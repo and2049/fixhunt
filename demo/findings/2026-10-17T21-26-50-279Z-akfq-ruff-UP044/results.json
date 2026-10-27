@@ -1,0 +1,489 @@
+{
+  "runId": "2026-10-17T21-26-50-279Z-akfq-ruff-UP044",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP044",
+    "fixKind": "unknown",
+    "docs": "# non-pep646-unpack (UP044)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `Unpack[]` on Python 3.11 and above, and suggests\nusing `*` instead.\n\n## Why is this bad?\n[PEP 646] introduced a new syntax for unpacking sequences based on the `*`\noperator. This syntax is more concise and readable than the previous\n`Unpack[]` syntax.\n\n## Example\n```python\nfrom typing import Unpack\n\n\ndef foo(*args: Unpack[tuple[int, ...]]) -> None:\n    pass\n```\n\nUse instead:\n```python\ndef foo(*args: *tuple[int, ...]) -> None:\n    pass\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as `Unpack[T]` and `*T` are considered\ndifferent values when introspecting types at runtime. However, in most cases,\nthe fix should be safe to apply.\n\n## Options\n\n- `target-version`\n\n[PEP 646]: https://peps.python.org/pep-0646/\n"
+  },
+  "analysis": {
+    "summary": "Flags type annotations using Unpack[] from typing where PEP 646 star-expression syntax (*T) can be used instead.",
+    "firingShapes": [
+      "def f(x: Unpack[tuple[int, str]]): ...",
+      "def g(*args: Unpack[Ts]) -> None: ...",
+      "h: Callable[[Unpack[tuple[float, ...]]], int] = lambda *a: 0",
+      "class C: def __init__(self, **kw: Unpack[dict[str, int]]) -> None: ...",
+      "def variadic(*args: Unpack[Tuple[int, ...]], **kwargs: Unpack[Mapping[str, object]]) -> list: ..."
+    ],
+    "silentShapes": [
+      "def f(x: tuple[int, str]): ...",
+      "def g(*args: tuple[int, ...]) -> None: ...",
+      "from typing import Unpack; x: Unpack[SomeGeneric]",
+      "def f(*args: int, **kwargs: str): ...",
+      "class T: __class_getitem__ = classmethod(lambda cls, _: cls)"
+    ],
+    "fixDescription": "Replaces Unpack[X] with *X in type annotations, preserving the surrounding syntactic context (e.g., *args: *tuple[int, ...]).",
+    "hazards": [
+      "Rewriting Unpack[expr] to *expr changes the meaning if expr is not a type but a value, as *expr becomes an illegal starred expression outside function parameters or invalid syntax elsewhere.",
+      "If Unpack appears in a string annotation (e.g., \"Unpack[T]\"), the fix may incorrectly modify it, breaking forward references or causing syntax errors in evaluated annotations.",
+      "In nested generic contexts like Dict[str, Unpack[Tuple[int]]], rewriting to *Tuple[int] produces invalid syntax because * is not allowed inside bracket notation.",
+      "When Unpack is used as a variable name (e.g., Unpack = 5), the fix erroneously rewrites it to *5, which is invalid syntax and alters the identifier's meaning.",
+      "The fix may remove or misplace comments attached to the Unpack token (e.g., Unpack[# inline comment\nint]) due to token-based replacement without comment preservation.",
+      "In class bodies or module-level code, *expr is syntactically invalid unless in a function parameter list, so rewriting Unpack[T] there raises a SyntaxError.",
+      "If the code targets Python <3.11, using *T in type annotations may be unsupported by the interpreter or type checkers, even if semantically equivalent.",
+      "When Unpack is imported under an alias (e.g., from typing import Unpack as U), the fix may fail to trigger or incorrectly rewrite the alias, leading to inconsistent or missed transformations."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0029352,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 2,
+    "fixed": 0,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Generator consumption with Unpack",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: f() takes 1 positional argument but 2 were given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Unpack as variable shadowed by rewrite",
+      "hazard": "When Unpack is used as a variable name, the fix rewrites it to *5, causing syntax error",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "6\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p003",
+      "title": "Descriptor interaction with unpacked type annotation",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "104\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Side effects in duplicated unpack expression",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: f() takes 1 positional argument but 2 were given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Python <3.11 compatibility with *T syntax",
+      "hazard": "If the code targets Python <3.11, using *T in type annotations may be unsupported",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: f() takes 1 positional argument but 2 were given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Walrus and scoping with unpacked lambda",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\nn leaked? False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Mutable default and aliasing after unpack rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'int' object has no attribute 'extend'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exception handling in unpacked function call",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "cleanup\n",
+          "stderr1": "TypeError: f() takes 1 positional argument but 2 were given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Walrus, comprehensions, closures",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p002",
+      "title": "Comments on Unpack token",
+      "hazard": "The fix may remove or misplace comments attached to the Unpack token",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Pathlib vs os.path behavior",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[Errno 2] No such file or directory: 'missing.txt'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "Aliased Unpack import",
+      "hazard": "When Unpack is imported under an alias, the fix may fail to trigger or incorrectly rewrite the alias",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP044",
+            "severity": "warning",
+            "message": "Use `*` for unpacking",
+            "span": [
+              2,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "6\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "6\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Truthiness and identity checks",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'A' object is not iterable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Evaluation order and side effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP044",
+            "severity": "warning",
+            "message": "Use `*` for unpacking",
+            "span": [
+              6,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "String annotations",
+      "hazard": "When Unpack appears in a string annotation, the fix may incorrectly modify it",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "typing.Unpack[tuple[int, ...]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict ordering and overrides",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "UP044",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "['b1', 'b2']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

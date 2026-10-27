@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags any call to built-in functions like `open`, `io.open`, `codecs.open`, `fileinput.input`, or `tarfile.open` when used in text mode without an explicit `encoding` argument.",
+  "firingShapes": [
+    "open('data.txt')",
+    "open('log.txt', 'r')",
+    "io.open('config.json')",
+    "codecs.open('message.txt', 'r')",
+    "fileinput.input('input.csv')",
+    "tarfile.open('archive.tar', 'r')"
+  ],
+  "silentShapes": [
+    "open('data.bin', 'rb')",
+    "open('text.txt', encoding='utf-8')",
+    "open('file.txt', 'w', encoding='ascii')",
+    "open(os.devnull, 'w')",
+    "getattr(__builtins__, 'open')('file.txt')"
+  ],
+  "fixDescription": "Adds `encoding='utf-8'` as a keyword argument to the function call, inserted before any `**kwargs` unpacking if present, otherwise appended at the end of the argument list.",
+  "hazards": [
+    "Adding `encoding='utf-8'` to a binary mode call like `open('file', 'rb')` creates an invalid argument combination that raises `ValueError` because encoding is not allowed in binary mode.",
+    "If the call already contains an `encoding` keyword argument (e.g., via `**kwargs` that includes 'encoding'), adding another `encoding='utf-8'` results in a duplicate keyword argument error (`TypeError: got multiple values for argument 'encoding'`).",
+    "When the file is opened in a locale-specific encoding (e.g., Windows-1252 on Western European Windows systems), forcing UTF-8 causes `UnicodeDecodeError` when reading existing non-UTF-8 encoded files.",
+    "For `tarfile.open`, adding `encoding='utf-8'` is invalid because `tarfile.open` does not accept an `encoding` parameter; it raises `TypeError: unexpected keyword argument`.",
+    "In `fileinput.input`, the `encoding` parameter behaves differently—it applies to all files processed, and forcing UTF-8 may break when processing mixed-encoding input streams.",
+    "If the `open` call is shadowed by a local variable or imported alias (e.g., `local_open = open; local_open('file')`), the autofix may incorrectly modify the wrong function or fail to recognize the call as subject to the rule.",
+    "When the call uses positional arguments where the mode is passed as a variable (e.g., `open(file, mode)`), inserting `encoding='utf-8'` assumes the mode is text-based, but if `mode` resolves to a binary mode at runtime, the call becomes invalid.",
+    "Adding `encoding='utf-8'` may interfere with code that relies on the system default encoding for compatibility with legacy data or inter-process communication, silently corrupting data or causing downstream failures.",
+    "If the call appears within a lambda or comprehension and is modified, the autofix may inadvertently alter binding or evaluation timing if the original comment or formatting is disturbed during rewrite.",
+    "In codebases with custom `open` wrappers that expect no encoding argument (e.g., for testing mocks), injecting `encoding='utf-8'` breaks the wrapper’s signature assumption, causing `TypeError` during test execution.",
+    "When the original source contains trailing comments (e.g., `open('file')  # read config`), the autofix may drop or misplace the comment due to improper reflow, especially if the edit disrupts whitespace or delimiter handling.",
+    "If the function call is part of a larger expression (e.g., `data = open('file').read()`), inserting `encoding='utf-8'` changes the temporary object’s behavior, potentially causing failure if the file encoding is not UTF-8."
+  ]
+}

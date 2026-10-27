@@ -1,0 +1,573 @@
+{
+  "runId": "2026-10-17T19-41-16-732Z-jwkh-biome-correctness_noSwitchDeclarations",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "correctness/noSwitchDeclarations",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noSwitchDeclarations\n- Fix: safe\n- Default severity: error\n- Available from version: 1.0.0\n- Diagnostic category: lint/correctness/noSwitchDeclarations\n- This rule is recommended\n\nDescription\n\n Disallow lexical declarations in `switch` clauses.\n\n Lexical declarations in `switch` clauses are accessible in the entire `switch`.\n However, it only gets initialized when it is assigned, which will only happen if the `switch` clause where it is defined is reached.\n\n To ensure that the lexical declarations only apply to the current `switch` clause wrap your declarations in a block.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n switch (foo) {\n     case 0:\n         const x = 1;\n         break;\n     case 2:\n         x; // `x` can be used while it is not initialized\n         break;\n }\n ```\n\n ```js,expect_diagnostic\n switch (foo) {\n     case 0:\n         function f() {}\n         break;\n     case 2:\n         f(); // `f` can be called here\n         break;\n }\n ```\n\n ```js,expect_diagnostic\n switch (foo) {\n     case 0:\n         class A {}\n         break;\n     default:\n         new A(); // `A` can be instantiated here\n         break;\n }\n ```\n\nValid\n\n ```js\n switch (foo) {\n     case 0: {\n         const x = 1;\n         break;\n     }\n     case 1:\n         // `x` is not visible here\n         break;\n }\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags any lexical declaration (`const`, `let`, `class`, or `function`) directly inside a `case` or `default` clause of a `switch` statement without being wrapped in a block.",
+    "firingShapes": [
+      "switch(x){case 0:const y=1;break;}",
+      "switch(x){case 0:let y=1;break;}",
+      "switch(x){case 0:function y(){}break;}",
+      "switch(x){case 0:class Y{}break;}",
+      "switch(x){default:const y=1;break;}",
+      "switch(x){case true:let y=1;break;}",
+      "switch(x){case 'a':function y(){}break;}",
+      "switch(x){case null:class Y{}break;}"
+    ],
+    "silentShapes": [
+      "switch(x){case 0:{const y=1;}break;}",
+      "switch(x){case 0:var y=1;break;}",
+      "switch(x){if(true){const y=1;}}",
+      "switch(x){case 0:break;}"
+    ],
+    "fixDescription": "Wraps the lexical declaration(s) in the problematic `case` or `default` clause in a block by adding `{` before the first declaration and `}` after the last statement in that clause, preserving all existing statements and their order.",
+    "hazards": [
+      "If the clause contains a labeled statement, wrapping it in a block changes the label's scope, potentially breaking `break` or `continue` references to that label from outside the block.",
+      "If the clause contains a `break` statement with a label that refers to an outer loop, inserting a block does not affect the label resolution, but if the label is defined inside the clause, the block alters its scope and may cause the label to be undefined.",
+      "If the clause contains a `with` statement, introducing a block changes the scope chain for the `with` body, potentially altering variable resolution.",
+      "If the clause contains a `try`/`catch`/`finally` block, adding an outer block does not change behavior, but if the `catch` or `finally` clause declares variables with the same name as the hoisted declaration, the original code might have allowed access due to function-scoped hoisting, whereas the block prevents it.",
+      "If the clause contains a `return` statement, wrapping it in a block does not change the return value or control flow, but if the function is an arrow function with a concise body, the insertion of a block may require adding explicit `return` and braces, though this rule does not apply to arrow functions directly in switch clauses as they are expressions.",
+      "If the clause contains a `debugger` statement, adding a block around it does not affect its execution.",
+      "If the clause contains a comment immediately after the opening brace of the inserted block, the formatter might reposition it, but Biome's autofix aims to preserve comments; however, if comments are attached to the lexical declaration node, moving the declaration into a block could detach leading/trailing comments if not handled properly.",
+      "If the clause is the last clause in the switch and ends with a `break`, adding a block before the `break` does not affect semicolon insertion, but if the `break` is omitted and the clause falls through, the block does not change fall-through behavior.",
+      "If the lexical declaration is a `function` declaration, the original code hoists the function to the function scope, making it accessible throughout the switch (and function), while the fix makes it block-scoped to the case, so any reference to the function in other cases becomes a ReferenceError, changing behavior.",
+      "If the lexical declaration is a `class` declaration, similar to `function`, it is hoisted and accessible in the entire switch in the original code, but the fix restricts it to the block, so usage in other cases fails.",
+      "If the lexical declaration is a `const` or `let` with an initializer that has side effects (e.g., a function call), the original code evaluates the initializer only when the clause is reached, and the fix preserves this timing, so no change in evaluation timing occurs."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0065382,
+  "summary": {
+    "programs": 16,
+    "invalid": 5,
+    "fired": 10,
+    "fixed": 10
+  },
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Exception inside const declaration",
+      "hazard": "exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-41-16-732Z-jwkh-biome-correctness_noSwitchDeclarations/r1-p001/orig.js:5\n      try { const y = throw new Error('boom'); } catch (e) { result.push(e.message); }\n                      ^^^^^\n\nSyntaxError: Unexpected token 'throw'\n    at checkSyntax (node:intern"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Function declaration hoisting across cases",
+      "hazard": "If the lexical declaration is a function declaration, the original code hoists the function to the function scope, making it accessible throughout the switch (and function), while the fix makes it blo",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: x is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: x is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:43.215331110 -0400\n+++ fixed.js\t2026-10-17 15:41:43.486325754 -0400\n@@ -1,8 +1,9 @@\n function f() {\n   switch (x) {\n-    case 0:\n+    case 0: {\n       function g() { return 1; }\n       break;\n+    }\n     case 1:\n       return g();\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Regex with g flag and lastIndex mutation",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: tag is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: tag is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:43.648322552 -0400\n+++ fixed.js\t2026-10-17 15:41:43.906317453 -0400\n@@ -1,11 +1,12 @@\n function f() {\n   let results = [];\n   switch (tag) {\n-    case 'a':\n+    case 'a': {\n       const re = /ab/g;\n       re.lastIndex = 0;\n       results.push(re.exec('abab'));\n       break;\n+    }\n     case 'b':\n       results.push(re ? re.lastIndex : -1);\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Sparse array access via const-declared variable",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: mode is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: mode is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:44.070314210 -0400\n+++ fixed.js\t2026-10-17 15:41:44.321309242 -0400\n@@ -1,9 +1,10 @@\n function f() {\n   switch (mode) {\n-    case 0:\n+    case 0: {\n       const arr = Array(3);\n       arr[2] = 'x';\n       return arr[1]; // hole \u2192 undefined\n+    }\n     case 1:\n       return 'fallback';\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Labeled statement inside case, break from outside",
+      "hazard": "If the clause contains a labeled statement, wrapping it in a block changes the label's scope, potentially breaking `break` or `continue` references to that label from outside the block.",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-41-16-732Z-jwkh-biome-correctness_noSwitchDeclarations/r1-p005/orig.js:20\nfunction f() {\n^\n\nSyntaxError: Identifier 'f' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Function declaration in labeled case, referenced after switch",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-41-16-732Z-jwkh-biome-correctness_noSwitchDeclarations/r1-p006/orig.js:4\n      start: function helper() { return 42; }\n             ^^^^^^^^\n\nSyntaxError: In strict mode code, functions can only be declared at top level or inside a block.\n    at checkSyntax "
+    },
+    {
+      "id": "r1-p007",
+      "title": "Class declaration hoisting across cases",
+      "hazard": "If the lexical declaration is a `class` declaration, similar to `function`, it is hoisted and accessible in the entire switch in the original code, but the fix restricts it to the block, so usage in o",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: x is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: x is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:44.564304433 -0400\n+++ fixed.js\t2026-10-17 15:41:44.826299248 -0400\n@@ -1,8 +1,9 @@\n function f() {\n   switch (x) {\n-    case 0:\n+    case 0: {\n       class C { constructor() { this.val = 99; } }\n       break;\n+    }\n     case 1:\n       return new C().val;\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Var re-declaration after const in same scope",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-41-16-732Z-jwkh-biome-correctness_noSwitchDeclarations/r1-p008/orig.js:7\n      var y = 2; // \u2190 This is allowed only if y is not const/let in same scope\n          ^\n\nSyntaxError: Identifier 'y' has already been declared\n    at checkSyntax (node:internal/main/"
+    },
+    {
+      "id": "r2-p001",
+      "title": "With Statement Scope Change",
+      "hazard": "If the clause contains a `with` statement, introducing a block changes the scope chain for the `with` body, potentially altering variable resolution.",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-41-16-732Z-jwkh-biome-correctness_noSwitchDeclarations/r2-p001/orig.js:3\n  switch(0){case 0: let y = 2; with({x:y}) console.log(x); break;}\n                               ^^^^\n\nSyntaxError: Strict mode code may not include a with statement\n    at checkSyntax"
+    },
+    {
+      "id": "r2-p002",
+      "title": "RegExp lastIndex Mutation with g Flag",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:49.558205268 -0400\n+++ fixed.js\t2026-10-17 15:41:49.805200348 -0400\n@@ -1,4 +1,4 @@\n function f(){\n   const regex = /a/g;\n-  switch('aa'){case 'aa': let m = regex.exec('aa'); console.log(m.index); break;}\n+  switch('aa'){case 'aa': { let m = regex.exec('aa'); console.log(m.index); break;}}\n }\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Numeric/String Coercion Interaction",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:49.960197260 -0400\n+++ fixed.js\t2026-10-17 15:41:50.202192435 -0400\n@@ -1,4 +1,4 @@\n function f(){\n   const obj = {valueOf:()=>5,toString:()=>'5'};\n-  switch(obj){case 5: let y = +obj + ''; console.log(y); break;}\n+  switch(obj){case 5: { let y = +obj + ''; console.log(y); break;}}\n }\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Strict Mode Semantics Difference",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:50.346189562 -0400\n+++ fixed.js\t2026-10-17 15:41:50.602184456 -0400\n@@ -1,3 +1,3 @@\n \"use strict\";\n-function f(){switch(0){case 0: let y = 1; eval('console.log(typeof y)'); break;}}\n+function f(){switch(0){case 0: { let y = 1; eval('console.log(typeof y)'); break;}}}\n f();\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Arrow Function Concise Body Misapplication Note",
+      "hazard": "If the clause contains a `return` statement, wrapping it in a block does not change the return value or control flow, but if the function is an arrow function with a concise body, the insertion of a b",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "Fallthrough Behavior Preservation",
+      "hazard": "If the clause is the last clause in the switch and ends with a `break`, adding a block before the `break` does not affect semicolon insertion, but if the `break` is omitted and the clause falls throug",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:50.951177495 -0400\n+++ fixed.js\t2026-10-17 15:41:51.187172783 -0400\n@@ -1 +1 @@\n-function f(){let r='';switch(1){case 1: let y='a'; r+=y; case 2: r+='b';} console.log(r);}\n+function f(){let r='';switch(1){case 1: { let y='a'; r+=y; }case 2: r+='b';} console.log(r);}\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Debugger Statement Execution",
+      "hazard": "If the clause contains a `debugger` statement, adding a block around it does not affect its execution.",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:51.329169948 -0400\n+++ fixed.js\t2026-10-17 15:41:51.574165054 -0400\n@@ -1 +1 @@\n-function f(){switch(0){case 0: let y=1; debugger; console.log(y); break;}}\n+function f(){switch(0){case 0: { let y=1; debugger; console.log(y); break;}}}\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Labeled Statement Scope Change",
+      "hazard": "If the clause contains a labeled statement, wrapping it in a block changes the label's scope, potentially breaking `break` or `continue` references to that label from outside the block.",
+      "rule": "correctness/noSwitchDeclarations",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noSwitchDeclarations",
+            "severity": "error",
+            "message": "Other switch clauses can erroneously access this declaration.\nWrap the declaration in a block to restrict its access to the switch clause.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:41:51.723162079 -0400\n+++ fixed.js\t2026-10-17 15:41:51.955157445 -0400\n@@ -1 +1 @@\n-function f(){switch(0){case 0: let y=1; labelled: if(y) break labelled; console.log('unreachable'); break;}}\n+function f(){switch(0){case 0: { let y=1; labelled: if(y) break labelled; console.log('unreachable'); break;}}}\n"
+      }
+    }
+  ]
+}

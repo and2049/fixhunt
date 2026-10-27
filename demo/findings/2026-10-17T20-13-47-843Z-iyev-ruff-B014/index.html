@@ -1,0 +1,174 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff B014 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff B014 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-13-47-843Z-iyev-ruff-B014 · fix labelled <b>unknown</b> · 16 programs, 0 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0034</p>
+<div class="card"><b>Rule analysis</b><p>Flags except clauses containing duplicate or redundant exception types where one type subsumes another.</p><p class="mut">Fix: Removes redundant exception types from the except tuple, keeping only the most general (superclass) exception when a subtype is present, or deduplicates identical types, preserving the original order of non-redundant types.</p><details><summary>12 hazards</summary><ul><li>Rewriting `except (Exception, ValueError):` to `except Exception:` changes behavior if the handler relies on `ValueError` being matched first for conditional logic inside the handler, though such logic is unreachable anyway.</li><li>If the except clause contains a comment after a redundant type like `except (Exception, # keep
+ValueError):`, the autofix may incorrectly remove or misplace the comment during tuple restructuring.</li><li>When the except clause is part of a larger compound statement with line continuations, the rewrite may alter formatting in a way that breaks parsing if the tool does not preserve exact whitespace or parentheses structure.</li><li>In code that uses stringized exceptions via `from __future__ import annotations`, the autofix might not correctly resolve forward references, leading to incorrect removal or retention of types.</li><li>If the except tuple contains a variable name that shadows an exception class (e.g., `ValueError = 5; except (Exception, ValueError):`), the rewrite incorrectly treats it as a type and may produce invalid syntax or change meaning.</li><li>The autofix may fail to recognize that a user-defined exception inherits from a built-in, leading to incomplete redundancy removal and leaving the code still flagged.</li><li>In nested try statements, rewriting an outer except clause may affect the control flow of inner handlers if exceptions are re-raised, though this is unlikely due to redundancy.</li><li>If the except clause is followed by a `finally` block, the rewrite does not affect finally execution, but removing redundant types could be misconstrued as altering exception propagation timing—though it does not.</li><li>When the except clause uses a bare `except:` (no arguments), the rule does not fire, but if mistakenly applied, the fix would break syntax by introducing an empty tuple.</li><li>If the code depends on the exact tuple object for introspection (e.g., storing the except clause via `inspect`), the rewritten tuple may differ in identity or content, affecting metaprogramming.</li><li>Autofix may leave a trailing comma in a singleton tuple (e.g., `except (Exception,):`) which is valid but may trigger style warnings in strict codebases.</li><li>In code processed by tools that rely on the AST node&#39;s exact source representation (e.g., certain refactoring tools), the rewritten source may break source-to-AST roundtripping.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String Formatting Edge Cases - % Operator</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generators vs Lists - Iterator Consumption</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Trailing Comma in Singleton Tuple</td><td class="mut">Autofix may leave a trailing comma in a singleton tuple (e.g., `except (Exception,):`) whi</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Finally Block Interaction</td><td class="mut">If the except clause is followed by a `finally` block, the rewrite does not affect finally</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Handler Conditional Logic Dependency</td><td class="mut">Rewriting `except (Exception, ValueError):` to `except Exception:` changes behavior if the</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Comments Attached to Removed Code</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>Runtime Type Annotations Evaluation</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Truthiness and Identity Checks</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Comment Preservation During Redundant Except Rewrite</td><td class="mut">Comments attached to redundant exception types may be lost or misplaced during autofix.</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>AST Roundtrip Integrity After Except Rewrite</td><td class="mut">Rewritten except tuple may break source-to-AST roundtripping in tools relying on exact sou</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Variable Shadowing Exception Class in Except Tuple</td><td class="mut">When a variable shadows an exception class (e.g., ValueError=5), the linter may mistakenly</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Except Rewrite Followed by Finally Block</td><td class="mut">Autofix of except clause does not alter finally execution, but may be misconstrued as chan</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span></td><td>Context Manager Without Close() Method</td><td class="mut">Using non-file context managers that implement write() but not close() — unrelated to exce</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Except Tuple Used for Introspection via inspect</td><td class="mut">Storing the except clause tuple for introspection (e.g., via inspect) may break if autofix</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span></td><td>Bytes vs Str Encoding in Except-Related I/O</td><td class="mut">Mixing bytes and str in I/O operations within except handlers — encoding/newline hazards u</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Async Generator and Await Ordering in Except Handler</td><td class="mut">Interaction between async def/await ordering and except clause rewrite — ensuring await ha</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — String Formatting Edge Cases - % Operator</summary><pre>try:
+    x = &#39;%s&#39; % [1, 2]
+except (TypeError, ValueError):
+    print(&#39;caught:&#39;, type(e).__name__)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Generators vs Lists - Iterator Consumption</summary><pre>def gen():
+    yield 1
+    yield 2
+g = gen()
+try:
+    next(g)
+    next(g)
+    next(g)
+except (StopIteration, Exception):
+    print(&#39;caught:&#39;, type(e).__name__)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Trailing Comma in Singleton Tuple</summary><pre>try:
+    int(&#39;a&#39;)
+except (ValueError,):
+    print(&#39;value error caught&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Finally Block Interaction</summary><pre>try:
+    1/0
+except (ZeroDivisionError, ArithmeticError):
+    print(&#39;except&#39;)
+finally:
+    print(&#39;finally&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Handler Conditional Logic Dependency</summary><pre>try:
+    int(&#39;x&#39;)
+except (Exception, ValueError) as e:
+    if isinstance(e, ValueError):
+        print(&#39;value error path&#39;)
+    else:
+        print(&#39;other error:&#39;, type(e).__name__)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Comments Attached to Removed Code</summary><pre>try:
+    [] + {}
+except (TypeError, Exception):  # TypeError is more specific
+    print(&#39;type error&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Runtime Type Annotations Evaluation</summary><pre>from typing import List
+try:
+    [1, 2] + &#39;a&#39;
+except (TypeError,):
+    print(&#39;type error&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Truthiness and Identity Checks</summary><pre>class Fake:
+    def __bool__(self): return False
+try:
+    bool(Fake())
+except (Exception, ValueError):
+    print(&#39;no exception raised&#39;)
+except:
+    print(&#39;unexpected&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Comment Preservation During Redundant Except Rewrite</summary><pre># Test comment preservation
+try:
+    raise ValueError
+except (Exception, # keep this comment
+        ValueError):  # this should stay
+    print(&#39;Caught:&#39;, type(__import__(&#39;sys&#39;).exc_info()[1]).__name__)
+else:
+    print(&#39;No exception&#39;)
+finally:
+    print(&#39;Finally ran&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — AST Roundtrip Integrity After Except Rewrite</summary><pre>import ast
+src = &#39;&#39;&#39;\
+try:
+    1/0
+except (ZeroDivisionError, Exception):\
+    pass&#39;&#39;&#39;
+tree = ast.parse(src)
+fixed = ast.unparse(tree)  # May not preserve original tuple form
+print(&#39;Original:&#39;, repr(src))
+print(&#39;Unparsed:&#39;, repr(fixed))
+try:
+    exec(fixed)
+except Exception as e:
+    print(&#39;Error in fixed code:&#39;, type(e).__name__)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Variable Shadowing Exception Class in Except Tuple</summary><pre>ValueError = 42  # shadows built-in
+try:
+    raise ValueError  # raises the variable (int), not exception
+except (Exception, ValueError):  # linter sees two &#39;types&#39;, may dedupe
+    print(&#39;Caught:&#39;, type(__import__(&#39;sys&#39;).exc_info()[1]))
+    print(&#39;Value is:&#39;, ValueError)
+except TypeError:
+    print(&#39;Got TypeError as expected&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Except Rewrite Followed by Finally Block</summary><pre>def test():
+    try:
+        raise OSError(&#39;disk error&#39;)
+    except (OSError, IOError):  # IOError is subclass of OSError in Python 3
+        print(&#39;Handler: OSError caught&#39;)
+        return &#39;from_except&#39;
+    finally:
+        print(&#39;Finally: always runs&#39;)
+        return &#39;from_finally&#39;
+result = test()
+print(&#39;Result:&#39;, result)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Context Manager Without Close() Method</summary><pre>class WriteOnly:
+    def __enter__(self):
+        self.data = []
+        return self
+    def write(self, x):
+        self.data.append(x)
+    def __exit__(self, *args):
+        pass
+
+with WriteOnly() as w:
+    w.write(&#39;hello&#39;)
+    w.write(&#39;world&#39;)
+print(&#39;Written:&#39;, &#39;&#39;.join(w.data))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Except Tuple Used for Introspection via inspect</summary><pre>import inspect
+
+def func():
+    try:
+        raise ValueError
+    except (ValueError, TypeError):  # not redundant, so rule should not fire
+        pass
+
+handler_tuple = None
+for name, cell in inspect.getclosurevars(func).nonlocals.items():
+    if isinstance(cell, tuple) and all(isinstance(t, type) for t in cell):
+        handler_tuple = cell
+        break
+
+print(&#39;Handler tuple:&#39;, handler_tuple)
+print(&#39;Length:&#39;, len(handler_tuple) if handler_tuple else 0)
+print(&#39;Types:&#39;, [t.__name__ for t in handler_tuple] if handler_tuple else [])
+</pre></details><details id="r2-p007"><summary>r2-p007 — Bytes vs Str Encoding in Except-Related I/O</summary><pre>try:
+    with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+        f.write(b&#39;hello\n&#39;)
+    with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+        data = f.read()
+        print(&#39;Raw bytes:&#39;, repr(data))
+        try:
+            text = data.decode(&#39;utf-8&#39;)
+            print(&#39;Decoded:&#39;, repr(text))
+        except UnicodeDecodeError as ude:
+            print(&#39;Decode failed:&#39;, ude)
+except (OSError, IOError):  # redundant: IOError is alias for OSError
+    print(&#39;File error caught&#39;)
+finally:
+    import os
+    try: os.remove(&#39;test.bin&#39;)
+    except: pass
+</pre></details><details id="r2-p008"><summary>r2-p008 — Async Generator and Await Ordering in Except Handler</summary><pre>async def maybe_fail():
+    await asyncio.sleep(0)  # yield control
+    raise ValueError(&#39;async error&#39;)
+
+async def main():
+    try:
+        await maybe_fail()
+    except (ValueError, Exception):  # ValueError subsumed by Exception
+        print(&#39;Caught ValueError&#39;)
+        return 42
+    finally:
+        print(&#39;Finally in async&#39;)
+
+import asyncio
+result = asyncio.run(main())
+print(&#39;Result:&#39;, result)
+</pre></details></body></html>

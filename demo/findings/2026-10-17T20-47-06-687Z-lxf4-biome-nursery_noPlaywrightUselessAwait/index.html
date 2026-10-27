@@ -1,0 +1,181 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome nursery/noPlaywrightUselessAwait — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome nursery/noPlaywrightUselessAwait <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-47-06-687Z-lxf4-biome-nursery_noPlaywrightUselessAwait · fix labelled <b>safe</b> · 15 programs, 6 fired, 6 fixed, 0 oracle-backed finding(s) · model cost $0.0035</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags unnecessary `await` keywords before Playwright methods that return synchronous values, such as locator creation or synchronous expect matchers.</p><p class="mut">Fix: Remove the `await` keyword from the expression, leaving the method call unchanged.</p><details><summary>10 hazards</summary><ul><li>Rewriting `await page.locator(...)` removes the await but if the locator method were overridden to return a Promise in a subclass or mock, the code would now ignore the Promise and proceed synchronously, breaking async logic.</li><li>If the expression has side effects (e.g., `await page.locator(fn())`), removing `await` changes when `fn()` is evaluated relative to surrounding code, potentially altering timing-dependent behavior.</li><li>In a sequence like `await page.locator(A); await page.locator(B);`, removing awaits could reorder execution if `A` or `B` have side effects, violating intended sequencing.</li><li>If the awaited expression is used in a boolean context like `if (await page.locator(...))`, removing `await` treats a Locator object as truthy instead of awaiting a potential Promise, changing the condition&#39;s evaluation.</li><li>When the awaited call is part of a larger expression such as `x = await page.locator(...)`, removing `await` assigns a Locator instead of a resolved Promise, breaking downstream code expecting a Promise.</li><li>If the locator method is accessed via a dynamic property (e.g., `await page[methodName]()`), the fix assumes it returns a sync value, but if the property resolves to an async method, the await removal breaks the code.</li><li>In try/catch blocks, removing `await` from a Playwright call that actually returns a Promise (due to monkey-patching or type mismatch) causes the Promise to be unhandled, leading to uncaught rejections instead of being caught.</li><li>Comments placed on the `await` token (e.g., `await/* TODO */ page.locator(...)`) may be lost during the rewrite if the tool does not preserve inline comments on removed tokens.</li><li>If the code relies on the awaited expression returning a Promise for `.then()` chaining (e.g., `await page.locator(...).then(...)`), removing `await` breaks the chain by applying `.then()` to a Locator.</li><li>In an async function, removing `await` from a call that returns a Promise (even if incorrectly flagged) turns the call into a fire-and-forget operation, potentially causing race conditions or unhandled rejections.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Reordering of side effects in sequential locator calls</td><td class="mut">In a sequence like `await page.locator(A); await page.locator(B);`, removing awaits could </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>__proto__ access interfering with method resolution</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Var hoisting and re-declaration in loop</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Order of evaluation: duplicated expression with side effects</td><td class="mut">order of evaluation when expressions are merged, duplicated or deleted (side effects run t</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Comment attached to removed await line</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>ASI hazard: leading parenthesis after semicolon-less await removal</td><td class="mut">ASI and semicolon-less code, leading ( or [ on the next line</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Broken .then() chain due to removed await on locator</td><td class="mut">If the code relies on the awaited expression returning a Promise for `.then()` chaining (e</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Comment loss on await token</td><td class="mut">Comments placed on the `await` token (e.g., `await/* TODO */ page.locator(...)`) may be lo</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Class fields and static blocks interference</td><td class="mut">class fields, static blocks, private names, super calls</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Side effect timing in argument evaluation</td><td class="mut">If the expression has side effects (e.g., `await page.locator(fn())`), removing `await` ch</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Null/undefined distinction with optional chaining</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Label/break/continue and finally interaction</td><td class="mut">label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Sequential locator side-effect reordering</td><td class="mut">In a sequence like `await page.locator(A); await page.locator(B);`, removing awaits could </td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Regular expression lastIndex mutation</td><td class="mut">regular expressions: escapes, unicode flag, lastIndex with the g flag</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>This binding in extracted methods</td><td class="mut">this binding: arrow vs function, methods extracted from objects, call/apply/bind</td></tr></table>
+<h2>Sources</h2><details id="r1-p002"><summary>r1-p002 — Reordering of side effects in sequential locator calls</summary><pre>// Hazard 2: Side effect order matters; removal may reorder
+let log = &#39;&#39;;
+const sideEffect = (msg) =&gt; { log += msg; return { click: () =&gt; {} } };
+// Simulate two locator-like calls with side effects in args
+{ const temp = sideEffect(&#39;A&#39;); await temp.click(); }
+{ const temp = sideEffect(&#39;B&#39;); await temp.click(); }
+console.log(&#39;Log:&#39;, log);
+</pre></details><details id="r1-p003"><summary>r1-p003 — __proto__ access interfering with method resolution</summary><pre>// Hazard 3: __proto__ tampering affects object shape
+const base = { locator: () =&gt; ({ click: () =&gt; console.log(&#39;real&#39;) }) };
+const fake = { __proto__: base, locator: () =&gt; ({ click: () =&gt; console.log(&#39;fake&#39;) }) };
+// Rule sees: await fake.locator() -&gt; but __proto__ may interfere
+{ const l = fake.locator(); await l.click(); }
+{ const l = fake.locator(); l.click(); } // No await - still works? but we test if rule fires
+console.log(&#39;Test done&#39;);
+</pre></details><details id="r1-p004"><summary>r1-p004 — Var hoisting and re-declaration in loop</summary><pre>// Hazard 4: var hoisting with re-declaration
+for (let i = 0; i &lt; 2; i++) {
+  var loc = { click: () =&gt; console.log(&#39;iter&#39;, i) }; // hoisted, redeclared
+  await loc.click(); // rule fires here
+}
+console.log(&#39;After loop:&#39;, typeof loc); // loc exists due to hoisting
+</pre></details><details id="r1-p005"><summary>r1-p005 — Order of evaluation: duplicated expression with side effects</summary><pre>// Hazard 5: Side effect in argument runs twice if await removed and expr duplicated
+let count = 0;
+const getArg = () =&gt; { count++; return &#39;.el&#39;; };
+// Rule sees: await page.locator(getArg()) - if it duplicates the call...
+{ const l = { click: () =&gt; console.log(&#39;count&#39;, count) }; await l.click(); }
+// We simulate: if await removed and expr duplicated, getArg might run twice
+// But we can&#39;t duplicate - so we make the hazard visible by having the call itself have side effect
+console.log(&#39;Final count:&#39;, count); // Should be 1 if await kept, but we show it&#39;s used
+</pre></details><details id="r1-p006"><summary>r1-p006 — Comment attached to removed await line</summary><pre>// Hazard 6: Comment on the line with await
+// This comment should stay after fix
+await { click: () =&gt; console.log(&#39;hi&#39;) }.click(); // keep this comment
+console.log(&#39;After&#39;);
+</pre></details><details id="r1-p007"><summary>r1-p007 — ASI hazard: leading parenthesis after semicolon-less await removal</summary><pre>// Hazard 7: ASI risk - if await removed and no semicolon, next line &#39;(&#39; is absorbed
+let x = 1
+(await { click: () =&gt; console.log(x) }).click() // If no semicolon after 1, this is: 1(await...)
+console.log(&#39;Survived&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Broken .then() chain due to removed await on locator</summary><pre>// Hazard 8: Removing await breaks .then() chain
+let result = &#39;none&#39;;
+// Simulate locator that returns a promise-like thenable
+const loc = {
+  then: (cb) =&gt; { cb(&#39;resolved&#39;); return loc; }
+};
+// Normally: await loc.then(v =&gt; { result = v; });
+// But rule sees: await loc - and removes await, leaving loc.then(...)
+// So we do: await loc; then .then? No - we make it so the code is: await loc.then(...)
+// But rule only fires on await loc, not await loc.then...
+// So we need: await loc  -&gt; but we want to test if removing await breaks a chain that comes AFTER
+// Let&#39;s restructure: code is: await loc; loc.then(...)  -&gt; but that&#39;s two statements
+// Instead: make it one expression: (await loc).then(...) -&gt; rule doesn&#39;t fire on that
+// We need the rule to fire on a subexpression that is used in a chain
+// Final attempt: we make the locator call itself be chained, but rule fires on the await
+console.log(&#39;Skipped - complex&#39;);
+</pre></details><details id="r2-p001"><summary>r2-p001 — Comment loss on await token</summary><pre>let logged = &#39;&#39;;
+function log(msg) { logged += msg + &#39;|&#39;; }
+await/* TODO */ page.locator(&#39;.elem&#39;);
+log(&#39;done&#39;);
+console.log(logged);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:47:28.399853276 -0400
++++ fixed.js	2026-10-17 16:47:28.672859676 -0400
+@@ -1,5 +1,5 @@
+ let logged = &#39;&#39;;
+ function log(msg) { logged += msg + &#39;|&#39;; }
+<span class="del">-await/* TODO */ page.locator(&#39;.elem&#39;);</span>
+<span class="add">+page.locator(&#39;.elem&#39;);</span>
+ log(&#39;done&#39;);
+ console.log(logged);
+</pre></details><details id="r2-p002"><summary>r2-p002 — Class fields and static blocks interference</summary><pre>class Test {
+  static x = 0;
+  static {
+    await/* mark */ page.locator(&#39;.static&#39;);
+    Test.x = 1;
+  }
+}
+console.log(Test.x);
+</pre></details><details id="r2-p003"><summary>r2-p003 — Side effect timing in argument evaluation</summary><pre>let called = false;
+function fn() { called = true; return &#39;.dynamic&#39;; }
+console.log(&#39;before:&#39;, called);
+await page.locator(fn());
+console.log(&#39;after:&#39;, called);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:47:28.892864833 -0400
++++ fixed.js	2026-10-17 16:47:29.167871275 -0400
+@@ -1,5 +1,5 @@
+ let called = false;
+ function fn() { called = true; return &#39;.dynamic&#39;; }
+ console.log(&#39;before:&#39;, called);
+<span class="del">-await page.locator(fn());</span>
+<span class="add">+page.locator(fn());</span>
+ console.log(&#39;after:&#39;, called);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Null/undefined distinction with optional chaining</summary><pre>let obj = { locator: () =&gt; ({ click: () =&gt; &#39;ok&#39; }) };
+let result = obj?.locator?.()?.click();
+console.log(result);
+obj = null;
+result = await/* mark */ obj?.locator?.()?.click();
+console.log(result);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Label/break/continue and finally interaction</summary><pre>outer: {
+  try {
+    await/* mark */ page.locator(&#39;.test&#39;);
+    break outer;
+  } finally {
+    console.log(&#39;finally ran&#39;);
+  }
+}
+console.log(&#39;after&#39;);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:47:29.567880640 -0400
++++ fixed.js	2026-10-17 16:47:29.828886751 -0400
+@@ -1,6 +1,6 @@
+ outer: {
+   try {
+<span class="del">-    await/* mark */ page.locator(&#39;.test&#39;);</span>
+<span class="add">+    page.locator(&#39;.test&#39;);</span>
+     break outer;
+   } finally {
+     console.log(&#39;finally ran&#39;);
+</pre></details><details id="r2-p006"><summary>r2-p006 — Sequential locator side-effect reordering</summary><pre>let order = &#39;&#39;;
+function A() { order += &#39;A&#39;; return &#39;.a&#39;; }
+function B() { order += &#39;B&#39;; return &#39;.b&#39;; }
+await page.locator(A());
+await page.locator(B());
+console.log(order);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:47:29.997890708 -0400
++++ fixed.js	2026-10-17 16:47:30.270897093 -0400
+@@ -1,6 +1,6 @@
+ let order = &#39;&#39;;
+ function A() { order += &#39;A&#39;; return &#39;.a&#39;; }
+ function B() { order += &#39;B&#39;; return &#39;.b&#39;; }
+<span class="del">-await page.locator(A());</span>
+<span class="del">-await page.locator(B());</span>
+<span class="add">+page.locator(A());</span>
+<span class="add">+page.locator(B());</span>
+ console.log(order);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Regular expression lastIndex mutation</summary><pre>const regex = /a/g;
+regex.lastIndex = 0;
+console.log(&#39;match1:&#39;, regex.exec(&#39;aa&#39;));
+await/* mark */ page.locator(regex);
+console.log(&#39;match2:&#39;, regex.exec(&#39;aa&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:47:30.436900975 -0400
++++ fixed.js	2026-10-17 16:47:30.709907359 -0400
+@@ -1,5 +1,5 @@
+ const regex = /a/g;
+ regex.lastIndex = 0;
+ console.log(&#39;match1:&#39;, regex.exec(&#39;aa&#39;));
+<span class="del">-await/* mark */ page.locator(regex);</span>
+<span class="add">+page.locator(regex);</span>
+ console.log(&#39;match2:&#39;, regex.exec(&#39;aa&#39;));
+</pre></details><details id="r2-p008"><summary>r2-p008 — This binding in extracted methods</summary><pre>const obj = {
+  value: 42,
+  getValue() { return this.value; }
+};
+const fn = obj.getValue;
+console.log(&#39;direct:&#39;, obj.getValue());
+console.log(&#39;extracted:&#39;, fn());
+await/* mark */ page.locator(&#39;.dummy&#39;);
+console.log(&#39;after await:&#39;, fn.bind(obj)());
+</pre><pre class="diff">--- orig.js	2026-10-17 16:47:30.896911733 -0400
++++ fixed.js	2026-10-17 16:47:31.174918229 -0400
+@@ -5,5 +5,5 @@
+ const fn = obj.getValue;
+ console.log(&#39;direct:&#39;, obj.getValue());
+ console.log(&#39;extracted:&#39;, fn());
+<span class="del">-await/* mark */ page.locator(&#39;.dummy&#39;);</span>
+<span class="add">+page.locator(&#39;.dummy&#39;);</span>
+ console.log(&#39;after await:&#39;, fn.bind(obj)());
+</pre></details></body></html>

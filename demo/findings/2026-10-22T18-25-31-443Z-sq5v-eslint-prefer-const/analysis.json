@@ -1,0 +1,28 @@
+{
+  "summary": "Flags let-declared variables that are never reassigned after initialization.",
+  "firingShapes": [
+    "let x = 1;",
+    "let y; y = 2;",
+    "for (let z of arr);",
+    "let {a,b}=o;"
+  ],
+  "silentShapes": [
+    "let x; x=1; x=2;",
+    "let y; console.log(y); y=3;",
+    "const z = 1;",
+    "for (let i=0,e=10;i<e;i++);"
+  ],
+  "fixDescription": "Replaces 'let' with 'const' for variables that are never reassigned after their initial assignment.",
+  "hazards": [
+    "Rewriting 'let' to 'const' in a block-scoped loop initializer like 'for (let i = 0; i < n; ++i)' breaks reassignment and causes a TypeError.",
+    "Changing 'let' to 'const' for a variable declared in a conditional block but used outside (e.g., 'if (true) let x = 1;') moves the declaration into the block scope, making it inaccessible outside and causing a ReferenceError.",
+    "If the variable is read before its assignment (e.g., 'let x; console.log(x); x = 1;'), replacing 'let' with 'const' creates a temporal dead zone, causing a ReferenceError on the read.",
+    "In destructuring like 'let {a, b} = obj;', rewriting only 'b' to 'const' when 'a' is reassigned later leaves 'b' as const but may mislead if 'b' is actually used in a way that assumes mutability (though rare).",
+    "If the variable is declared with 'let' in the init part of a for-in or for-of loop (e.g., 'for (let k in obj)'), changing to 'const' is correct per spec (new binding per iteration), but if the loop body relies on reassignment of the variable across iterations (which it shouldn't), it could break—though the rule only fires when there is no reassignment, so this is safe in practice.",
+    "If the variable is declared in a class static block (e.g., 'static { let x = 1; }'), rewriting to 'const' is safe because the block has its own scope and no reassignment occurs.",
+    "If the variable is declared in a scope where it is shadowed later (e.g., 'let x = 1; { let x = 2; }'), changing the outer 'let' to 'const' does not affect the inner shadowing and is safe.",
+    "If the variable is declared but never used (e.g., 'let unused = 1;'), changing to 'const' is safe and may even help tools detect unused variables.",
+    "If the variable is initialized with a function call that has side effects (e.g., 'let x = foo();'), moving the declaration to const does not change the timing or number of side effects.",
+    "If the variable is declared in a comma-separated list (e.g., 'let a = 1, b = 2;'), rewriting only 'b' to 'const' when 'a' is reassigned later results in mixed const/let in the same statement, which is syntactically valid but may confuse readers or tools expecting uniformity."
+  ]
+}

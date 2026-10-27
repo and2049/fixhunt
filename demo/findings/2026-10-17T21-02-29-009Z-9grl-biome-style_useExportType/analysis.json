@@ -1,0 +1,35 @@
+{
+  "summary": "The rule flags named exports where the exported identifier is used exclusively as a type annotation and lacks the 'type' keyword on the export statement.",
+  "firingShapes": [
+    "interface I {}; export { I };",
+    "type T = string; export { T };",
+    "import type { U } from './mod'; export { U };",
+    "export { type X, type Y };",
+    "class C {}; type D = C; export { D };",
+    "function f(): void {}; type F = typeof f; export { F };",
+    "enum E { A }; export { E };",
+    "namespace N {}; export { N };"
+  ],
+  "silentShapes": [
+    "const v = 42; export { v };",
+    "function g() {}; export { g };",
+    "class H {}; export { H };",
+    "import { k } from './mod'; export { k };",
+    "export { type L, m };"
+  ],
+  "fixDescription": "The autofix adds the 'type' keyword before the exported identifier(s) in the export statement, transforming 'export { I };' into 'export { type I };' for single or multiple type-only exports, and converts mixed exports like 'export { type X, Y };' into 'export type { X }; export { Y };' when the 'style' option is set to 'separatedType', or keeps them grouped as 'export { type X, Y };' under 'auto' or 'inlineType' styles if values are present.",
+  "hazards": [
+    "Rewriting 'export { I };' to 'export { type I };' changes the meaning if I is later used as a value (e.g., new I()) in another file, causing a runtime error because the type-only export is erased.",
+    "If the exported identifier is a namespace (e.g., export { N }; → export { type N };), the rewrite is invalid because namespaces cannot be exported as types, leading to a parse error.",
+    "When the identifier is an enum (e.g., export { E }; → export { type E };), the rewrite may break code that relies on the enum's runtime value (e.g., E.A) since type-only enums are not emitted.",
+    "Adding 'type' to an export of a const variable (e.g., export { v }; → export { type v };) is invalid syntax because const declarations cannot be type-only exported, causing a parse error.",
+    "In a file with 'export { type X, Y };', the autofix under 'separatedType' style may split it into 'export type { X }; export { Y };', but if Y is actually a type used elsewhere, the second export becomes incorrect and may trigger the same rule again or cause errors.",
+    "If the exported identifier is declared in the same file via a type alias that is conditionally defined (e.g., type T = cond ? string : number;), marking it as type-only is safe, but if the alias is later used in a value position (e.g., as a default export), the rewrite hides that usage and may lead to undetected misuse.",
+    "The autofix may move or drop attached comments (e.g., JSDoc or // TODO) on the export statement if the tool does not preserve them during rewriting, especially when splitting or reformatting the export clause.",
+    "In a re-export like 'export { T } from \"mod\";', if T is a type in the source module but the rule incorrectly flags it (though documentation says it should ignore), applying 'type' would be invalid because re-exports cannot be marked as type-only in the same way, causing a parse error.",
+    "If the file is in a JavaScript context (not TypeScript) and the rule is mistakenly applied, adding 'type' introduces invalid syntax that breaks parsing.",
+    "When using 'export { type I };' under 'inlineType' style, if the file also exports a value with the same name (e.g., const I = 5;), the rewrite creates a duplicate identifier error because 'type I' and 'value I' conflict in the same scope.",
+    "The fix assumes that all references to the identifier are type-only, but if there is a dynamic import like import('./mod').then(({ I }) => new I()), the static analysis may miss the value usage, making the rewrite unsafe.",
+    "If the export statement is inside a nested block (e.g., if (false) { export { I }; }), the rewrite is syntactically invalid because exports cannot appear inside blocks, though the original would also be invalid—this edge case highlights that the rule assumes top-level exports."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags manual file opening and writing using 'with open(...)' followed by '.write()', suggesting replacement with pathlib.Path.write_text/write_bytes.",
+  "firingShapes": [
+    "with open('file.txt', 'w') as f:\\n    f.write(data)",
+    "with open(path, 'wb') as f:\\n    f.write(b'data')",
+    "with open(filename, 'w', encoding='utf-8') as f:\\n    f.write(text)",
+    "with open(file, 'a') as f:\\n    f.write(line)\\n",
+    "with open(tmp, 'w') as out:\\n    out.write(result)",
+    "with open(logfile, 'wt') as log:\\n    log.write(msg + '\\\\n')",
+    "with open(output, 'w', buffering=1) as f:\\n    f.write(content)",
+    "with open(dest, 'wb') as dst:\\n    dst.write(payload)"
+  ],
+  "silentShapes": [
+    "with open('file.txt', 'r') as f:\\n    data = f.read()",
+    "with open('file.txt', 'w') as f:\\n    f.write(a); f.write(b)",
+    "with open('file.txt', 'w') as f:\\n    print(x, file=f)",
+    "with open('file.txt', 'w') as f:\\n    # comment\\n    f.write(data)",
+    "f = open('file.txt', 'w'); f.write(data); f.close()"
+  ],
+  "fixDescription": "Replace 'with open(path, mode) as f: f.write(content)' with 'Path(path).write_text(content)' for text modes or 'Path(path).write_bytes(content)' for binary modes, assuming no additional file operations or comments within the block.",
+  "hazards": [
+    "The rewrite drops any comments inside the 'with' block, altering source code documentation.",
+    "If the file mode includes 'a' (append), the fix incorrectly overwrites instead of appending.",
+    "Using buffering=1 or other non-default flags in open() changes I/O behavior; the fix ignores these flags.",
+    "When multiple write() calls exist in the block, the fix only replaces the first, leaving others unchanged and causing syntax errors.",
+    "If the write() argument is not a simple string/bytes but an expression with side effects, evaluating it once in the fix may differ from multiple evaluations in the original.",
+    "The original 'open' may create the file descriptor used elsewhere via aliasing (e.g., passing 'f' to another function); the fix breaks such aliases.",
+    "If an exception occurs during open(), the with statement ensures cleanup; the fix changes error handling timing and scope.",
+    "The fix assumes the path is a string or Path object, but if it's an expression (e.g., f'{dir}/file.txt'), the rewrite may not preserve evaluation order or side effects.",
+    "In binary mode, if the written data is not bytes (e.g., a string encoded implicitly), the fix may raise TypeError where the original succeeded via str.encode().",
+    "The fix introduces a top-level Path() call that may fail if the module lacks 'from pathlib import Path', requiring an import that wasn't needed before."
+  ]
+}

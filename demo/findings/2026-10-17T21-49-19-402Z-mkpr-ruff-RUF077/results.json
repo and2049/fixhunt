@@ -1,0 +1,594 @@
+{
+  "runId": "2026-10-17T21-49-19-402Z-mkpr-ruff-RUF077",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF077",
+    "fixKind": "unknown",
+    "docs": "# method-receiver-default (RUF077)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for default values on receiver parameters (e.g., `self`, `cls`) in method definitions.\n\n## Why is this bad?\nReceiver parameters (`self`, `cls`, or any name used as the receiver) should not have default\nvalues. In practice, these parameters are usually bound by the method binding protocol, so a\ndefault value on a receiver parameter is almost\ncertainly a mistake and can lead to confusing behavior or runtime errors.\n\n## Example\n\n```python\nclass A:\n    def method(self=None): ...\n\n    @classmethod\n    def build(cls=None): ...\n```\n\nUse instead:\n\n```python\nclass A:\n    def method(self): ...\n\n    @classmethod\n    def build(cls): ...\n```\n\n## Fix safety\nThis fix is always marked as unsafe. Removing the default changes behavior for a caller that\ninvokes the method directly through the class rather than through an instance (e.g.\n`A.method()` instead of `A().method()`), relying on the receiver parameter's default value.\n\n## Known limitations\nTo avoid false positives, this rule only flags an undecorated method, an undecorated\n`__new__`, or a method whose sole decorator is the one that makes it a `@classmethod`. A\nmethod with any other decorator (including common ones like `@property`, `@x.setter`, or\n`@typing.override`) is not flagged, even though such decorators typically leave the receiver\nbinding unchanged, because an arbitrary decorator could alter it.\n\n## Options\n- `lint.pep8-naming.classmethod-decorators`\n"
+  },
+  "analysis": {
+    "summary": "Flags methods where the first parameter (receiver) has a default value.",
+    "firingShapes": [
+      "def f(self=1): pass",
+      "def g(cls=[]): return cls",
+      "@classmethod\\ndef h(cls=None): pass",
+      "def __new__(cls=''): return object.__new__(cls)",
+      "def m(a, self=0): pass",
+      "async def am(self={}): await asyncio.sleep(0)",
+      "def static_meth():\n    def inner(self=True): pass\n    return inner()",
+      "lambda x=self: x"
+    ],
+    "silentShapes": [
+      "def f(x=1): pass",
+      "@staticmethod\\ndef g(): pass",
+      "@property\\ndef prop(self): return 1",
+      "@decorator\\ndef meth(self): pass",
+      "def meth(self, x=1): pass"
+    ],
+    "fixDescription": "Removes the default value expression from the receiver parameter (the first parameter of the method definition).",
+    "hazards": [
+      "If the method is called directly via the class (e.g., C.m()) without providing the receiver argument, removing the default causes a TypeError due to missing positional argument.",
+      "If the default value is a mutable object (e.g., self=[]), removing it eliminates shared state across calls, changing behavior for callers who relied on that sharing.",
+      "If the default value has side effects (e.g., self=print('hi') or self=f()), removing it prevents those side effects from occurring at function definition time.",
+      "If the default value is used elsewhere in the method body (e.g., def f(self=None): return self is None), removing it may cause NameError if the parameter is referenced without being passed.",
+      "If the method is overridden in a subclass and the subclass relies on the parent's default for dispatch or behavior, removing the default breaks the override contract.",
+      "If the default value depends on variables from outer scope (e.g., self=x where x is defined later), removing it changes closure capture and may cause NameError if x is not defined when the method is called.",
+      "If the method is used in a context where the receiver is intentionally omitted and the default provides a sentinel (e.g., for optional chaining or mocking), removing it breaks that pattern.",
+      "If the default value is an expression that evaluates to a type or class used in annotations or isinstance checks within the method, removing it alters those checks.",
+      "If the method is part of an API where callers explicitly rely on the ability to omit the receiver (even if unconventional), removing the default constitutes a breaking change.",
+      "If the default value is a forward reference or string annotation (e.g., self=\"Self\"), removing it may affect tools that inspect defaults for refactoring or documentation.",
+      "If the method contains nested functions that close over the receiver parameter and rely on its default value for correctness, removing the default alters the captured value in those closures.",
+      "If the default value is a decorated expression or involves complex operators (e.g., self=a+b), removing it changes evaluation timing and may affect performance or side-effect order."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0030378000000000002,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 8,
+    "fixed": 0,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Bytes vs Str Encoding Hazard",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Async Await Ordering Hazard",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              2,
+              28
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Subclass Override Dispatch Hazard",
+      "hazard": "If the method is overridden in a subclass and the subclass relies on the parent's default for dispatch or behavior, removing the default breaks the override contract.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p004",
+      "title": "Evaluation Order Side Effects Hazard",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n1\nCounter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Direct Class Call Missing Arg Hazard",
+      "hazard": "If the method is called directly via the class (e.g., C.m()) without providing the receiver argument, removing the default causes a TypeError due to missing positional argument.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              2,
+              21
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "84\nTypeError unsupported operand type(s) for *: 'C' and 'int'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "84\nTypeError unsupported operand type(s) for *: 'C' and 'int'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Omitted Receiver Sentinel Hazard",
+      "hazard": "If the method is used in a context where the receiver is intentionally omitted and the default provides a sentinel (e.g., for optional chaining or mocking), removing it breaks that pattern.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "default_used\nvalue: actual\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Star Imports Module Side Effects Hazard",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Shadowed Builtins Redefinition Hazard",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2, 3]\n[4, 5]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Type check depends on default receiver value",
+      "hazard": "If the default value is an expression that evaluates to a type or class used in annotations or isinstance checks within the method, removing it alters those checks.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              4,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Forward reference as default affects tooling",
+      "hazard": "If the default value is a forward reference or string annotation (e.g., self=\"Self\"), removing it may affect tools that inspect defaults for refactoring or documentation.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Receiver default used in method body causes NameError after fix",
+      "hazard": "If the default value is used elsewhere in the method body (e.g., def f(self=None): return self is None), removing it may cause NameError if the parameter is referenced without being passed.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              2,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Exception in default expression affects finally/else chaining",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              4,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: bad",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: bad",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mutable default receiver causes shared state across calls",
+      "hazard": "If the default value is a mutable object (e.g., self=[]), removing it eliminates shared state across calls, changing behavior for callers who relied on that sharing.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              2,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'G' object has no attribute 'append'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'G' object has no attribute 'append'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Generator default vs list: exhaustion behavior differs",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              5,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'H' object is not an iterator",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'H' object is not an iterator",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Side effect in default expression silenced by fix",
+      "hazard": "If the default value has side effects (e.g., self=print('hi') or self=f()), removing it prevents those side effects from occurring at function definition time.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF077",
+            "severity": "warning",
+            "message": "Receiver parameter should not have a default value",
+            "span": [
+              6,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1 ['called']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1 ['called']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Complex expression default changes evaluation timing",
+      "hazard": "If the default value is a decorated expression or involves complex operators (e.g., self=a+b), removing it changes evaluation timing and may affect performance or side-effect order.",
+      "rule": "RUF077",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    }
+  ]
+}

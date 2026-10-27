@@ -1,0 +1,1 @@
+log = []\ndef log_writer(msg, buf=log):\n    with open('tmp.txt', 'w') as f:\n        buf.append(msg)\n        f.write(msg)\n    return buf\nlog_writer('first')\nlog_writer('second')\nprint('log:', log)\nwith open('tmp.txt') as f:\n    print('file:', repr(f.read()))\nimport os\nos.remove('tmp.txt')

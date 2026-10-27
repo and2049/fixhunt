@@ -1,0 +1,28 @@
+{
+  "summary": "Flags conditional expressions where the true branch is False and the false branch is True.",
+  "firingShapes": [
+    "False if x else True",
+    "False if func() else True",
+    "False if obj.attr else True",
+    "False if lst[0] else True"
+  ],
+  "silentShapes": [
+    "True if x else False",
+    "x if y else z",
+    "False if x else y",
+    "x if True else False"
+  ],
+  "fixDescription": "Rewrites the expression as 'not <condition>' where <condition> is the original if-expression's test.",
+  "hazards": [
+    "The condition may have side effects; while evaluation order is preserved, the negation changes the truth value semantics but not execution timing.",
+    "If the condition is a variable named 'not', rewriting could create a syntax error due to keyword conflict (e.g., 'False if not else True' → 'not not' is valid but 'False if not else True' parses as condition='not').",
+    "If the condition uses a walrus operator (e.g., 'False if (x := y) else True'), the rewrite 'not (x := y)' remains valid but alters where the assignment expression is evaluated in larger contexts.",
+    "In a lambda default argument like 'lambda cond=False if x else True: ...', the rewrite to 'lambda cond=not x: ...' preserves behavior but may affect introspection or source display.",
+    "If the expression appears in a statement where the value is ignored (e.g., 'False if x else True; pass'), removing the conditional expression via rewrite does not drop the statement but replaces its value, which is safe since the value was unused.",
+    "If the condition is a comma-separated tuple (e.g., 'False if (a, b) else True'), the rewrite 'not (a, b)' is valid and equivalent since tuple truthiness is preserved under negation.",
+    "If the condition is a slice object (e.g., 'False if s[x:y] else True'), the rewrite 'not s[x:y]' is valid and equivalent because slice objects are always truthy, so both sides evaluate to False and True respectively — wait, no: slice objects are truthy, so 'False if slice else True' is False, and 'not slice' is False — actually equivalent. No hazard here.",
+    "If the condition is a NumPy array, 'not arr' raises ValueError due to ambiguity, whereas the conditional expression would have worked if the array was used in a boolean context only after explicit reduction — but in the original, 'False if arr else True' would already raise ValueError on the condition evaluation, so the rewrite fails at the same point.",
+    "If the condition is a custom object with __bool__ returning an integer subclass where negation behaves differently due to __inv__, but Python's 'not' always coerces to bool first, so it is equivalent.",
+    "If the expression is part of a larger expression and parentheses are omitted relying on operator precedence, the rewrite 'not cond' may bind differently than the original conditional expression (which has low precedence), e.g., in 'False if x else True or y' vs 'not x or y' — but the original parses as (False if x else (True or y))? No: conditional expressions have lower precedence than 'or', so 'False if x else True or y' is (False if x else True) or y, and 'not x or y' is (not x) or y — and since (False if x else True) equals (not x), they are equivalent. So no hazard."
+  ]
+}

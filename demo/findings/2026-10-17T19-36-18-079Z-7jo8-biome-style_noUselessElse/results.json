@@ -1,0 +1,321 @@
+{
+  "runId": "2026-10-17T19-36-18-079Z-7jo8-biome-style_noUselessElse",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/noUselessElse",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessElse\n- Fix: safe\n- Default severity: info\n- Available from version: 1.3.0\n- Diagnostic category: lint/style/noUselessElse\n\n\nDescription\n\n Disallow `else` block when the `if` block breaks early.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes useless.\n Its contents can be placed outside of the block.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes unnecessary.\n This is because the content of the `else` block will never be executed in conjunction with the `if` block,\n as the breaking statement ensures the control flow exits the `if` block immediately.\n Therefore, the `else` block is redundant, and its content can be placed outside of the block,\n reducing the indentation level by one.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n while (x > 0) {\n     if (f(x)) {\n         break;\n     } else {\n         x++\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         return 0;\n     } else {\n         return x;\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         throw new RangeError();\n     } else {\n         return x;\n     }\n }\n ```\n\nValid\n\n ```js\n function f(x) {\n     if (x < 0) {\n         return 0;\n     }\n     return x;\n }\n ```\n\n ```js\n function f(x) {\n     if (x < 0) {\n         console.info(\"negative number\");\n     } else if (x > 0) {\n         return x;\n     } else {\n         console.info(\"number 0\");\n     }\n }\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "Flags 'else' blocks that follow an 'if' containing a breaking statement (return, break, continue, throw), marking them as redundant.",
+    "firingShapes": [
+      "if (a) { return; } else { b(); }",
+      "while (x) { if (y) { break; } else { z++; } }",
+      "for (; ;) { if (cond) { continue; } else { foo(); } }",
+      "try { if (err) { throw err; } else { log(); } } catch {}",
+      "function f() { if (x) { return 1; } else { return 2; } }",
+      "if (x) { break; } else { y = 1; }",
+      "switch(v){case 1:if(true){return;}else{do();}break;}",
+      "if (x) { throw new Error(); } else { cleanup(); }"
+    ],
+    "silentShapes": [
+      "if (a) { b(); } else { c(); }",
+      "if (x) { return; } else if (y) { return; } else { z(); }",
+      "function f() { if (x) { return; } else { if (y) { return; } } }",
+      "if (x) { continue; } else { if (y) { break; } }",
+      "if (x) { return; } else { return; }"
+    ],
+    "fixDescription": "Removes the 'else' keyword and braces, promoting the else block's statements to the same indentation level as the if statement, preserving their original order.",
+    "hazards": [
+      "Moving statements from an else block to the outer scope changes their execution context\u2014they may now run even when the if condition is true but non-breaking (e.g., due to missing break/return).",
+      "If the else block contains a variable declaration with 'let' or 'const', hoisting it outward may cause a ReferenceError if used before declaration in the new scope.",
+      "Promoting statements from an else block can alter evaluation order relative to prior or subsequent statements in the enclosing block, affecting side effects.",
+      "If the else block contains a labeled statement that is referenced by a break/continue from outside the original else, moving it may break the label's visibility or create incorrect control flow.",
+      "When the if-else is inside a loop, promoting the else block's content may cause it to execute on iterations where the if condition is true but doesn't break (e.g., continues), altering loop behavior.",
+      "If the else block contains a function declaration, moving it may change its hoisting timing relative to other declarations in the outer scope, leading to override issues.",
+      "Comments attached to the 'else' keyword or its braces may be lost during the rewrite, as the autofix typically discards irrelevant tokens.",
+      "If the else block is empty or contains only whitespace/comments, removing it may inadvertently delete meaningful formatting or trailing comments relied upon for readability or tooling.",
+      "In strict mode, promoting a 'with' statement (if present) from an else block could alter scope resolution unexpectedly.",
+      "If the else block follows an 'if' inside a with statement, moving its content out may change the object scope in which those statements execute.",
+      "When the if statement is part of a larger ternary-like chain via else-if, flattening may break the intended mutual exclusivity of branches.",
+      "If the else block contains a debugger statement, its removal or relocation may affect debugging behavior depending on tool expectations."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0013373999999999999,
+  "summary": {
+    "programs": 9,
+    "invalid": 0,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 7
+  },
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Evaluation Order Shift",
+      "hazard": "Promoting statements from an else block can alter evaluation order relative to prior or subsequent statements in the enclosing block, affecting side effects.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Label Visibility Break",
+      "hazard": "If the else block contains a labeled statement that is referenced by a break/continue from outside the original else, moving it may break the label's visibility or create incorrect control flow.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:36:28.834491383 -0400\n+++ fixed.js\t2026-10-17 15:36:29.085490518 -0400\n@@ -2,9 +2,8 @@\n for (let i = 0; i < 3; i++) {\n   if (Math.random() < 0.5) {\n     break outer; // original: break exits the labeled loop from inside else\n-  } else {\n-    innerBreak: break outer; // labeled break inside else\n   }\n+    innerBreak: break outer; // labeled break inside else\n }\n print('loop finished, counter should be 3');\n print('i value: ' + i);\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "TDZ After Hoisting",
+      "hazard": "If the else block contains a variable declaration with 'let' or 'const', hoisting it outward may cause a ReferenceError if used before declaration in the new scope.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Getter Side Effect",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Let Const Hoisting TDZ",
+      "hazard": "If the else block contains a variable declaration with 'let' or 'const', hoisting it outward may cause a ReferenceError if used before declaration in the new scope.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Function Declaration in Else",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Empty Else Formatting",
+      "hazard": "If the else block is empty or contains only whitespace/comments, removing it may inadvertently delete meaningful formatting or trailing comments relied upon for readability or tooling.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "else body\n",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Nested Break/Continue/Fina lly",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: print is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:36:30.334486108 -0400\n+++ fixed.js\t2026-10-17 15:36:30.581485220 -0400\n@@ -6,10 +6,9 @@\n       depth++;\n       if (Math.random() < 0.5) {\n         break outer; // original break from inside nested else\n-      } else {\n+      }\n         depth++;\n         continue outer; // original continue from inside else\n-      }\n     }\n   }\n   print('depth: ' + depth);\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Else Block After Non-Breaking If",
+      "hazard": "Moving statements from an else block to the outer scope changes their execution context\u2014they may now run even when the if condition is true but non-breaking (e.g., due to missing break/return).",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: x is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

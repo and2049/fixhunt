@@ -1,0 +1,647 @@
+{
+  "runId": "2026-10-17T20-59-45-406Z-livv-biome-style_useCollapsedIf",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useCollapsedIf",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useCollapsedIf\n- Fix: safe\n- Default severity: info\n- Available from version: 1.9.4\n- Diagnostic category: lint/style/useCollapsedIf\n\n\nDescription\n\n Enforce using single `if` instead of nested `if` clauses.\n\n If an `if (b)` statement is the only statement in an `if (a)` block, it is often clearer to use an `if (a && b)` form.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n if (condition) {\n     if (anotherCondition) {\n         // ...\n     }\n }\n ```\n\n ```js,expect_diagnostic\n if (condition) {\n     // Comment\n     if (anotherCondition) {\n         // ...\n     }\n }\n ```\n\nValid\n\n ```js\n if (condition && anotherCondition) {\n     // ...\n }\n ```\n\n ```js\n if (condition) {\n     if (anotherCondition) {\n         // ...\n     }\n     doSomething();\n }\n ```\n\n ```js\n if (condition) {\n     if (anotherCondition) {\n         // ...\n     } else {\n         // ...\n     }\n }\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags nested if statements where the inner if is the sole statement in the outer if's body.",
+    "firingShapes": [
+      "if (a) { if (b) { c; } }",
+      "if (x) { /* comment */ if (y) { z(); } }",
+      "if (p) {   if (q) { return r; } }",
+      "if (flag) { if (value > 0) { console.log(value); } }",
+      "if (obj) { if (obj.prop) { obj.prop = null; } }",
+      "if (cond1) { if (cond2) { throw new Error(); } }",
+      "if (a) { if (b) { let d = e; } }",
+      "if (x) { if (y) { x = y; } }"
+    ],
+    "silentShapes": [
+      "if (a) { if (b) { c; } else { d; } }",
+      "if (a) { if (b) { c; } doSomething(); }",
+      "if (a) { if (b) { c; } if (d) { e; } }",
+      "if (a) { if (b) { c; } } while (false) {}",
+      "if (a) { if (b) { c; } } if (d) { e; }"
+    ],
+    "fixDescription": "Rewrites the nested if statements into a single if with a logical AND (&&) condition, preserving the inner block's statements exactly as they were.",
+    "hazards": [
+      "The rewrite changes evaluation order: in the original, `b` is only evaluated if `a` is truthy, but in the fixed version `b` is always evaluated regardless of `a`'s value, which can cause errors if `b` has side effects or throws when `a` is falsy.",
+      "If `a` is an expression with side effects (e.g., a function call), the original evaluates it once, but the fixed version may evaluate it twice due to how `&&` short-circuiting works in some contexts\u2014though actually `a && b` still evaluates `a` only once, so this hazard is invalid; instead, consider: if `a` is falsy, the original skips evaluating `b`, but the fixed version evaluates `b` unconditionally in the `&&` expression, leading to potential errors.",
+      "Comments inside the outer if block but outside the inner if (e.g., after the opening brace and before the inner if) are removed by the autofix because the fix collapses the entire block into a single line, discarding intermediate comments.",
+      "If the inner block contains a `break` statement, the original `break` applies to the nearest enclosing loop or switch, but after rewriting, the context may change if the if statement is nested within other constructs, potentially altering which construct the `break` targets.",
+      "If the inner block contains a `continue` statement, similar to `break`, its target loop may be misinterpreted after the structural change, especially if the if statement is not directly inside a loop.",
+      "If the inner block contains a `return` statement, the function return behavior is preserved, but if the outer if is part of a larger expression or statement, the control flow change could affect surrounding code\u2014though `return` exits the function immediately, so this is less likely; however, in arrow functions or edge cases with commas, it might matter.",
+      "If the inner block declares a variable with `let` or `const`, the original confines that variable to the inner block's scope, but after rewriting into a single if block, the variable remains in the same scope (the outer if's block), so scoping is preserved\u2014wait, no: in both cases, the variable is scoped to the outer if's block because the inner block is the only statement; thus, no change. Instead, consider: if the inner block is empty (though the rule requires a statement), but it's not. Another idea: if the condition `a` or `b` involves `this` or `super` in a method, the evaluation context is unchanged, so no issue. Focus on comments and evaluation order.",
+      "If the outer if block has trailing comments after the closing brace, they are unaffected, but if there are comments between the outer `{` and the inner `if`, they are lost.",
+      "In rare cases involving ASI (Automatic Semicolon Insertion), rewriting a nested if into a single line could alter semicolon insertion if the surrounding code relies on newlines, though this is highly speculative and unlikely in practice.",
+      "If the inner if statement is labeled (e.g., `inner: if (b) { ... }`), the label is discarded in the fix because the collapsed form does not retain labels, breaking any `break inner;` or `continue inner;` references.",
+      "If the inner block contains a debugger statement, it is preserved, but if the autofix process mishandles it due to formatting, it could be dropped\u2014though formatters usually preserve it."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0037251000000000003,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 13,
+    "fixed": 11,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Evaluation order changed due to &&",
+      "hazard": "In the original, `b` is only evaluated if `a` is truthy, but in the fixed version `b` is always evaluated regardless of `a`'s value.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "bEval: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "bEval: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:00.026457539 -0400\n+++ fixed.js\t2026-10-17 17:00:00.298460978 -0400\n@@ -1,5 +1,5 @@\n let a = false;\n let bEval = 0;\n function b() { bEval++; return true; }\n-if (a) { if (b()) { console.log('inner'); } }\n+if (a && b()) { console.log('inner'); }\n console.log('bEval:', bEval);\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Comment removed by autofix",
+      "hazard": "Comments inside the outer if block but outside the inner if are removed by the autofix.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Comment presence affects readability only; no runtime change.\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Comment presence affects readability only; no runtime change.\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Temporal Dead Zone hazard via let scoping misunderstanding",
+      "hazard": "Although let scoping is preserved, this program checks for mistaken assumptions about hoisting or TDZ if code is reordered incorrectly.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x after: undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Regex lastIndex side effect with g flag",
+      "hazard": "Merging conditions with && causes the regex to be tested twice, advancing lastIndex and skipping matches.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1st: 1\n2nd: 3\nFinal lastIndex: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Side effect duplication in merged condition",
+      "hazard": "The condition `b()` is evaluated once in original but twice in fixed version due to &&, causing side effects to run twice.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "inner\ncounter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "inner\ncounter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:01.186472206 -0400\n+++ fixed.js\t2026-10-17 17:00:01.443475455 -0400\n@@ -1,5 +1,5 @@\n let a = true;\n let counter = 0;\n function b() { counter++; return true; }\n-if (a) { if (b()) { console.log('inner'); } }\n+if (a && b()) { console.log('inner'); }\n console.log('counter:', counter);\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Async/await ordering changed by && evaluation",
+      "hazard": "In `if (a) { if (await b()) { ... } }`, the await is only called if a is true, but `if (a && await b())` always evaluates await b() even if a is false.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "bCalled: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "bCalled: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:01.608477540 -0400\n+++ fixed.js\t2026-10-17 17:00:01.881480991 -0400\n@@ -2,6 +2,6 @@\n let bCalled = false;\n async function b() { bCalled = true; return true; }\n (async () => {\n-  if (a) { if (await b()) { console.log('inner'); } }\n+  if (a && (await b())) { console.log('inner'); }\n   console.log('bCalled:', bCalled);\n })();\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Function declaration in block affected by scoping perception",
+      "hazard": "Function declarations inside blocks are hoisted to the function scope, but the collapse may mislead about visibility\u2014though semantics are preserved, we capture any confusion.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "inner after: undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "inner after: undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:02.049483114 -0400\n+++ fixed.js\t2026-10-17 17:00:02.322486563 -0400\n@@ -1,7 +1,5 @@\n-if (true) {\n-  if (false) {\n+if (true && false) {\n     function inner() { return 1; }\n     console.log(typeof inner); // 'function' due to hoisting\n   }\n-}\n console.log('inner after:', typeof inner); // 'function' due to hoisting to outer scope\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Generator yield position affected by early exit",
+      "hazard": "The collapse does not change yield position, but we test interaction with loops and re-entry to ensure deterministic behavior.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Comment loss between braces",
+      "hazard": "If the inner block contains a `break` statement, the original `break` applies to the nearest enclosing loop or switch, but after rewriting, the context may change if the if statement is nested within ",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "sum: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "sum: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:08.628566110 -0400\n+++ fixed.js\t2026-10-17 17:00:08.904569586 -0400\n@@ -2,11 +2,9 @@\n let sum = 0;\n outer:\n for (let i = 0; i < 2; i++) {\n-  if (i === 0) {\n-    if (true) {\n+  if (i === 0 && true) {\n       break outer;\n     }\n-  }\n   sum += i;\n }\n console.log('sum:', sum);\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Function declaration in block scoping",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:09.074571727 -0400\n+++ fixed.js\t2026-10-17 17:00:09.311574710 -0400\n@@ -1,10 +1,8 @@\n // Hazard 3: function declaration in block\n (function() {\n-  if (true) {\n-    if (false) {\n+  if (true && false) {\n       function f() { return 1; }\n       return f();\n     }\n-  }\n   return typeof f === 'function' ? f() : 0;\n })();\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Label/break/continue/finally control flow",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "finally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:09.471576725 -0400\n+++ fixed.js\t2026-10-17 17:00:09.751580250 -0400\n@@ -3,11 +3,9 @@\n loop:\n for (let i = 0; i < 2; i++) {\n   try {\n-    if (i === 0) {\n-      if (true) {\n+    if (i === 0 && true) {\n         break loop;\n       }\n-    }\n     result.push(i);\n   } finally {\n     result.push('finally');\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Debugger statement preservation",
+      "hazard": "If the inner block contains a debugger statement, it is preserved, but if the autofix process mishandles it due to formatting, it could be dropped\u2014though formatters usually preserve it.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "x: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:09.928582478 -0400\n+++ fixed.js\t2026-10-17 17:00:10.197585864 -0400\n@@ -1,9 +1,7 @@\n // Hazard 5: debugger statement\n let x = 0;\n-if (true) {\n-  if (false) {\n+if (true && false) {\n     debugger;\n     x = 1;\n   }\n-}\n console.log('x:', x);\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Strict vs sloppy mode semantics",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "obj.prop: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "obj.prop: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:10.374588091 -0400\n+++ fixed.js\t2026-10-17 17:00:10.640591438 -0400\n@@ -1,9 +1,7 @@\n 'use strict';\n // Hazard 6: strict mode\n let obj = {};\n-if (obj) {\n-  if (obj.prop === undefined) {\n+if (obj && obj.prop === undefined) {\n     obj.prop = 42;\n   }\n-}\n console.log('obj.prop:', obj.prop);\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Falsy outer condition skipping inner eval",
+      "hazard": "if `a` is falsy, the original skips evaluating `b`, but the fixed version evaluates `b` unconditionally in the `&&` expression, leading to potential errors.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "side called: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "side called: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:10.808593552 -0400\n+++ fixed.js\t2026-10-17 17:00:11.082596999 -0400\n@@ -4,9 +4,7 @@\n   called = true;\n   return true;\n }\n-if (false) {\n-  if (side()) {\n+if (false && side()) {\n     // should not run\n   }\n-}\n console.log('side called:', called);\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Arguments object and rest parameters interaction",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "result: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:11.250599112 -0400\n+++ fixed.js\t2026-10-17 17:00:11.531602646 -0400\n@@ -1,10 +1,8 @@\n // Hazard 8: arguments and rest\n function test(...args) {\n-  if (args.length > 0) {\n-    if (args[0] === 42) {\n+  if (args.length > 0 && args[0] === 42) {\n       return arguments[0];\n     }\n-  }\n   return -1;\n }\n console.log('result:', test(42, 99));\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Comment loss between outer { and inner if",
+      "hazard": "If the outer if block has trailing comments after the closing brace, they are unaffected, but if there are comments between the outer `{` and the inner `if`, they are lost.",
+      "rule": "style/useCollapsedIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into another if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "log: none\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "log: none\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

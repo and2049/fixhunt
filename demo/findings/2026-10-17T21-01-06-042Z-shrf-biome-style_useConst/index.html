@@ -1,0 +1,126 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/useConst — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/useConst <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T21-01-06-042Z-shrf-biome-style_useConst · fix labelled <b>safe</b> · 16 programs, 10 fired, 9 fixed, 0 oracle-backed finding(s) · model cost $0.0033</p>
+<div class="card"><b>Rule analysis</b><p>Flags `let` declarations where the variable is never reassigned after initialization.</p><p class="mut">Fix: Replaces `let` with `const` for each variable declarator that has an initializer or is assigned exactly once before any reassignment, preserving declarators, commas, and block structure while removing the `let` keyword and inserting `const`.</p><details><summary>12 hazards</summary><ul><li>Rewriting `let` in a loop header like `for (let i of arr)` to `const` causes a TypeError because `const` bindings cannot be reassigned per iteration.</li><li>Changing `let` to `const` in a block-scoped redeclaration such as `{ let a = 1; let a = 2; }` results in a SyntaxError due to duplicate `const` declarations in the same block.</li><li>If the initializer contains a `delete` expression targeting an unqualified identifier (e.g., `let x = delete y;`), converting to `const` may throw a SyntaxError in strict mode because `const` bindings cannot be deleted.</li><li>When the variable is conditionally declared (e.g., `if (x) let y = 1;`), replacing `let` with `const` can cause a ReferenceError if the block is not entered, as `const` is not hoisted and remains inaccessible outside its block.</li><li>In non-strict mode, if the initializer assigns to an undeclared variable (e.g., `let a = (b = 5);`), switching to `const` may silently create a global variable instead of throwing, altering implicit globals behavior.</li><li>If the declarator lacks an initializer and is assigned later (e.g., `let a; a = 1;`), the fix incorrectly applies `const` to the uninitialized declarator, causing a SyntaxError because `const` must be initialized at declaration.</li><li>Moving a `let` declaration to `const` across a function boundary (e.g., from outer to inner scope via hoisting misunderstandings) breaks encapsulation and may expose unintended variables.</li><li>Comments attached to the `let` keyword or declarators (e.g., `let /* ignored */ x = 1;`) may be stripped or misplaced during the rewrite, altering source formatting or tooling expectations.</li><li>In a `try` block (e.g., `try { let e = 5; }`), rewriting to `const` is safe only if no reassignment occurs, but if the variable is referenced in `finally` after potential reassignment in `catch`, the timing of binding initialization may differ.</li><li>When used with `export let` (non-standard but possible in some environments), replacing with `export const` may break bindings expected to be mutable by importers.</li><li>If the variable name is `let` or `const` itself (e.g., `let let = 5;`), the rewrite produces invalid syntax (`const const = 5;`).</li><li>In eval contexts or dynamic scope manipulations, changing `let` to `const` alters the mutability of the binding, which may be relied upon for runtime redefinition via indirect eval.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>ASI and semicolon-less code with leading parenthesis</td><td class="mut">When `let` is converted to `const` in ASI-prone code without semicolons, a following line </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Moving let to const across function boundary breaks encapsulation</td><td class="mut">If a `let` declared in an outer scope is reassigned inside an inner function, converting i</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Non-strict mode: initializer assigns to undeclared variable</td><td class="mut">In sloppy mode, `let a = (b = 5);` creates a global `b`. If `let` becomes `const`, the ass</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Strict vs sloppy mode semantics</td><td class="mut">In strict mode, assigning to an undeclared variable throws; in sloppy mode it creates a gl</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Sparse arrays, holes, Array(n) vs [n]</td><td class="mut">When initializing a `let` variable with an array literal containing holes (e.g., `[, , 3]`</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Regular expressions: escapes, unicode flag, lastIndex with g flag</td><td class="mut">If a `let` variable holds a regex with `/g` flag, its `lastIndex` mutates on each `exec`. </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>Block-scoped redeclaration with const causes SyntaxError</td><td class="mut">Two `let` declarations in the same block are allowed; converting both to `const` causes a </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Order of evaluation when expressions are merged or duplicated</td><td class="mut">If a `let` variable&#39;s initializer has side effects (e.g., function calls), and the linter </td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Unassigned let converted to const</td><td class="mut">If the declarator lacks an initializer and is assigned later (e.g., `let a; a = 1;`), the </td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Delete unqualified identifier in initializer</td><td class="mut">If the initializer contains a `delete` expression targeting an unqualified identifier (e.g</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Conditional let declaration</td><td class="mut">When the variable is conditionally declared (e.g., `if (x) let y = 1;`), replacing `let` w</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Numeric/string coercion with toString/valueOf</td><td class="mut">numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, Big</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Export let (non-standard)</td><td class="mut">When used with `export let` (non-standard but possible in some environments), replacing wi</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>__proto__ and prototype access</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Strict vs sloppy mode semantics</td><td class="mut">strict vs sloppy mode semantics</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Eval context mutability</td><td class="mut">In eval contexts or dynamic scope manipulations, changing `let` to `const` alters the muta</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — ASI and semicolon-less code with leading parenthesis</summary><pre>let x = 5
+[1,2].forEach(v=&gt;console.log(x+v))
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:20.097451115 -0400
++++ fixed.js	2026-10-17 17:01:20.379454550 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-let x = 5</span>
+<span class="add">+const x = 5</span>
+ [1,2].forEach(v=&gt;console.log(x+v))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Moving let to const across function boundary breaks encapsulation</summary><pre>let v = 0;
+function update() { v = 42; }
+update();
+console.log(v);
+</pre></details><details id="r1-p003"><summary>r1-p003 — Non-strict mode: initializer assigns to undeclared variable</summary><pre>(function(){ &#39;use sloppy&#39;; let a = (b = 5); console.log(typeof b, b); })();
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:20.778459409 -0400
++++ fixed.js	2026-10-17 17:01:21.052462746 -0400
+@@ -1 +1 @@
+<span class="del">-(function(){ &#39;use sloppy&#39;; let a = (b = 5); console.log(typeof b, b); })();</span>
+<span class="add">+(function(){ &#39;use sloppy&#39;; const a = (b = 5); console.log(typeof b, b); })();</span>
+</pre></details><details id="r1-p004"><summary>r1-p004 — Strict vs sloppy mode semantics</summary><pre>&#39;use strict&#39;;
+try {
+  let c = (d = 1);
+} catch(e) {
+  console.log(e.name, e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:21.225464852 -0400
++++ fixed.js	2026-10-17 17:01:21.502468224 -0400
+@@ -1,6 +1,6 @@
+ &#39;use strict&#39;;
+ try {
+<span class="del">-  let c = (d = 1);</span>
+<span class="add">+  const c = (d = 1);</span>
+ } catch(e) {
+   console.log(e.name, e.message);
+ }
+</pre></details><details id="r1-p005"><summary>r1-p005 — Sparse arrays, holes, Array(n) vs [n]</summary><pre>let arr = [, , 3];
+console.log(arr.length, arr[0], arr[1], arr[2]);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:21.677470354 -0400
++++ fixed.js	2026-10-17 17:01:21.965473860 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-let arr = [, , 3];</span>
+<span class="add">+const arr = [, , 3];</span>
+ console.log(arr.length, arr[0], arr[1], arr[2]);
+</pre></details><details id="r1-p006"><summary>r1-p006 — Regular expressions: escapes, unicode flag, lastIndex with g flag</summary><pre>let re = /a/g;
+console.log(re.exec(&#39;aba&#39;), re.lastIndex);
+console.log(re.exec(&#39;aba&#39;), re.lastIndex);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:22.140475990 -0400
++++ fixed.js	2026-10-17 17:01:22.413479312 -0400
+@@ -1,3 +1,3 @@
+<span class="del">-let re = /a/g;</span>
+<span class="add">+const re = /a/g;</span>
+ console.log(re.exec(&#39;aba&#39;), re.lastIndex);
+ console.log(re.exec(&#39;aba&#39;), re.lastIndex);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Block-scoped redeclaration with const causes SyntaxError</summary><pre>{ let a = 1; let a = 2; console.log(a); }
+</pre></details><details id="r1-p008"><summary>r1-p008 — Order of evaluation when expressions are merged or duplicated</summary><pre>let n = 0, x = (n++, 10);
+console.log(n, x);
+</pre></details><details id="r2-p001"><summary>r2-p001 — Unassigned let converted to const</summary><pre>let a;
+a = 1;
+console.log(a);
+</pre></details><details id="r2-p002"><summary>r2-p002 — Delete unqualified identifier in initializer</summary><pre>&quot;use strict&quot;;
+let x = delete y;
+console.log(x);
+</pre></details><details id="r2-p003"><summary>r2-p003 — Conditional let declaration</summary><pre>if (false) { let y = 1; }
+try { console.log(y); } catch (e) { console.log(e.name + &#39;: &#39; + e.message); }
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:27.815544970 -0400
++++ fixed.js	2026-10-17 17:01:28.092548333 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-if (false) { let y = 1; }</span>
+<span class="add">+if (false) { const y = 1; }</span>
+ try { console.log(y); } catch (e) { console.log(e.name + &#39;: &#39; + e.message); }
+</pre></details><details id="r2-p004"><summary>r2-p004 — Numeric/string coercion with toString/valueOf</summary><pre>let o = { valueOf: () =&gt; 2, toString: () =&gt; &#39;3&#39; };
+let result = o + &#39;&#39;;
+console.log(result);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:28.269550481 -0400
++++ fixed.js	2026-10-17 17:01:28.535553709 -0400
+@@ -1,3 +1,3 @@
+<span class="del">-let o = { valueOf: () =&gt; 2, toString: () =&gt; &#39;3&#39; };</span>
+<span class="del">-let result = o + &#39;&#39;;</span>
+<span class="add">+const o = { valueOf: () =&gt; 2, toString: () =&gt; &#39;3&#39; };</span>
+<span class="add">+const result = o + &#39;&#39;;</span>
+ console.log(result);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Export let (non-standard)</summary><pre>export let counter = 0;
+counter++;
+console.log(counter);
+</pre></details><details id="r2-p006"><summary>r2-p006 — __proto__ and prototype access</summary><pre>let obj = { __proto__: { x: 1 } };
+console.log(obj.x);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:28.940558624 -0400
++++ fixed.js	2026-10-17 17:01:29.224562070 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-let obj = { __proto__: { x: 1 } };</span>
+<span class="add">+const obj = { __proto__: { x: 1 } };</span>
+ console.log(obj.x);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Strict vs sloppy mode semantics</summary><pre>&quot;use strict&quot;;
+try { let v = 1; v = 2; } catch (e) { console.log(e.name); }
+(function() { &quot;use sloppy&quot;; let w = 1; w = 2; console.log(w); })();
+</pre></details><details id="r2-p008"><summary>r2-p008 — Eval context mutability</summary><pre>let global = (0, eval)(&#39;this&#39;);
+let x = 1;
+(0, eval)(&#39;x = 2&#39;);
+console.log(x);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:29.623566910 -0400
++++ fixed.js	2026-10-17 17:01:29.893570185 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-let global = (0, eval)(&#39;this&#39;);</span>
+<span class="del">-let x = 1;</span>
+<span class="add">+const global = (0, eval)(&#39;this&#39;);</span>
+<span class="add">+const x = 1;</span>
+ (0, eval)(&#39;x = 2&#39;);
+ console.log(x);
+</pre></details></body></html>

@@ -1,0 +1,36 @@
+{
+  "summary": "Flags dict, list, or set comprehensions where the output expression equals the iteration variable(s), suggesting replacement with direct constructor calls.",
+  "firingShapes": [
+    "{a: b for a, b in items}",
+    "[x for x in seq]",
+    "{x for x in coll}",
+    "{k: v for k, v in zip(keys, vals)}",
+    "[i for i in range(n)]",
+    "{s for s in strings if True}",
+    "{(x, y): None for x, y in pairs}",
+    "[func(y) for y in data if func(y) == y]"
+  ],
+  "silentShapes": [
+    "{a: b*2 for a, b in items}",
+    "[x+1 for x in seq]",
+    "{x for x in coll if x > 0}",
+    "{k: v for k, v in d.items() if v}",
+    "[i for i, _ in enumerate(data)]",
+    "{s.upper(): len(s) for s in strings}"
+  ],
+  "fixDescription": "Replaces the comprehension with a call to dict(), list(), or set() using the same iterable expression, preserving only the iterable part and discarding any conditionals or transformed expressions.",
+  "hazards": [
+    "Rewriting `{a: b for a, b in mapping}` as `dict(mapping)` changes behavior when `mapping` is a dict, because the comprehension iterates over keys while `dict(mapping)` preserves key-value pairs.",
+    "Rewriting `{x for x in seq}` as `set(seq)` may raise a TypeError if `seq` contains unhashable elements like lists or dicts, whereas the comprehension would fail earlier during iteration.",
+    "Rewriting `[x for x in iterable]` as `list(iterable)` can trigger a RecursionError if `iterable` is an object whose `__iter__` method calls `len()` on the containing object, and the list constructor invokes `__len__`.",
+    "Rewriting a comprehension inside a lambda or nested function may alter variable scoping if the iterable expression captures variables from an outer scope that are later rebound, due to differences in when the iterable is evaluated.",
+    "If the iterable has side effects (e.g., a function call with prints or state changes), moving it into a constructor call may not change behavior, but if the comprehension was inside a larger expression, reordering could affect evaluation order relative to other side effects.",
+    "Comments inside the comprehension brackets (e.g., `{x # comment\n for x in y}`) are lost during the rewrite, as the autofix does not preserve internal comment syntax.",
+    "Rewriting `{k: v for k, v in zip(a, b)}` as `dict(zip(a, b))` is safe only if `zip(a, b)` produces pairs; however, if `a` and `b` are of unequal length, the behavior matches, but if the zip object is reused elsewhere, its state may be consumed earlier.",
+    "Rewriting a comprehension used in a default argument (e.g., `def f(x={y: z for y, z in items}):`) may cause premature evaluation of the iterable at definition time instead of call time, changing when side effects occur.",
+    "If the iterable is a class property or descriptor, accessing it via the constructor may trigger different behavior than in the comprehension due to how `__get__` is invoked.",
+    "Rewriting `{x for x in obj}` as `set(obj)` may invoke `__iter__` on `obj` twice if the constructor internally checks for set-like behavior, potentially causing inconsistent iteration or side effects.",
+    "In a boolean context like `if {x for x in items}:`, rewriting as `if set(items):` may behave differently if `items` is a non-list iterable that defines `__len__` to raise an exception, since `set()` may not call `__len__` while the comprehension does during iteration.",
+    "If the comprehension includes a walrus operator (e.g., `{x: y for x, y in data if (tmp := x) is not None}`), the autofix does not apply, but if mistakenly used, removing the condition would break scoping of the assignment expression."
+  ]
+}

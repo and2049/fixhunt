@@ -1,0 +1,103 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C410 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C410 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-21-05-230Z-6h8d-ruff-C410 · fix labelled <b>unknown</b> · 16 programs, 9 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0029</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant list() constructor calls wrapping list or tuple literals.</p><p class="mut">Fix: Rewrites list(literal) to the literal itself if it&#39;s a list literal, or to a list literal with the same elements if it&#39;s a tuple literal.</p><details><summary>10 hazards</summary><ul><li>If the literal contains a comment inside (e.g., list([1, # comment
+2])), the autofix may drop the comment when converting to [1, 2].</li><li>If the literal is part of a larger expression where the list() call affects operator precedence (e.g., list([1, 2]) + [3]), removing list() could change evaluation order due to binding differences.</li><li>If the literal is used in a context where the list() call is relied upon to create a new list (e.g., for mutation safety), replacing list((1,2)) with [1,2] still creates a new list, so no semantic change, but if the literal is a variable referencing a mutable list, the fix does not apply—this hazard is not applicable as the rule only triggers on literals.</li><li>If the code relies on the list() constructor for debugging or side effects (e.g., list(print([1,2]) or [])), the rule does not fire because the argument is not a literal, so no fix is attempted—this hazard is not applicable.</li><li>If the literal contains nested expressions with side effects (e.g., list([f(), g()])), the rule does not fire because the argument is not a literal (it&#39;s a list containing calls), so no fix is attempted—this hazard is not applicable.</li><li>If the literal is a tuple containing a starred expression (e.g., list((*range(3),))), the rule does not fire because starred expressions are not allowed in tuple literals in this context—invalid syntax, so rule does not fire.</li><li>If the code is in a string or comment (e.g., &#39;# list([1,2])&#39;), the linter does not parse it as code, so no fix is attempted—this hazard is not applicable.</li><li>If the literal is a list literal that is empty and the surrounding code depends on the identity of the list (e.g., is(list([])) is not list([])), removing list() changes identity because [] is a singleton in some contexts? Actually, [] is not a singleton; each [] creates a new list, so list([]) and [] are both new lists—no identity difference. However, in CPython, small tuples may be interned, but lists are not. So no hazard.</li><li>If the literal is a tuple and the code uses the fact that list(tuple) raises TypeError on non-tuple (but the argument is a literal tuple, so safe), no issue.</li><li>If the literal is a tuple and the rewrite to list literal fails due to being in a context that expects a tuple (e.g., as a key in a dict: {list((1,2)): 3} becomes {[1,2]: 3}), which is invalid because lists are unhashable—this changes behavior from valid to TypeError.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Precedence Hazard</td><td class="mut">If the literal is part of a larger expression where the list() call affects operator prece</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Type Annotation Runtime Evaluation</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span></td><td>Starred Expression Near-Miss</td><td class="mut">If the literal is a tuple containing a starred expression, the rule does not fire because </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus and Comprehension Scoping</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Coercion and Rounding</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Tuple Type Safety</td><td class="mut">If the literal is a tuple and the code uses the fact that list(tuple) raises TypeError on </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Comments and Docstrings</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Exception Handling and Finally</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String formatting interaction</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Mutable default argument aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only and *args forwarding</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Tuple-to-list-as-dict-key TypeError</td><td class="mut">If the literal is a tuple and the rewrite to list literal fails due to being in a context </td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Star-import and __all__ side effect</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Shadowed builtin list</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span></td><td>Starred expression in tuple (no trigger)</td><td class="mut">If the literal is a tuple containing a starred expression (e.g., list((*range(3),))), the </td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Walrus and comprehension scoping</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Precedence Hazard</summary><pre>def main():
+    try:
+        result = list([1, 2]) * 2
+        print(&#39;Result:&#39;, result)
+    except Exception as e:
+        print(type(e).__name__ + &#39;:&#39;, str(e))
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre></details><details id="r1-p002"><summary>r1-p002 — Type Annotation Runtime Evaluation</summary><pre>from typing import List
+T = list([int])
+def func(x: T[0]) -&gt; None:
+    print(&#39;Received:&#39;, x)
+func(42)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Starred Expression Near-Miss</summary><pre># This is invalid syntax; commented out to keep program valid.
+# lst = list((*range(3),))
+print(&#39;No trigger: starred expression in tuple literal is invalid syntax&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Walrus and Comprehension Scoping</summary><pre>lst = []
+f = lambda: list((y for y in [lst.append(i) or i for i in range(2)]))
+print(&#39;First call:&#39;, f())
+print(&#39;Second call:&#39;, f())
+</pre></details><details id="r1-p005"><summary>r1-p005 — Coercion and Rounding</summary><pre>from decimal import Decimal
+vals = list((Decimal(&#39;1.5&#39;), Decimal(&#39;2.5&#39;)))
+total = sum(vals)
+print(&#39;Sum:&#39;, total)
+print(&#39;Rounded:&#39;, round(total))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Tuple Type Safety</summary><pre>def process_tuple(t):
+    return list(t)
+result = process_tuple((1, 2, 3))
+print(&#39;List from tuple:&#39;, result)
+try:
+    process_tuple(&#39;not a tuple&#39;)
+except TypeError as e:
+    print(&#39;Caught TypeError:&#39;, e)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Comments and Docstrings</summary><pre>def get_data():
+    &quot;&quot;&quot;Returns fixed data.&quot;&quot;&quot;
+    # This list conversion is redundant
+    return list([10, 20])
+print(&#39;Data:&#39;, get_data())
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exception Handling and Finally</summary><pre>def risky():
+    try:
+        data = list((1, 2, 0))
+        return 10 / data[2]
+    except ZeroDivisionError as e:
+        raise ValueError(&#39;bad divisor&#39;) from e
+    else:
+        print(&#39;No error&#39;)
+    finally:
+        print(&#39;Cleanup&#39;)
+try:
+    risky()
+except ValueError as e:
+    print(&#39;Caught:&#39;, e.__cause__.__class__.__name__, &#39;-&#39;, e.__cause__)
+</pre></details><details id="r2-p001"><summary>r2-p001 — String formatting interaction</summary><pre>def main():
+    t = (&#39;%s&#39;, &#39;%d&#39;)
+    s = list(t)
+    print(s[0] % &#39;hello&#39; + &#39;, &#39; + s[1] % 42)
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre></details><details id="r2-p002"><summary>r2-p002 — Mutable default argument aliasing</summary><pre>def f(x=list([1, 2])):
+    x.append(99)
+    return x
+print(f())
+print(f())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Keyword-only and *args forwarding</summary><pre>def g(*args, sep=&#39;:&#39;):
+    lst = list(args)
+    return sep.join(map(str, lst))
+print(g(1, 2, 3))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Tuple-to-list-as-dict-key TypeError</summary><pre>try:
+    d = {list((1, 2)): &#39;ok&#39;}
+    print(d)
+except TypeError as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Star-import and __all__ side effect</summary><pre>__all__ = [list([&#39;mod_item&#39;])]
+print(__all__[0])
+</pre></details><details id="r2-p006"><summary>r2-p006 — Shadowed builtin list</summary><pre>list = lambda x: x.upper()
+print(list((list,))[0]([&#39;a&#39;]))
+</pre></details><details id="r2-p007"><summary>r2-p007 — Starred expression in tuple (no trigger)</summary><pre># list((*range(3),))  # SyntaxError: starred expression must be in an iterable unpacking
+print(&#39;no trigger&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Walrus and comprehension scoping</summary><pre>fns = []
+for i in range(3):
+    if (lst := list((i, i+1))) and len(lst) == 2:
+        fns.append(lambda: lst[0])
+print([f() for f in fns])
+</pre></details></body></html>

@@ -1,0 +1,179 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RUF070 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RUF070 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-49-01-368Z-odu8-ruff-RUF070 · fix labelled <b>unknown</b> · 16 programs, 6 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0033</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant variable assignments directly before yielding the same variable.</p><p class="mut">Fix: Replace &#39;x = expr\n    yield x&#39; with &#39;yield expr&#39;, preserving indentation and removing the assignment line while keeping all other code unchanged.</p><details><summary>12 hazards</summary><ul><li>Removing the assignment eliminates the local variable binding, altering the output of locals() inspection during generator suspension.</li><li>If the variable is referenced in a debugger or introspection tool at the yield point, the reference will become undefined after the fix.</li><li>The assignment may contain a side-effect (e.g., incrementing a counter via a property setter) that would be omitted by the fix.</li><li>If the assigned expression is used elsewhere in the function via closure capture, removing the assignment could break the closure by eliminating the variable reference.</li><li>The assignment line may carry a trailing comment that would be deleted by the rewrite, altering source documentation.</li><li>If the variable name is shadowed in an inner scope, removing the outer assignment could change which variable is yielded due to altered resolution.</li><li>The assignment may be part of a larger statement (e.g., walrus operator) that the rule does not handle, but if misapplied could break syntax.</li><li>If the expression is a mutable object and the variable is later mutated (though not yielded), the fix does not affect this, but the hazard is misdiagnosis—however, the rule only fires when unused, so this is mitigated; still, if the variable is used in a lambda defined later but not executed, the lambda&#39;s closure could break.</li><li>In rare cases, the assignment might be syntactically indistinguishable from a type annotation in stub files or conditional code, leading to incorrect removal.</li><li>If the yield is inside a try block and the assignment contains a finally-dependent expression, moving the expression into the yield could change exception timing.</li><li>The fix may interfere with instrumented code (e.g., coverage tools) that relies on the assignment line being executable.</li><li>If the assignment uses the walrus operator in a way that creates a variable used only in the yield, the rule may not fire due to current limitations, but if incorrectly extended, it could break.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable object mutation after assignment</td><td class="mut">If the expression is a mutable object and the variable is later mutated (though not yielde</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Property descriptor with side effects</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Closure capture in nested lambda</td><td class="mut">If the assigned expression is used elsewhere in the function via closure capture, removing</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Variable shadowing in inner scope</td><td class="mut">If the variable name is shadowed in an inner scope, removing the outer assignment could ch</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Star-import and __all__ interaction</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Numeric coercion and precision</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Locals() inspection during generator suspension</td><td class="mut">Removing the assignment eliminates the local variable binding, altering the output of loca</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Walrus operator in assignment (near-miss)</td><td class="mut">If the assignment uses the walrus operator in a way that creates a variable used only in t</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type annotation confusion</td><td class="mut">In rare cases, the assignment might be syntactically indistinguishable from a type annotat</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation order and side effects</td><td class="mut">Evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>Walrus operator interaction</td><td class="mut">The assignment may be part of a larger statement (e.g., walrus operator) that the rule doe</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Runtime type annotations</td><td class="mut">Type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Class vs instance attributes</td><td class="mut">Class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Exception handling interference</td><td class="mut">Exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Locals() inspection during suspension</td><td class="mut">Removing the assignment eliminates the local variable binding, altering the output of loca</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span></td><td>Misapplied walrus extension</td><td class="mut">If the assignment uses the walrus operator in a way that creates a variable used only in t</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Mutable object mutation after assignment</summary><pre>def gen():
+    x = []
+    yield x
+    # Lambda captures x but not executed until after yield
+    f = lambda: len(x)
+    x.append(1)  # Mutation after yield
+    yield f()  # Should reflect mutation
+
+print(list(gen()))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Property descriptor with side effects</summary><pre>class A:
+    @property
+    def prop(self):
+        print(&#39;prop accessed&#39;)
+        return 42
+
+def gen():
+    a = A()
+    x = a.prop  # Triggers property access
+    yield x
+    return
+
+list(gen())  # Should print &#39;prop accessed&#39; once
+</pre></details><details id="r1-p003"><summary>r1-p003 — Closure capture in nested lambda</summary><pre>def gen():
+    x = 10
+    yield x
+    # Lambda captures x, called after first yield
+    f = lambda: x * 2
+    yield f()  # Should be 20
+
+print(list(gen()))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Variable shadowing in inner scope</summary><pre>def gen():
+    x = 99
+    def inner():
+        x = 88  # Shadows outer x
+        return x
+    yield x     # Should yield 99 (outer)
+    yield inner()  # Should yield 88
+
+print(list(gen()))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Star-import and __all__ interaction</summary><pre># This file tests star-import safety
+# We create a temporary module to isolate
+import tempfile
+import os
+
+code = &#39;&#39;&#39;
+__all__ = [&#39;value&#39;]
+value = 123
+&#39;&#39;&#39;
+
+with tempfile.NamedTemporaryFile(mode=&#39;w&#39;, suffix=&#39;.py&#39;, delete=False) as f:
+    f.write(code)
+    modname = f.name[:-3]
+
+try:
+    # Import the module
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(modname, f.name)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def gen():
+        x = module.value  # Assignment from imported module
+        yield x
+        # No further use
+
+    print(list(gen()))
+finally:
+    os.unlink(f.name)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Numeric coercion and precision</summary><pre>from decimal import Decimal, getcontext
+getcontext().prec = 10
+
+def gen():
+    x = Decimal(&#39;1&#39;) / Decimal(&#39;3&#39;)  # Precision-sensitive
+    yield x
+    # Later use in calculation (not yielded)
+    y = x * 3
+    # y should be 1 if precision preserved
+    yield (y - 1).copy_abs()  # Should be near zero
+
+print(list(gen()))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Locals() inspection during generator suspension</summary><pre>def gen():
+    x = 42
+    frame = None
+    def capture_frame():
+        nonlocal frame
+        frame = frame  # This is a trick: we want to capture the frame at yield point
+        # Instead, we inspect locals at first yield
+        pass
+    # We&#39;ll inspect locals by yielding a frame proxy
+    yield x
+    # Now yield locals() to see if &#39;x&#39; is present
+    # But we can&#39;t access frame directly -&gt; alternative: use sys._getframe
+    import sys
+    yield sys._getframe().f_locals.copy()
+
+# First value is 42, second is locals dict
+g = gen()
+first = next(g)
+second = next(g)
+print(f&#39;First yielded: {first}&#39;)
+print(f&quot;&#39;x&#39; in locals: {&#39;x&#39; in second}&quot;)
+print(f&quot;Value of &#39;x&#39; in locals: {second.get(&#39;x&#39;, &#39;MISSING&#39;)}&quot;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Walrus operator in assignment (near-miss)</summary><pre>def gen():
+    if (x := 5) &gt; 0:  # Walrus in condition
+        yield x       # Uses x from walrus
+    # Rule should NOT fire here because assignment is not directly before yield
+    # (there&#39;s an if statement in between)
+    
+    # Second part: direct assignment that SHOULD trigger
+    y = 99
+    yield y
+
+print(list(gen()))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Type annotation confusion</summary><pre>def gen():
+    x: int = 42
+    yield x
+print(list(gen()))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Evaluation order and side effects</summary><pre>seq = []
+def side():
+    seq.append(&#39;called&#39;)
+    return 99
+def gen():
+    x = side()
+    yield x + sum(seq)
+print(list(gen()))
+</pre></details><details id="r2-p003"><summary>r2-p003 — Walrus operator interaction</summary><pre>def gen():
+    if (x := 5) &gt; 0:
+        yield x
+print(list(gen()))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Runtime type annotations</summary><pre>T = int
+def gen():
+    x = T(7)
+    yield x
+print(list(gen()))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Class vs instance attributes</summary><pre>class A:
+    val = 100
+    @property
+    def prop(self):
+        return self.val * 2
+def gen():
+    a = A()
+    x = a.prop
+    yield x
+print(list(gen()))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Exception handling interference</summary><pre>def gen():
+    try:
+        x = 1 / 0
+    except ZeroDivisionError as e:
+        x = e
+        yield x
+print(list(gen()))
+</pre></details><details id="r2-p007"><summary>r2-p007 — Locals() inspection during suspension</summary><pre>def gen():
+    x = 42
+    yield locals().get(&#39;x&#39;, &#39;missing&#39;)
+print(list(gen()))
+</pre></details><details id="r2-p008"><summary>r2-p008 — Misapplied walrus extension</summary><pre>def gen():
+    while (x := next(it)) != 0:
+        yield x
+it = iter([3, 2, 1, 0])
+print(list(gen()))
+</pre></details></body></html>

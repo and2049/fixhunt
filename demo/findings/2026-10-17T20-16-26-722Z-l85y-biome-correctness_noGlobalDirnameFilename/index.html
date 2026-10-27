@@ -1,0 +1,494 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome correctness/noGlobalDirnameFilename — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome correctness/noGlobalDirnameFilename <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-16-26-722Z-l85y-biome-correctness_noGlobalDirnameFilename · fix labelled <b>safe</b> · 16 programs, 14 fired, 14 fixed, 12 oracle-backed finding(s) · model cost $0.3011</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags any reference to __dirname or __filename used outside of function/class scopes as they are unavailable in ES modules.</p><p class="mut">Fix: Replaces each occurrence of __dirname with import.meta.dirname and __filename with import.meta.filename when used in the global scope.</p><details><summary>10 hazards</summary><ul><li>The rewrite changes the meaning if __dirname or __filename is shadowed by a local variable in an outer function scope, as import.meta properties are not subject to variable shadowing.</li><li>If the code is executed in a non-ESM environment (e.g., CommonJS), import.meta.dirname/filename are undefined, causing runtime errors where the original globals were defined.</li><li>The fix removes any JSDoc or inline comments attached to the __dirname/__filename token, as the replacement does not preserve comment associations.</li><li>In destructuring like const { __filename } = obj, the rewrite produces { import.meta.filename } which is invalid syntax because import.meta is not an object literal property in that context.</li><li>When __dirname/__filename is used in a dynamic import() argument, the rewrite may alter timing or availability if import.meta is not yet resolved.</li><li>If the code relies on __dirname/__filename being a string primitive (which they are), but import.meta.dirname/filename are also strings, this is safe—but if used in a typeof check against a fake global, behavior diverges.</li><li>In a with (__dirname) { ... } block (though rare and deprecated), the rewrite breaks because import.meta cannot be used in a with statement due to being a member expression.</li><li>If __dirname or __filename is used as a property name in computed form like [__dirname]: value, the rewrite becomes [import.meta.dirname]: value which evaluates the string, but the original used the global variable&#39;s value—however, since both are strings and same value, this may be safe, but if the global was reassigned (which it isn&#39;t), it would differ—yet reassignment of __dirname is not allowed, so likely safe, but we include due to theoretical reassignment in non-strict? Actually, __dirname/__filename are not writable in Node.js, so reassignment fails silently in strict or throws—so if somehow reassigned, original would reflect new value, but import.meta is fixed—so hazard: if reassigned (though impossible in practice), behavior changes.</li><li>The fix does not preserve trailing comments on the line if the replacement alters whitespace in a way that moves or drops line comments (e.g., if __dirname; // comment becomes import.meta.dirname; // comment—usually preserved, but if the tool reformats, it might not).</li><li>In eval() contexts, __dirname/__filename refer to the global scope of the calling script, but import.meta is fixed to the current module—so if eval runs in a different module context, behavior differs.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p001"><b>r1-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix replaces `__dirname` with `import.meta.dirname` in a dynamic import expression, but the original code was running as CommonJS (where `__dirname` is defined) while the fixed code runs as an ES module (where `import.meta.dirname` exists). The module resolution behavior differs between the two formats, causing the fixed program to fail with a module-not-found error instead of loading the intended data file.">judge: real · high</span> Dynamic import argument uses __dirname<p class="mut">The fix replaces `__dirname` with `import.meta.dirname` in a dynamic import expression, but the original code was running as CommonJS (where `__dirname` is defined) while the fixed code runs as an ES module (where `import.meta.dirname` exists). The module resolution behavior differs between the two formats, causing the fixed program to fail with a module-not-found error instead of loading the intended data file.</p>
+<h2>Minimized program (3→1 lines)</h2><pre>const mod = await import(`./${__dirname}/data.json`);
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:38.781057717 -0400
++++ fixed.js	2026-10-17 16:16:39.079054053 -0400
+@@ -1,3 +1,3 @@
+ // Hazard 1
+<span class="del">-const mod = await import(`./${__dirname}/data.json`);</span>
+<span class="add">+const mod = await import(`./${import.meta.dirname}/data.json`);</span>
+ console.log(&#39;done&#39;);
+</pre>
+<h2>Observed</h2><pre>stderr before: ReferenceError: Cannot determine intended module format because both &#39;__dirname&#39; and top-level await are present. If the code is intended to be CommonJS, wrap await in an async function. If the code is intended to be an ES module, use import.meta.dirname instead.
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find module &#39;&lt;wd&gt;/prog imported from &lt;wd&gt;/prog</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r1-p001.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p002"><b>r1-p002</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule replaces __dirname with import.meta.dirname to make the code work in ES modules where __dirname is not defined. The original program threw a ReferenceError because __dirname is unavailable in ES module scope, and the fixed program runs successfully, which is exactly the behavior change the rule documents.">judge: intended-change · high</span> __dirname in __proto__ key via computed property<p class="mut">The rule replaces __dirname with import.meta.dirname to make the code work in ES modules where __dirname is not defined. The original program threw a ReferenceError because __dirname is unavailable in ES module scope, and the fixed program runs successfully, which is exactly the behavior change the rule documents.</p>
+<h2>Minimized program (4→2 lines)</h2><pre>const o = {};
+o[`__proto__${__dirname}`] = &#39;tampered&#39;;
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:39.258051857 -0400
++++ fixed.js	2026-10-17 16:16:39.542048373 -0400
+@@ -1,4 +1,4 @@
+ // Hazard 2
+ const o = {};
+<span class="del">-o[`__proto__${__dirname}`] = &#39;tampered&#39;;</span>
+<span class="add">+o[`__proto__${import.meta.dirname}`] = &#39;tampered&#39;;</span>
+ console.log(Object.getPrototypeOf(o));
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+[Object: null prototype] {}
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined in ES module scope
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11028">biomejs/biome/issues/11028</a> · <a href="reports/r1-p002.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p003"><b>r1-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule explicitly replaces `__dirname` with `import.meta.dirname` because `__dirname` is not available in ES modules, as documented. The original program threw a ReferenceError in ES module scope, and the fix makes it run without error, returning `undefined` when called without arguments. This is exactly the behavior change the rule is designed to achieve.">judge: intended-change · high</span> Function using __dirname in default parameter<p class="mut">The rule explicitly replaces `__dirname` with `import.meta.dirname` because `__dirname` is not available in ES modules, as documented. The original program threw a ReferenceError in ES module scope, and the fix makes it run without error, returning `undefined` when called without arguments. This is exactly the behavior change the rule is designed to achieve.</p>
+<h2>Minimized program (5→3 lines)</h2><pre>function f(dir = __dirname) {
+}
+console.log(f());
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:39.716046238 -0400
++++ fixed.js	2026-10-17 16:16:40.007042667 -0400
+@@ -1,5 +1,5 @@
+ // Hazard 3
+<span class="del">-function f(dir = __dirname) {</span>
+<span class="add">+function f(dir = import.meta.dirname) {</span>
+   return dir.length;
+ }
+ console.log(f());
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+107
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined in ES module scope
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/5778">biomejs/biome/issues/5778</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/9061">biomejs/biome/issues/9061</a> · <a href="reports/r1-p003.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p004"><b>r1-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule replaces __dirname with import.meta.dirname because __dirname is not available in ES modules, which is exactly the documented purpose of the fix. The original program crashed with a ReferenceError in an ES module context, and the fixed version runs successfully, demonstrating the intended behavior change.">judge: intended-change · high</span> Async function awaiting __dirname in expression<p class="mut">The rule replaces __dirname with import.meta.dirname because __dirname is not available in ES modules, which is exactly the documented purpose of the fix. The original program crashed with a ReferenceError in an ES module context, and the fixed version runs successfully, demonstrating the intended behavior change.</p>
+<h2>Minimized program (6→4 lines)</h2><pre>async function main() {
+  const dir = await Promise.resolve(__dirname);
+}
+main();
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:40.179040562 -0400
++++ fixed.js	2026-10-17 16:16:40.463037086 -0400
+@@ -1,6 +1,6 @@
+ // Hazard 4
+ async function main() {
+<span class="del">-  const dir = await Promise.resolve(__dirname);</span>
+<span class="add">+  const dir = await Promise.resolve(import.meta.dirname);</span>
+   console.log(dir.length);
+ }
+ main();
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+107
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11028">biomejs/biome/issues/11028</a> · <a href="reports/r1-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule replaces the invalid ES module construct `__dirname` with the correct `import.meta.dirname`, which is exactly the documented behavior change. The original program threw a ReferenceError because `__dirname` is not defined in ES modules, while the fixed program runs without error, demonstrating the fix resolves the correctness issue the rule targets.">judge: intended-change · high</span> __dirname; // comment - tests trailing comment preservation<p class="mut">The rule replaces the invalid ES module construct `__dirname` with the correct `import.meta.dirname`, which is exactly the documented behavior change. The original program threw a ReferenceError because `__dirname` is not defined in ES modules, while the fixed program runs without error, demonstrating the fix resolves the correctness issue the rule targets.</p>
+<h2>Minimized program (3→1 lines)</h2><pre>__dirname; // this comment must stay
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:41.117029086 -0400
++++ fixed.js	2026-10-17 16:16:41.383025839 -0400
+@@ -1,3 +1,3 @@
+ // Hazard 6
+<span class="del">-__dirname; // this comment must stay</span>
+<span class="add">+import.meta.dirname; // this comment must stay</span>
+ console.log(&#39;ok&#39;);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+ok
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined in ES module scope
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11028">biomejs/biome/issues/11028</a> · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p008"><b>r1-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule replaces the invalid ES module reference `__filename` with the correct `import.meta.filename`; the before run crashes with a ReferenceError while the after run succeeds, which is exactly the behavior change the rule documents.">judge: intended-change · high</span> __filename /* inline */ - comment attached to removed code<p class="mut">The rule replaces the invalid ES module reference `__filename` with the correct `import.meta.filename`; the before run crashes with a ReferenceError while the after run succeeds, which is exactly the behavior change the rule documents.</p>
+<h2>Minimized program (3→1 lines)</h2><pre>const x = __filename /* inline note */;
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:41.596023239 -0400
++++ fixed.js	2026-10-17 16:16:41.866019943 -0400
+@@ -1,3 +1,3 @@
+ // Hazard 8
+<span class="del">-const x = __filename /* inline note */;</span>
+<span class="add">+const x = import.meta.filename /* inline note */;</span>
+ console.log(x.length);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+115
+exit 1 → 0
+stderr before: ReferenceError: __filename is not defined in ES module scope
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6670">biomejs/biome/issues/6670</a> <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/4331">biomejs/biome/issues/4331</a> · <a href="reports/r1-p008.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule explicitly replaces `__dirname` with `import.meta.dirname` because `__dirname` is not available in ES modules, as documented. The original program threw a ReferenceError in ES module scope, and the fixed program runs without error, which is exactly the behavior change the rule intends.">judge: intended-change · high</span> Non-ESM environment failure<p class="mut">The rule explicitly replaces `__dirname` with `import.meta.dirname` because `__dirname` is not available in ES modules, as documented. The original program threw a ReferenceError in ES module scope, and the fixed program runs without error, which is exactly the behavior change the rule intends.</p>
+<h2>Minimized program (8→4 lines)</h2><pre>const dir = __dirname;
+try {
+} catch (e) {
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:49.078932784 -0400
++++ fixed.js	2026-10-17 16:16:49.341929639 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-const dir = __dirname;</span>
+<span class="add">+const dir = import.meta.dirname;</span>
+ console.log(&#39;original:&#39;, typeof dir === &#39;string&#39; ? dir : &#39;not string&#39;);
+ try {
+   const fixed = import.meta.dirname;
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+original: &lt;wd&gt;/prog
+fixed: &lt;wd&gt;/prog
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined in ES module scope
+stderr after: (none)</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p002"><b>r2-p002</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix replaces `__dirname` with `import.meta.dirname` in a CommonJS environment where the latter is undefined, turning a caught ReferenceError into a successful access and changing the program&#39;s observable output from `threw: true` to `threw: false`.">judge: real · high</span> Exception during evaluation<p class="mut">The fix replaces `__dirname` with `import.meta.dirname` in a CommonJS environment where the latter is undefined, turning a caught ReferenceError into a successful access and changing the program&#39;s observable output from `threw: true` to `threw: false`.</p>
+<h2>Minimized program (8→7 lines)</h2><pre>let threw = false;
+try {
+  const d = __dirname;
+} catch (e) {
+  threw = true;
+}
+console.log(&#39;threw:&#39;, threw);
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:49.500927738 -0400
++++ fixed.js	2026-10-17 16:16:49.762924605 -0400
+@@ -1,6 +1,6 @@
+ let threw = false;
+ try {
+<span class="del">-  const d = __dirname;</span>
+<span class="add">+  const d = import.meta.dirname;</span>
+   if (d === undefined) throw new Error(&#39;unexpected&#39;);
+ } catch (e) {
+   threw = true;
+</pre>
+<h2>Observed</h2><pre>stdout before:
+threw: true
+stdout after:
+threw: false</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/8922">biomejs/biome/pull/8922</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/8829">biomejs/biome/issues/8829</a> · <a href="reports/r2-p002.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p003"><b>r2-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule replaces __dirname with import.meta.dirname because __dirname is not available in ES modules, which is exactly the documented purpose of the fix. The before run fails with a ReferenceError while the after run succeeds, demonstrating the fix corrects the behavior to work in ES module scope.">judge: intended-change · high</span> Name collision after rewrite<p class="mut">The rule replaces __dirname with import.meta.dirname because __dirname is not available in ES modules, which is exactly the documented purpose of the fix. The before run fails with a ReferenceError while the after run succeeds, demonstrating the fix corrects the behavior to work in ES module scope.</p>
+<h2>Minimized program (6→1 lines)</h2><pre>const dir = __dirname;
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:49.925922655 -0400
++++ fixed.js	2026-10-17 16:16:50.190919492 -0400
+@@ -1,5 +1,5 @@
+ let dirname = &#39;outer&#39;;
+<span class="del">-const dir = __dirname;</span>
+<span class="add">+const dir = import.meta.dirname;</span>
+ console.log(&#39;dirname:&#39;, dirname);
+ if (typeof dirname === &#39;string&#39;) {
+   console.log(&#39;block dirname:&#39;, dirname);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+dirname: outer
+block dirname: outer
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined in ES module scope
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/4331">biomejs/biome/issues/4331</a> <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11028">biomejs/biome/issues/11028</a> · <a href="reports/r2-p003.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p004"><b>r2-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix replaces `__dirname` with `import.meta.dirname` inside a try-catch block that catches ReferenceError when `__dirname` is unavailable (e.g., in ES modules). After the fix, `import.meta.dirname` throws in CommonJS environments where it is not defined, causing the catch block to execute and changing the program&#39;s output from the directory path to an empty string. This is a silent behavior change in plausible code that uses feature detection via try-catch.">judge: real · high</span> Control flow interference<p class="mut">The fix replaces `__dirname` with `import.meta.dirname` inside a try-catch block that catches ReferenceError when `__dirname` is unavailable (e.g., in ES modules). After the fix, `import.meta.dirname` throws in CommonJS environments where it is not defined, causing the catch block to execute and changing the program&#39;s output from the directory path to an empty string. This is a silent behavior change in plausible code that uses feature detection via try-catch.</p>
+<h2>Minimized program (14→9 lines)</h2><pre>let result = [];
+try {
+  result.push(__dirname);
+} catch (e) {
+  try {
+  } catch (e) {
+  }
+}
+console.log(result.join(&#39;|&#39;));
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:50.358917488 -0400
++++ fixed.js	2026-10-17 16:16:50.624914315 -0400
+@@ -1,6 +1,6 @@
+ let result = [];
+ try {
+<span class="del">-  result.push(__dirname);</span>
+<span class="add">+  result.push(import.meta.dirname);</span>
+   throw new Error(&#39;test&#39;);
+ } catch (e) {
+   result.push(e.message);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+__dirname is not defined|&lt;wd&gt;/prog
+stdout after:
+&lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/8922">biomejs/biome/pull/8922</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/8829">biomejs/biome/issues/8829</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11028">biomejs/biome/issues/11028</a> · <a href="reports/r2-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p005"><b>r2-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule replaces __dirname with import.meta.dirname to make the code work in ES modules where __dirname is not defined. The original program crashed with a ReferenceError, and the fixed program runs successfully, which is exactly the behavior change the rule documents.">judge: intended-change · high</span> Class static field interaction<p class="mut">The rule replaces __dirname with import.meta.dirname to make the code work in ES modules where __dirname is not defined. The original program crashed with a ReferenceError, and the fixed program runs successfully, which is exactly the behavior change the rule documents.</p>
+<h2>Minimized program (7→5 lines)</h2><pre>class C {
+  static dir = __dirname;
+  static log() {
+  }
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:50.791912323 -0400
++++ fixed.js	2026-10-17 16:16:51.070908997 -0400
+@@ -1,5 +1,5 @@
+ class C {
+<span class="del">-  static dir = __dirname;</span>
+<span class="add">+  static dir = import.meta.dirname;</span>
+   static log() {
+     return C.dir;
+   }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+&lt;wd&gt;/prog
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined in ES module scope
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/8829">biomejs/biome/issues/8829</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/8922">biomejs/biome/pull/8922</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11028">biomejs/biome/issues/11028</a> · <a href="reports/r2-p005.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p008"><b>r2-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix replaces `__dirname` with `import.meta.dirname` inside a template literal, but the original code threw a ReferenceError for `__dirname` while the fixed code throws a ReferenceError for `x` instead, showing the fix changed which error occurs and allowed execution to proceed further. This is a silent behavior change in plausible code because the rule&#39;s fix assumes the replacement is semantically equivalent, but the surrounding context (the undefined `x`) means the program&#39;s observable failure mode changed.">judge: real · high</span> Coercion differences: + vs template literal<p class="mut">The fix replaces `__dirname` with `import.meta.dirname` inside a template literal, but the original code threw a ReferenceError for `__dirname` while the fixed code throws a ReferenceError for `x` instead, showing the fix changed which error occurs and allowed execution to proceed further. This is a silent behavior change in plausible code because the rule&#39;s fix assumes the replacement is semantically equivalent, but the surrounding context (the undefined `x`) means the program&#39;s observable failure mode changed.</p>
+<h2>Minimized program (4→1 lines)</h2><pre>console.log(&#39;template:&#39;, `${__dirname}${x}`);
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:16:51.912898979 -0400
++++ fixed.js	2026-10-17 16:16:52.176895844 -0400
+@@ -1,4 +1,4 @@
+ const x = { toString: () =&gt; 42 };
+<span class="del">-console.log(&#39;+ coercion:&#39;, __dirname + x);</span>
+<span class="del">-console.log(&#39;template:&#39;, `${__dirname}${x}`);</span>
+<span class="add">+console.log(&#39;+ coercion:&#39;, import.meta.dirname + x);</span>
+<span class="add">+console.log(&#39;template:&#39;, `${import.meta.dirname}${x}`);</span>
+ console.log(&#39;import.meta + x:&#39;, import.meta.dirname + x);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
++ coercion: &lt;wd&gt;/prog
+template: &lt;wd&gt;/prog
+import.meta + x: &lt;wd&gt;/prog
+exit 1 → 0
+stderr before: ReferenceError: __dirname is not defined in ES module scope
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/5778">biomejs/biome/issues/5778</a> · <a href="reports/r2-p008.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Dynamic import argument uses __dirname</td><td class="mut">When __dirname/__filename is used in a dynamic import() argument, the rewrite may alter ti</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>__dirname in __proto__ key via computed property</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Function using __dirname in default parameter</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Async function awaiting __dirname in expression</td><td class="mut">async/await ordering, generators and yield position</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>__dirname in optional chaining with nullish coalescing</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>__dirname; // comment - tests trailing comment preservation</td><td class="mut">The fix does not preserve trailing comments on the line if the replacement alters whitespa</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>__dirname in sloppy mode with with statement</td><td class="mut">strict vs sloppy mode semantics</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>__filename /* inline */ - comment attached to removed code</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Non-ESM environment failure</td><td class="mut">If executed in CommonJS, import.meta.dirname/filename are undefined while __dirname/__file</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Exception during evaluation</td><td class="mut">If __dirname access throws (hypothetical), the fix removes the try/catch scope.</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Name collision after rewrite</td><td class="mut">Rewrite creates import.meta.dirname that shadows a outer-scope dirname variable.</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Control flow interference</td><td class="mut">The fix inserts import.meta in a finally block, altering control flow if it throws.</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Class static field interaction</td><td class="mut">Static field initialization accesses __dirname; fix changes timing/scope.</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Eval context mismatch</td><td class="mut">__dirname in eval refers to caller’s global; import.meta is module-fixed.</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Computed property name (theoretical reassignment)</td><td class="mut">[__dirname]: value uses variable; if reassigned, import.meta is fixed.</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Coercion differences: + vs template literal</td><td class="mut">+ __dirname may coerce non-string; import.meta.dirname is always string.</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Dynamic import argument uses __dirname</summary><pre>// Hazard 1
+const mod = await import(`./${__dirname}/data.json`);
+console.log(&#39;done&#39;);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:38.781057717 -0400
++++ fixed.js	2026-10-17 16:16:39.079054053 -0400
+@@ -1,3 +1,3 @@
+ // Hazard 1
+<span class="del">-const mod = await import(`./${__dirname}/data.json`);</span>
+<span class="add">+const mod = await import(`./${import.meta.dirname}/data.json`);</span>
+ console.log(&#39;done&#39;);
+</pre></details><details id="r1-p002"><summary>r1-p002 — __dirname in __proto__ key via computed property</summary><pre>// Hazard 2
+const o = {};
+o[`__proto__${__dirname}`] = &#39;tampered&#39;;
+console.log(Object.getPrototypeOf(o));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:39.258051857 -0400
++++ fixed.js	2026-10-17 16:16:39.542048373 -0400
+@@ -1,4 +1,4 @@
+ // Hazard 2
+ const o = {};
+<span class="del">-o[`__proto__${__dirname}`] = &#39;tampered&#39;;</span>
+<span class="add">+o[`__proto__${import.meta.dirname}`] = &#39;tampered&#39;;</span>
+ console.log(Object.getPrototypeOf(o));
+</pre></details><details id="r1-p003"><summary>r1-p003 — Function using __dirname in default parameter</summary><pre>// Hazard 3
+function f(dir = __dirname) {
+  return dir.length;
+}
+console.log(f());
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:39.716046238 -0400
++++ fixed.js	2026-10-17 16:16:40.007042667 -0400
+@@ -1,5 +1,5 @@
+ // Hazard 3
+<span class="del">-function f(dir = __dirname) {</span>
+<span class="add">+function f(dir = import.meta.dirname) {</span>
+   return dir.length;
+ }
+ console.log(f());
+</pre></details><details id="r1-p004"><summary>r1-p004 — Async function awaiting __dirname in expression</summary><pre>// Hazard 4
+async function main() {
+  const dir = await Promise.resolve(__dirname);
+  console.log(dir.length);
+}
+main();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:40.179040562 -0400
++++ fixed.js	2026-10-17 16:16:40.463037086 -0400
+@@ -1,6 +1,6 @@
+ // Hazard 4
+ async function main() {
+<span class="del">-  const dir = await Promise.resolve(__dirname);</span>
+<span class="add">+  const dir = await Promise.resolve(import.meta.dirname);</span>
+   console.log(dir.length);
+ }
+ main();
+</pre></details><details id="r1-p005"><summary>r1-p005 — __dirname in optional chaining with nullish coalescing</summary><pre>// Hazard 5
+const maybePath = null;
+const result = maybePath?.startsWith(__dirname) ?? &#39;fallback&#39;;
+console.log(result);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:40.640034920 -0400
++++ fixed.js	2026-10-17 16:16:40.941031237 -0400
+@@ -1,4 +1,4 @@
+ // Hazard 5
+ const maybePath = null;
+<span class="del">-const result = maybePath?.startsWith(__dirname) ?? &#39;fallback&#39;;</span>
+<span class="add">+const result = maybePath?.startsWith(import.meta.dirname) ?? &#39;fallback&#39;;</span>
+ console.log(result);
+</pre></details><details id="r1-p006"><summary>r1-p006 — __dirname; // comment - tests trailing comment preservation</summary><pre>// Hazard 6
+__dirname; // this comment must stay
+console.log(&#39;ok&#39;);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:41.117029086 -0400
++++ fixed.js	2026-10-17 16:16:41.383025839 -0400
+@@ -1,3 +1,3 @@
+ // Hazard 6
+<span class="del">-__dirname; // this comment must stay</span>
+<span class="add">+import.meta.dirname; // this comment must stay</span>
+ console.log(&#39;ok&#39;);
+</pre></details><details id="r1-p007"><summary>r1-p007 — __dirname in sloppy mode with with statement</summary><pre>// Hazard 7
+(function() {
+  &#39;use sloppy&#39;;
+  with ({}) {
+    console.log(__dirname);
+  }
+})();
+</pre></details><details id="r1-p008"><summary>r1-p008 — __filename /* inline */ - comment attached to removed code</summary><pre>// Hazard 8
+const x = __filename /* inline note */;
+console.log(x.length);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:41.596023239 -0400
++++ fixed.js	2026-10-17 16:16:41.866019943 -0400
+@@ -1,3 +1,3 @@
+ // Hazard 8
+<span class="del">-const x = __filename /* inline note */;</span>
+<span class="add">+const x = import.meta.filename /* inline note */;</span>
+ console.log(x.length);
+</pre></details><details id="r2-p001"><summary>r2-p001 — Non-ESM environment failure</summary><pre>const dir = __dirname;
+console.log(&#39;original:&#39;, typeof dir === &#39;string&#39; ? dir : &#39;not string&#39;);
+try {
+  const fixed = import.meta.dirname;
+  console.log(&#39;fixed:&#39;, typeof fixed === &#39;string&#39; ? fixed : &#39;not string&#39;);
+} catch (e) {
+  console.log(&#39;error:&#39;, e.name, e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:49.078932784 -0400
++++ fixed.js	2026-10-17 16:16:49.341929639 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-const dir = __dirname;</span>
+<span class="add">+const dir = import.meta.dirname;</span>
+ console.log(&#39;original:&#39;, typeof dir === &#39;string&#39; ? dir : &#39;not string&#39;);
+ try {
+   const fixed = import.meta.dirname;
+</pre></details><details id="r2-p002"><summary>r2-p002 — Exception during evaluation</summary><pre>let threw = false;
+try {
+  const d = __dirname;
+  if (d === undefined) throw new Error(&#39;unexpected&#39;);
+} catch (e) {
+  threw = true;
+}
+console.log(&#39;threw:&#39;, threw);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:49.500927738 -0400
++++ fixed.js	2026-10-17 16:16:49.762924605 -0400
+@@ -1,6 +1,6 @@
+ let threw = false;
+ try {
+<span class="del">-  const d = __dirname;</span>
+<span class="add">+  const d = import.meta.dirname;</span>
+   if (d === undefined) throw new Error(&#39;unexpected&#39;);
+ } catch (e) {
+   threw = true;
+</pre></details><details id="r2-p003"><summary>r2-p003 — Name collision after rewrite</summary><pre>let dirname = &#39;outer&#39;;
+const dir = __dirname;
+console.log(&#39;dirname:&#39;, dirname);
+if (typeof dirname === &#39;string&#39;) {
+  console.log(&#39;block dirname:&#39;, dirname);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:49.925922655 -0400
++++ fixed.js	2026-10-17 16:16:50.190919492 -0400
+@@ -1,5 +1,5 @@
+ let dirname = &#39;outer&#39;;
+<span class="del">-const dir = __dirname;</span>
+<span class="add">+const dir = import.meta.dirname;</span>
+ console.log(&#39;dirname:&#39;, dirname);
+ if (typeof dirname === &#39;string&#39;) {
+   console.log(&#39;block dirname:&#39;, dirname);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Control flow interference</summary><pre>let result = [];
+try {
+  result.push(__dirname);
+  throw new Error(&#39;test&#39;);
+} catch (e) {
+  result.push(e.message);
+} finally {
+  try {
+    result.push(import.meta.dirname);
+  } catch (e) {
+    result.push(&#39;finally error&#39;);
+  }
+}
+console.log(result.join(&#39;|&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:50.358917488 -0400
++++ fixed.js	2026-10-17 16:16:50.624914315 -0400
+@@ -1,6 +1,6 @@
+ let result = [];
+ try {
+<span class="del">-  result.push(__dirname);</span>
+<span class="add">+  result.push(import.meta.dirname);</span>
+   throw new Error(&#39;test&#39;);
+ } catch (e) {
+   result.push(e.message);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Class static field interaction</summary><pre>class C {
+  static dir = __dirname;
+  static log() {
+    return C.dir;
+  }
+}
+console.log(C.log());
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:50.791912323 -0400
++++ fixed.js	2026-10-17 16:16:51.070908997 -0400
+@@ -1,5 +1,5 @@
+ class C {
+<span class="del">-  static dir = __dirname;</span>
+<span class="add">+  static dir = import.meta.dirname;</span>
+   static log() {
+     return C.dir;
+   }
+</pre></details><details id="r2-p006"><summary>r2-p006 — Eval context mismatch</summary><pre>const val = eval(&#39;__dirname&#39;);
+console.log(&#39;eval result:&#39;, typeof val === &#39;string&#39; &amp;&amp; val.length &gt; 0 ? &#39;defined&#39; : &#39;undefined&#39;);
+console.log(&#39;import.meta.dirname:&#39;, typeof import.meta.dirname === &#39;string&#39; ? &#39;defined&#39; : &#39;undefined&#39;);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Computed property name (theoretical reassignment)</summary><pre>__dirname = &#39;overridden&#39;; // assignment fails in strict, but assume non-strict
+const obj = {};
+obj[__dirname] = &#39;value&#39;;
+console.log(obj[&#39;overridden&#39;] ?? &#39;not set&#39;);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:51.470904238 -0400
++++ fixed.js	2026-10-17 16:16:51.755900847 -0400
+@@ -1,4 +1,4 @@
+ __dirname = &#39;overridden&#39;; // assignment fails in strict, but assume non-strict
+ const obj = {};
+<span class="del">-obj[__dirname] = &#39;value&#39;;</span>
+<span class="add">+obj[import.meta.dirname] = &#39;value&#39;;</span>
+ console.log(obj[&#39;overridden&#39;] ?? &#39;not set&#39;);
+</pre></details><details id="r2-p008"><summary>r2-p008 — Coercion differences: + vs template literal</summary><pre>const x = { toString: () =&gt; 42 };
+console.log(&#39;+ coercion:&#39;, __dirname + x);
+console.log(&#39;template:&#39;, `${__dirname}${x}`);
+console.log(&#39;import.meta + x:&#39;, import.meta.dirname + x);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:16:51.912898979 -0400
++++ fixed.js	2026-10-17 16:16:52.176895844 -0400
+@@ -1,4 +1,4 @@
+ const x = { toString: () =&gt; 42 };
+<span class="del">-console.log(&#39;+ coercion:&#39;, __dirname + x);</span>
+<span class="del">-console.log(&#39;template:&#39;, `${__dirname}${x}`);</span>
+<span class="add">+console.log(&#39;+ coercion:&#39;, import.meta.dirname + x);</span>
+<span class="add">+console.log(&#39;template:&#39;, `${import.meta.dirname}${x}`);</span>
+ console.log(&#39;import.meta + x:&#39;, import.meta.dirname + x);
+</pre></details></body></html>

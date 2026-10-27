@@ -1,0 +1,638 @@
+{
+  "runId": "2026-10-17T21-00-16-738Z-3bi8-ruff-PLR0203",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLR0203",
+    "fixKind": "unknown",
+    "docs": "# no-staticmethod-decorator (PLR0203)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for the use of a staticmethod being made without the decorator.\n\n## Why is this bad?\nWhen it comes to consistency and readability, it's preferred to use the decorator.\n\n## Example\n\n```python\nclass Foo:\n    def bar(arg1, arg2): ...\n\n    bar = staticmethod(bar)\n```\n\nUse instead:\n\n```python\nclass Foo:\n    @staticmethod\n    def bar(arg1, arg2): ...\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags assignments where a function defined earlier in the same class body is reassigned via `staticmethod(func)` as a method replacement.",
+    "firingShapes": [
+      "class C:\n    def f(x): return x\n    f = staticmethod(f)",
+      "class C:\n    @property\n    def g(): pass\n    g = staticmethod(g)",
+      "class C:\n    def h():\n        print('hi')\n    h = staticmethod(h)\n    i = 1",
+      "class C:\n    def j(a, b):\n        return a + b\n    tmp = j\n    j = staticmethod(tmp)",
+      "class C:\n    def k():\n        return 42\n    k = staticmethod(k)\n    del k",
+      "class C:\n    def l():\n        return []\n    l = staticmethod(l)\n    l2 = l",
+      "class D:\n    def m(self):\n        return self\n    m = staticmethod(m)",
+      "class E:\n    def n():\n        raise ValueError\n    n = staticmethod(n)"
+    ],
+    "silentShapes": [
+      "class C:\n    @staticmethod\n    def f(): pass",
+      "class C:\n    def f():\n        return staticmethod(lambda: 42)",
+      "class C:\n    f = staticmethod(lambda x: x)",
+      "class C:\n    def f():\n        pass\n    g = staticmethod(f)",
+      "class C:\n    def f():\n        pass\n    f = classmethod(f)"
+    ],
+    "fixDescription": "Replace the assignment `name = staticmethod(name)` with the decorator `@staticmethod` placed directly above the function definition of `name`, preserving the function's name, parameters, body, and decorators, and removing the reassignment line.",
+    "hazards": [
+      "If the function name is used in an annotation within its own body (e.g., `def f(x: f) -> int:`), moving the decorator above may cause a NameError because `f` is not yet defined at annotation evaluation time.",
+      "If the function defines a nested function that references the outer function's name via closure (e.g., `def f(): def g(): return f`), the rewrite breaks the closure because the original function object is replaced by a staticmethod wrapper before the nested function is defined.",
+      "If the function is referenced in a default argument of a later-defined function in the same class body (e.g., `def f(): pass\ndef g(x=f): pass`), the rewrite changes when the staticmethod wrapper is applied, potentially altering the value captured in the default if the wrapper has side effects (though it doesn't, the timing of binding changes relative to other class body statements).",
+      "If the assignment line carries a comment (e.g., `f = staticmethod(f)  # workaround`), the rewrite drops that comment entirely, as the fix only preserves comments attached to the function definition.",
+      "If the function is decorated with other decorators (e.g., `@property\n def f(): pass\n f = staticmethod(f)`), the rewrite incorrectly places `@staticmethod` above `@property`, reversing decorator order and changing semantics (property vs staticmethod).",
+      "If the function name is deleted after the assignment (e.g., `f = staticmethod(f); del f`), the rewrite leaves the function accessible via its original name, whereas the original code intended to remove it after wrapping.",
+      "If the function is aliased before reassignment (e.g., `orig = f; f = staticmethod(f)`), the rewrite does not update the alias `orig`, which remains bound to the unwrapped function, diverging from the original behavior where `orig` and `f` both pointed to the same unwrapped function before reassignment.",
+      "If the function definition contains a `yield` expression and is used in a generator expression within its own defaults (e.g., `def f(x=(yield 42)): pass; f = staticmethod(f)`), the rewrite changes the timing of when the staticmethod wrapper is applied relative to the first invocation, affecting generator state initialization.",
+      "If the class is defined inside a function or loop and the staticmethod assignment relies on the enclosing scope for nonlocal variables accessed in the function body, the rewrite is safe but may interact poorly with tools that expect the decorator form for static analysis.",
+      "If the function name is the same as a class variable or imported name in the class scope (e.g., `f = 1\n def f(): pass\n f = staticmethod(f)`), the rewrite may confuse linters or readers about which `f` is being decorated, though runtime behavior is preserved.",
+      "If the assignment uses a qualified name like `C.f = staticmethod(f)` inside the class body (invalid syntax but sometimes seen in generated code), the fix does not apply and the rule may not fire, but if it did, the rewrite would be incorrect."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0038328,
+  "summary": {
+    "programs": 16,
+    "invalid": 4,
+    "fired": 11,
+    "fixed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Closure capture broken by premature staticmethod wrapping",
+      "hazard": "If the function defines a nested function that references the outer function's name via closure (e.g., `def f(): def g(): return f`), the rewrite breaks the closure because the original function objec",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'f' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'f' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:30.979846091 -0400\n+++ fixed.py\t2026-10-17 17:00:31.379851074 -0400\n@@ -1,9 +1,9 @@\n class C:\n+    @staticmethod\n     def f():\n         def g():\n             return f\n         return g\n-    f = staticmethod(f)\n \n c = C()\n g = c.f()\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Name shadowing confusion between class var and function",
+      "hazard": "If the function name is the same as a class variable or imported name in the class scope (e.g., `f = 1\\ndef f(): pass\\nf = staticmethod(f)`), the rewrite may confuse linters or readers about which `f`",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p003",
+      "title": "File write with partial data and non-str input after staticmethod rewrite",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError write() argument must be str, not bytes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError write() argument must be str, not bytes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:31.684854873 -0400\n+++ fixed.py\t2026-10-17 17:00:31.853856978 -0400\n@@ -1,9 +1,9 @@\n class C:\n+    @staticmethod\n     def log(msg):\n         with open('test.txt', 'w') as fp:\n             fp.write(msg)  # expects str\n             fp.write(b'\\n')  # error: bytes not str\n-    log = staticmethod(log)\n \n try:\n     C.log('hello')\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Property descriptor side effects confused with staticmethod",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p005",
+      "title": "Walrus and late binding in comprehension capturing reassigned name",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Type annotation evaluated at runtime referencing reassigned function",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:32.143860589 -0400\n+++ fixed.py\t2026-10-17 17:00:32.309862656 -0400\n@@ -1,9 +1,9 @@\n class C:\n+    @staticmethod\n     def f() -> 'return_f()':\n         pass\n     def return_f():\n         return f\n-    f = staticmethod(f)\n \n try:\n     C.f()\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Exception in finally block after staticmethod rewrite",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "RuntimeError worse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "RuntimeError worse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:32.417864001 -0400\n+++ fixed.py\t2026-10-17 17:00:32.583866067 -0400\n@@ -1,10 +1,10 @@\n class C:\n+    @staticmethod\n     def fails():\n         try:\n             raise ValueError('bad')\n         finally:\n             raise RuntimeError('worse')\n-    fails = staticmethod(fails)\n \n try:\n     C.fails()\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Keyword-only args with default evaluated once, affected by reassignment timing",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:32.689867387 -0400\n+++ fixed.py\t2026-10-17 17:00:32.847869355 -0400\n@@ -1,9 +1,9 @@\n class C:\n     default = []\n+    @staticmethod\n     def append_val(x, *, lst=default):\n         lst.append(x)\n         return lst\n-    append_val = staticmethod(append_val)\n \n print(C.append_val(1))\n print(C.append_val(2))\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Annotation self-reference causes NameError after fix",
+      "hazard": "If the function name is used in an annotation within its own body (e.g., `def f(x: f) -> int:`), moving the decorator above may cause a NameError because `f` is not yet defined at annotation evaluatio",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:38.834943776 -0400\n+++ fixed.py\t2026-10-17 17:00:39.012945986 -0400\n@@ -1,7 +1,7 @@\n class C:\n+    @staticmethod\n     def f(x: f) -> int:\n         return x\n-    f = staticmethod(f)\n try:\n     c = C()\n     print(c.f(1))\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Default argument captures pre-wrapper function due to timing shift",
+      "hazard": "If the function is referenced in a default argument of a later-defined function in the same class body (e.g., `def f(): pass\ndef g(x=f): pass`), the rewrite changes when the staticmethod wrapper is ap",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'C' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'C' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:39.119947314 -0400\n+++ fixed.py\t2026-10-17 17:00:39.556952737 -0400\n@@ -1,7 +1,7 @@\n class C:\n+    @staticmethod\n     def f():\n         return 9\n     def g(x=f):\n         return x()\n-    f = staticmethod(f)\n print(C().g())\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Context manager-like object with write but no close used in function body",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "hellodone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "hellodone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:39.777955479 -0400\n+++ fixed.py\t2026-10-17 17:00:39.946957576 -0400\n@@ -2,9 +2,9 @@\n     def write(self, s):\n         print(s, end='')\n class C:\n+    @staticmethod\n     def log(msg):\n         w = Writer()\n         w.write(msg)\n-    log = staticmethod(log)\n C.log('hello')\n print('done')\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Decorator order reversed when combining @property and staticmethod reassignment",
+      "hazard": "If the function is decorated with other decorators (e.g., `@property\n def f(): pass\n f = staticmethod(f)`), the rewrite incorrectly places `@staticmethod` above `@property`, reversing decorator order ",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p005",
+      "title": "Qualified assignment C.f = staticmethod(f) not handled by fix",
+      "hazard": "If the assignment uses a qualified name like `C.f = staticmethod(f)` inside the class body (invalid syntax but sometimes seen in generated code), the fix does not apply and the rule may not fire, but ",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "no trigger\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "Nested function accesses nonlocal from enclosing function scope",
+      "hazard": "If the class is defined inside a function or loop and the staticmethod assignment relies on the enclosing scope for nonlocal variables accessed in the function body, the rewrite is safe but may intera",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:40.264961521 -0400\n+++ fixed.py\t2026-10-17 17:00:40.429963567 -0400\n@@ -1,10 +1,10 @@\n def make_class():\n     x = 10\n     class C:\n+        @staticmethod\n         def get():\n             nonlocal x\n             return x\n-        get = staticmethod(get)\n     return C\n C = make_class()\n print(C().get())\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Alias to function remains bound to original after reassignment",
+      "hazard": "If the function is aliased before reassignment (e.g., `orig = f; f = staticmethod(f)`), the rewrite does not update the alias `orig`, which remains bound to the unwrapped function, diverging from the ",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'orig' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'orig' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:40.526964770 -0400\n+++ fixed.py\t2026-10-17 17:00:40.921969669 -0400\n@@ -1,8 +1,8 @@\n class C:\n+    @staticmethod\n     def f():\n         return 'original'\n     orig = f\n-    f = staticmethod(f)\n print('orig:', orig())\n print('f:', C().f())\n print('same?', orig is C.__dict__['f'])\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Function return value used in truthiness context after reassignment",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "PLR0203",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0203",
+            "severity": "warning",
+            "message": "Static method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "falsy\nlen: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "falsy\nlen: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:41.132972286 -0400\n+++ fixed.py\t2026-10-17 17:00:41.299974356 -0400\n@@ -1,7 +1,7 @@\n class C:\n+    @staticmethod\n     def f():\n         return []\n-    f = staticmethod(f)\n result = C().f()\n if result:\n     print('truthy')\n"
+      }
+    }
+  ]
+}

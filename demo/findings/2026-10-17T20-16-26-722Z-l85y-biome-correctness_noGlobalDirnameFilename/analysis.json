@@ -1,0 +1,37 @@
+{
+  "summary": "The rule flags any reference to __dirname or __filename used outside of function/class scopes as they are unavailable in ES modules.",
+  "firingShapes": [
+    "const d = __dirname;",
+    "let f = __filename;",
+    "var x = __dirname + '/file';",
+    "function g() { return __filename; } // Wait—this is inside a function? Actually, need to check: the rule says 'global scope', so inside a function should NOT fire. Let me re-read: 'Disallow the use of __dirname and __filename in the global scope.' So only top-level. So adjust: firing shapes must be at module level. Corrected: ",
+    "const dirname = __dirname;",
+    "const filename = __filename;",
+    "const obj = { __filename };",
+    "if (__dirname.startsWith('/')) {}",
+    "export const value = __dirname;",
+    "__filename; // unused but still referenced",
+    "console.log(__dirname);",
+    "export default { dir: __dirname };"
+  ],
+  "silentShapes": [
+    "function foo() { return __dirname; }",
+    "class C { m() { return __filename; } }",
+    "(function() { return __dirname; })();",
+    "const getDir = () => __dirname;",
+    "import { dirname } from 'path'; dirname; // This is a variable named dirname, not __dirname"
+  ],
+  "fixDescription": "Replaces each occurrence of __dirname with import.meta.dirname and __filename with import.meta.filename when used in the global scope.",
+  "hazards": [
+    "The rewrite changes the meaning if __dirname or __filename is shadowed by a local variable in an outer function scope, as import.meta properties are not subject to variable shadowing.",
+    "If the code is executed in a non-ESM environment (e.g., CommonJS), import.meta.dirname/filename are undefined, causing runtime errors where the original globals were defined.",
+    "The fix removes any JSDoc or inline comments attached to the __dirname/__filename token, as the replacement does not preserve comment associations.",
+    "In destructuring like const { __filename } = obj, the rewrite produces { import.meta.filename } which is invalid syntax because import.meta is not an object literal property in that context.",
+    "When __dirname/__filename is used in a dynamic import() argument, the rewrite may alter timing or availability if import.meta is not yet resolved.",
+    "If the code relies on __dirname/__filename being a string primitive (which they are), but import.meta.dirname/filename are also strings, this is safe—but if used in a typeof check against a fake global, behavior diverges.",
+    "In a with (__dirname) { ... } block (though rare and deprecated), the rewrite breaks because import.meta cannot be used in a with statement due to being a member expression.",
+    "If __dirname or __filename is used as a property name in computed form like [__dirname]: value, the rewrite becomes [import.meta.dirname]: value which evaluates the string, but the original used the global variable's value—however, since both are strings and same value, this may be safe, but if the global was reassigned (which it isn't), it would differ—yet reassignment of __dirname is not allowed, so likely safe, but we include due to theoretical reassignment in non-strict? Actually, __dirname/__filename are not writable in Node.js, so reassignment fails silently in strict or throws—so if somehow reassigned, original would reflect new value, but import.meta is fixed—so hazard: if reassigned (though impossible in practice), behavior changes.",
+    "The fix does not preserve trailing comments on the line if the replacement alters whitespace in a way that moves or drops line comments (e.g., if __dirname; // comment becomes import.meta.dirname; // comment—usually preserved, but if the tool reformats, it might not).",
+    "In eval() contexts, __dirname/__filename refer to the global scope of the calling script, but import.meta is fixed to the current module—so if eval runs in a different module context, behavior differs."
+  ]
+}

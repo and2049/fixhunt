@@ -1,0 +1,34 @@
+{
+  "summary": "Flags nested if statements where the inner if is the sole statement in the outer if's body.",
+  "firingShapes": [
+    "if (a) { if (b) { c; } }",
+    "if (x) { /* comment */ if (y) { z(); } }",
+    "if (p) {   if (q) { return r; } }",
+    "if (flag) { if (value > 0) { console.log(value); } }",
+    "if (obj) { if (obj.prop) { obj.prop = null; } }",
+    "if (cond1) { if (cond2) { throw new Error(); } }",
+    "if (a) { if (b) { let d = e; } }",
+    "if (x) { if (y) { x = y; } }"
+  ],
+  "silentShapes": [
+    "if (a) { if (b) { c; } else { d; } }",
+    "if (a) { if (b) { c; } doSomething(); }",
+    "if (a) { if (b) { c; } if (d) { e; } }",
+    "if (a) { if (b) { c; } } while (false) {}",
+    "if (a) { if (b) { c; } } if (d) { e; }"
+  ],
+  "fixDescription": "Rewrites the nested if statements into a single if with a logical AND (&&) condition, preserving the inner block's statements exactly as they were.",
+  "hazards": [
+    "The rewrite changes evaluation order: in the original, `b` is only evaluated if `a` is truthy, but in the fixed version `b` is always evaluated regardless of `a`'s value, which can cause errors if `b` has side effects or throws when `a` is falsy.",
+    "If `a` is an expression with side effects (e.g., a function call), the original evaluates it once, but the fixed version may evaluate it twice due to how `&&` short-circuiting works in some contexts—though actually `a && b` still evaluates `a` only once, so this hazard is invalid; instead, consider: if `a` is falsy, the original skips evaluating `b`, but the fixed version evaluates `b` unconditionally in the `&&` expression, leading to potential errors.",
+    "Comments inside the outer if block but outside the inner if (e.g., after the opening brace and before the inner if) are removed by the autofix because the fix collapses the entire block into a single line, discarding intermediate comments.",
+    "If the inner block contains a `break` statement, the original `break` applies to the nearest enclosing loop or switch, but after rewriting, the context may change if the if statement is nested within other constructs, potentially altering which construct the `break` targets.",
+    "If the inner block contains a `continue` statement, similar to `break`, its target loop may be misinterpreted after the structural change, especially if the if statement is not directly inside a loop.",
+    "If the inner block contains a `return` statement, the function return behavior is preserved, but if the outer if is part of a larger expression or statement, the control flow change could affect surrounding code—though `return` exits the function immediately, so this is less likely; however, in arrow functions or edge cases with commas, it might matter.",
+    "If the inner block declares a variable with `let` or `const`, the original confines that variable to the inner block's scope, but after rewriting into a single if block, the variable remains in the same scope (the outer if's block), so scoping is preserved—wait, no: in both cases, the variable is scoped to the outer if's block because the inner block is the only statement; thus, no change. Instead, consider: if the inner block is empty (though the rule requires a statement), but it's not. Another idea: if the condition `a` or `b` involves `this` or `super` in a method, the evaluation context is unchanged, so no issue. Focus on comments and evaluation order.",
+    "If the outer if block has trailing comments after the closing brace, they are unaffected, but if there are comments between the outer `{` and the inner `if`, they are lost.",
+    "In rare cases involving ASI (Automatic Semicolon Insertion), rewriting a nested if into a single line could alter semicolon insertion if the surrounding code relies on newlines, though this is highly speculative and unlikely in practice.",
+    "If the inner if statement is labeled (e.g., `inner: if (b) { ... }`), the label is discarded in the fix because the collapsed form does not retain labels, breaking any `break inner;` or `continue inner;` references.",
+    "If the inner block contains a debugger statement, it is preserved, but if the autofix process mishandles it due to formatting, it could be dropped—though formatters usually preserve it."
+  ]
+}

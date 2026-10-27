@@ -1,0 +1,33 @@
+{
+  "summary": "Flags unnecessary uses of set() wrapping a generator expression when they can be replaced by a set comprehension or simplified set() call.",
+  "firingShapes": [
+    "set(f(x) for x in foo)",
+    "set(x for x in foo)",
+    "set((x for x in foo))",
+    "set(g(y) for y in bar if cond(y))",
+    "set(a for a in b for c in d)",
+    "set(x for x in y for z in w)",
+    "set(k(v) for k, v in mapping.items())",
+    "set(item for item in iterable)"
+  ],
+  "silentShapes": [
+    "set([x for x in foo])",
+    "set(map(f, foo))",
+    "{x for x in foo}",
+    "set(foo)",
+    "set()"
+  ],
+  "fixDescription": "Rewrites set(<generator>) to {<expression> for <targets> in <iterables> [<ifs>]} when the generator has a non-trivial expression, otherwise to set(<iterable>) if the generator is simply iterating over the iterable without transformation or filtering.",
+  "hazards": [
+    "The rewrite may drop inline or trailing comments attached to the original set() call or generator expression, as the autofix does not preserve comment tokens.",
+    "If the generator expression contains a walrus operator (:=), the scope of the assigned variable changes from the generator's scope to the comprehension's scope, potentially causing NameError if used outside.",
+    "When the generator is nested inside a larger expression, removing the set() call alters precedence and may change the order of operations relative to surrounding operators.",
+    "If the iterable in the generator is a function call with side effects, rewriting set(x for x in foo()) to set(foo()) may change the number of times the function is invoked if the original code relied on lazy evaluation (though set() forces evaluation, this is a theoretical hazard in altered contexts).",
+    "In rare cases involving __iter__ implementations that return different iterators on each call, replacing a generator with set(foo) could yield different results if foo is not rebounded and its __iter__ is stateful across calls (though set() consumes the iterator, this is only relevant if the original code somehow reused the generator, which it cannot).",
+    "If the generator expression is used in a default argument or class body, moving the comprehension into a set literal may affect timing of evaluation relative to class creation or function definition.",
+    "When the generator includes a conditional that raises an exception, the exception behavior is preserved, but line numbers in tracebacks may shift due to the rewrite, affecting debugging tools that rely on line numbers.",
+    "If the code relies on the generator expression being of type generator for introspection (e.g., checking type(set_gen)), the rewrite removes that object, breaking any such checks.",
+    "In the presence of asynchronous generators (async for), the rule does not apply, but if mistakenly triggered, rewriting would be invalid syntax; however, the rule correctly ignores async generators, so this is a safeguard note.",
+    "If the iterable is a variable named 'set', the rewrite set(foo) could be misinterpreted as a recursive call, though this is prevented by Python's name resolution and is not a real hazard."
+  ]
+}

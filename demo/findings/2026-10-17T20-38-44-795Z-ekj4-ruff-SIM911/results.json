@@ -1,0 +1,816 @@
+{
+  "runId": "2026-10-17T20-38-44-795Z-ekj4-ruff-SIM911",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM911",
+    "fixKind": "unknown",
+    "docs": "# zip-dict-keys-and-values (SIM911)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for use of `zip()` to iterate over keys and values of a dictionary at once.\n\n## Why is this bad?\nThe `dict` type provides an `.items()` method which is faster and more readable.\n\n## Example\n```python\nflag_stars = {\"USA\": 50, \"Slovenia\": 3, \"Panama\": 2, \"Australia\": 6}\n\nfor country, stars in zip(flag_stars.keys(), flag_stars.values()):\n    print(f\"{country}'s flag has {stars} stars.\")\n```\n\nUse instead:\n```python\nflag_stars = {\"USA\": 50, \"Slovenia\": 3, \"Panama\": 2, \"Australia\": 6}\n\nfor country, stars in flag_stars.items():\n    print(f\"{country}'s flag has {stars} stars.\")\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the expression contains comments.\n\n## References\n- [Python documentation: `dict.items`](https://docs.python.org/3/library/stdtypes.html#dict.items)\n"
+  },
+  "analysis": {
+    "summary": "Flags usage of `zip(dict.keys(), dict.values())` when iterating over both simultaneously.",
+    "firingShapes": [
+      "for k, v in zip(d.keys(), d.values()): pass",
+      "a, b = zip(my_dict.keys(), my_dict.values())[0]",
+      "list(zip(data.keys(), data.values()))",
+      "result = [x for x in zip(mapping.keys(), mapping.values()))",
+      "for item in zip(obj.keys(), obj.values()): process(item)",
+      "*_ = zip(adict.keys(), adict.values())",
+      "zip(adict.keys(), adict.values())",
+      "[*zip(adict.keys(), adict.values()))"
+    ],
+    "silentShapes": [
+      "for k, v in zip(d.keys(), d.items()): pass",
+      "for k, v in zip(d.values(), d.keys()): pass",
+      "for k, v in zip(other_dict.keys(), d.values()): pass",
+      "for k, v in zip(d.keys(), [1, 2, 3]): pass",
+      "for k, v in d.items(): pass"
+    ],
+    "fixDescription": "Replace `zip(expr.keys(), expr.values())` with `expr.items()`, where `expr` is the same dictionary expression in both calls.",
+    "hazards": [
+      "If `expr` has side effects (e.g., a function call), evaluating it twice in the original vs once in the fix changes behavior.",
+      "If `expr` is mutated between the `.keys()` and `.values()` calls, the zip may see inconsistent state while `.items()` sees a snapshot.",
+      "If `expr` is not a dict but a subclass with overridden `.keys()` or `.values()` that return non-corresponding iterables, the zip may pair incorrectly while `.items()` is correct.",
+      "If `.keys()` or `.values()` returns a custom iterator with state that affects iteration (e.g., depends on prior calls), replacing with `.items()` alters execution.",
+      "If the expression uses a walrus operator (e.g., `zip((d:=func()).keys(), (d:=func()).values())`), the fix would lose reassignment and break scoping.",
+      "If the code relies on the order of evaluation (e.g., `.keys()` has a side effect that must happen before `.values()`), the fix may reverse or eliminate ordering expectations.",
+      "If `expr` is a variable that gets rebound between the two attribute accesses (e.g., due to concurrency or descriptor magic), the fix uses a single consistent value while the original may see two different ones.",
+      "If the original code contains inline comments within the zip expression (e.g., `zip(d.keys() # comment, d.values())`), the fix may drop or misplace them during rewrite.",
+      "If `expr` is a property that returns a different dict on each access, the original zips keys from one dict with values from another, while the fix uses items from a single dict (possibly inconsistent).",
+      "If `expr` is `None` or an object that raises AttributeError on `.keys()` or `.values()` only under certain conditions (e.g., due to `__getattr__`), the fix may trigger the error earlier/later or not at all."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0172221,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 8,
+    "fixed": 6,
+    "disputed": 7,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r1-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "d = {'a': 1, 'b': 2}\nzipped = zip(d.keys(), d.values())\nfor k, v in zipped:\n    s = f'{k!r}:{v!r}'\nprint(repr(list(zipped)))\n",
+      "lines": {
+        "before": 13,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T20-38-44-795Z-ekj4-ruff-SIM911/reports/r1-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18775",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18778",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18776",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11125",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9319",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18777",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule rewrites `zip(d.keys(), d.values())` to `d.items()`, but `zip` returns a reusable iterator while `dict.items()` returns a view that reflects the dictionary's current state. In the program, the view is consumed by the for-loop, so `list(zipped)` afterwards yields the items, whereas the original exhausted zip iterator yields an empty list. This is a silent change in runtime behavior for plausible code.",
+        "docsQuote": "The `dict` type provides an `.items()` method which is faster and more readable.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "SIM911 fix",
+          "SIM911 dict keys values zip",
+          "Ruff lint zip dictionary iteration",
+          "Rule SIM911 replace zip with items"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "[flake8-simplify] SIM910/SIM911 can delete comments",
+            "url": "https://github.com/astral-sh/ruff/issues/18775",
+            "state": "closed",
+            "snippet": "### Summary\n\nThe fix for `SIM910` will delete comments inside the `get`. If there are comments, they should be moved, the fix should be marked unsafe, or the fix should not apply. [playground](https://play.ruff.rs/f86e679b-f3a2-4b66-95cc-fee74fc212d9)\n```\nPS ~\\Desktop\\New_folder>Get-Content issue.py"
+          },
+          {
+            "source": "github",
+            "title": "[flake8-simplify] SIM911 false positive when methods have args",
+            "url": "https://github.com/astral-sh/ruff/issues/18778",
+            "state": "closed",
+            "snippet": "### Summary\n\n`SIM911` has a false positive if you give the methods args, since they are removed when it is transformed into `.items()`, which changes the behavior of the code to no longer raise a `TypeError`. If there is a situation in where the code thinks the variable is a `dict`, but it's actuall"
+          },
+          {
+            "source": "github",
+            "title": "[flake8-simplify] SIM911 fix causes syntax error",
+            "url": "https://github.com/astral-sh/ruff/issues/18776",
+            "state": "closed",
+            "snippet": "### Summary\n\n`SIM911`'s fix doesn't add padding/parenthesis to the resulting code, causing errors if it's directly next to other code through putting parenthesis around the zip:\n [playground](https://play.ruff.rs/d69299a5-96c5-4726-969e-1ff85a46efe9)\n```\nPS ~\\Desktop\\New_folder>Get-Content issue.py\n"
+          },
+          {
+            "source": "github",
+            "title": "SIM911 false positive (with bad autofix) on non-`zip` attribute calls",
+            "url": "https://github.com/astral-sh/ruff/issues/11125",
+            "state": "closed",
+            "snippet": "## Description\r\nRunning the ruff format on `plt.bar(dict_a.keys(), dict_a.values())` is formatted by ruff to `dict_a.items()` which seems to be an issue.\r\n\r\nThis is the pre-commit config I am using\r\n```yaml\r\n- repo:\r\nhttps://github.com/astral-sh/ruff-pre-commit\r\n  rev: 21d9bff1d62aaf03230baa6b804b90"
+          },
+          {
+            "source": "github",
+            "title": "Format breaks f-string with literal strings inside (versions 0.3.0 and 0.3.1)",
+            "url": "https://github.com/astral-sh/ruff/issues/10273",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Implement new SIM rule SIM911: `zip(dict.keys(), dict.values()) → dict.items()`",
+            "url": "https://github.com/astral-sh/ruff/issues/9319",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "tavily",
+            "title": "[flake8-simplify] SIM910/SIM911 false negative if variable is named dict · Issue #18777 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/18777",
+            "snippet": "LaBatata101\n\n   on Jun 19, 2025\n\n   Contributor\n\n   More actions\n\n   I'm working on this one\n4. ntBre\n\n   assigned\n\n   LaBatata101\n\n   on Jun 20, 2025\n5. ntBre\n\n   closed this as completedin #18794on Jun 20, 2025\n6. dylwil3\n\n   added a commit that references this issue on Jun 20, 2025\n\n   [[`flake8-"
+          },
+          {
+            "source": "github",
+            "title": "Feature: Port Sonar's Python scanner checks",
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "state": "open",
+            "snippet": "More of a challenge than porting flake8 plugins, because these are written in Java: https://github.com/SonarSource/sonar-python\r\n\r\nBut some of them are somewhat useful and I didn't see equivalent code in any flake8 plugins.\r\n\r\n(Feel free to edit this to make it a checklist)\r\n\r\n"
+          },
+          {
+            "source": "tavily",
+            "title": "B909 misses dict.keys() deletion · Issue #16865 · astral-sh/ruff",
+            "url": "https://github.com/astral-sh/ruff/issues/16865",
+            "snippet": "The deletion doesn't even have to use a value that comes from the iterator, because all deletes are illegal. I don't know if it's difficult to encode this into"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "ARG001/ARG005 false positive on underscore-prefixed variable named 次"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18775",
+            "relation": "related",
+            "why": "SIM910/SIM911 fix deletes comments inside the get call"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18778",
+            "relation": "related",
+            "why": "SIM911 false positive when methods have arguments that get dropped by .items()"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18776",
+            "relation": "related",
+            "why": "SIM911 fix causes syntax error due to missing parentheses"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11125",
+            "relation": "related",
+            "why": "SIM911 false positive on non-zip attribute calls like plt.bar(dict.keys(), dict.values())"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10273",
+            "relation": "unrelated",
+            "why": "f-string formatting breakage in ruff 0.3.0/0.3.1"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9319",
+            "relation": "related",
+            "why": "original implementation of SIM911 rule for zip(dict.keys(), dict.values()) → dict.items()"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18777",
+            "relation": "related",
+            "why": "SIM910/SIM911 false negative when variable is named dict"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "relation": "unrelated",
+            "why": "feature request to port Sonar's Python scanner checks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16865",
+            "relation": "unrelated",
+            "why": "B909 misses dict.keys() deletion detection"
+          }
+        ],
+        "cost": 0.0032533
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:29:23.939936549 -0400\n+++ fixed.py\t2026-10-22 13:29:26.602981043 -0400\n@@ -1,5 +1,5 @@\n d = {'a': 1, 'b': 2}\n-zipped = zip(d.keys(), d.values())\n+zipped = d.items()\n for k, v in zipped:\n     s = f'{k!r}:{v!r}'\n print(repr(list(zipped)))\n",
+        "observed": "stdout before:\n[]\nstdout after:\n[('a', 1), ('b', 2)]",
+        "before": {
+          "stdout": "[]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "[('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "d = {'a': 1, 'b': 2}\nzipped = d.items()\nfor k, v in zipped:\n    s = f'{k!r}:{v!r}'\nprint(repr(list(zipped)))\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select SIM911 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original `zip` creates an iterator consumed by the loop; afterwards it’s exhausted, so converting it to a list yields []. Replacing it with `dict.items()` returns a view that remains reusable—iterating over it does not consume the view itself—so the subsequent `list(zipped)` captures all items, changing the output from [] to [('a', 1), ('b', 2)]. This alters program behavior, making the rewrite unsafe.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Truthiness of Custom Bool/Len",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: True\nZip result: [(0, 0), (1, 1)]\nAfter zero: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Dict Ordering & Duplicates",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Inline Comments in Zip Expression",
+      "hazard": "If the original code contains inline comments within the zip expression, the fix may drop or misplace them during rewrite.",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `dict.items()` instead of `zip(dict.keys(), dict.values())`",
+            "span": [
+              3,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: [('a', 1), ('b', 2)]\nExpected: [('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: [('a', 1), ('b', 2)]\nExpected: [('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Order of Evaluation Side Effects",
+      "hazard": "If the code relies on the order of evaluation (e.g., `.keys()` has a side effect that must happen before `.values()`), the fix may reverse or eliminate ordering expectations.",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "State before: []\nState after zip: ['keys', 'values']\nState after items: ['items']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Conditional AttributeError via __getattr__",
+      "hazard": "If `expr` is `None` or an object that raises AttributeError on `.keys()` or `.values()` only under certain conditions (e.g., due to `__getattr__`), the fix may trigger the error earlier/later or not a",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Testing zip...\nZip error: keys failed\nTesting items...\n",
+          "stderr1": "TypeError: 'dict_items' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "String Formatting Edge Cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `d.items()` instead of `zip(d.keys(), d.values())`",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "'a':1\n'b':2\n'a':1\n'b':2\n[]\n[('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n'a':1\n'b':2\n'a':1\n'b':2\n[]\n[('a', 1), ('b', 2)]\nstdout after:\n'a':1\n'b':2\n'a':1\n'b':2\n[('a', 1), ('b', 2)]\n[('a', 1), ('b', 2)]"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'a':1\n'b':2\n'a':1\n'b':2\n[('a', 1), ('b', 2)]\n[('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:38:58.621792777 -0400\n+++ fixed.py\t2026-10-17 16:38:58.785800554 -0400\n@@ -1,5 +1,5 @@\n d = {'a': 1, 'b': 2}\n-zipped = zip(d.keys(), d.values())\n+zipped = d.items()\n for k, v in zipped:\n     s = f'{k!r}:{v!r}'\n     print(s)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Custom Iterator State in Keys/Values",
+      "hazard": "If `.keys()` or `.values()` returns a custom iterator with state that affects iteration (e.g., depends on prior calls), replacing with `.items()` alters execution.",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First zip: [('a', 1), ('b', 2)]\nSecond zip: [('a', 1), ('b', 2)]\nItems: [('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Bytes vs Str Encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `d.items()` instead of `zip(d.keys(), d.values())`",
+            "span": [
+              2,
+              15
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'a\\nb' b'1\\n2'\nb'c' b'3'\na\nb 1\n2\nc 3\nb'a\\nb:1\\n2\\nc:3\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'a\\nb' b'1\\n2'\nb'c' b'3'\na\nb 1\n2\nc 3\nb'a\\nb:1\\n2\\nc:3\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:38:59.017811553 -0400\n+++ fixed.py\t2026-10-17 16:38:59.180819270 -0400\n@@ -1,5 +1,5 @@\n d = {b'a\\nb': b'1\\n2', b'c': b'3'}\n-zipped = list(zip(d.keys(), d.values()))\n+zipped = list(d.items())\n for k, v in zipped:\n     print(repr(k), repr(v))\n # Simulate text processing\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "String Formatting Edge Cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `d.items()` instead of `zip(d.keys(), d.values())`",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:03.757035241 -0400\n+++ fixed.py\t2026-10-17 16:39:04.156054002 -0400\n@@ -1,4 +1,4 @@\n d = {'k': '%\\n', 'v': '\\t'}\n-k, v = zip(d.keys(), d.values())\n+k, v = d.items()\n s = ''.join(f'{a!r}:{b!r}' for a, b in k)\n print(s)\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Bytes vs Str Encoding Newline Handling",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `d.items()` instead of `zip(d.keys(), d.values())`",
+            "span": [
+              2,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'str' object has no attribute 'decode'. Did you mean: 'encode'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'str' object has no attribute 'decode'. Did you mean: 'encode'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:04.367063913 -0400\n+++ fixed.py\t2026-10-17 16:39:04.751081951 -0400\n@@ -1,4 +1,4 @@\n d = {'a': b'hello\\nworld', 'b': b'foo\\r\\nbar'}\n-pairs = list(zip(d.keys(), d.values()))\n+pairs = list(d.items())\n for k, v in pairs:\n     print(k.decode(), v.decode().replace('\\n', '\\\\n'))\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Side Effect in Expr Evaluation",
+      "hazard": "If `expr` has side effects (e.g., a function call), evaluating it twice in the original vs once in the fix changes behavior.",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "['x', 1] ['y', 2] [0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Mutable Default Arguments and Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[('a', 1), ('b', 2)]\n[('x', 9)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Type Annotations Evaluated at Runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `D.items()` instead of `zip(D.keys(), D.values())`",
+            "span": [
+              4,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:05.223104106 -0400\n+++ fixed.py\t2026-10-17 16:39:05.607122116 -0400\n@@ -1,5 +1,5 @@\n from typing import Dict, Any\n D: Dict[str, int] = {'a': 1}\n ann = D.__annotations__ if hasattr(D, '__annotations__') else {}\n-k, v = zip(D.keys(), D.values())\n+k, v = D.items()\n print(list(k), list(v), ann)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Inline Comments in Zip Expression",
+      "hazard": "If the original code contains inline comments within the zip expression (e.g., `zip(d.keys() # comment, d.values())`), the fix may drop or misplace them during rewrite.",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `dict.items()` instead of `zip(dict.keys(), dict.values())`",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "['x', 1] ['y', 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['x', 1] ['y', 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Variable Rebound Between Attribute Accesses",
+      "hazard": "If `expr` is a variable that gets rebound between the two attribute accesses (e.g., due to concurrency or descriptor magic), the fix uses a single consistent value while the original may see two diffe",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Async Def/Await Ordering Async Generators",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "SIM911",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM911",
+            "severity": "warning",
+            "message": "Use `d.items()` instead of `zip(d.keys(), d.values())`",
+            "span": [
+              3,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[('a', 1), ('b', 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:06.347156796 -0400\n+++ fixed.py\t2026-10-17 16:39:06.619169533 -0400\n@@ -1,6 +1,6 @@\n async def gen():\n     d = {'a': 1, 'b': 2}\n-    for k, v in zip(d.keys(), d.values()):\n+    for k, v in d.items():\n         yield k, v\n import asyncio\n async def main():\n"
+      }
+    }
+  ]
+}

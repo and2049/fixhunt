@@ -1,0 +1,1 @@
+const dir = __dirname;

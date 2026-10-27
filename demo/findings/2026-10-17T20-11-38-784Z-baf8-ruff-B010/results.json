@@ -1,0 +1,714 @@
+{
+  "runId": "2026-10-17T20-11-38-784Z-baf8-ruff-B010",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "B010",
+    "fixKind": "unknown",
+    "docs": "# set-attr-with-constant (B010)\n\nDerived from the **flake8-bugbear** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `setattr` that take a constant attribute value as an\nargument (e.g., `setattr(obj, \"foo\", 42)`).\n\n## Why is this bad?\n`setattr` is used to set attributes dynamically. If the attribute is\ndefined as a constant, it is no safer than a typical property access. When\npossible, prefer property access over `setattr` calls, as the former is\nmore concise and idiomatic.\n\n## Example\n```python\nsetattr(obj, \"foo\", 42)\n```\n\nUse instead:\n```python\nobj.foo = 42\n```\n\n## Fix safety\nThe fix is marked as unsafe for attribute names that are not in NFKC (Normalization Form KC)\nnormalization. Python normalizes identifiers using NFKC when using attribute access syntax\n(e.g., `obj.attr = value`), but does not normalize string arguments passed to `setattr`.\nRewriting `setattr(obj, \"ſ\", 1)` to `obj.ſ = 1` would be interpreted as `obj.s = 1` at\nruntime, changing behavior.\n\nAdditionally, the fix is marked as unsafe if the expression contains comments,\nas the replacement may remove comments attached to the original `setattr` call.\n\nFor example, the long s character `\"ſ\"` normalizes to `\"s\"` under NFKC, so:\n```python\n# This creates an attribute with the exact name \"ſ\"\nsetattr(obj, \"ſ\", 1)\ngetattr(obj, \"ſ\")  # Returns 1\n\n# But this would normalize to \"s\" and set a different attribute\nobj.ſ = 1  # This is interpreted as obj.s = 1, not obj.ſ = 1\n```\n\n## Known issues\nIn some cases, a type checker may be able to analyze an assignment more\nthoroughly than a `setattr` call. Applying the fix in such cases may result\nin new type checking diagnostics, even if the runtime behavior of the code\nis unchanged.\n\n## References\n- [Python documentation: `setattr`](https://docs.python.org/3/library/functions.html#setattr)\n"
+  },
+  "analysis": {
+    "summary": "Flags setattr() calls where the attribute name argument is a literal string.",
+    "firingShapes": [
+      "setattr(x, \"a\", 1)",
+      "setattr(y, 'b', z)",
+      "setattr(obj, \"hello world\", None)",
+      "setattr(item, '\\t', 42)",
+      "setattr(data, \"🙂\", True)",
+      "setattr(self, \"_private\", value)",
+      "setattr(cls, \"ClassAttr\", 99)",
+      "setattr(module, \"dynamic_attr\", func())"
+    ],
+    "silentShapes": [
+      "setattr(x, variable, 1)",
+      "setattr(obj, attr_name.split('_')[0], value)",
+      "setattr(target, get_attr(), 42)"
+    ],
+    "fixDescription": "Rewrites setattr(obj, \"attr\", value) to obj.attr = value, preserving the target object, attribute name literal, and value expression exactly.",
+    "hazards": [
+      "Rewriting setattr(obj, \"ſ\", 1) to obj.ſ = 1 changes behavior because Python normalizes identifiers in attribute access via NFKC, turning \"ſ\" into \"s\".",
+      "If the setattr call contains inline comments (e.g., setattr(x, \"a\", 1  # comment)), the autofix may drop them since the rewritten assignment cannot preserve arbitrary comment placement.",
+      "When the target object is a complex expression like setattr(f()[0], \"a\", 1), rewriting to f()[0].a = 1 may change evaluation order or side effects if f() has mutable state.",
+      "If the attribute name literal is not a valid Python identifier (e.g., setattr(obj, \"123\", 1)), the rewrite obj.123 = 1 is a syntax error.",
+      "Rewriting setattr(obj, \"__builtins__\", value) to obj.__builtins__ = value may violate module-level immutability expectations or trigger unintended name mangling in classes.",
+      "In code relying on dynamic attribute names via setattr, replacing with direct assignment may break frameworks that intercept setattr via __setattr__ but not direct attribute assignment.",
+      "If the value expression contains side effects (e.g., setattr(obj, \"a\", print(\"side\") or 1)), moving it into an assignment does not change evaluation timing, but refactoring tools might reorder expressions unsafely in broader contexts.",
+      "When used in nested scopes like setattr(lambda: obj, \"a\", 1), the rewrite (lambda: obj).a = 1 may fail if the lambda’s return value is not assignable due to expression context restrictions.",
+      "Rewriting setattr(klass, \"ClsAttr\", 42) to klass.ClsAttr = 42 inside a function may create an attribute on the class object at runtime where the original intended a local or closure variable due to mis-scoping.",
+      "If the target object is a property returning a non-setattr-compatible object (e.g., a read-only proxy), the assignment may succeed where setattr would have raised an AttributeError due to __setattr__ overrides.",
+      "In multi-target assignments like setattr(a, \"x\", setattr(b, \"y\", 1)), the autofix may produce invalid syntax or altered semantics due to broken expression chaining."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0060504,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 14,
+    "fixed": 13,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Exception handling after rewrite",
+      "hazard": "Exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "finally\n",
+          "stderr1": "AttributeError: 'list' object attribute 'append' is read-only",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally\n",
+          "stderr1": "AttributeError: 'list' object attribute 'append' is read-only",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:11:51.039178352 -0400\n+++ fixed.py\t2026-10-17 16:11:51.423168980 -0400\n@@ -1,7 +1,7 @@\n def f():\n     try:\n         x = []\n-        setattr(x, 'append', lambda v: (_ for _ in ()).throw(ValueError('bad')))\n+        x.append = lambda v: (_ for _ in ()).throw(ValueError('bad'))\n         x.append(1)\n     except ValueError as e:\n         print('caught', e)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Evaluation order with side-effecting target",
+      "hazard": "When the target object is a complex expression like setattr(f()[0], \"a\", 1), rewriting to f()[0].a = 1 may change evaluation order or side effects if f() has mutable state.",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              5,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'list' object has no attribute 'a' and no __dict__ for setting new attributes",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'list' object has no attribute 'a' and no __dict__ for setting new attributes",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:11:51.623164099 -0400\n+++ fixed.py\t2026-10-17 16:11:52.026154265 -0400\n@@ -2,5 +2,5 @@\n def f():\n     state.append(len(state))\n     return [0, 0]\n-setattr(f(), 'a', 99)\n+f().a = 99\n print('state:', state)\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mis-scoped attribute creation on class",
+      "hazard": "Rewriting setattr(klass, \"ClsAttr\", 42) to klass.ClsAttr = 42 inside a function may create an attribute on the class object at runtime where the original intended a local or closure variable due to mi",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "local ClsAttr: 1\nC.ClsAttr: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "local ClsAttr: 1\nC.ClsAttr: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:11:52.226149395 -0400\n+++ fixed.py\t2026-10-17 16:11:52.372145840 -0400\n@@ -2,7 +2,7 @@\n     ClsAttr = 1\n     class C: pass\n     def inner():\n-        setattr(C, 'ClsAttr', 42)\n+        C.ClsAttr = 42\n         print('local ClsAttr:', ClsAttr)\n         print('C.ClsAttr:', C.ClsAttr)\n     inner()\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Builtins override via attribute assignment",
+      "hazard": "Rewriting setattr(obj, \"__builtins__\", value) to obj.__builtins__ = value may violate module-level immutability expectations or trigger unintended name mangling in classes.",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              4,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "m.__builtins__[\"len\"]([1,2,3]): 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "m.__builtins__[\"len\"]([1,2,3]): 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:11:52.452143892 -0400\n+++ fixed.py\t2026-10-17 16:11:52.612139996 -0400\n@@ -1,5 +1,5 @@\n class ModLike:\n     pass\n m = ModLike()\n-setattr(m, '__builtins__', {'len': lambda x: 42})\n+m.__builtins__ = {'len': lambda x: 42}\n print('m.__builtins__[\"len\"]([1,2,3]):', m.__builtins__['len']([1,2,3]))\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Value expression with side effects",
+      "hazard": "If the value expression contains side effects (e.g., setattr(obj, \"a\", print(\"side\") or 1)), moving it into an assignment does not change evaluation timing, but refactoring tools might reorder express",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              6,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "log: ['side']\nobj.a: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "log: ['side']\nobj.a: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:11:52.704137756 -0400\n+++ fixed.py\t2026-10-17 16:11:52.862133908 -0400\n@@ -3,6 +3,6 @@\n     log.append('side')\n     return 1\n obj = type('O', (), {})()\n-setattr(obj, 'a', side() or 0)\n+obj.a = side() or 0\n print('log:', log)\n print('obj.a:', obj.a)\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Chained setattr in assignment",
+      "hazard": "In multi-target assignments like setattr(a, \"x\", setattr(b, \"y\", 1)), the autofix may produce invalid syntax or altered semantics due to broken expression chaining.",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a.x: None\nb.y: 1\nresult: None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "File write truncation and partial writes",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: '_io.TextIOWrapper' object has no attribute '__write__'. Did you mean: '__exit__'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: '_io.TextIOWrapper' object has no attribute '__write__'. Did you mean: '__exit__'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:11:53.109127900 -0400\n+++ fixed.py\t2026-10-17 16:11:53.535117550 -0400\n@@ -1,5 +1,5 @@\n with open('test.txt', 'w') as f:\n-    setattr(f, 'write', lambda data: f.__write__(data.upper()))\n+    f.write = lambda data: f.__write__(data.upper())\n     f.write('hi')\n with open('test.txt') as f:\n     print(f.read())\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Truthiness and equality distinctions",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              5,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "false but len= 1\nobj.flag is False: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false but len= 1\nobj.flag is False: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:11:53.752112278 -0400\n+++ fixed.py\t2026-10-17 16:11:53.914108342 -0400\n@@ -2,7 +2,7 @@\n     def __bool__(self): return False\n     def __len__(self): return 1\n obj = type('O', (), {})()\n-setattr(obj, 'flag', X())\n+obj.flag = X()\n if obj.flag:\n     print('true')\n else:\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Property returns read-only proxy blocking assignment",
+      "hazard": "If the target object is a property returning a non-setattr-compatible object (e.g., a read-only proxy), the assignment may succeed where setattr would have raised an AttributeError due to __setattr__ ",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              12,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "setattr error: AttributeError : read-only\nassignment error: AttributeError : read-only\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "setattr error: AttributeError : read-only\nassignment error: AttributeError : read-only\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:12:15.983585807 -0400\n+++ fixed.py\t2026-10-17 16:12:16.143582116 -0400\n@@ -9,7 +9,7 @@\n \n obj = Obj()\n try:\n-    setattr(obj.p, 'x', 1)\n+    obj.p.x = 1\n except AttributeError as e:\n     print('setattr error:', type(e).__name__, ':', e)\n else:\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Binary mode file write with str vs bytes confusion",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "error during setattr/write: AttributeError : attribute 'mode' of '_io.BufferedWriter' objects is not writable\nfile content: b''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "error during setattr/write: AttributeError : attribute 'mode' of '_io.BufferedWriter' objects is not writable\nfile content: b''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:12:16.242579833 -0400\n+++ fixed.py\t2026-10-17 16:12:16.395576304 -0400\n@@ -1,6 +1,6 @@\n f = open('test.bin', 'wb')\n try:\n-    setattr(f, 'mode', 'wb')  # rule triggers\n+    f.mode = 'wb'  # rule triggers\n     f.write(b'hello')\n     pos = f.tell()\n     print('position after write:', pos)\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Text mode file write truncation and partial write with newline translation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "position before close: 11\ncontent repr: 'line1\\nline2'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "position before close: 11\ncontent repr: 'line1\\nline2'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:12:16.490574114 -0400\n+++ fixed.py\t2026-10-17 16:12:16.647570493 -0400\n@@ -1,6 +1,6 @@\n f = open('test.txt', 'w')\n try:\n-    setattr(f, 'encoding', 'utf-8')\n+    f.encoding = 'utf-8'\n except: pass\n f.write('line1\\n')\n f.write('line2')  # no newline yet\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Float precision loss in assignment vs setattr context",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "setattr num: 0.30000000000000004\nassignment num: 0.30000000000000004\nequal? True\n",
+          "stderr1": "TypeError: 'float' object cannot be interpreted as an integer",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "setattr num: 0.30000000000000004\nassignment num: 0.30000000000000004\nequal? True\n",
+          "stderr1": "TypeError: 'float' object cannot be interpreted as an integer",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:12:16.748568164 -0400\n+++ fixed.py\t2026-10-17 16:12:17.161558648 -0400\n@@ -1,6 +1,6 @@\n val = 0.1 + 0.2\n setattr_obj = type('Obj', (), {})()\n-setattr(setattr_obj, 'num', val)\n+setattr_obj.num = val\n print('setattr num:', repr(setattr_obj.num))\n \n obj = type('Obj', (), {})()\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Star-import shadowing __all__ and triggering attribute write to module",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              15,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'public' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'public' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:12:17.385553494 -0400\n+++ fixed.py\t2026-10-17 16:12:18.063537898 -0400\n@@ -12,7 +12,7 @@\n \n # Now simulate: setattr(mod, '__all__', ['private']) triggers rule\n import mod\n-setattr(mod, '__all__', ['private'])  # rule fires\n+mod.__all__ = ['private']  # rule fires\n print('after setattr __all__:', mod.__all__)\n \n # Now star-import again: should import private\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Mutable default argument aliasing after rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "After first call: f(a) returned [1] f(b) returned [1]\nAre they the same object? True\nAfter rewrite: f2(a2) returned [2] f2(b2) returned [2]\nAre they the same object? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After first call: f(a) returned [1] f(b) returned [1]\nAre they the same object? True\nAfter rewrite: f2(a2) returned [2] f2(b2) returned [2]\nAre they the same object? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:12:18.427529541 -0400\n+++ fixed.py\t2026-10-17 16:12:18.592525754 -0400\n@@ -1,5 +1,5 @@\n def f(x, lst=[]):\n-    setattr(x, 'data', lst)  # rule triggers\n+    x.data = lst  # rule triggers\n     return lst\n \n a = type('A', (), {})()\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Inline comment lost during autofix rewrite",
+      "hazard": "If the setattr call contains inline comments (e.g., setattr(x, \"a\", 1  # comment)), the autofix may drop them since the rewritten assignment cannot preserve arbitrary comment placement.",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B010",
+            "severity": "warning",
+            "message": "Do not call `setattr` with a constant attribute value. It is not any safer than normal property access.",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "flag after setattr: 1\nflag after assignment: 1\nComments preserved in output? Yes — but linter drops them silently.\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "flag after setattr: 1\nflag after assignment: 1\nComments preserved in output? Yes — but linter drops them silently.\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Side effect in value expression: print during setattr vs assignment",
+      "hazard": "If the value expression contains side effects (e.g., setattr(obj, \"a\", print(\"side\") or 1)), moving it into an assignment does not change evaluation timing, but refactoring tools might reorder express",
+      "rule": "B010",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "setattr result: None ref: ['called']\nobj.attr: 99\nassignment result: 99 ref: ['called']\nobj2.attr: 99\nSame side-effect timing? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,308 @@
+{
+  "runId": "2026-10-17T20-47-31-435Z-nk3c-biome-nursery_noUnnecessaryTemplateExpression",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "nursery/noUnnecessaryTemplateExpression",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUnnecessaryTemplateExpression\n- Fix: safe\n- Default severity: info\n- Available from version: 2.4.13\n- Diagnostic category: lint/nursery/noUnnecessaryTemplateExpression\n\n\nDescription\n\n Disallow unnecessary template expressions.\n\n A template expression (or template literal) is unnecessary when it only contains\n string literal expressions that could be written as a regular string literal instead.\n\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n const a = `${'hello'}`;\n ```\n\n ```js,expect_diagnostic\n const b = `${\"world\"}`;\n ```\n\n ```js,expect_diagnostic\n const c = `${'hello'}${'world'}`;\n ```\n\n ```js,expect_diagnostic\n const d = `prefix_${'suffix'}`;\n ```\n\nValid\n\n ```js\n // Template with a non-string-literal expression\n const a = `${someVariable}`;\n ```\n\n ```js\n // Template with a non-string-literal interpolation mixed with text\n const b = `Hello, ${name}!`;\n ```\n\n ```js\n // Tagged templates are never flagged\n const c = html`${'foo'}`;\n ```\n\n ```js\n // Templates with newlines in the text part need the template syntax\n const d = `line one\n ${'line two'}`;\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags template literals containing only string literal interpolations that can be rewritten as concatenated or plain string literals.",
+    "firingShapes": [
+      "const a = `${'hello'}`;",
+      "const b = `${\"world\"}`;",
+      "const c = `${'hello'}${'world'}`;",
+      "const d = `prefix_${'suffix'}`;",
+      "let e = `start${'middle'}end`;",
+      "var f = ``${''}``;",
+      "const g = `${'a'}${''}${}`;",
+      "const h = `x${'y'z}`;"
+    ],
+    "silentShapes": [
+      "const a = `${someVar}`;",
+      "const b = `Hello, ${name}!`;",
+      "const c = html`${'foo'}`;",
+      "const d = `line one\n${'line two'}`;",
+      "const e = `${true ? 'yes' : 'no'}`;"
+    ],
+    "fixDescription": "Replaces the template literal with either a plain string literal if it has a single interpolation, or a string concatenation using + operator if it has multiple adjacent string literal interpolations, preserving original whitespace and quotes where applicable.",
+    "hazards": [
+      "Rewriting `${'hello'}` to 'hello' changes behavior if the code relies on the template literal being a distinct object identity (e.g., for === comparison with another template literal).",
+      "Converting `${'a'}${'b'}` to 'a'+'b' may alter evaluation order if the original template was part of a larger expression where left-to-right timing mattered for side effects in surrounding expressions.",
+      "If the template literal appears in a context expecting a TemplateLiteral type (e.g., tagged template inference), replacing it with a string literal breaks type checking in TypeScript.",
+      "The autofix may incorrectly remove escaped characters like \\n or \\t within the string literals if they are present, altering the resulting string value.",
+      "When the template literal is immediately followed by a plus (+) without space, rewriting `'a'+'b'` could be misparsed as part of a larger concatenation chain due to operator precedence.",
+      "Comments inside the template literal (e.g., `${'hello' /* comment */}`) would be lost during the rewrite since string literals do not preserve internal comments.",
+      "If the string literal contains a line terminator (e.g., `${'a\\nb'}`), rewriting it as a plain string literal may break if the surrounding code depends on the template literal's multi-line nature for ASI or parsing.",
+      "In strict mode, if the original template literal was used in an eval-like context, replacing it with a string literal could change how the string is interpreted due to differing escape handling.",
+      "The fix assumes all interpolated parts are pure string literals; if any interpolation is actually a non-literal (e.g., due to macro expansion), the rewrite would incorrectly remove necessary template syntax.",
+      "When the template literal is part of a sequence expression or comma operator, rewriting it may change how the expression is parsed or optimized by minifiers.",
+      "If the template literal is used as a property key in an object literal, rewriting it to a string literal may cause a syntax error if the original relied on template literal flexibility (though rare, as keys are coerced).",
+      "The autofix may insert unnecessary parentheses around the rewritten expression if not carefully formatted, potentially altering precedence in edge cases involving exponentiation or nullish coalescing."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0020283000000000002,
+  "summary": {
+    "programs": 8,
+    "invalid": 3,
+    "fired": 4,
+    "fixed": 4,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Evaluation order changed when template literal part of larger expression",
+      "hazard": "Converting `${'a'}${'b'}` to 'a'+'b' may alter evaluation order if the original template was part of a larger expression where left-to-right timing mattered for side effects in surrounding expressions",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noUnnecessaryTemplateExpression",
+            "severity": "info",
+            "message": "This template expression is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "log: 1\nlog: 2\n",
+          "stderr1": "ReferenceError: expr is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "log: 1\nlog: 2\n",
+          "stderr1": "ReferenceError: expr is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:42.635184249 -0400\n+++ fixed.js\t2026-10-17 16:47:42.918190776 -0400\n@@ -1,4 +1,4 @@\n let x = 0;\n const log = v => { console.log('log:', v); return ++x; };\n-expr = (log(1), `${'a'}${'b'}`, log(2));\n+expr = (log(1), \"ab\", log(2));\n console.log('Result:', expr);\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Type checking broken in tagged template context",
+      "hazard": "If the template literal appears in a context expecting a TemplateLiteral type (e.g., tagged template inference), replacing it with a string literal breaks type checking in TypeScript.",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Tagged result: {\"raw\":[\"\",\"\",\"\"],\"cooked\":[\"hello\",\"world\"]}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Sequence expression parsing changed by rewrite",
+      "hazard": "When the template literal is part of a sequence expression or comma operator, rewriting it may change how the expression is parsed or optimized by minifiers.",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noUnnecessaryTemplateExpression",
+            "severity": "info",
+            "message": "This template expression is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Eval order: 1,2,3\nExpr value: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Eval order: 1,2,3\nExpr value: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:43.314199901 -0400\n+++ fixed.js\t2026-10-17 16:47:43.587206189 -0400\n@@ -1,5 +1,5 @@\n let evalOrder = [];\n const push = v => { evalOrder.push(v); return v; };\n-const expr = (push(1), `${'a'}${'b'}`, push(2), push(3));\n+const expr = (push(1), \"ab\", push(2), push(3));\n console.log('Eval order:', evalOrder.join(','));\n console.log('Expr value:', expr);\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Internal comments lost during rewrite",
+      "hazard": "Comments inside the template literal (e.g., `${'hello' /* comment */}`) would be lost during the rewrite since string literals do not preserve internal comments.",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-47-31-435Z-nk3c-biome-nursery_noUnnecessaryTemplateExpression/r1-p004/orig.js:4\n\n\n\nSyntaxError: Unexpected end of input\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p005",
+      "title": "Template literal as object property key",
+      "hazard": "If the template literal is used as a property key in an object literal, rewriting it to a string literal may cause a syntax error if the original relied on template literal flexibility (though rare, a",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noUnnecessaryTemplateExpression",
+            "severity": "info",
+            "message": "This template expression is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Key exists: true\nValue: value\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Key exists: true\nValue: value\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:43.812211373 -0400\n+++ fixed.js\t2026-10-17 16:47:44.086217682 -0400\n@@ -1,5 +1,5 @@\n const obj = {\n-  [`${'key'}${'name'}`]: 'value'\n+  [\"keyname\"]: 'value'\n };\n console.log('Key exists:', Object.hasOwn(obj, 'keyname'));\n console.log('Value:', obj.keyname);\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "__proto__ key handling affected by rewrite",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noUnnecessaryTemplateExpression",
+            "severity": "info",
+            "message": "This template expression is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Assignment succeeded, proto unchanged: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Assignment succeeded, proto unchanged: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:44.265221801 -0400\n+++ fixed.js\t2026-10-17 16:47:44.535228014 -0400\n@@ -1,5 +1,5 @@\n const protoObj = { __proto__: null };\n-const key = `${'__proto__'}${'sub'}`;\n+const key = \"__proto__sub\";\n try {\n   protoObj[key] = 'should not set proto';\n   console.log('Assignment succeeded, proto unchanged:', protoObj.__proto__ === null);\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "this binding affected in method extraction",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-47-31-435Z-nk3c-biome-nursery_noUnnecessaryTemplateExpression/r1-p007/orig.js:11\n\n\n\nSyntaxError: Unexpected end of input\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exceptions in removed code change behavior",
+      "hazard": "exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "nursery/noUnnecessaryTemplateExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-47-31-435Z-nk3c-biome-nursery_noUnnecessaryTemplateExpression/r1-p008/orig.js:9\n\n\n\nSyntaxError: Unexpected end of input\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    }
+  ]
+}

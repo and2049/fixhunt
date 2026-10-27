@@ -1,0 +1,529 @@
+{
+  "runId": "2026-10-17T19-57-27-934Z-8ilt-biome-style_noUselessElse",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/noUselessElse",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessElse\n- Fix: safe\n- Default severity: info\n- Available from version: 1.3.0\n- Diagnostic category: lint/style/noUselessElse\n\n\nDescription\n\n Disallow `else` block when the `if` block breaks early.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes useless.\n Its contents can be placed outside of the block.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes unnecessary.\n This is because the content of the `else` block will never be executed in conjunction with the `if` block,\n as the breaking statement ensures the control flow exits the `if` block immediately.\n Therefore, the `else` block is redundant, and its content can be placed outside of the block,\n reducing the indentation level by one.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n while (x > 0) {\n     if (f(x)) {\n         break;\n     } else {\n         x++\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         return 0;\n     } else {\n         return x;\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         throw new RangeError();\n     } else {\n         return x;\n     }\n }\n ```\n\nValid\n\n ```js\n function f(x) {\n     if (x < 0) {\n         return 0;\n     }\n     return x;\n }\n ```\n\n ```js\n function f(x) {\n     if (x < 0) {\n         console.info(\"negative number\");\n     } else if (x > 0) {\n         return x;\n     } else {\n         console.info(\"number 0\");\n     }\n }\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "Flags else blocks after if statements containing breaking statements (return, break, continue, throw), as they are unreachable.",
+    "firingShapes": [
+      "if (a) { return; } else { b(); }",
+      "while (x) { if (y) { break; } else { z++; } }",
+      "for (;;) { if (cond) { continue; } else { foo(); } }",
+      "try { if (err) { throw err; } else { bar(); } } catch {}",
+      "function f() { if (true) { return 1; } else { return 2; } }",
+      "switch(s){case 0:if(t){return}else{break};default:}",
+      "if (x) { throw new Error(); } else { y = 1; }",
+      "do { if (a) { break; } else { c--; } } while (0);"
+    ],
+    "silentShapes": [
+      "if (a) { b(); } else { c(); }",
+      "if (a) { return; } else if (b) { return; } else { d(); }",
+      "function f() { if (x) { y++; } return; }",
+      "if (a) { for (;;) { if (z) break; } } else { b(); }",
+      "if (a) { try { return; } finally {} } else { b(); }"
+    ],
+    "fixDescription": "Removes the else block and places its statements directly after the if block, dedenting them by one level while preserving their original order.",
+    "hazards": [
+      "Moving a break statement out of a switch case into the enclosing loop changes which loop it breaks, altering control flow.",
+      "Lifting a continue statement from inside a nested loop to an outer scope may cause it to break the wrong loop or become invalid if no enclosing loop exists.",
+      "Hoisting a throw statement before a variable declaration in the else block could reference a variable that hasn't been initialized yet due to TDZ.",
+      "Extracting a return statement from an else block inside a function may skip cleanup logic in a finally block of a surrounding try statement.",
+      "Moving a break from an else block inside a labeled statement to an outer context may break the wrong label or become syntactically invalid.",
+      "If the else block contains a function declaration, moving it to the outer scope may alter hoisting behavior and create a naming conflict.",
+      "Comments attached to the else block or its braces may be lost or misplaced during the rewrite, affecting readability but not semantics.",
+      "If the if block contains a labeled break and the else block is lifted, the label may no longer be in scope for the lifted statement.",
+      "Lifting a statement with side effects (e.g., i++) from an else block changes the timing of execution relative to prior code in the same block.",
+      "In a try-finally construct, moving a return from an else block before the finally block may prevent the finally block from executing if the return was previously guarded."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0029562000000000004,
+  "summary": {
+    "programs": 16,
+    "invalid": 5,
+    "fired": 6,
+    "fixed": 6,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Continue lifted from inner loop breaks wrong outer loop",
+      "hazard": "Lifting a continue statement from inside a nested loop to an outer scope may cause it to break the wrong loop or become invalid if no enclosing loop exists.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1,0|1,1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1,0|1,1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:57:36.172011573 -0400\n+++ fixed.js\t2026-10-17 15:57:36.448021434 -0400\n@@ -2,7 +2,7 @@\n outer: for (let i = 0; i < 2; i++) {\n   inner: for (let j = 0; j < 2; j++) {\n     if (i === 0) { continue outer; }\n-    else { out.push(i + ',' + j); }\n+    out.push(i + ',' + j); \n   }\n }\n console.log(out.join('|'));\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Class field initialization skipped due to removed else block",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:57:36.612027294 -0400\n+++ fixed.js\t2026-10-17 15:57:36.873036619 -0400\n@@ -1,4 +1,4 @@\n class C {\n-  static x = (() => { if (false) { return 1; } else { return 2; } })();\n+  static x = (() => { if (false) { return 1; }return 2; })();\n }\n console.log(C.x);\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Break moved from else in labeled block breaks outer label incorrectly",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:57:37.034042369 -0400\n+++ fixed.js\t2026-10-17 15:57:37.296051707 -0400\n@@ -1,7 +1,7 @@\n let result = '';\n loop: {\n   if (true) { break loop; }\n-  else { result += 'b'; }\n+  result += 'b'; \n }\n result += 'a';\n console.log(result);\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Break from else inside labeled statement moves to wrong label scope",
+      "hazard": "Moving a break from an else block inside a labeled statement to an outer context may break the wrong label or become syntactically invalid.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "end\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "end\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:57:37.461057587 -0400\n+++ fixed.js\t2026-10-17 15:57:37.728067103 -0400\n@@ -2,7 +2,7 @@\n outer: {\n   inner: {\n     if (false) { break inner; }\n-    else { break outer; }\n+    break outer; \n   }\n   log += 'after inner';\n }\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Return moved before finally skips cleanup action",
+      "hazard": "In a try-finally construct, moving a return from an else block before the finally block may prevent the finally block from executing if the return was previously guarded.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-57-27-934Z-8ilt-biome-style_noUselessElse/r1-p005/orig.js:3\n  if (false) { return 'skipped'; }\n               ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Function call in else condition runs twice after fix",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "yes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Throw hoisted before let declaration causes TDZ error",
+      "hazard": "Hoisting a throw statement before a variable declaration in the else block could reference a variable that hasn't been initialized yet due to TDZ.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-57-27-934Z-8ilt-biome-style_noUselessElse/r1-p007/orig.js:2\n  if (false) { return; }\n               ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Function declaration in else block becomes hoisted and alters control flow",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: f is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Shadowing after else removal",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-57-27-934Z-8ilt-biome-style_noUselessElse/r2-p001/orig.js:2\nif (true) { return; }\n            ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p002",
+      "title": "Break to wrong label after lift",
+      "hazard": "Moving a break from an else block inside a labeled statement to an outer context may break the wrong label or become syntactically invalid.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "in else\nreached\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "in else\nreached\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:57:41.802211505 -0400\n+++ fixed.js\t2026-10-17 15:57:42.055220429 -0400\n@@ -1,8 +1,7 @@\n outer: {\n   if (false) { break outer; }\n-  else {\n+  \n     console.log('in else');\n     break outer;\n-  }\n }\n console.log('reached');\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Throw before let TDZ",
+      "hazard": "Hoisting a throw statement before a variable declaration in the else block could reference a variable that hasn't been initialized yet due to TDZ.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'x' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comments lost on move",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-57-27-934Z-8ilt-biome-style_noUselessElse/r2-p004/orig.js:1\nif (true) { return; }\n            ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p005",
+      "title": "Side effect timing changed",
+      "hazard": "Lifting a statement with side effects (e.g., i++) from an else block changes the timing of execution relative to prior code in the same block.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Function declaration hoisted in else",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-57-27-934Z-8ilt-biome-style_noUselessElse/r2-p006/orig.js:1\nif (true) { return; }\n            ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Labeled break loses label scope",
+      "hazard": "If the if block contains a labeled break and the else block is lifted, the label may no longer be in scope for the lifted statement.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "in else\nafter label\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "in else\nafter label\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:57:42.783246061 -0400\n+++ fixed.js\t2026-10-17 15:57:43.054255598 -0400\n@@ -1,8 +1,7 @@\n outer: {\n   if (false) { break outer; }\n-  else {\n+  \n     console.log('in else');\n     break outer; // label 'outer' must still be in scope\n-  }\n }\n console.log('after label');\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Nullish vs falsy after lift",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "default\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

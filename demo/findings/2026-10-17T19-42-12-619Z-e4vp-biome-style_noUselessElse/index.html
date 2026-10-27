@@ -1,0 +1,413 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/noUselessElse — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/noUselessElse <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse · fix labelled <b>safe</b> · 16 programs, 14 fired, 14 fixed, 3 oracle-backed finding(s) · model cost $0.0538</p>
+<div class="card"><b>Rule analysis</b><p>Flags else blocks that follow an if block containing a breaking statement (return, break, continue, throw), as they are unreachable and redundant.</p><p class="mut">Fix: Removes the else block and places its statements directly after the if block, preserving their original order and indentation relative to the function or block scope.</p><details><summary>10 hazards</summary><ul><li>Moving a break statement out of a switch case alters fall-through behavior, potentially executing unintended cases.</li><li>Relocating a continue statement may cause it to target an outer loop instead of the innermost one, changing iteration behavior.</li><li>Hoisting a function declaration from within the else block could make it available earlier than intended, causing premature invocation.</li><li>Moving a variable declaration with let/const from the else block risks referencing it before initialization if used prior to the if block.</li><li>Extracting a labeled statement from the else block may break label targeting if the label is referenced elsewhere via break/continue.</li><li>Relocating a throw statement could change the stack trace by altering the point of origin, affecting error handling logic.</li><li>Moving a return statement from within a try block may skip execution of a finally block that was meant to run regardless.</li><li>Duplicating a side-effecting expression (e.g., a function call) from the else block into multiple paths due to code duplication during refactoring is not applicable here, but the fix assumes single occurrence—however, if the else block contains multiple statements, their relative order is preserved but their execution context changes.</li><li>If the else block contains a debugger statement, moving it may alter developer tooling behavior if the surrounding scope has different blackboxing settings.</li><li>Comments attached to the else brace or internal to the else block may be lost or misplaced during the rewrite, degrading code readability.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix hoists a function declaration out of an else block that is never executed because the preceding if block always returns. In the original code the declaration is dead code so f is never created and the call throws a ReferenceError; after the fix the declaration becomes live, f is defined, and the program prints 1. This is a silent change in observable behavior for a plausible construct.">judge: real · high</span> Premature function hoist<p class="mut">The fix hoists a function declaration out of an else block that is never executed because the preceding if block always returns. In the original code the declaration is dead code so f is never created and the call throws a ReferenceError; after the fix the declaration becomes live, f is defined, and the program prints 1. This is a silent change in observable behavior for a plausible construct.</p>
+<h2>Minimized program (6→6 lines)</h2><pre>function main() {
+  if (false) { return; }
+  else { function f() { return 1; } }
+  try { console.log(f()); } catch (e) { console.log(e.name); }
+}
+main();
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 15:42:23.507514755 -0400
++++ fixed.js	2026-10-17 15:42:23.777509156 -0400
+@@ -1,6 +1,6 @@
+ function main() {
+   if (false) { return; }
+<span class="del">-  else { function f() { return 1; } }</span>
+<span class="add">+  function f() { return 1; } </span>
+   try { console.log(f()); } catch (e) { console.log(e.name); }
+ }
+ main();
+</pre>
+<h2>Observed</h2><pre>stdout before:
+ReferenceError
+stdout after:
+1</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11937">biomejs/biome/issues/11937</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3770">biomejs/biome/issues/3770</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1191">biomejs/biome/issues/1191</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/4354">biomejs/biome/issues/4354</a> · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p008"><b>r1-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix moves a function declaration from an unreachable else block to the case block scope, making it reachable and changing typeof g from &#39;undefined&#39; to &#39;function&#39;. This is a silent behavior change in plausible code (dead-code elimination that actually defines a function).">judge: real · high</span> Block-scoped function in switch<p class="mut">The fix moves a function declaration from an unreachable else block to the case block scope, making it reachable and changing typeof g from &#39;undefined&#39; to &#39;function&#39;. This is a silent behavior change in plausible code (dead-code elimination that actually defines a function).</p>
+<h2>Minimized program (10→9 lines)</h2><pre>function main() {
+  switch (0) {
+    case 0:
+      if (false) { return; }
+      else { function g() { return 2; } }
+      console.log(typeof g);
+  }
+}
+main();
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 15:42:23.938505817 -0400
++++ fixed.js	2026-10-17 15:42:24.206500254 -0400
+@@ -2,7 +2,7 @@
+   switch (0) {
+     case 0:
+       if (false) { return; }
+<span class="del">-      else { function g() { return 2; } }</span>
+<span class="add">+      function g() { return 2; } </span>
+       console.log(typeof g);
+       break;
+   }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+undefined
+stdout after:
+function</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11937">biomejs/biome/issues/11937</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3770">biomejs/biome/issues/3770</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1191">biomejs/biome/issues/1191</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/4354">biomejs/biome/issues/4354</a> · <a href="reports/r1-p008.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-breaks-syntax</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the else block but leaves its body at the same scope level, causing the inner &#39;let x = 2&#39; to conflict with the outer &#39;let x = 1&#39;. In the original code the else block created a nested block scope so the redeclaration was legal; after the fix both declarations are in the same function scope, producing a syntax error. This is a silent correctness bug for any code that shadow-declares a variable inside the else branch.">judge: real · high</span> Shadowing after removal of else block<p class="mut">The fix removes the else block but leaves its body at the same scope level, causing the inner &#39;let x = 2&#39; to conflict with the outer &#39;let x = 1&#39;. In the original code the else block created a nested block scope so the redeclaration was legal; after the fix both declarations are in the same function scope, producing a syntax error. This is a silent correctness bug for any code that shadow-declares a variable inside the else branch.</p>
+<h2>Minimized program (9→7 lines)</h2><pre>function f() {
+  let x = 1;
+  if (true) { return x; }
+  else {
+    let x = 2;
+  }
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 15:42:28.435412284 -0400
++++ fixed.js	2026-10-17 15:42:28.696406842 -0400
+@@ -1,9 +1,8 @@
+ function f() {
+   let x = 1;
+   if (true) { return x; }
+<span class="del">-  else {</span>
+<span class="add">+  </span>
+     let x = 2;
+     console.log(x);
+<span class="del">-  }</span>
+ }
+ f();
+</pre>
+<h2>Observed</h2><pre>/home/sun/dev/diaghunt/runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/r2-p001/fixed.js:5
+    let x = 2;
+        ^
+
+SyntaxError: Identifier &#39;x&#39; has already been declared
+    at checkSyntax (node:internal/main/check_syntax:84:5)
+
+Node.js v26.8.1
+</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11937">biomejs/biome/issues/11937</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11351">biomejs/biome/issues/11351</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11558">biomejs/biome/issues/11558</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11092">biomejs/biome/issues/11092</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/8347">biomejs/biome/issues/8347</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3770">biomejs/biome/issues/3770</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1191">biomejs/biome/issues/1191</a> · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Continue targeting wrong loop</td><td class="mut">Relocating a continue statement may cause it to target an outer loop instead of the innerm</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Class field timing</td><td class="mut">class fields, static blocks, private names, super calls</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Label and finally interaction</td><td class="mut">label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">invalid</span></td><td>Labeled statement extraction</td><td class="mut">Extracting a labeled statement from the else block may break label targeting if the label </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Comment displacement</td><td class="mut">Comments attached to the else brace or internal to the else block may be lost or misplaced</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Side effect duplication</td><td class="mut">order of evaluation when expressions are merged, duplicated or deleted (side effects run t</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Premature function hoist</td><td class="mut">Hoisting a function declaration from within the else block could make it available earlier</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Block-scoped function in switch</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-breaks-syntax</span></td><td>Shadowing after removal of else block</td><td class="mut">name collisions across scopes after a move (shadowing)</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Label targeting broken by else block extraction</td><td class="mut">Extracting a labeled statement from the else block may break label targeting if the label </td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Function declaration hoisted from else block</td><td class="mut">Hoisting a function declaration from within the else block could make it available earlier</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Comment displaced when else block removed</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Debugger statement moved alters tooling behavior</td><td class="mut">If the else block contains a debugger statement, moving it may alter developer tooling beh</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Function declaration in else block of switch case</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Order preservation but context change in else block</td><td class="mut">Duplicating a side-effecting expression [...] their relative order is preserved but their </td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">invalid</span></td><td>Nullish vs falsy in else block after move</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Continue targeting wrong loop</summary><pre>function main() {
+  let out = &#39;&#39;;
+  L1: for (let i = 0; i &lt; 2; i++) {
+    for (let j = 0; j &lt; 2; j++) {
+      if (j === 0) { continue L1; }
+      else { out += i + &#39;,&#39; + j + &#39;|&#39;; }
+    }
+  }
+  console.log(out);
+}
+main();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:21.261561278 -0400
++++ fixed.js	2026-10-17 15:42:21.532555670 -0400
+@@ -3,7 +3,7 @@
+   L1: for (let i = 0; i &lt; 2; i++) {
+     for (let j = 0; j &lt; 2; j++) {
+       if (j === 0) { continue L1; }
+<span class="del">-      else { out += i + &#39;,&#39; + j + &#39;|&#39;; }</span>
+<span class="add">+      out += i + &#39;,&#39; + j + &#39;|&#39;; </span>
+     }
+   }
+   console.log(out);
+</pre></details><details id="r1-p002"><summary>r1-p002 — Class field timing</summary><pre>class C {
+  static x = 1;
+  #p;
+  constructor() {
+    this.#p = 0;
+    if (false) { return; }
+    else { this.#p = 2; }
+  }
+  get p() { return this.#p; }
+}
+const c = new C();
+console.log(c.p);
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:21.701552173 -0400
++++ fixed.js	2026-10-17 15:42:21.967546668 -0400
+@@ -4,7 +4,7 @@
+   constructor() {
+     this.#p = 0;
+     if (false) { return; }
+<span class="del">-    else { this.#p = 2; }</span>
+<span class="add">+    this.#p = 2; </span>
+   }
+   get p() { return this.#p; }
+ }
+</pre></details><details id="r1-p003"><summary>r1-p003 — Label and finally interaction</summary><pre>function main() {
+  let out = &#39;&#39;;
+  L: for (let i = 0; i &lt; 2; i++) {
+    try {
+      if (i === 0) { break L; }
+      else { out += i; }
+    } finally { out += &#39;f&#39;; }
+  }
+  console.log(out);
+}
+main();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:22.127543355 -0400
++++ fixed.js	2026-10-17 15:42:22.396537782 -0400
+@@ -3,7 +3,7 @@
+   L: for (let i = 0; i &lt; 2; i++) {
+     try {
+       if (i === 0) { break L; }
+<span class="del">-      else { out += i; }</span>
+<span class="add">+      out += i; </span>
+     } finally { out += &#39;f&#39;; }
+   }
+   console.log(out);
+</pre></details><details id="r1-p004"><summary>r1-p004 — Labeled statement extraction</summary><pre>function main() {
+  let out = &#39;&#39;;
+  L: for (let i = 0; i &lt; 2; i++) {
+    if (i === 0) { continue; }
+    else { L: out += i; break L; }
+  }
+  console.log(out);
+}
+main();
+</pre></details><details id="r1-p005"><summary>r1-p005 — Comment displacement</summary><pre>function main() {
+  let x = 0;
+  if (false) { return; }
+  /* keep-me */
+  else { x = 1; /* inner */ }
+  console.log(x);
+}
+main();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:22.618533183 -0400
++++ fixed.js	2026-10-17 15:42:22.899527362 -0400
+@@ -2,7 +2,7 @@
+   let x = 0;
+   if (false) { return; }
+   /* keep-me */
+<span class="del">-  else { x = 1; /* inner */ }</span>
+<span class="add">+  x = 1; /* inner */ </span>
+   console.log(x);
+ }
+ main();
+</pre></details><details id="r1-p006"><summary>r1-p006 — Side effect duplication</summary><pre>function main() {
+  let a = 0, b = 0;
+  if (false) { return; }
+  else { a++; b += a; }
+  console.log(a, b);
+}
+main();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:23.061524004 -0400
++++ fixed.js	2026-10-17 15:42:23.339518239 -0400
+@@ -1,7 +1,7 @@
+ function main() {
+   let a = 0, b = 0;
+   if (false) { return; }
+<span class="del">-  else { a++; b += a; }</span>
+<span class="add">+  a++; b += a; </span>
+   console.log(a, b);
+ }
+ main();
+</pre></details><details id="r1-p007"><summary>r1-p007 — Premature function hoist</summary><pre>function main() {
+  if (false) { return; }
+  else { function f() { return 1; } }
+  try { console.log(f()); } catch (e) { console.log(e.name); }
+}
+main();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:23.507514755 -0400
++++ fixed.js	2026-10-17 15:42:23.777509156 -0400
+@@ -1,6 +1,6 @@
+ function main() {
+   if (false) { return; }
+<span class="del">-  else { function f() { return 1; } }</span>
+<span class="add">+  function f() { return 1; } </span>
+   try { console.log(f()); } catch (e) { console.log(e.name); }
+ }
+ main();
+</pre></details><details id="r1-p008"><summary>r1-p008 — Block-scoped function in switch</summary><pre>function main() {
+  switch (0) {
+    case 0:
+      if (false) { return; }
+      else { function g() { return 2; } }
+      console.log(typeof g);
+      break;
+  }
+}
+main();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:23.938505817 -0400
++++ fixed.js	2026-10-17 15:42:24.206500254 -0400
+@@ -2,7 +2,7 @@
+   switch (0) {
+     case 0:
+       if (false) { return; }
+<span class="del">-      else { function g() { return 2; } }</span>
+<span class="add">+      function g() { return 2; } </span>
+       console.log(typeof g);
+       break;
+   }
+</pre></details><details id="r2-p001"><summary>r2-p001 — Shadowing after removal of else block</summary><pre>function f() {
+  let x = 1;
+  if (true) { return x; }
+  else {
+    let x = 2;
+    console.log(x);
+  }
+}
+f();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:28.435412284 -0400
++++ fixed.js	2026-10-17 15:42:28.696406842 -0400
+@@ -1,9 +1,8 @@
+ function f() {
+   let x = 1;
+   if (true) { return x; }
+<span class="del">-  else {</span>
+<span class="add">+  </span>
+     let x = 2;
+     console.log(x);
+<span class="del">-  }</span>
+ }
+ f();
+</pre></details><details id="r2-p002"><summary>r2-p002 — Label targeting broken by else block extraction</summary><pre>outer: for (let i = 0; i &lt; 2; i++) {
+  if (i === 0) { continue outer; }
+  else {
+    console.log(&#39;reached&#39;);
+    break outer;
+  }
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:28.746405799 -0400
++++ fixed.js	2026-10-17 15:42:29.010400295 -0400
+@@ -1,7 +1,6 @@
+ outer: for (let i = 0; i &lt; 2; i++) {
+   if (i === 0) { continue outer; }
+<span class="del">-  else {</span>
+<span class="add">+  </span>
+     console.log(&#39;reached&#39;);
+     break outer;
+<span class="del">-  }</span>
+ }
+</pre></details><details id="r2-p003"><summary>r2-p003 — Function declaration hoisted from else block</summary><pre>function f() {
+  if (false) {
+    return g();
+  } else {
+    function g() { return &#39;early&#39;; }
+    return g();
+  }
+}
+console.log(f());
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:29.177396809 -0400
++++ fixed.js	2026-10-17 15:42:29.432391487 -0400
+@@ -1,9 +1,8 @@
+ function f() {
+   if (false) {
+     return g();
+<span class="del">-  } else {</span>
+<span class="add">+  }</span>
+     function g() { return &#39;early&#39;; }
+     return g();
+<span class="del">-  }</span>
+ }
+ console.log(f());
+</pre></details><details id="r2-p004"><summary>r2-p004 — Comment displaced when else block removed</summary><pre>function f() {
+  if (true) { return 1; }
+  // This comment should stay
+  else {
+    // This comment may be lost
+    console.log(2);
+  }
+}
+f();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:29.599388001 -0400
++++ fixed.js	2026-10-17 15:42:29.839382992 -0400
+@@ -1,9 +1,8 @@
+ function f() {
+   if (true) { return 1; }
+   // This comment should stay
+<span class="del">-  else {</span>
+<span class="add">+  </span>
+     // This comment may be lost
+     console.log(2);
+<span class="del">-  }</span>
+ }
+ f();
+</pre></details><details id="r2-p005"><summary>r2-p005 — Debugger statement moved alters tooling behavior</summary><pre>function f() {
+  if (true) { return; }
+  else {
+    debugger;
+    console.log(&#39;unreachable&#39;);
+  }
+}
+f();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:29.990379840 -0400
++++ fixed.js	2026-10-17 15:42:30.237374680 -0400
+@@ -1,8 +1,7 @@
+ function f() {
+   if (true) { return; }
+<span class="del">-  else {</span>
+<span class="add">+  </span>
+     debugger;
+     console.log(&#39;unreachable&#39;);
+<span class="del">-  }</span>
+ }
+ f();
+</pre></details><details id="r2-p006"><summary>r2-p006 — Function declaration in else block of switch case</summary><pre>function f() {
+  switch (0) {
+    case 0:
+      if (true) { break; }
+      else {
+        function g() { return 1; }
+        return g();
+      }
+  }
+}
+console.log(f());
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:30.382371650 -0400
++++ fixed.js	2026-10-17 15:42:30.664365758 -0400
+@@ -2,10 +2,9 @@
+   switch (0) {
+     case 0:
+       if (true) { break; }
+<span class="del">-      else {</span>
+<span class="add">+      </span>
+         function g() { return 1; }
+         return g();
+<span class="del">-      }</span>
+   }
+ }
+ console.log(f());
+</pre></details><details id="r2-p007"><summary>r2-p007 — Order preservation but context change in else block</summary><pre>let log = [];
+function f() {
+  if (true) { return; }
+  else {
+    log.push(1);
+    log.push(2);
+  }
+}
+f();
+console.log(log);
+</pre><pre class="diff">--- orig.js	2026-10-17 15:42:30.830362290 -0400
++++ fixed.js	2026-10-17 15:42:31.095356751 -0400
+@@ -1,10 +1,9 @@
+ let log = [];
+ function f() {
+   if (true) { return; }
+<span class="del">-  else {</span>
+<span class="add">+  </span>
+     log.push(1);
+     log.push(2);
+<span class="del">-  }</span>
+ }
+ f();
+ console.log(log);
+</pre></details><details id="r2-p008"><summary>r2-p008 — Nullish vs falsy in else block after move</summary><pre>let obj = { foo: undefined };
+if (obj?.foo ?? false) {
+  return;
+} else {
+  console.log(obj?.foo ?? &#39;default&#39;);
+}
+</pre></details></body></html>

@@ -1,0 +1,711 @@
+{
+  "runId": "2026-10-17T21-52-48-892Z-gia8-ruff-TRY201",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "TRY201",
+    "fixKind": "unknown",
+    "docs": "# verbose-raise (TRY201)\n\nDerived from the **tryceratops** linter.\n\nFix is always available.\n\n## What it does\nChecks for needless exception names in `raise` statements.\n\n## Why is this bad?\nIt's redundant to specify the exception name in a `raise` statement if the\nexception is being re-raised.\n\n## Example\n```python\ndef foo():\n    try:\n        ...\n    except ValueError as exc:\n        raise exc\n```\n\nUse instead:\n```python\ndef foo():\n    try:\n        ...\n    except ValueError:\n        raise\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it doesn't properly handle bound\nexceptions that are shadowed between the `except` and `raise` statements.\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary repetition of caught exception variable when immediately re-raising the same exception.",
+    "firingShapes": [
+      "except ValueError as exc:\n    raise exc",
+      "except Exception as e:\n    raise e",
+      "except RuntimeError as err:\n    raise err",
+      "except KeyError as k:\n    raise k"
+    ],
+    "silentShapes": [
+      "except ValueError as exc:\n    raise ValueError()",
+      "except Exception as e:\n    raise OtherError(e)",
+      "except RuntimeError as err:\n    log(err); raise err",
+      "except KeyError:\n    pass",
+      "except ValueError as exc:\n    if True:\n        raise exc"
+    ],
+    "fixDescription": "Removes the exception variable name from both the except clause and the raise statement, changing 'except X as var: raise var' to 'except X: raise'.",
+    "hazards": [
+      "The exception variable is used after the raise in the same block, so removing it causes an undefined variable error.",
+      "The exception variable is reassigned between the except and raise, so the fix alters which object is raised.",
+      "The exception variable is referenced in a nested function defined between except and raise, capturing the original binding which the fix removes.",
+      "The except clause contains multiple exception types (e.g., 'except (ValueError, TypeError) as exc') and the fix incorrectly drops the variable.",
+      "A comment attached to the 'as exc' token is lost during the rewrite.",
+      "The raise statement is inside a finally block where the variable is referenced from an outer scope, and the fix breaks that reference.",
+      "The exception variable name shadows a global or nonlocal variable, and removing the binding changes later accesses to that variable.",
+      "The except block is empty except for the raise, and removing the variable leaves a pointless 'except:' that may confuse readers but is syntactically valid.",
+      "The code relies on the exception variable being deleted after the block (via implicit cleanup), and altering the binding scope changes deletion timing.",
+      "The raise statement is modified by a decorator or metaclass that inspects the source, and the rewrite changes its behavior."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0041907,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 14,
+    "fixed": 0,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Multiple exception types - variable dropped",
+      "hazard": "When catching multiple exception types, dropping the variable loses access to the actual exception instance, which may carry different state depending on which type was raised.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              10,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Instance attribute with descriptor side effect",
+      "hazard": "If the exception variable refers to an instance attribute accessed via a descriptor (__get__ has side effects), removing the variable prevents those side effects from occurring during the raise.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              13,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "DESC_GET\n42\n",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "DESC_GET\n42\n",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Evaluation order in raised expression",
+      "hazard": "If the exception variable is used in a subexpression with side effects (e.g., function call), removing it changes evaluation order or eliminates the side effect entirely.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              13,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First: 1, Second: 2\n",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First: 1, Second: 2\n",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Pointless bare except after rewrite",
+      "hazard": "Removing the variable from a single-except clause results in 'except:' which catches BaseException (including KeyboardInterrupt, SystemExit), changing exception semantics.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              5,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 130,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 130,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Decorator inspecting raise statement source",
+      "hazard": "A decorator that parses the source code of the function to detect 'raise <var>' patterns will behave differently if the variable is removed, altering its logic.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              17,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Trace: raise exc detected\nIn handler\n",
+          "stderr1": "ValueError: test",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Trace: raise exc detected\nIn handler\n",
+          "stderr1": "ValueError: test",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Generator state lost by early raise",
+      "hazard": "If the exception variable is used to conditionally resume a generator, removing it breaks the ability to inspect the exception and decide whether to yield or terminate.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n3\n",
+          "stderr1": "ValueError: stop",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Custom __bool__ affects control flow",
+      "hazard": "If the exception variable is used in a boolean context (e.g., conditional raise), removing it may prevent inspection of a custom __bool__ that affects whether the raise happens.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              11,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "No raise due to __bool__ False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "No raise due to __bool__ False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exception in dict key with custom __hash__",
+      "hazard": "If the exception instance is used as a dict key (relying on __hash__/__eq__), removing the variable prevents it from being used in lookups or storage that depend on its identity or value.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              15,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "found\n",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "found\n",
+          "stderr1": "Traceback (most recent call last):",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Mutable default argument retains raised exception across calls",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              6,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: bad",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: bad",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Generator expression consumes iterator before raise",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              9,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: fail",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: fail",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Property getter accesses exception variable after raise",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              11,
+              19
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: oops",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: oops",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Multi-type except drops variable needed after raise",
+      "hazard": "The except clause contains multiple exception types (e.g., 'except (ValueError, TypeError) as exc') and the fix incorrectly drops the variable.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              5,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "exc type: ValueError\n",
+          "stderr1": "ValueError: x",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "exc type: ValueError\n",
+          "stderr1": "ValueError: x",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Exception variable used after raise in same block",
+      "hazard": "The exception variable is used after the raise in the same block, so removing it causes an undefined variable error.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              4,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: fail",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: fail",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Finally block references outer-scope exception variable",
+      "hazard": "The raise statement is inside a finally block where the variable is referenced from an outer scope, and the fix breaks that reference.",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally saw: test\n",
+          "stderr1": "ValueError: test",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Keyword-only args and exception variable capture",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              7,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "KeyError: 'missing'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "KeyError: 'missing'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict ordering affects exception trace",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "TRY201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TRY201",
+            "severity": "warning",
+            "message": "Use `raise` without specifying exception name",
+            "span": [
+              13,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: collision",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: collision",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

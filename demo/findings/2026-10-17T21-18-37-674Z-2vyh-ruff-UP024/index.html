@@ -1,0 +1,279 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP024 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP024 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-18-37-674Z-2vyh-ruff-UP024 · fix labelled <b>unknown</b> · 16 programs, 10 fired, 10 fixed, 0 oracle-backed finding(s) · model cost $0.0052</p>
+<div class="card"><b>Rule analysis</b><p>Flags usage of exception classes that are aliases of OSError (e.g., IOError, EnvironmentError, WindowsError) and recommends replacing them with OSError.</p><p class="mut">Fix: Replaces any occurrence of an OSError-alias exception name (such as IOError, EnvironmentError, WindowsError) with OSError in raise statements, except clauses, isinstance/issubclass checks, and similar contexts, preserving all surrounding syntax and structure.</p><details><summary>11 hazards</summary><ul><li>Rewriting `except IOError:` to `except OSError:` changes the set of caught exceptions if other OSError subclasses (like FileNotFoundError) were previously excluded by a broader except clause above, altering control flow.</li><li>In `except (IOError, ValueError):`, replacing IOError with OSError may cause ValueError to be unreachable if OSError is checked first, due to exception matching order changing subclass precedence.</li><li>If `IOError` is imported via `from errno import IOError` (though incorrect, hypothetically), rewriting to `OSError` would break the name resolution since `OSError` is not defined in that module&#39;s namespace.</li><li>In a context like `except IOError as e:`, if the variable `e` is later used to access attributes specific to the IOError alias (none exist, but hypothetically), the rewrite assumes identical interface, which while true now, relies on the alias preserving all behavior.</li><li>When `WindowsError` is used in `raise WindowsError`, rewriting to `raise OSError` loses the platform-specific signal that the error originated from Windows, though the exception instance behaves identically.</li><li>In `issubclass(SomeErr, EnvironmentError)`, replacing EnvironmentError with OSError may return False if SomeErr is a subclass of a removed alias that no longer inherits from OSError in a future Python version, making the fix forward-incompatible if the alias is deleted.</li><li>If a comment like `# Prefer IOError for clarity` appears after `raise IOError`, the autofix may preserve the comment but it becomes misleading post-rewrite, constituting a documentation hazard.</li><li>In `try: ... except IOError: ... finally:`, the rewrite to `OSError` does not affect finally execution, but if the except block was relying on IOError being a distinct type for logging or metrics, the semantics of error categorization change.</li><li>When `EnvironmentError` is used in a tuple like `except (EnvironmentError, KeyboardInterrupt):`, replacing it with `OSError` risks catching KeyboardInterrupt less likely if OSError is checked before KeyboardInterrupt in the tuple, though tuple order is preserved so this only matters if the interpreter reorders—which it doesn&#39;t, but the hazard is perceived reordering risk.</li><li>If `IOError` is dynamically looked up via `getattr(exceptions_module, &#39;IOError&#39;)` and the rewrite incorrectly modifies the string literal, it would break runtime attribute access, though the rule does not target string literals—this hazard applies only if the autofix erroneously extends beyond identifiers.</li><li>In a class definition like `class CustomIOError(IOError):`, rewriting the base to `OSError` is correct and safe, but if the class relied on IOError being a distinct type for `__instancecheck__` overrides, the change could break custom behavior, though no such override exists in standard aliases.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Comments attached to rewritten code</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Custom subclass inheriting from alias</td><td class="mut">In a class definition like `class CustomIOError(IOError):`, rewriting the base to `OSError</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Tuple order in except clause with KeyboardInterrupt</td><td class="mut">When `EnvironmentError` is used in a tuple like `except (EnvironmentError, KeyboardInterru</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Unreachable except clause due to subclass precedence</td><td class="mut">In `except (IOError, ValueError):`, replacing IOError with OSError may cause ValueError to</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Exception chaining in finally/else clauses</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>pathlib vs os.path behavior on relative paths</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Broader except above narrowing control flow</td><td class="mut">Rewriting `except IOError:` to `except OSError:` changes the set of caught exceptions if o</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation order and side effects in expressions</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span></td><td>Dynamic lookup via getattr</td><td class="mut">If autofix erroneously rewrites string literals like &#39;IOError&#39; during dynamic attribute ac</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Async function with await ordering</td><td class="mut">Rewriting exception types in async contexts should not interfere with await execution orde</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Finally block reliance on exception type for logging</td><td class="mut">Changing except IOError to except OSError alters which exceptions are caught, affecting wh</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Class attribute descriptor with side effects on access</td><td class="mut">If the rewritten exception type is used in a descriptor&#39;s __get__ with side effects, chang</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only args with default evaluation once</td><td class="mut">Default values for keyword-only args are evaluated once at def-time; if the rewritten expr</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Generator vs list consumption laziness</td><td class="mut">If the rewritten expression appears in a generator condition, changing it could alter when</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Broad except above narrowing control flow with subclass precedence</td><td class="mut">Rewriting except IOError to except OSError in a narrow handler above a broad OSError handl</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>String formatting edge cases with % and .format</td><td class="mut">If the autofix touches string literals near exception handlers (e.g., in log messages), it</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Comments attached to rewritten code</summary><pre># This comment explains why we handle IOError
+# Specifically for legacy file operations
+raise IOError(&quot;legacy error&quot;)  # Keep this message
+</pre><pre class="diff">--- orig.py	2026-10-17 17:18:53.256973814 -0400
++++ fixed.py	2026-10-17 17:18:53.645953769 -0400
+@@ -1,3 +1,3 @@
+ # This comment explains why we handle IOError
+ # Specifically for legacy file operations
+<span class="del">-raise IOError(&quot;legacy error&quot;)  # Keep this message</span>
+<span class="add">+raise OSError(&quot;legacy error&quot;)  # Keep this message</span>
+</pre></details><details id="r1-p002"><summary>r1-p002 — Custom subclass inheriting from alias</summary><pre>class CustomIOError(IOError):  # RULE SHOULD REWRITE BASE TO OSError
+    pass
+
+try:
+    raise CustomIOError(&quot;custom&quot;)
+except OSError as e:
+    print(f&quot;Caught: {type(e).__name__}&quot;)
+except Exception as e:
+    print(f&quot;Unexpected: {type(e).__name__}&quot;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Tuple order in except clause with KeyboardInterrupt</summary><pre>import sys
+try:
+    raise KeyboardInterrupt(&quot;user abort&quot;)
+except (EnvironmentError, KeyboardInterrupt) as e:  # RULE REWRITES EnvironmentError -&gt; OSError
+    print(f&quot;Caught: {type(e).__name__}: {e}&quot;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:18:53.989936042 -0400
++++ fixed.py	2026-10-17 17:18:54.144928068 -0400
+@@ -1,5 +1,5 @@
+ import sys
+ try:
+     raise KeyboardInterrupt(&quot;user abort&quot;)
+<span class="del">-except (EnvironmentError, KeyboardInterrupt) as e:  # RULE REWRITES EnvironmentError -&gt; OSError</span>
+<span class="add">+except (OSError, KeyboardInterrupt) as e:  # RULE REWRITES EnvironmentError -&gt; OSError</span>
+     print(f&quot;Caught: {type(e).__name__}: {e}&quot;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Unreachable except clause due to subclass precedence</summary><pre>try:
+    raise ValueError(&quot;value issue&quot;)
+except (IOError, ValueError) as e:  # RULE REWRITES IOError -&gt; OSError; OSError is broader, but ValueError not subclass -&gt; still caught
+    print(f&quot;Caught: {type(e).__name__}&quot;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:18:54.246922821 -0400
++++ fixed.py	2026-10-17 17:18:54.409914436 -0400
+@@ -1,4 +1,4 @@
+ try:
+     raise ValueError(&quot;value issue&quot;)
+<span class="del">-except (IOError, ValueError) as e:  # RULE REWRITES IOError -&gt; OSError; OSError is broader, but ValueError not subclass -&gt; still caught</span>
+<span class="add">+except (OSError, ValueError) as e:  # RULE REWRITES IOError -&gt; OSError; OSError is broader, but ValueError not subclass -&gt; still caught</span>
+     print(f&quot;Caught: {type(e).__name__}&quot;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Exception chaining in finally/else clauses</summary><pre>try:
+    raise IOError(&quot;original&quot;)  # RULE REWRITES IOError -&gt; OSError
+except OSError as e:
+    try:
+        raise ValueError(&quot;chained&quot;) from e
+    finally:
+        print(&quot;finally executed&quot;)
+else:
+    print(&quot;no exception&quot;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:18:54.513909086 -0400
++++ fixed.py	2026-10-17 17:18:54.919888202 -0400
+@@ -1,5 +1,5 @@
+ try:
+<span class="del">-    raise IOError(&quot;original&quot;)  # RULE REWRITES IOError -&gt; OSError</span>
+<span class="add">+    raise OSError(&quot;original&quot;)  # RULE REWRITES IOError -&gt; OSError</span>
+ except OSError as e:
+     try:
+         raise ValueError(&quot;chained&quot;) from e
+</pre></details><details id="r1-p006"><summary>r1-p006 — pathlib vs os.path behavior on relative paths</summary><pre>import os
+import pathlib
+try:
+    pathlib.Path(&quot;nonexistent.txt&quot;).read_text()
+except OSError as e:  # RULE MAY HAVE COME FROM EnvironmentError or similar
+    print(f&quot;pathlib: {type(e).__name__}&quot;)
+try:
+    open(&quot;nonexistent.txt&quot;).read()
+except OSError as e:
+    print(f&quot;open: {type(e).__name__}&quot;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Broader except above narrowing control flow</summary><pre>try:
+    raise FileNotFoundError(&quot;missing&quot;)
+except OSError:
+    print(&quot;caught by OSError&quot;)
+except FileNotFoundError as e:  # THIS IS NOW UNREACHABLE if above except IOError was rewritten to OSError
+    print(&quot;caught by FileNotFoundError&quot;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Evaluation order and side effects in expressions</summary><pre>def side_effect():
+    print(&quot;side effect&quot;)
+    return IOError
+
+try:
+    raise side_effect()(&quot;delayed&quot;)  # RULE REWRITES the returned IOError -&gt; OSError; side effect must happen
+except OSError as e:
+    print(f&quot;Caught after side effect: {type(e).__name__}&quot;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Dynamic lookup via getattr</summary><pre>import builtins
+mod = builtins
+err = getattr(mod, &#39;IOError&#39;)
+try:
+    raise err
+except OSError as e:
+    print(&#39;Caught:&#39;, type(e).__name__)
+except Exception as e:
+    print(&#39;Unexpected:&#39;, type(e).__name__)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Async function with await ordering</summary><pre>async def foo():
+    try:
+        await bar()
+    except IOError as e:
+        print(&#39;caught IOError:&#39;, e)
+    except OSError as e:
+        print(&#39;caught OSError:&#39;, e)
+async def bar():
+    raise IOError(&#39;disk error&#39;)
+import asyncio
+asyncio.run(foo())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:19:01.371558476 -0400
++++ fixed.py	2026-10-17 17:19:01.683542626 -0400
+@@ -1,11 +1,11 @@
+ async def foo():
+     try:
+         await bar()
+<span class="del">-    except IOError as e:</span>
+<span class="add">+    except OSError as e:</span>
+         print(&#39;caught IOError:&#39;, e)
+     except OSError as e:
+         print(&#39;caught OSError:&#39;, e)
+ async def bar():
+<span class="del">-    raise IOError(&#39;disk error&#39;)</span>
+<span class="add">+    raise OSError(&#39;disk error&#39;)</span>
+ import asyncio
+ asyncio.run(foo())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Finally block reliance on exception type for logging</summary><pre>logged = []
+def log_exc(t):
+    logged.append(t)
+try:
+    raise FileNotFoundError(&#39;missing&#39;)
+except IOError:
+    log_exc(&#39;IOError-handled&#39;)
+except OSError as e:
+    log_exc(&#39;OSError-handled:&#39;, e.__class__.__name__)
+finally:
+    log_exc(&#39;finally&#39;)
+print(&#39;log:&#39;, logged)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:19:01.855533888 -0400
++++ fixed.py	2026-10-17 17:19:02.017525661 -0400
+@@ -3,7 +3,7 @@
+     logged.append(t)
+ try:
+     raise FileNotFoundError(&#39;missing&#39;)
+<span class="del">-except IOError:</span>
+<span class="add">+except OSError:</span>
+     log_exc(&#39;IOError-handled&#39;)
+ except OSError as e:
+     log_exc(&#39;OSError-handled:&#39;, e.__class__.__name__)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Class attribute descriptor with side effects on access</summary><pre>class ExcSelector:
+    def __get__(self, obj, owner):
+        print(&#39;ExcSelector accessed&#39;)
+        return IOError
+class Test:
+    exc = ExcSelector()
+try:
+    raise Test.exc(&#39;fail&#39;)
+except IOError as e:
+    print(&#39;caught:&#39;, e)
+except OSError as e:
+    print(&#39;caught OS:&#39;, e)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:19:02.121520387 -0400
++++ fixed.py	2026-10-17 17:19:02.281512273 -0400
+@@ -6,7 +6,7 @@
+     exc = ExcSelector()
+ try:
+     raise Test.exc(&#39;fail&#39;)
+<span class="del">-except IOError as e:</span>
+<span class="add">+except OSError as e:</span>
+     print(&#39;caught:&#39;, e)
+ except OSError as e:
+     print(&#39;caught OS:&#39;, e)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Keyword-only args with default evaluation once</summary><pre>def make_handler(*,
+        exc_type=IOError,
+        msg=&#39;default&#39;):
+    try:
+        raise exc_type(msg)
+    except exc_type as e:
+        return f&#39;handled {type(e).__name__}&#39;
+    except OSError as e:
+        return f&#39;OSError fallback {type(e).__name__}&#39;
+print(make_handler())
+print(make_handler(exc_type=OSError))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Generator vs list consumption laziness</summary><pre>def gen():
+    for i in range(3):
+        if i == 1:
+            raise IOError(&#39;at 1&#39;)
+        yield i
+g = gen()
+try:
+    for x in g:
+        print(&#39;yielded:&#39;, x)
+except IOError as e:
+    print(&#39;gen IOError:&#39;, e)
+except OSError as e:
+    print(&#39;gen OSError:&#39;, e)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:19:02.521500103 -0400
++++ fixed.py	2026-10-17 17:19:02.682491939 -0400
+@@ -1,13 +1,13 @@
+ def gen():
+     for i in range(3):
+         if i == 1:
+<span class="del">-            raise IOError(&#39;at 1&#39;)</span>
+<span class="add">+            raise OSError(&#39;at 1&#39;)</span>
+         yield i
+ g = gen()
+ try:
+     for x in g:
+         print(&#39;yielded:&#39;, x)
+<span class="del">-except IOError as e:</span>
+<span class="add">+except OSError as e:</span>
+     print(&#39;gen IOError:&#39;, e)
+ except OSError as e:
+     print(&#39;gen OSError:&#39;, e)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Broad except above narrowing control flow with subclass precedence</summary><pre>try:
+    raise FileNotFoundError(&#39;no such file&#39;)
+except IOError:
+    print(&#39;narrow IOError&#39;)
+except OSError:
+    print(&#39;broad OSError&#39;)
+except Exception as e:
+    print(&#39;unexpected:&#39;, type(e).__name__)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:19:02.786486665 -0400
++++ fixed.py	2026-10-17 17:19:02.948478450 -0400
+@@ -1,6 +1,6 @@
+ try:
+     raise FileNotFoundError(&#39;no such file&#39;)
+<span class="del">-except IOError:</span>
+<span class="add">+except OSError:</span>
+     print(&#39;narrow IOError&#39;)
+ except OSError:
+     print(&#39;broad OSError&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — String formatting edge cases with % and .format</summary><pre>try:
+    raise IOError(&#39;error %d&#39; % 42)
+except IOError as e:
+    print(&#39;msg:&#39;, e)
+except OSError as e:
+    print(&#39;OSError msg:&#39;, str(e))
+try:
+    raise EnvironmentError(&#39;{0}!&#39;)
+except EnvironmentError as e:
+    print(&#39;fmt:&#39;, e.format() if hasattr(e, &#39;format&#39;) else str(e))
+except OSError as e:
+    print(&#39;OSError fmt:&#39;, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:19:03.048473384 -0400
++++ fixed.py	2026-10-17 17:19:03.219464728 -0400
+@@ -1,12 +1,12 @@
+ try:
+<span class="del">-    raise IOError(&#39;error %d&#39; % 42)</span>
+<span class="del">-except IOError as e:</span>
+<span class="add">+    raise OSError(&#39;error %d&#39; % 42)</span>
+<span class="add">+except OSError as e:</span>
+     print(&#39;msg:&#39;, e)
+ except OSError as e:
+     print(&#39;OSError msg:&#39;, str(e))
+ try:
+<span class="del">-    raise EnvironmentError(&#39;{0}!&#39;)</span>
+<span class="del">-except EnvironmentError as e:</span>
+<span class="add">+    raise OSError(&#39;{0}!&#39;)</span>
+<span class="add">+except OSError as e:</span>
+     print(&#39;fmt:&#39;, e.format() if hasattr(e, &#39;format&#39;) else str(e))
+ except OSError as e:
+     print(&#39;OSError fmt:&#39;, str(e))
+</pre></details></body></html>

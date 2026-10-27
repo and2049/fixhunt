@@ -1,0 +1,6 @@
+for (var i = 0; i < 2; i++) {
+  var data = [[i], [i+1]];
+  var result = data.map(x => x).flat();
+  console.log(result.length);
+}
+console.log(typeof data);

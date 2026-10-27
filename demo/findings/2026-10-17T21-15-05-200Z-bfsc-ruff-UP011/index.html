@@ -1,0 +1,321 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP011 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP011 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-15-05-200Z-bfsc-ruff-UP011 · fix labelled <b>unknown</b> · 16 programs, 11 fired, 11 fixed, 1 oracle-backed finding(s) · model cost $0.0169</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant parentheses when using @functools.lru_cache() without arguments.</p><p class="mut">Fix: Removes the trailing empty parentheses from @functools.lru_cache(), rewriting it as @functools.lru_cache while preserving spacing, imports, aliases, and surrounding decorators.</p><details><summary>12 hazards</summary><ul><li>Rewriting @functools.lru_cache() inside a TYPE_CHECKING block may break type checking if the block is conditionally excluded at runtime but the linter assumes it is active.</li><li>If the decorator line contains a trailing comment after the parentheses, the fix may drop or misplace that comment during whitespace normalization.</li><li>When the decorator is applied to a class, removing parentheses could be misinterpreted if the class defines __call__ and the decorator is later invoked elsewhere in the module.</li><li>In code that manually inspects decorator syntax via ast or inspect, the absence of parentheses may alter the perceived call structure and break introspection logic.</li><li>If functools.lru_cache is shadowed by a local variable named lru_cache in an outer scope, the unqualified name after rewrite may resolve incorrectly.</li><li>When the decorator is used on a forward-referenced name in a string annotation context, the rewrite has no effect but may create inconsistency in mixed-style codebases.</li><li>If the line contains a line continuation character within the parentheses (e.g., due to formatting), removing them may break the syntactic validity of the statement.</li><li>In Python versions prior to 3.8, removing the parentheses would cause a SyntaxError because lru_cache could not be used as a bare decorator.</li><li>If the decorator is part of a macro-generated code block where the parentheses are significant for template matching, their removal may prevent correct expansion.</li><li>When the decorator appears in a stub (.pyi) file, some type checkers may expect the explicit call form for compatibility with older stubs, and the rewrite could trigger false positives.</li><li>If the decorator line is edited via a tool that relies on the presence of parentheses to delimit the decorator expression, subsequent edits may fail to parse correctly.</li><li>In rare cases where lru_cache is imported via a relative import or through a namespace package, the rewrite does not affect resolution but may obscure intent in code review.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p005"><b>r2-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the parentheses from @functools.lru_cache(), changing the AST node type from a Call to an Attribute. The program uses ast.parse to inspect its own source and expects decorator nodes to have &#39;args&#39; and &#39;keywords&#39; attributes, which only exist on Call nodes. After the fix, the Attribute node lacks these attributes, causing an AttributeError and changing the exit code from 0 to 1.">judge: real · medium</span> AST introspection of decorator call structure<p class="mut">The fix removes the parentheses from @functools.lru_cache(), changing the AST node type from a Call to an Attribute. The program uses ast.parse to inspect its own source and expects decorator nodes to have &#39;args&#39; and &#39;keywords&#39; attributes, which only exist on Call nodes. After the fix, the Attribute node lacks these attributes, causing an AttributeError and changing the exit code from 0 to 1.</p>
+<h2>Minimized program (13→9 lines)</h2><pre>import functools, ast
+@functools.lru_cache()
+def cached_func(x):
+    return x * 2
+tree = ast.parse(open(__file__).read())
+for node in ast.walk(tree):
+    if isinstance(node, ast.FunctionDef) and node.name == &#39;cached_func&#39;:
+        for dec in node.decorator_list:
+                print(&#39;Decorator is call:&#39;, len(dec.args) == 0 and len(dec.keywords) == 0)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:15:47.523352220 -0400
++++ fixed.py	2026-10-17 17:15:47.705339077 -0400
+@@ -1,5 +1,5 @@
+ import functools, ast
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ def cached_func(x):
+     return x * 2
+ tree = ast.parse(open(__file__).read())
+</pre>
+<h2>Observed</h2><pre>stdout before:
+Decorator is call: True
+Result: 10
+stdout after:
+Decorator is attribute only: lru_cache
+Result: 10</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/1913">astral-sh/ruff/issues/1913</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/827">astral-sh/ruff/issues/827</a> · <a href="reports/r2-p005.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Macro-generated code dependence on parentheses</td><td class="mut">If the decorator is part of a macro-generated code block where the parentheses are signifi</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Tool-dependent parsing via parentheses delimiters</td><td class="mut">If the decorator line is edited via a tool that relies on the presence of parentheses to d</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus/comprehension scoping interaction</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>Comments/docstrings attachment preservation</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Async def/await ordering interaction</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>String formatting edge case interaction</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Shadowing by outer scope variable</td><td class="mut">If functools.lru_cache is shadowed by a local variable named lru_cache in an outer scope, </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes/str encoding and newline handling</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>File mode truncation with LRU-cached writer</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Numeric coercion with cached division</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>String formatting with nested quotes and repr</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Forward reference in string annotation with LRU cache</td><td class="mut">When the decorator is used on a forward-referenced name in a string annotation context, th</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>AST introspection of decorator call structure</td><td class="mut">In code that manually inspects decorator syntax via ast or inspect, the absence of parenth</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">invalid</span></td><td>Binary mode write with encoding-sensitive data</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Stub file compatibility simulation</td><td class="mut">When the decorator appears in a stub (.pyi) file, some type checkers may expect the explic</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Relative import and namespace package obscurity</td><td class="mut">In rare cases where lru_cache is imported via a relative import or through a namespace pac</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Macro-generated code dependence on parentheses</summary><pre>import functools
+decorator = &#39;@functools.lru_cache()&#39;
+exec(decorator + &#39;
+def f(): return 1&#39;)
+print(f())
+</pre></details><details id="r1-p002"><summary>r1-p002 — Tool-dependent parsing via parentheses delimiters</summary><pre>import functools
+source = &#39;&#39;&#39;def foo(): pass&#39;&#39;&#39;
+injected = source.replace(&#39;def&#39;, &#39;@functools.lru_cache()
+def&#39;)
+exec(injected)
+print(foo.__wrapped__( )) if hasattr(foo, &#39;__wrapped__&#39;) else print(type(foo))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Walrus/comprehension scoping interaction</summary><pre>from functools import lru_cache
+@lru_cache()
+def make_adder(n):
+  return lambda x: x + n
+f1 = make_adder(10)
+print(f1(5))
+# After fix: same behavior but tests sensitivity
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:27.585818711 -0400
++++ fixed.py	2026-10-17 17:15:27.759805675 -0400
+@@ -1,5 +1,5 @@
+ from functools import lru_cache
+<span class="del">-@lru_cache()</span>
+<span class="add">+@lru_cache</span>
+ def make_adder(n):
+   return lambda x: x + n
+ f1 = make_adder(10)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Comments/docstrings attachment preservation</summary><pre># This comment precedes the decorator
+def dummy():
+  &quot;&quot;&quot;Docstring here.&quot;&quot;&quot;
+  return 42
+print(dummy())
+</pre></details><details id="r1-p005"><summary>r1-p005 — Async def/await ordering interaction</summary><pre>import functools
+@functools.lru_cache()
+async def fetch():
+  await _dummy()
+  return 99
+async def _dummy(): pass
+import asyncio
+result = asyncio.run(fetch())
+print(result)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:27.992788219 -0400
++++ fixed.py	2026-10-17 17:15:28.291765859 -0400
+@@ -1,5 +1,5 @@
+ import functools
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ async def fetch():
+   await _dummy()
+   return 99
+</pre></details><details id="r1-p006"><summary>r1-p006 — String formatting edge case interaction</summary><pre>from functools import lru_cache
+@lru_cache()
+def fmt(x):
+  return f&#39;Value: {x!r}&#39;
+print(fmt(42))
+print(fmt(42))  # cached
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:28.456753520 -0400
++++ fixed.py	2026-10-17 17:15:28.627740733 -0400
+@@ -1,5 +1,5 @@
+ from functools import lru_cache
+<span class="del">-@lru_cache()</span>
+<span class="add">+@lru_cache</span>
+ def fmt(x):
+   return f&#39;Value: {x!r}&#39;
+ print(fmt(42))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Shadowing by outer scope variable</summary><pre>def outer():
+  lru_cache = lambda f: f  # breaks lru_cache
+  from functools import lru_cache as real_lru
+  @real_lru()
+  def inner():
+    return 1
+  return inner()
+print(outer())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:28.732732881 -0400
++++ fixed.py	2026-10-17 17:15:28.909719645 -0400
+@@ -1,7 +1,7 @@
+ def outer():
+   lru_cache = lambda f: f  # breaks lru_cache
+   from functools import lru_cache as real_lru
+<span class="del">-  @real_lru()</span>
+<span class="add">+  @real_lru</span>
+   def inner():
+     return 1
+   return inner()
+</pre></details><details id="r1-p008"><summary>r1-p008 — Bytes/str encoding and newline handling</summary><pre>import functools
+@functools.lru_cache()
+def read_file(path):
+  with open(path, &#39;r&#39;, encoding=&#39;utf-8&#39;) as f:
+    return f.read()
+with open(&#39;test.txt&#39;, &#39;w&#39;, encoding=&#39;utf-8&#39;) as f:
+  f.write(&#39;hello&#39;)
+print(read_file(&#39;test.txt&#39;))
+import os
+os.remove(&#39;test.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:29.017711571 -0400
++++ fixed.py	2026-10-17 17:15:29.189698733 -0400
+@@ -1,5 +1,5 @@
+ import functools
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ def read_file(path):
+   with open(path, &#39;r&#39;, encoding=&#39;utf-8&#39;) as f:
+     return f.read()
+</pre></details><details id="r2-p001"><summary>r2-p001 — File mode truncation with LRU-cached writer</summary><pre>import functools
+@functools.lru_cache()
+def cached_write(data):
+    with open(&#39;tmp.bin&#39;, &#39;wb&#39;) as f:
+        if isinstance(data, float):
+            data = struct.pack(&#39;&lt;d&#39;, data)
+        elif isinstance(data, bool):
+            data = b&#39;\x01&#39; if data else b&#39;\x00&#39;
+        f.write(data[:2])  # Truncate to 2 bytes
+        f.seek(0); return f.read()
+try:
+    result1 = cached_write(3.14)
+    result2 = cached_write(True)
+    print(&#39;float-&gt;bytes:&#39;, repr(result1))
+    print(&#39;bool-&gt;bytes:&#39;, repr(result2))
+except Exception as e:
+    print(type(e).__name__, str(e))
+finally:
+    import os; os.remove(&#39;tmp.bin&#39;) if os.path.exists(&#39;tmp.bin&#39;) else None
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:46.183449093 -0400
++++ fixed.py	2026-10-17 17:15:46.360436288 -0400
+@@ -1,5 +1,5 @@
+ import functools
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ def cached_write(data):
+     with open(&#39;tmp.bin&#39;, &#39;wb&#39;) as f:
+         if isinstance(data, float):
+</pre></details><details id="r2-p002"><summary>r2-p002 — Numeric coercion with cached division</summary><pre>import functools, decimal
+@functools.lru_cache()
+def divide_cached(a, b):
+    return round(float(a) / float(b), 4)
+d = decimal.Decimal(&#39;10&#39;)
+print(divide_cached(d, 3))  # Decimal -&gt; float via float()
+print(divide_cached(True, False))  # Bool division: True/False -&gt; 1.0/0.0 -&gt; ZeroDivisionError
+print(divide_cached(5, 2))  # Should hit cache on second call
+# Second call to same args should return cached value
+print(divide_cached(5, 2))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:46.473428113 -0400
++++ fixed.py	2026-10-17 17:15:46.890397945 -0400
+@@ -1,5 +1,5 @@
+ import functools, decimal
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ def divide_cached(a, b):
+     return round(float(a) / float(b), 4)
+ d = decimal.Decimal(&#39;10&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — String formatting with nested quotes and repr</summary><pre>import functools
+@functools.lru_cache()
+def fmt_cached(x):
+    s = str(x)
+    return f&#39;{repr(s)} | {s!r} | %{s}
+&#39;
+print(fmt_cached(&#39;hello\	world&#39;))
+print(fmt_cached(42))
+# Second call should hit cache
+print(fmt_cached(&#39;hello\	world&#39;))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Forward reference in string annotation with LRU cache</summary><pre>from __future__ import annotations
+import functools
+@functools.lru_cache()
+def process_data(value: &#39;DataProcessor&#39;) -&gt; int:
+    return len(str(value))
+class DataProcessor:
+    def __init__(self, data):
+        self.data = data
+    def __str__(self):
+        return str(self.data)
+dp = DataProcessor(&#39;test123&#39;)
+print(process_data(dp))
+print(process_data(dp))  # Should be cached
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:47.252371789 -0400
++++ fixed.py	2026-10-17 17:15:47.417359874 -0400
+@@ -1,6 +1,6 @@
+ from __future__ import annotations
+ import functools
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ def process_data(value: &#39;DataProcessor&#39;) -&gt; int:
+     return len(str(value))
+ class DataProcessor:
+</pre></details><details id="r2-p005"><summary>r2-p005 — AST introspection of decorator call structure</summary><pre>import functools, ast
+@functools.lru_cache()
+def cached_func(x):
+    return x * 2
+tree = ast.parse(open(__file__).read())
+for node in ast.walk(tree):
+    if isinstance(node, ast.FunctionDef) and node.name == &#39;cached_func&#39;:
+        for dec in node.decorator_list:
+            if isinstance(dec, ast.Call) and dec.func.attr == &#39;lru_cache&#39;:
+                print(&#39;Decorator is call:&#39;, len(dec.args) == 0 and len(dec.keywords) == 0)
+            elif isinstance(dec, ast.Attribute) and dec.attr == &#39;lru_cache&#39;:
+                print(&#39;Decorator is attribute only:&#39;, dec.attr)
+print(&#39;Result:&#39;, cached_func(5))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:47.523352220 -0400
++++ fixed.py	2026-10-17 17:15:47.705339077 -0400
+@@ -1,5 +1,5 @@
+ import functools, ast
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ def cached_func(x):
+     return x * 2
+ tree = ast.parse(open(__file__).read())
+</pre></details><details id="r2-p006"><summary>r2-p006 — Binary mode write with encoding-sensitive data</summary><pre>import functools, codecs
+@functools.lru_cache()
+def encode_and_write(text, encoding=&#39;utf-8&#39;):
+    data = text.encode(encoding)
+    with open(&#39;tmp.dat&#39;, &#39;wb&#39;) as f:
+        f.write(data)
+        f.write(b&#39;
+&#39;)
+    with open(&#39;tmp.dat&#39;, &#39;rb&#39;) as f:
+        return f.read().strip(b&#39;
+&#39;)
+result1 = encode_and_write(&#39;café&#39;)
+result2 = encode_and_write(&#39;café&#39;)  # Should hit cache
+print(&#39;First:&#39;, repr(result1))
+print(&#39;Second:&#39;, repr(result2))
+print(&#39;Equal:&#39;, result1 == result2)
+import os; os.remove(&#39;tmp.dat&#39;) if os.path.exists(&#39;tmp.dat&#39;) else None
+</pre></details><details id="r2-p007"><summary>r2-p007 — Stub file compatibility simulation</summary><pre># Simulate .pyi file behavior: type checker expects @functools.lru_cache()
+# But we are in .py file - rule will remove parentheses
+import functools
+@functools.lru_cache()
+def stubbed_func(x: int) -&gt; str:
+    return str(x * 2)
+# If type checker sees @functools.lru_cache (no parens) in .pyi, it may error
+# We simulate by checking if the decorator form affects runtime
+print(&#39;Result:&#39;, stubbed_func(21))
+print(&#39;Cached:&#39;, stubbed_func.__wrapped__(21) if hasattr(stubbed_func, &#39;__wrapped__&#39;) else &#39;no wrapper&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:47.945321746 -0400
++++ fixed.py	2026-10-17 17:15:48.116309413 -0400
+@@ -1,7 +1,7 @@
+ # Simulate .pyi file behavior: type checker expects @functools.lru_cache()
+ # But we are in .py file - rule will remove parentheses
+ import functools
+<span class="del">-@functools.lru_cache()</span>
+<span class="add">+@functools.lru_cache</span>
+ def stubbed_func(x: int) -&gt; str:
+     return str(x * 2)
+ # If type checker sees @functools.lru_cache (no parens) in .pyi, it may error
+</pre></details><details id="r2-p008"><summary>r2-p008 — Relative import and namespace package obscurity</summary><pre>import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+try:
+    from .local_functools import lru_cache  # Relative import simulation
+    @lru_cache()
+    def cached_local(x):
+        return x + 10
+except ImportError:
+    # Fallback: simulate namespace package by importing via package-like name
+    import functools as local_functools
+    @local_functools.lru_cache()
+    def cached_local(x):
+        return x + 10
+print(cached_local(5))
+print(cached_local(5))  # Cache hit
+# Cleanup
+if &#39;local_functools&#39; in locals():
+    del local_functools
+if &#39;.&#39; in sys.path[0]:
+    sys.path.pop(0)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:15:48.221301844 -0400
++++ fixed.py	2026-10-17 17:15:48.392289519 -0400
+@@ -8,7 +8,7 @@
+ except ImportError:
+     # Fallback: simulate namespace package by importing via package-like name
+     import functools as local_functools
+<span class="del">-    @local_functools.lru_cache()</span>
+<span class="add">+    @local_functools.lru_cache</span>
+     def cached_local(x):
+         return x + 10
+ print(cached_local(5))
+</pre></details></body></html>

@@ -1,0 +1,151 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB145 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB145 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-32-36-205Z-tk0u-ruff-FURB145 · fix labelled <b>unknown</b> · 10 programs, 2 fired, 2 fixed, 0 oracle-backed finding(s) · model cost $0.0056</p>
+<div class="card"><b>Rule analysis</b><p>Flags unbounded slice expressions (`seq[:]`) used to copy a sequence when the target is known to be a list.</p><p class="mut">Fix: Replaces the unbounded slice expression `seq[:]` with the method call `seq.copy()` while preserving the surrounding assignment or expression context.</p><details><summary>11 hazards</summary><ul><li>Rewriting `seq[:]` where `seq` is not a list (e.g., a string or tuple) changes the return type from the original sequence type to a list, breaking type expectations.</li><li>If `seq` is a subclass of list that overrides `__getitem__` but not `copy`, the slice may return a different type than `copy()` produces.</li><li>When the slice appears in a context relying on the exact object identity of a new list (e.g., `is` checks), `copy()` may produce a different object than slicing in some implementations (though CPython guarantees a new object, this is not language-spec guaranteed).</li><li>If `seq` is a variable that is deleted or reassigned between the evaluation of the slice and its use in the original code (impossible in a simple expression, but relevant in larger refactorings), the fix does not capture this timing—however, since the fix is applied locally to an expression, this hazard is mitigated; still noted for completeness in complex macro-like scenarios.</li><li>If the slice expression contains an inline comment (e.g., `a[: # copy]`), the fix may drop or misplace the comment during rewrite, altering source code readability.</li><li>In code where `seq` is a property with a side-effecting `__getitem__` (highly unconventional but possible), accessing `seq[:]` triggers `__getitem__` once with a slice object, whereas `seq.copy()` may not invoke `__getitem__` at all, changing side-effect timing.</li><li>If `seq` is a mutable object and the slice is used in a conditional expression where the object might be mutated between evaluation points (not applicable here as the expression is atomic), but note that the fix does not alter evaluation order—it replaces the expression in place.</li><li>When the slice is part of a larger subscript (e.g., `a[:][0]`), the fix only applies to the unbounded slice if isolated; however, the rule does not fire on bounded or chained slices, so this shape is silent—no hazard from misapplication.</li><li>If `seq` is annotated as a list but inferred as a subtype (e.g., `UserList`), and `copy()` is not overridden, the returned object may lack expected subclass behavior, though `list.copy()` on a subclass returns a plain list, whereas slicing may preserve subclass type—this is a behavioral change.</li><li>In code that depends on the slice returning exactly the same type as the input (e.g., for duck typing with custom sequences), replacing with `copy()` narrows the type to `list`, breaking polymorphism.</li><li>If the slice appears in a lambda or comprehension where the variable is rebound later (e.g., `[f() for x in data][:]` vs `[f() for x in data.copy()]`), the fix does not change behavior because the slice is evaluated immediately—but note: the rule does not fire on `data[:]` inside a comprehension index; it fires on standalone unbounded slices.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Subclass override mismatch</td><td class="mut">If seq is a subclass of list that overrides __getitem__ but not copy, the slice may return</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Polymorphism narrowing</td><td class="mut">In code that depends on the slice returning exactly the same type as the input (e.g., for </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Parameter kinds and defaults</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dict ordering and overrides</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Async interaction</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>File write truncation</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exceptions and finally</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">invalid</span></td><td>Conditional expression mutation timing</td><td class="mut">Conditional expression mutation timing - fix doesn&#39;t alter eval order but we verify sequen</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Identity check reliance</td><td class="mut">Object identity reliance: user expects distinct objects via [:], .copy() also gives distin</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Subclass override mismatch</summary><pre>class MyList(list):
+    def __getitem__(self, key):
+        return super().__getitem__(key) * 2
+lst = MyList([1, 2, 3])
+slice_copy = lst[:]
+method_copy = lst.copy()
+print(&#39;slice type:&#39;, type(slice_copy).__name__, &#39;values:&#39;, slice_copy)
+print(&#39;method type:&#39;, type(method_copy).__name__, &#39;values:&#39;, method_copy)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Polymorphism narrowing</summary><pre>class Seq:
+    def __init__(self, data):
+        self.data = list(data)
+    def __getitem__(self, key):
+        return self.data[key]
+    def __len__(self):
+        return len(self.data)
+    def copy(self):
+        raise AttributeError(&#39;no copy&#39;)
+s = Seq([1, 2, 3])
+try:
+    sliced = s[:]
+except TypeError as e:
+    sliced = None
+    print(&#39;slice error:&#39;, type(e).__name__, str(e))
+try:
+    copied = s.copy()
+except AttributeError as e:
+    copied = None
+    print(&#39;copy error:&#39;, type(e).__name__, str(e))
+print(&#39;slice result:&#39;, type(sliced).__name__ if sliced else &#39;None&#39;)
+print(&#39;copy result:&#39;, type(copied).__name__ if copied else &#39;None&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Mutable default and aliasing</summary><pre>def f(x=None):
+    if x is None:
+        x = []
+    y = x[:]
+    y.append(99)
+    return x, y
+a, b = f()
+print(&#39;first call:&#39;, a, b)
+c, d = f()
+print(&#39;second call:&#39;, c, d)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Parameter kinds and defaults</summary><pre>def process(a, /, b, *, c=None):
+    if c is None:
+        c = b[:]
+    c.append(len(b))
+    return a, b, c
+out = process(1, [2, 3], c=[4])
+print(&#39;out:&#39;, out)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Dict ordering and overrides</summary><pre>class Key:
+    def __init__(self, val):
+        self.val = val
+    def __hash__(self):
+        return hash(self.val)
+    def __eq__(self, other):
+        return self.val == other.val
+k1 = Key(1)
+k2 = Key(1)
+d = {k1: &#39;first&#39;, k2: &#39;second&#39;}
+items = list(d.items())[:]
+print(&#39;dict len:&#39;, len(d), &#39;slice len:&#39;, len(items))
+for k, v in items:
+    print(k.val, v)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Async interaction</summary><pre>async def gen():
+    for i in [1, 2, 3]:
+        yield i
+async def main():
+    g = [x async for x in gen()]  # materialize async gen
+    slice_part = g[:]
+    method_part = g.copy()
+    print(&#39;slice:&#39;, slice_part, &#39;type:&#39;, type(slice_part).__name__)
+    print(&#39;copy:&#39;, method_part, &#39;type:&#39;, type(method_part).__name__)
+import asyncio
+asyncio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:32:47.514914824 -0400
++++ fixed.py	2026-10-17 17:32:47.811910782 -0400
+@@ -3,7 +3,7 @@
+         yield i
+ async def main():
+     g = [x async for x in gen()]  # materialize async gen
+<span class="del">-    slice_part = g[:]</span>
+<span class="add">+    slice_part = g.copy()</span>
+     method_part = g.copy()
+     print(&#39;slice:&#39;, slice_part, &#39;type:&#39;, type(slice_part).__name__)
+     print(&#39;copy:&#39;, method_part, &#39;type:&#39;, type(method_part).__name__)
+</pre></details><details id="r1-p007"><summary>r1-p007 — File write truncation</summary><pre>data = b&#39;hello&#39;
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    f.write(data[:])  # rule does not trigger on bytes
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;test.bin&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exceptions and finally</summary><pre>class BadList(list):
+    def __getitem__(self, key):
+        if key == 0:
+            raise ValueError(&#39;bad&#39;)
+        return super().__getitem__(key)
+    def copy(self):
+        return super().copy()
+b = BadList([1, 2, 3])
+try:
+    x = b[:]  # triggers on first element access during slice
+    print(&#39;slice succeeded:&#39;, x)
+except ValueError as e:
+    print(&#39;slice error:&#39;, type(e).__name__, str(e))
+try:
+    y = b.copy()
+    print(&#39;copy succeeded:&#39;, y)
+except ValueError as e:
+    print(&#39;copy error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Conditional expression mutation timing</summary><pre>state = []
+def get_target(): return state[:]
+state.append(1)
+a = [] if False else get_target()
+print(&#39;result id&#39;, id(a))
+print(&#39;source len&#39;, len(state))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Identity check reliance</summary><pre>src = [1, 2]
+candidate = src[:]
+is_same_obj = candidate is src
+print(&#39;distinct?&#39;, not is_same_obj)
+# rule triggers on candidate = src[:]
+if not is_same_obj:
+    print(&#39;ok&#39;)
+else:
+    print(&#39;unexpected alias&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:33:01.807722136 -0400
++++ fixed.py	2026-10-17 17:33:01.970719959 -0400
+@@ -1,5 +1,5 @@
+ src = [1, 2]
+<span class="del">-candidate = src[:]</span>
+<span class="add">+candidate = src.copy()</span>
+ is_same_obj = candidate is src
+ print(&#39;distinct?&#39;, not is_same_obj)
+ # rule triggers on candidate = src[:]
+</pre></details></body></html>

@@ -1,0 +1,324 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLR0202 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLR0202 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-59-52-966Z-ny2q-ruff-PLR0202 · fix labelled <b>unknown</b> · 16 programs, 15 fired, 15 fixed, 0 oracle-backed finding(s) · model cost $0.0035</p>
+<div class="card"><b>Rule analysis</b><p>Flags methods defined as plain functions then assigned via `classmethod(func)` outside the function body.</p><p class="mut">Fix: Replaces the method definition and subsequent assignment with a single method definition prefixed by the `@classmethod` decorator, preserving the original function name, parameters, and body.</p><details><summary>12 hazards</summary><ul><li>If the method name is used in an annotation within the same class body before the assignment, moving the decorator may change the binding time and cause a NameError.</li><li>If the class contains a `__prepare__` metaclass method that relies on the order of attribute definitions, inserting the decorator earlier may alter the namespace preparation state.</li><li>If the method is decorated with other decorators (e.g., `@property`) in the original code, the autofix does not preserve them, potentially changing the descriptor behavior.</li><li>If the method assignment is guarded by a runtime condition (e.g., inside an `if` block), the autofix hoists it to unconditional execution, altering when the method becomes a classmethod.</li><li>If the method name is deleted (`del m`) after the assignment but before the end of the class body, the autofix incorrectly retains the method as a classmethod.</li><li>If the method is assigned to an alias (e.g., `n = m`) after the `classmethod` assignment, the autofix breaks the alias because `n` refers to the undecorated function in the original but would refer to the classmethod-descriptor after the fix.</li><li>If the method definition contains a type comment (e.g., `# type: (cls) -&gt; int`) placed after the function, the autofix may discard it during rewrite, altering static type checking behavior.</li><li>If the method is defined in a class executed under `-OO` (optimized mode) where docstrings are omitted, the autofix preserves the docstring but the rewrite timing may interact unexpectedly with stripped constants.</li><li>If the class is nested inside a function and the method uses a closure variable from the outer scope, the autofix does not affect closure capture, but the redefinition order may interfere with late-bound defaults in rare cases.</li><li>If the method name is `__classcell__` (used in Python 3.7+ for class cell handling), rewriting it as a decorated method may interfere with the class creation protocol.</li><li>If the method assignment is preceded by a `from __future__ import` statement that affects execution semantics, the autofix does not account for potential changes in how the function is compiled.</li><li>If the method is part of a mixin intended to be overridden and the assignment relies on the original function being temporarily accessible via the class dict, the autofix may break intermediate access patterns during class construction.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>__prepare__ metaclass depends on attribute definition order</td><td class="mut">Inserting @classmethod earlier alters namespace preparation state during class creation.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Alias to method breaks after autofix</td><td class="mut">Alias `n = m` after `classmethod` assignment refers to raw function; after fix refers to d</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus and closure capture with late binding</td><td class="mut">Lambda capturing method via walrus in comprehension binds late; autofix changes timing of </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>-OO mode interacts with docstring preservation</td><td class="mut">Autofix preserves docstring but -OO strips constants; rewrite may keep dead string affecti</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Generator expression consumes iterator once</td><td class="mut">Method used in generator expression; autofix changes when descriptor is available, affecti</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>File write with truncation and partial write</td><td class="mut">Method used in file-writing loop; autofix changes timing, risking incomplete write if inte</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Star-import and __all__ interaction</td><td class="mut">Method assigned to __all__; autofix may alter when symbol is available for export.</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>from __future__ import affects function compilation</td><td class="mut">Future import (e.g., annotations) changes function semantics; autofix doesn&#39;t reapply cont</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Annotation forward reference</td><td class="mut">If the method name is used in an annotation within the same class body before the assignme</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes vs str encoding</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Conditional assignment hoist</td><td class="mut">If the method assignment is guarded by a runtime condition (e.g., inside an `if` block), t</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>-OO mode docstring interaction</td><td class="mut">If the method is defined in a class executed under `-OO` (optimized mode) where docstrings</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Other decorators lost</td><td class="mut">If the method is decorated with other decorators (e.g., `@property`) in the original code,</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Nested class closure capture</td><td class="mut">If the class is nested inside a function and the method uses a closure variable from the o</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Dict ordering duplicate keys</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable default aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — __prepare__ metaclass depends on attribute definition order</summary><pre>class Meta(type):
+    def __prepare__(name, bases):
+        return {}
+    def __new__(cls, name, bases, ns):
+        order = [k for k in (&#39;a&#39;, &#39;m&#39;) if k in ns]
+        ns[&#39;order&#39;] = tuple(order)
+        return super().__new__(cls, name, bases, ns)
+
+class C(metaclass=Meta):
+    def m(cls): return &#39;m&#39;
+    m = classmethod(m)
+    def a(cls): return &#39;a&#39;
+
+print(C.order)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:05.813530631 -0400
++++ fixed.py	2026-10-17 17:00:05.976532687 -0400
+@@ -7,8 +7,8 @@
+         return super().__new__(cls, name, bases, ns)
+ 
+ class C(metaclass=Meta):
+<span class="add">+    @classmethod</span>
+     def m(cls): return &#39;m&#39;
+<span class="del">-    m = classmethod(m)</span>
+     def a(cls): return &#39;a&#39;
+ 
+ print(C.order)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Alias to method breaks after autofix</summary><pre>class C:
+    def m(cls): return 42
+    m = classmethod(m)
+    n = m  # alias to original function
+
+try:
+    print(&#39;n:&#39;, n)  # should be function
+    print(&#39;n():&#39;, n())  # fails: missing cls
+    print(&#39;C.m():&#39;, C.m())  # works: 42
+    print(&#39;C.n():&#39;, C.n())  # after fix: would fail if n is descriptor
+    
+except Exception as e:
+    print(type(e).__name__, &#39;:&#39;, e)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:06.074533923 -0400
++++ fixed.py	2026-10-17 17:00:06.236535965 -0400
+@@ -1,6 +1,6 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls): return 42
+<span class="del">-    m = classmethod(m)</span>
+     n = m  # alias to original function
+ 
+ try:
+</pre></details><details id="r1-p003"><summary>r1-p003 — Walrus and closure capture with late binding</summary><pre>class C:
+    def m(cls): return cls.__name__
+    m = classmethod(m)
+    fs = [(lambda: m()) for _ in range(1)]
+
+print(&#39;fs[0]():&#39;, fs[0]())  # Should be &#39;C&#39;
+# After fix: if m is descriptor at lambda definition, still works
+# But hazard: if class var lookup changes due to timing
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:06.331537163 -0400
++++ fixed.py	2026-10-17 17:00:06.712541967 -0400
+@@ -1,6 +1,6 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls): return cls.__name__
+<span class="del">-    m = classmethod(m)</span>
+     fs = [(lambda: m()) for _ in range(1)]
+ 
+ print(&#39;fs[0]():&#39;, fs[0]())  # Should be &#39;C&#39;
+</pre></details><details id="r1-p004"><summary>r1-p004 — -OO mode interacts with docstring preservation</summary><pre>class C:
+    def m(cls):
+        &#39;&#39;&#39;This is a docstring&#39;&#39;&#39;
+        return 42
+    m = classmethod(m)
+
+print(&#39;C.m.__doc__:&#39;, repr(C.m.__doc__))
+print(&#39;C.m():&#39;, C.m())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:06.936544791 -0400
++++ fixed.py	2026-10-17 17:00:07.103546896 -0400
+@@ -1,8 +1,8 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls):
+         &#39;&#39;&#39;This is a docstring&#39;&#39;&#39;
+         return 42
+<span class="del">-    m = classmethod(m)</span>
+ 
+ print(&#39;C.m.__doc__:&#39;, repr(C.m.__doc__))
+ print(&#39;C.m():&#39;, C.m())
+</pre></details><details id="r1-p005"><summary>r1-p005 — Generator expression consumes iterator once</summary><pre>class C:
+    def m(cls): return iter([1, 2, 3])
+    m = classmethod(m)
+    g = (next(m()) for _ in range(3))
+
+print(&#39;list(g):&#39;, list(g))  # Should be [1, 2, 3]
+# After fix: if m is descriptor earlier, same result
+# Hazard: if m looked up too early and state changed
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:07.206548194 -0400
++++ fixed.py	2026-10-17 17:00:07.593553071 -0400
+@@ -1,6 +1,6 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls): return iter([1, 2, 3])
+<span class="del">-    m = classmethod(m)</span>
+     g = (next(m()) for _ in range(3))
+ 
+ print(&#39;list(g):&#39;, list(g))  # Should be [1, 2, 3]
+</pre></details><details id="r1-p006"><summary>r1-p006 — File write with truncation and partial write</summary><pre>class C:
+    def m(cls): return b&#39;hello&#39;
+    m = classmethod(m)
+
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    for i in range(2):
+        f.write(m())  # writes b&#39;hello&#39; twice
+
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(&#39;file contents:&#39;, f.read())
+import os; os.remove(&#39;test.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:07.807555767 -0400
++++ fixed.py	2026-10-17 17:00:08.196560668 -0400
+@@ -1,6 +1,6 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls): return b&#39;hello&#39;
+<span class="del">-    m = classmethod(m)</span>
+ 
+ with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+     for i in range(2):
+</pre></details><details id="r1-p007"><summary>r1-p007 — Star-import and __all__ interaction</summary><pre>class C:
+    def m(cls): return &#39;exported&#39;
+    m = classmethod(m)
+    __all__ = [&#39;m&#39;]
+
+# Simulate star import: check what&#39;s in __all__
+print(&#39;C.__all__:&#39;, C.__all__)
+print(&#39;hasattr C.m:&#39;, hasattr(C, &#39;m&#39;))
+print(&#39;C.m():&#39;, C.m())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:08.417563452 -0400
++++ fixed.py	2026-10-17 17:00:08.584565555 -0400
+@@ -1,6 +1,6 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls): return &#39;exported&#39;
+<span class="del">-    m = classmethod(m)</span>
+     __all__ = [&#39;m&#39;]
+ 
+ # Simulate star import: check what&#39;s in __all__
+</pre></details><details id="r1-p008"><summary>r1-p008 — from __future__ import affects function compilation</summary><pre>from __future__ import annotations
+
+class C:
+    def m(cls) -&gt; &#39;int&#39;:  # string annotation due to future import
+        return 42
+    m = classmethod(m)
+
+print(&#39;C.m.__annotations__:&#39;, C.m.__annotations__)
+print(&#39;C.m():&#39;, C.m())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:08.691566903 -0400
++++ fixed.py	2026-10-17 17:00:08.857568994 -0400
+@@ -1,9 +1,9 @@
+ from __future__ import annotations
+ 
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls) -&gt; &#39;int&#39;:  # string annotation due to future import
+         return 42
+<span class="del">-    m = classmethod(m)</span>
+ 
+ print(&#39;C.m.__annotations__:&#39;, C.m.__annotations__)
+ print(&#39;C.m():&#39;, C.m())
+</pre></details><details id="r2-p001"><summary>r2-p001 — Annotation forward reference</summary><pre>class C:
+    f: &#39;m&#39;
+    def m(cls):
+        return 42
+    m = classmethod(m)
+print(C.f.__class__)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:14.005633744 -0400
++++ fixed.py	2026-10-17 17:00:14.421638968 -0400
+@@ -1,6 +1,6 @@
+ class C:
+     f: &#39;m&#39;
+<span class="add">+    @classmethod</span>
+     def m(cls):
+         return 42
+<span class="del">-    m = classmethod(m)</span>
+ print(C.f.__class__)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Bytes vs str encoding</summary><pre>class C:
+    def m(cls):
+        return b&#39;data&#39;
+    m = classmethod(m)
+with open(&#39;tmp.bin&#39;, &#39;wb&#39;) as f:
+    f.write(C.m())
+with open(&#39;tmp.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;tmp.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:14.635641655 -0400
++++ fixed.py	2026-10-17 17:00:14.799643715 -0400
+@@ -1,7 +1,7 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls):
+         return b&#39;data&#39;
+<span class="del">-    m = classmethod(m)</span>
+ with open(&#39;tmp.bin&#39;, &#39;wb&#39;) as f:
+     f.write(C.m())
+ with open(&#39;tmp.bin&#39;, &#39;rb&#39;) as f:
+</pre></details><details id="r2-p003"><summary>r2-p003 — Conditional assignment hoist</summary><pre>flag = True
+class C:
+    def m(cls):
+        return &#39;ok&#39;
+    if flag:
+        m = classmethod(m)
+print(type(C.m))
+</pre></details><details id="r2-p004"><summary>r2-p004 — -OO mode docstring interaction</summary><pre>class C:
+    def m(cls):
+        &quot;&quot;&quot;doc&quot;&quot;&quot;
+        return __doc__
+    m = classmethod(m)
+print(C.m())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:15.050646867 -0400
++++ fixed.py	2026-10-17 17:00:15.203648787 -0400
+@@ -1,6 +1,6 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls):
+         &quot;&quot;&quot;doc&quot;&quot;&quot;
+         return __doc__
+<span class="del">-    m = classmethod(m)</span>
+ print(C.m())
+</pre></details><details id="r2-p005"><summary>r2-p005 — Other decorators lost</summary><pre>class C:
+    @property
+    def m(cls):
+        return &#39;prop&#39;
+    m = classmethod(m)
+try:
+    print(C.m)
+except Exception as e:
+    print(type(e).__name__, e)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:15.304650055 -0400
++++ fixed.py	2026-10-17 17:00:15.467652101 -0400
+@@ -1,8 +1,8 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     @property
+     def m(cls):
+         return &#39;prop&#39;
+<span class="del">-    m = classmethod(m)</span>
+ try:
+     print(C.m)
+ except Exception as e:
+</pre></details><details id="r2-p006"><summary>r2-p006 — Nested class closure capture</summary><pre>def make():
+    x = 99
+    class C:
+        def m(cls):
+            return x
+        m = classmethod(m)
+    return C
+C = make()
+print(C.m())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:15.562653294 -0400
++++ fixed.py	2026-10-17 17:00:15.723655315 -0400
+@@ -1,9 +1,9 @@
+ def make():
+     x = 99
+     class C:
+<span class="add">+        @classmethod</span>
+         def m(cls):
+             return x
+<span class="del">-        m = classmethod(m)</span>
+     return C
+ C = make()
+ print(C.m())
+</pre></details><details id="r2-p007"><summary>r2-p007 — Dict ordering duplicate keys</summary><pre>class C:
+    def m(cls):
+        return {}
+    m = classmethod(m)
+d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+d[C.m()] = 3
+print(d.get(&#39;a&#39;), d.get(&#39;b&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:15.826656608 -0400
++++ fixed.py	2026-10-17 17:00:16.223661590 -0400
+@@ -1,7 +1,7 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls):
+         return {}
+<span class="del">-    m = classmethod(m)</span>
+ d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+ d[C.m()] = 3
+ print(d.get(&#39;a&#39;), d.get(&#39;b&#39;))
+</pre></details><details id="r2-p008"><summary>r2-p008 — Mutable default aliasing</summary><pre>class C:
+    def m(cls, lst=[]):
+        lst.append(1)
+        return lst
+    m = classmethod(m)
+print(C.m())
+print(C.m())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:16.430664187 -0400
++++ fixed.py	2026-10-17 17:00:16.580666069 -0400
+@@ -1,7 +1,7 @@
+ class C:
+<span class="add">+    @classmethod</span>
+     def m(cls, lst=[]):
+         lst.append(1)
+         return lst
+<span class="del">-    m = classmethod(m)</span>
+ print(C.m())
+ print(C.m())
+</pre></details></body></html>

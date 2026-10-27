@@ -1,0 +1,508 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff TC006 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff TC006 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-41-40-602Z-mapj-ruff-TC006 · fix labelled <b>unknown</b> · 16 programs, 14 fired, 14 fixed, 2 oracle-backed finding(s) · model cost $0.0339</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags unquoted type expressions in typing.cast() calls.</p><p class="mut">Fix: Wrap the first argument of typing.cast() in double quotes if it is not already a string literal, preserving whitespace and formatting.</p><details><summary>11 hazards</summary><ul><li>If the first argument is a variable name (e.g., cast(T, x)), quoting it changes it from a type reference to a string literal, causing a runtime error when the type checker expects a type but receives a string.</li><li>If the first attribute is a class or type imported locally (not from typing), quoting it prevents actual type resolution at runtime, breaking isinstance or issubclass checks that might rely on the cast target.</li><li>If the type expression spans multiple lines (even without comments), the autofix may incorrectly quote only the first line or fail to preserve line breaks, resulting in a syntax error.</li><li>If the first argument contains a comment on any line except the last, the fix may be applied incorrectly or omitted by Ruff due to its safety condition, but if forced, could comment out part of the type expression.</li><li>If the cast call uses keyword arguments like cast(typ=MyType, val=x), the autofix may not recognize the structure and either misapply quotes or fail to fire, leading to inconsistent fixes.</li><li>If the type expression contains a forward reference that is only resolved during TYPE_CHECKING, quoting it is correct, but if the same expression appears in a runtime context elsewhere, the inconsistency may mask circular import issues.</li><li>If the type expression is a string literal already but uses single quotes (e.g., cast(&#39;int&#39;, x)), the rule may not fire (depending on configuration), but if it did and the fix added outer quotes, it would produce a malformed nested string like cast(&#39;&#39;int&#39;&#39;, x).</li><li>If the code relies on the type expression being evaluated for side effects (e.g., a function call that returns a type), quoting it prevents execution, removing those side effects and potentially altering program state.</li><li>If the cast is inside a lambda or comprehension and the type expression references a loop variable, quoting it changes the meaning from a dynamic type lookup to a static string, breaking intended behavior.</li><li>If the type expression uses the | union operator (Python 3.10+) like cast(int | str, x), quoting it is necessary for forward compatibility, but if the code is run on Python &lt;3.10, the unquoted version would already fail, so the fix doesn&#39;t introduce new breakage but assumes the target environment supports the syntax.</li><li>If the first argument is a tuple or other container mistakenly used as a type (e.g., cast((int, str), x)), quoting it hides the fact that it&#39;s not a valid type annotation, delaying detection of a logical error until type checking fails.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p003"><b>r1-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix quotes the type expression `T`, turning it into a forward-referenced string annotation. At runtime, `typing.cast` evaluates its first argument; originally this raised `UnboundLocalError` because `T` was read before assignment, but after quoting the string `&#39;T&#39;` is passed unevaluated and the call proceeds to evaluate the second argument `x`, which is undefined, producing a `NameError`. This changes the observable exception type and masks the original forward-reference error, a silent behavior change in plausible code that uses a variable before assignment.">judge: real · high</span> Shadowed builtins and redefined names<p class="mut">The fix quotes the type expression `T`, turning it into a forward-referenced string annotation. At runtime, `typing.cast` evaluates its first argument; originally this raised `UnboundLocalError` because `T` was read before assignment, but after quoting the string `&#39;T&#39;` is passed unevaluated and the call proceeds to evaluate the second argument `x`, which is undefined, producing a `NameError`. This changes the observable exception type and masks the original forward-reference error, a silent behavior change in plausible code that uses a variable before assignment.</p>
+<h2>Minimized program (20→10 lines)</h2><pre>from typing import cast, List
+def main():
+    y = cast(T, x)  # Should be cast(str, x)
+    T = list  # Now T is the lambda
+    try:
+        print(&#39;z:&#39;, z)
+    except Exception as e:
+        print(&#39;Error after redefinition:&#39;, type(e).__name__, str(e))
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:42:02.732400438 -0400
++++ fixed.py	2026-10-17 16:42:03.133414842 -0400
+@@ -4,13 +4,13 @@
+ def main():
+     x = &#39;hello&#39;
+     # First use: T refers to shadowed list (which is str)
+<span class="del">-    y = cast(T, x)  # Should be cast(str, x)</span>
+<span class="add">+    y = cast(&#39;T&#39;, x)  # Should be cast(str, x)</span>
+     print(&#39;After cast:&#39;, y.upper() if isinstance(y, str) else &#39;fail&#39;)
+     # Later, redefine list back to builtin
+     del list  # Restore builtin
+     list = lambda x: x  # Redefine as identity
+     T = list  # Now T is the lambda
+<span class="del">-    z = cast(T, x)  # cast(lambda, x) -&gt; invalid type</span>
+<span class="add">+    z = cast(&#39;T&#39;, x)  # cast(lambda, x) -&gt; invalid type</span>
+     try:
+         # This won&#39;t fail at runtime, but type checker will complain
+         print(&#39;z:&#39;, z)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+After cast: HELLO
+stderr before: UnboundLocalError: cannot access local variable &#39;T&#39; where it is not associated with a value
+stderr after: UnboundLocalError: cannot access local variable &#39;list&#39; where it is not associated with a value</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/19596">astral-sh/ruff/issues/19596</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14676">astral-sh/ruff/issues/14676</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/20237">astral-sh/ruff/issues/20237</a> · <a href="reports/r1-p003.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p003"><b>r2-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule explicitly documents that it quotes type expressions in cast() calls to handle forward references and TYPE_CHECKING imports. The original code fails with NameError on MyType because it&#39;s evaluated at runtime, while the fixed code fails on x because the quoted string defers evaluation of the type expression. This is exactly the behavior change the rule intends: moving from runtime evaluation to string annotation.">judge: intended-change · low</span> Forward reference in TYPE_CHECKING vs runtime<p class="mut">The rule explicitly documents that it quotes type expressions in cast() calls to handle forward references and TYPE_CHECKING imports. The original code fails with NameError on MyType because it&#39;s evaluated at runtime, while the fixed code fails on x because the quoted string defers evaluation of the type expression. This is exactly the behavior change the rule intends: moving from runtime evaluation to string annotation.</p>
+<h2>Minimized program (8→2 lines)</h2><pre>import typing
+y = typing.cast(MyType, [x])  # Rule triggers: MyType is not a string
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:42:11.448711607 -0400
++++ fixed.py	2026-10-17 16:42:11.865726400 -0400
+@@ -4,5 +4,5 @@
+     from typing import List
+     MyType = List[int]
+ x = 5
+<span class="del">-y = typing.cast(MyType, [x])  # Rule triggers: MyType is not a string</span>
+<span class="add">+y = typing.cast(&quot;MyType&quot;, [x])  # Rule triggers: MyType is not a string</span>
+ print(sum(y))
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+5
+exit 1 → 0
+stderr before: NameError: name &#39;MyType&#39; is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13208">astral-sh/ruff/issues/13208</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/20096">astral-sh/ruff/issues/20096</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/19596">astral-sh/ruff/issues/19596</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/16037">astral-sh/ruff/issues/16037</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14676">astral-sh/ruff/issues/14676</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/1785">astral-sh/ruff/issues/1785</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9573">astral-sh/ruff/issues/9573</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14554">astral-sh/ruff/issues/14554</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/26625">astral-sh/ruff/issues/26625</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/20237">astral-sh/ruff/issues/20237</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/4939">astral-sh/ruff/issues/4939</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/6650">astral-sh/ruff/issues/6650</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/pull/16669">astral-sh/ruff/pull/16669</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18502">astral-sh/ruff/issues/18502</a> · <a href="reports/r2-p003.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Variable as type expression</td><td class="mut">If the first argument is a variable name (e.g., cast(T, x)), quoting it changes it from a </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Multiline type expression</td><td class="mut">If the type expression spans multiple lines (even without comments), the autofix may incor</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Shadowed builtins and redefined names</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Async def/await ordering</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Keyword arguments in cast</td><td class="mut">If the cast call uses keyword arguments like cast(typ=MyType, val=x), the autofix may not </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Tuple mistaken for type</td><td class="mut">If the first argument is a tuple or other container mistakenly used as a type (e.g., cast(</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>Single quotes already used</td><td class="mut">If the type expression is a string literal already but uses single quotes (e.g., cast(&#39;int</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Comments and docstrings attached</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Context manager with __enter__ returning non-self</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Float division and rounding with cast</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Forward reference in TYPE_CHECKING vs runtime</td><td class="mut">If the type expression contains a forward reference that is only resolved during TYPE_CHEC</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Union using | operator in cast</td><td class="mut">If the type expression uses the | union operator (Python 3.10+) like cast(int | str, x), q</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>F-string nested quotes in cast argument</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Cast with inline comment after argument</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span></td><td>Single-quoted string literal already in cast</td><td class="mut">If the type expression is a string literal already but uses single quotes (e.g., cast(&#39;int</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable default argument and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Variable as type expression</summary><pre>from typing import cast, List
+T = List[int]
+def main():
+    x = [1, 2, 3]
+    try:
+        # This should work: T is a type
+        y = cast(T, x)
+        print(&#39;Before fix:&#39;, len(y))
+    except Exception as e:
+        print(&#39;Error before fix:&#39;, type(e).__name__, str(e))
+    # After fix: cast(&#39;T&#39;, x) -&gt; T becomes string literal, not a type
+    # This will cause mypy/pyright to fail, but at runtime it&#39;s still a cast
+    # However, if we later use y as a type (e.g. in isinstance), it breaks
+    try:
+        if isinstance(y, T):  # T is still List[int] here
+            print(&#39;y is instance of T&#39;)
+        else:
+            print(&#39;y is not instance of T&#39;)
+    except Exception as e:
+        print(&#39;Error in isinstance:&#39;, type(e).__name__, str(e))
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:02.145379343 -0400
++++ fixed.py	2026-10-17 16:42:02.330385991 -0400
+@@ -4,7 +4,7 @@
+     x = [1, 2, 3]
+     try:
+         # This should work: T is a type
+<span class="del">-        y = cast(T, x)</span>
+<span class="add">+        y = cast(&#39;T&#39;, x)</span>
+         print(&#39;Before fix:&#39;, len(y))
+     except Exception as e:
+         print(&#39;Error before fix:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Multiline type expression</summary><pre>from typing import cast, List, Dict
+# Type expression split across lines
+MyType = Dict[
+    str,
+    List[int]
+]
+def main():
+    data = {&#39;a&#39;: [1, 2]}
+    try:
+        # This cast has a multiline first argument
+        result = cast(
+            MyType,
+            data
+        )
+        print(&#39;Success:&#39;, result[&#39;a&#39;])
+    except Exception as e:
+        print(&#39;Error during cast:&#39;, type(e).__name__, str(e))
+    # After fix: the autofix might produce:
+    # cast(
+    #     &quot;MyType,
+    #     \n    str,
+    #     \n    List[int]
+    # ), data
+    # which is invalid syntax due to broken string
+    # We simulate by trying to eval the broken form
+    try:
+        broken = &#39;cast(\n    &quot;MyType,\n    \nstr,\n    \nList[int]\n), data&#39;
+        # This would be a syntax error if parsed
+        print(&#39;Broken form would fail to parse&#39;)
+    except:
+        pass
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:02.436389801 -0400
++++ fixed.py	2026-10-17 16:42:02.624396557 -0400
+@@ -9,7 +9,7 @@
+     try:
+         # This cast has a multiline first argument
+         result = cast(
+<span class="del">-            MyType,</span>
+<span class="add">+            &#39;MyType&#39;,</span>
+             data
+         )
+         print(&#39;Success:&#39;, result[&#39;a&#39;])
+</pre></details><details id="r1-p003"><summary>r1-p003 — Shadowed builtins and redefined names</summary><pre>from typing import cast, List
+list = str  # Shadow builtin
+T = list  # Now T is str
+def main():
+    x = &#39;hello&#39;
+    # First use: T refers to shadowed list (which is str)
+    y = cast(T, x)  # Should be cast(str, x)
+    print(&#39;After cast:&#39;, y.upper() if isinstance(y, str) else &#39;fail&#39;)
+    # Later, redefine list back to builtin
+    del list  # Restore builtin
+    list = lambda x: x  # Redefine as identity
+    T = list  # Now T is the lambda
+    z = cast(T, x)  # cast(lambda, x) -&gt; invalid type
+    try:
+        # This won&#39;t fail at runtime, but type checker will complain
+        print(&#39;z:&#39;, z)
+    except Exception as e:
+        print(&#39;Error after redefinition:&#39;, type(e).__name__, str(e))
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:02.732400438 -0400
++++ fixed.py	2026-10-17 16:42:03.133414842 -0400
+@@ -4,13 +4,13 @@
+ def main():
+     x = &#39;hello&#39;
+     # First use: T refers to shadowed list (which is str)
+<span class="del">-    y = cast(T, x)  # Should be cast(str, x)</span>
+<span class="add">+    y = cast(&#39;T&#39;, x)  # Should be cast(str, x)</span>
+     print(&#39;After cast:&#39;, y.upper() if isinstance(y, str) else &#39;fail&#39;)
+     # Later, redefine list back to builtin
+     del list  # Restore builtin
+     list = lambda x: x  # Redefine as identity
+     T = list  # Now T is the lambda
+<span class="del">-    z = cast(T, x)  # cast(lambda, x) -&gt; invalid type</span>
+<span class="add">+    z = cast(&#39;T&#39;, x)  # cast(lambda, x) -&gt; invalid type</span>
+     try:
+         # This won&#39;t fail at runtime, but type checker will complain
+         print(&#39;z:&#39;, z)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Async def/await ordering</summary><pre>from typing import cast, List, AsyncIterator
+import asyncio
+async def gen() -&gt; AsyncIterator[int]:
+    for i in range(3):
+        yield i
+async def main():
+    # cast in async context
+    g = gen()
+    ag = cast(AsyncIterator[int], g)  # Rule fires here
+    try:
+        result = []
+        async for item in ag:
+            result.append(item)
+        print(&#39;Collected:&#39;, result)
+    except Exception as e:
+        print(&#39;Error in async iteration:&#39;, type(e).__name__, str(e))
+    # After fix: cast(&#39;AsyncIterator[int]&#39;, g) -&gt; string, not type
+    # This breaks type checking but not runtime
+    # However, if we try to use ag as a type later...
+    try:
+        if isinstance(g, AsyncIterator):  # Name not defined, but we meant the type
+            pass
+    except NameError:
+        print(&#39;Expected: AsyncIterator not found in runtime&#39;)
+asyncio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:03.355422809 -0400
++++ fixed.py	2026-10-17 16:42:03.678434400 -0400
+@@ -6,7 +6,7 @@
+ async def main():
+     # cast in async context
+     g = gen()
+<span class="del">-    ag = cast(AsyncIterator[int], g)  # Rule fires here</span>
+<span class="add">+    ag = cast(&#39;AsyncIterator[int]&#39;, g)  # Rule fires here</span>
+     try:
+         result = []
+         async for item in ag:
+</pre></details><details id="r1-p005"><summary>r1-p005 — Keyword arguments in cast</summary><pre>from typing import cast, List
+def main():
+    x = [1, 2, 3]
+    # Keyword form: should trigger rule on typ=
+    y = cast(typ=List[int], val=x)
+    print(&#39;Length via keyword:&#39;, len(y))
+    # After fix: autofix might not recognize keyword args and do nothing
+    # Or worse, quote the first positional arg (which doesn&#39;t exist)
+    # Simulate bad fix: if it tried to quote &#39;typ&#39; or messed up keywords
+    try:
+        # This is safe: keyword args are preserved
+        z = cast(typ=List[int], val=[4, 5])
+        print(&#39;Second call:&#39;, z)
+    except Exception as e:
+        print(&#39;Error in keyword cast:&#39;, type(e).__name__, str(e))
+    # To show dependency: if we change List[int] to a var, and fix breaks
+    T = List[int]
+    # Rule should fire on typ=T
+    w = cast(typ=T, val=x)
+    print(&#39;Via var:&#39;, len(w))
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:03.856440788 -0400
++++ fixed.py	2026-10-17 16:42:04.048447675 -0400
+@@ -2,21 +2,21 @@
+ def main():
+     x = [1, 2, 3]
+     # Keyword form: should trigger rule on typ=
+<span class="del">-    y = cast(typ=List[int], val=x)</span>
+<span class="add">+    y = cast(typ=&#39;List[int]&#39;, val=x)</span>
+     print(&#39;Length via keyword:&#39;, len(y))
+     # After fix: autofix might not recognize keyword args and do nothing
+     # Or worse, quote the first positional arg (which doesn&#39;t exist)
+     # Simulate bad fix: if it tried to quote &#39;typ&#39; or messed up keywords
+     try:
+         # This is safe: keyword args are preserved
+<span class="del">-        z = cast(typ=List[int], val=[4, 5])</span>
+<span class="add">+        z = cast(typ=&#39;List[int]&#39;, val=[4, 5])</span>
+         print(&#39;Second call:&#39;, z)
+     except Exception as e:
+         print(&#39;Error in keyword cast:&#39;, type(e).__name__, str(e))
+     # To show dependency: if we change List[int] to a var, and fix breaks
+     T = List[int]
+     # Rule should fire on typ=T
+<span class="del">-    w = cast(typ=T, val=x)</span>
+<span class="add">+    w = cast(typ=&#39;T&#39;, val=x)</span>
+     print(&#39;Via var:&#39;, len(w))
+ if __name__ == &#39;__main__&#39;:
+     main()
+</pre></details><details id="r1-p006"><summary>r1-p006 — Tuple mistaken for type</summary><pre>from typing import cast
+# Mistakenly using tuple as type - should be flagged by linter but isn&#39;t a type
+def main():
+    x = (1, &#39;hello&#39;)
+    # This is wrong: (int, str) is a tuple, not a type
+    # Rule TC006 should fire because it&#39;s unquoted
+    y = cast((int, str), x)  # Expect trigger: first arg is tuple literal
+    print(&#39;Cast result:&#39;, y, type(y))
+    # At runtime, this succeeds because cast ignores the type argument
+    # But if we later try to use (int, str) as a type in isinstance, it fails
+    try:
+        if isinstance(y, (int, str)):  # This works: tuple of types
+            print(&#39;isinstance check passed&#39;)
+        else:
+            print(&#39;isinstance check failed&#39;)
+    except Exception as e:
+        print(&#39;Error in isinstance:&#39;, type(e).__name__, str(e))
+    # After fix: cast(&#39;(int, str)&#39;, x) -&gt; first arg becomes string
+    # Now, if code later tried to evaluate the string as a type (e.g. via eval), it would fail
+    # But more importantly, the linter fix masks the error: the user thinks it&#39;s quoted on purpose
+    # So they don&#39;t realize (int, str) was never a valid type
+    try:
+        eval_type = eval(&#39;(int, str)&#39;)  # This would work
+        print(&#39;Eval succeeded:&#39;, eval_type)
+    except Exception as e:
+        print(&#39;Eval error:&#39;, type(e).__name__, str(e))
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:04.163451796 -0400
++++ fixed.py	2026-10-17 16:42:04.347458390 -0400
+@@ -4,7 +4,7 @@
+     x = (1, &#39;hello&#39;)
+     # This is wrong: (int, str) is a tuple, not a type
+     # Rule TC006 should fire because it&#39;s unquoted
+<span class="del">-    y = cast((int, str), x)  # Expect trigger: first arg is tuple literal</span>
+<span class="add">+    y = cast(&#39;int, str&#39;, x)  # Expect trigger: first arg is tuple literal</span>
+     print(&#39;Cast result:&#39;, y, type(y))
+     # At runtime, this succeeds because cast ignores the type argument
+     # But if we later try to use (int, str) as a type in isinstance, it fails
+</pre></details><details id="r1-p007"><summary>r1-p007 — Single quotes already used</summary><pre>from typing import cast
+# Already quoted with single quotes - rule may not fire (config-dependent)
+def main():
+    x = 42
+    # This uses single quotes - depending on ruff config, TC006 may or may not trigger
+    # We assume it does NOT trigger (as per rule description: stays silent on single quotes)
+    y = cast(&#39;int&#39;, x)  # No trigger expected
+    print(&#39;Value:&#39;, y, type(y))
+    # If the rule incorrectly fired and added outer quotes:
+    # cast(&#39;&#39;int&#39;&#39;, x) -&gt; invalid syntax
+    # We simulate the broken code
+    try:
+        # This line is commented out to avoid syntax error in our program
+        # z = cast(&#39;&#39;int&#39;&#39;, x)  # SyntaxError: invalid syntax
+        pass
+    except SyntaxError as e:
+        print(&#39;Simulated broken fix would cause:&#39;, type(e).__name__, str(e))
+    # Show that single-quoted string is fine at runtime
+    if isinstance(y, int):
+        print(&#39;Single-quoted cast worked as expected&#39;)
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre></details><details id="r1-p008"><summary>r1-p008 — Comments and docstrings attached</summary><pre>from typing import cast, List
+# This comment is near the cast
+def process(items):
+    &quot;&quot;&quot;Process a list of integers.&quot;&quot;&quot;
+    # Cast with trailing comment
+    result = cast(List[int], items)  # Ensure it&#39;s ints
+    # Another comment
+    total = 0
+    for x in result:
+        total += x
+    return total
+
+def main():
+    data = [1, 2, 3]
+    try:
+        output = process(data)
+        print(&#39;Total:&#39;, output)
+    except Exception as e:
+        print(&#39;Error in process:&#39;, type(e).__name__, str(e))
+    # After fix: the autofix might move or rewrite the line, potentially
+    # detaching the comment &quot;Ensure it&#39;s ints&quot; or the docstring
+    # If the comment is lost, runtime is unaffected, but intent is obscured
+    # We show that removing the comment doesn&#39;t change behavior
+    # But if the fix broke the line structure...
+    try:
+        # Simulate if fix broke indentation or moved line incorrectly
+        # Not actually breaking code, just noting hazard
+        print(&#39;Comment preservation affects readability, not runtime&#39;)
+    except:
+        pass
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:04.617468065 -0400
++++ fixed.py	2026-10-17 16:42:04.798474551 -0400
+@@ -3,7 +3,7 @@
+ def process(items):
+     &quot;&quot;&quot;Process a list of integers.&quot;&quot;&quot;
+     # Cast with trailing comment
+<span class="del">-    result = cast(List[int], items)  # Ensure it&#39;s ints</span>
+<span class="add">+    result = cast(&#39;List[int]&#39;, items)  # Ensure it&#39;s ints</span>
+     # Another comment
+     total = 0
+     for x in result:
+</pre></details><details id="r2-p001"><summary>r2-p001 — Context manager with __enter__ returning non-self</summary><pre>import typing
+class Ctx:
+    def __enter__(self):
+        return 42
+    def __exit__(self, *exc):
+        pass
+def f():
+    with Ctx() as c:
+        x = typing.cast(list[int], [c])
+        return sum(x)
+print(f())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:10.848690314 -0400
++++ fixed.py	2026-10-17 16:42:11.033696885 -0400
+@@ -6,6 +6,6 @@
+         pass
+ def f():
+     with Ctx() as c:
+<span class="del">-        x = typing.cast(list[int], [c])</span>
+<span class="add">+        x = typing.cast(&quot;list[int]&quot;, [c])</span>
+         return sum(x)
+ print(f())
+</pre></details><details id="r2-p002"><summary>r2-p002 — Float division and rounding with cast</summary><pre>import typing
+from decimal import Decimal
+def g():
+    a = 10
+    b = 3
+    res = typing.cast(float, a / b)
+    rounded = round(res, 2)
+    d = Decimal(str(res))
+    print(f&#39;{res:.2f}&#39;, rounded, d)
+g()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:11.163701496 -0400
++++ fixed.py	2026-10-17 16:42:11.340707775 -0400
+@@ -3,7 +3,7 @@
+ def g():
+     a = 10
+     b = 3
+<span class="del">-    res = typing.cast(float, a / b)</span>
+<span class="add">+    res = typing.cast(&#39;float&#39;, a / b)</span>
+     rounded = round(res, 2)
+     d = Decimal(str(res))
+     print(f&#39;{res:.2f}&#39;, rounded, d)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Forward reference in TYPE_CHECKING vs runtime</summary><pre>from __future__ import annotations
+import typing
+if typing.TYPE_CHECKING:
+    from typing import List
+    MyType = List[int]
+x = 5
+y = typing.cast(MyType, [x])  # Rule triggers: MyType is not a string
+print(sum(y))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:11.448711607 -0400
++++ fixed.py	2026-10-17 16:42:11.865726400 -0400
+@@ -4,5 +4,5 @@
+     from typing import List
+     MyType = List[int]
+ x = 5
+<span class="del">-y = typing.cast(MyType, [x])  # Rule triggers: MyType is not a string</span>
+<span class="add">+y = typing.cast(&quot;MyType&quot;, [x])  # Rule triggers: MyType is not a string</span>
+ print(sum(y))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Union using | operator in cast</summary><pre>import typing
+def h(x):
+    return typing.cast(int | str, x)
+print(h(123))
+print(h(&#39;abc&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:11.976730337 -0400
++++ fixed.py	2026-10-17 16:42:12.156736715 -0400
+@@ -1,5 +1,5 @@
+ import typing
+ def h(x):
+<span class="del">-    return typing.cast(int | str, x)</span>
+<span class="add">+    return typing.cast(&#39;int | str&#39;, x)</span>
+ print(h(123))
+ print(h(&#39;abc&#39;))
+</pre></details><details id="r2-p005"><summary>r2-p005 — F-string nested quotes in cast argument</summary><pre>import typing
+def i():
+    name = &#39;Bob&#39;
+    val = typing.cast(list[int], [len(f&#39;{name!r}&#39;)])
+    return sum(val)
+print(i())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:12.267740647 -0400
++++ fixed.py	2026-10-17 16:42:12.448747059 -0400
+@@ -1,6 +1,6 @@
+ import typing
+ def i():
+     name = &#39;Bob&#39;
+<span class="del">-    val = typing.cast(list[int], [len(f&#39;{name!r}&#39;)])</span>
+<span class="add">+    val = typing.cast(&#39;list[int]&#39;, [len(f&#39;{name!r}&#39;)])</span>
+     return sum(val)
+ print(i())
+</pre></details><details id="r2-p006"><summary>r2-p006 — Cast with inline comment after argument</summary><pre>import typing
+j = 7
+k = typing.cast(list[int], [j])  # This is a list of one int
+print(k[0] + 1)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:12.549750637 -0400
++++ fixed.py	2026-10-17 16:42:12.732757119 -0400
+@@ -1,4 +1,4 @@
+ import typing
+ j = 7
+<span class="del">-k = typing.cast(list[int], [j])  # This is a list of one int</span>
+<span class="add">+k = typing.cast(&quot;list[int]&quot;, [j])  # This is a list of one int</span>
+ print(k[0] + 1)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Single-quoted string literal already in cast</summary><pre>import typing
+x = 42
+y = typing.cast(&#39;int&#39;, x)  # Already quoted: rule should not fire
+print(isinstance(y, int))
+</pre></details><details id="r2-p008"><summary>r2-p008 — Mutable default argument and aliasing</summary><pre>import typing
+def bad(l=None):
+    if l is None:
+        l = []
+    l.append(typing.cast(int, len(l)))
+    return l
+print(bad())
+print(bad())
+print(bad([]))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:42:12.995766436 -0400
++++ fixed.py	2026-10-17 16:42:13.176772839 -0400
+@@ -2,7 +2,7 @@
+ def bad(l=None):
+     if l is None:
+         l = []
+<span class="del">-    l.append(typing.cast(int, len(l)))</span>
+<span class="add">+    l.append(typing.cast(&quot;int&quot;, len(l)))</span>
+     return l
+ print(bad())
+ print(bad())
+</pre></details></body></html>

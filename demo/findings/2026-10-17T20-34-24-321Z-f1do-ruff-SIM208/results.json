@@ -1,0 +1,749 @@
+{
+  "runId": "2026-10-17T20-34-24-321Z-f1do-ruff-SIM208",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM208",
+    "fixKind": "unknown",
+    "docs": "# double-negation (SIM208)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for double negations (i.e., multiple `not` operators).\n\n## Why is this bad?\nA double negation is redundant and less readable than omitting the `not`\noperators entirely.\n\n## Example\n```python\nnot (not a)\n```\n\nUse instead:\n```python\na\n```\n\n## References\n- [Python documentation: Comparisons](https://docs.python.org/3/reference/expressions.html#comparisons)\n"
+  },
+  "analysis": {
+    "summary": "Flags expressions containing two consecutive 'not' operators applied to the same subexpression.",
+    "firingShapes": [
+      "not (not x)",
+      "not(not(y))",
+      "not (not(a + b))",
+      "not(not[0])",
+      "not(not(obj.attr))",
+      "not(not(func()))",
+      "not(not['a'][0])",
+      "not(not{}.get('key'))"
+    ],
+    "silentShapes": [
+      "not x",
+      "not (x and y)",
+      "(not x) or y",
+      "not not not x",
+      "is not"
+    ],
+    "fixDescription": "Removes the outer 'not' and its surrounding parentheses if present, leaving only the inner expression after the inner 'not'.",
+    "hazards": [
+      "Rewriting 'not (not x)' when 'x' is a property with a side-effecting __get__ method changes behavior because the property is accessed twice in the original but once in the fix.",
+      "If 'x' is a function call, the original evaluates it twice while the fix evaluates it once, altering side effects and performance.",
+      "When 'x' is an indexing operation like 'a[b]', the original may raise IndexError twice (if the first access succeeds but the second fails on a mutated object), whereas the fix only risks it once.",
+      "In 'not (not obj.method())', if 'method' returns a mutable object that changes state on first call, the second call operates on a different state than the fix assumes.",
+      "For 'not (not x)' where 'x' is a conditional expression like 'a if b else c', the original evaluates the condition twice, potentially observing different values if 'b' is mutable between evaluations.",
+      "If the inner 'not' applies to a comma-separated tuple like 'not (not (a, b))', removing the outer 'not' and parentheses alters the expression's structure and may break tuple display or unpacking expectations.",
+      "When the double negation appears inside a larger expression like 'f(not (not x))', the fix changes the number of times 'x' is evaluated, affecting side effects visible to 'f'.",
+      "If the code relies on the traceback depth for debugging or testing, removing the extra 'not' frame alters the call stack.",
+      "A comment placed between the 'not' tokens like 'not # comment\n(not x)' would be lost if the autofix removes the inner 'not' and whitespace without preserving comment placement.",
+      "In code using 'not (not x)' to deliberately force a boolean context (e.g., for truthiness testing in a numeric setting), the fix may change the type of the result in edge cases involving numpy arrays or custom __bool__ implementations."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.016821,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 15,
+    "fixed": 15,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Context manager without close(): resource leak risk",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `use_writer()` instead of `not (not use_writer())`",
+            "span": [
+              13,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "write: hello\nlog: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "write: hello\nlog: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:33.988907100 -0400\n+++ fixed.py\t2026-10-17 16:34:34.164907420 -0400\n@@ -10,6 +10,6 @@\n def use_writer():\n     return w\n \n-if not (not use_writer()):\n+if use_writer():\n     use_writer().write('hello')\n print('log:', Writer('test').log)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Mutable default argument aliasing after rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `g()` instead of `not (not g())`",
+            "span": [
+              8,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "first: [1, 1]\nsecond: [1, 1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first: [1, 1]\nsecond: [1, 1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:34.267907608 -0400\n+++ fixed.py\t2026-10-17 16:34:34.439907921 -0400\n@@ -5,7 +5,7 @@\n def g():\n     return f()\n \n-if not (not g()):\n+if g():\n     print('first:', g())\n else:\n     print('unreachable')\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Function call evaluated twice vs once: side effect divergence",
+      "hazard": "If 'x' is a function call, the original evaluates it twice while the fix evaluates it once, altering side effects and performance.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `inc()` instead of `not (not inc())`",
+            "span": [
+              9,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "inc called, counter=1\nbranch taken\nfinal counter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "inc called, counter=1\nbranch taken\nfinal counter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:34.540908105 -0400\n+++ fixed.py\t2026-10-17 16:34:34.703908401 -0400\n@@ -6,6 +6,6 @@\n     print(f'inc called, counter={counter}')\n     return counter > 0\n \n-if not (not inc()):\n+if inc():\n     print('branch taken')\n print('final counter:', counter)\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Evaluation order and side effects in merged expressions",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `result[0] and result[1]` instead of `not (not result[0] and result[1])`",
+            "span": [
+              8,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "side effects: ['A', 'B', 'taken']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "side effects: ['A', 'B', 'taken']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:34.808908593 -0400\n+++ fixed.py\t2026-10-17 16:34:34.971908889 -0400\n@@ -5,6 +5,6 @@\n     return True\n \n result = [log('A'), log('B')]\n-if not (not (result[0] and result[1])):\n+if result[0] and result[1]:\n     side.append('taken')\n print('side effects:', side)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Double negation inside function call alters evaluation count",
+      "hazard": "When the double negation appears inside a larger expression like 'f(not (not x))', the fix changes the number of times 'x' is evaluated, affecting side effects visible to 'f'.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `get_val()` instead of `not (not get_val())`",
+            "span": [
+              10,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "result: (False, 1)\nafter fix simulation: (False, 1)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: (False, 1)\nafter fix simulation: (False, 1)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:35.071909072 -0400\n+++ fixed.py\t2026-10-17 16:34:35.237909374 -0400\n@@ -7,7 +7,7 @@\n def f(arg):\n     return arg, len(calls)\n \n-out = f(not (not get_val()))\n+out = f(bool(get_val()))\n print('result:', out)\n calls.clear()\n out2 = f(get_val())\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Boolean forcing with numpy-like truthiness altered by fix",
+      "hazard": "In code using 'not (not x)' to deliberately force a boolean context (e.g., for truthiness testing in a numeric setting), the fix may change the type of the result in edge cases involving numpy arrays ",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `x` instead of `not (not x)`",
+            "span": [
+              10,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "forced type: <class 'bool'> False\ndirect type: <class '__main__.BoolLike'> BoolLike(0)\nare they same object? False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "forced type: <class 'bool'> False\ndirect type: <class '__main__.BoolLike'> BoolLike(0)\nare they same object? False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:35.343909568 -0400\n+++ fixed.py\t2026-10-17 16:34:35.504909861 -0400\n@@ -7,7 +7,7 @@\n         return f'BoolLike({self.val})'\n \n x = BoolLike(0)\n-forced = not (not x)\n+forced = bool(x)\n direct = x\n print('forced type:', type(forced), forced)\n print('direct type:', type(direct), direct)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Class vs instance attribute with property side effect",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `obj.value` instead of `not (not obj.value)`",
+            "span": [
+              9,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "first access: 1\nsecond access: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first access: 1\nsecond access: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:35.605910046 -0400\n+++ fixed.py\t2026-10-17 16:34:35.768910343 -0400\n@@ -6,7 +6,7 @@\n         return Counter.count > 0\n \n obj = Counter()\n-if not (not obj.value):\n+if obj.value:\n     print('first access:', Counter.count)\n else:\n     print('unreachable')\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Star-imports and module-level side effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `side_effect()` instead of `not (not side_effect())`",
+            "span": [
+              11,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "state after: 1\nfinal state: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "state after: 1\nfinal state: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:34:35.869910527 -0400\n+++ fixed.py\t2026-10-17 16:34:36.034910828 -0400\n@@ -8,7 +8,7 @@\n     mod.state += 1\n     return mod.state > 0\n \n-if not (not side_effect()):\n+if side_effect():\n     print('state after:', mod.state)\n else:\n     print('unreachable')\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Double Negation Inside Function Call Alters Evaluation Count",
+      "hazard": "When the double negation appears inside a larger expression like 'f(not (not x))', the fix changes the number of times 'x' is evaluated, affecting side effects visible to 'f'.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `True` instead of `not (not True)`",
+            "span": [
+              6,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "expected_calls=2 actual_calls=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "expected_calls=2 actual_calls=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:35:52.976062087 -0400\n+++ fixed.py\t2026-10-17 16:35:53.144062439 -0400\n@@ -3,7 +3,7 @@\n     counter += arg\n     return arg\n counter = 0\n-result = f(not (not True))\n+result = f(bool(True))\n expected_calls = 2\n actual_calls = counter\n print(f'{expected_calls=} {actual_calls=}')\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Indexing Operation May Raise IndexError Twice vs Once",
+      "hazard": "When 'x' is an indexing operation like 'a[b]', the original may raise IndexError twice (if the first access succeeds but the second fails on a mutated object), whereas the fix only risks it once.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `lst[get_idx()]` instead of `not (not lst[get_idx()])`",
+            "span": [
+              9,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Exception caught: IndexError: list index out of range, index evaluations: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Exception caught: IndexError: list index out of range, index evaluations: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:35:53.244062650 -0400\n+++ fixed.py\t2026-10-17 16:35:53.407062992 -0400\n@@ -6,7 +6,7 @@\n     lst.clear()\n     return val\n try:\n-    result = not (not lst[get_idx()])\n+    result = bool(lst[get_idx()])\n except IndexError as e:\n     passes = len([i for i in range(len(idx_list)) if i < len(lst)])\n     print(f'Exception caught: {type(e).__name__}: {e}, index evaluations: {len(idx_list)}')\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Conditional Expression Evaluates Condition Twice",
+      "hazard": "For 'not (not x)' where 'x' is a conditional expression like 'a if b else c', the original evaluates the condition twice, potentially observing different values if 'b' is mutable between evaluations.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comment Between Not Tokens Would Be Lost",
+      "hazard": "A comment placed between the 'not' tokens like 'not # comment\\n(not x)' would be lost if the autofix removes the inner 'not' and whitespace without preserving comment placement.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `marker` instead of `not (not marker)`",
+            "span": [
+              5,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Marker value: preserved, Result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Marker value: preserved, Result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:35:53.654063511 -0400\n+++ fixed.py\t2026-10-17 16:35:53.821063862 -0400\n@@ -2,8 +2,5 @@\n # Ruff may drop internal comments when fixing not(not x)\n # We cannot observe comment loss directly, so we use a marker\n marker = 'preserved'\n-val = not (\n-    # comment that should stay\n-    not marker\n-)\n+val = bool(marker)\n print(f'Marker value: {marker}, Result: {val}')\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Pathlib Vs Os.Path Behavior On Relative Paths Etc",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `os.path.exists(name)` instead of `not (not os.path.exists(name))`",
+            "span": [
+              7,
+              14
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `os.path.exists(name)` instead of `not (not os.path.exists(name))`",
+            "span": [
+              11,
+              15
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "os.path: True\nos.path after remove: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "os.path: True\nos.path after remove: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:35:53.921064072 -0400\n+++ fixed.py\t2026-10-17 16:35:54.104064456 -0400\n@@ -4,11 +4,11 @@\n     f.write('data')\n try:\n     # Using os.path.exists - not(not(...)) form\n-    exists = not (not os.path.exists(name))\n+    exists = bool(os.path.exists(name))\n     print(f'os.path: {exists}')\n     os.remove(name)\n     # Second check after delete - would differ if duplicated\n-    exists2 = not (not os.path.exists(name))\n+    exists2 = bool(os.path.exists(name))\n     print(f'os.path after remove: {exists2}')\n except Exception as e:\n     print(f'OS error: {e}')\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Method Returns Mutable Object That Changes State",
+      "hazard": "In 'not (not obj.method())', if 'method' returns a mutable object that changes state on first call, the second call operates on a different state than the fix assumes.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `obj.method()` instead of `not (not obj.method())`",
+            "span": [
+              17,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Method calls: 1, Result truthiness: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Method calls: 1, Result truthiness: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:35:54.205064669 -0400\n+++ fixed.py\t2026-10-17 16:35:54.373065023 -0400\n@@ -14,7 +14,7 @@\n try:\n     # First call: returns mutated object\n     # Second call: returns fresh object\n-    result = not (not obj.method())\n+    result = bool(obj.method())\n     print(f'Method calls: {obj.call_count}, Result truthiness: {bool(result)}')\n except Exception as e:\n     print(f'Error: {e}')\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Property With Side-Effecting __Get__ Accessed Twice",
+      "hazard": "Rewriting 'not (not x)' when 'x' is a property with a side-effecting __get__ method changes behavior because the property is accessed twice in the original but once in the fix.",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `obj2.prop` instead of `not (not obj2.prop)`",
+            "span": [
+              22,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Access count: 2, Expected result: False\nActual access count: 1, Actual result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Access count: 2, Expected result: False\nActual access count: 1, Actual result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:35:54.475065237 -0400\n+++ fixed.py\t2026-10-17 16:35:54.641065586 -0400\n@@ -19,7 +19,7 @@\n     print(f'Access count: {obj.access_count}, Expected result: {result}')\n     # Now test actual expression\n     obj2 = SideEffectProp()\n-    actual = not (not obj2.prop)\n+    actual = bool(obj2.prop)\n     print(f'Actual access count: {obj2.access_count}, Actual result: {actual}')\n except Exception as e:\n     print(f'Error: {e}')\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Keyword-Only Positional-Only *Args/**Kwargs Forwarding Defaults Evaluated Once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "SIM208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM208",
+            "severity": "warning",
+            "message": "Use `make_k()` instead of `not (not make_k())`",
+            "span": [
+              11,
+              30
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Error: 'bool' object has no attribute 'append'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Error: 'bool' object has no attribute 'append'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:35:54.741065797 -0400\n+++ fixed.py\t2026-10-17 16:35:54.905066142 -0400\n@@ -8,7 +8,7 @@\n try:\n     # This will trigger SIM208 on the inner not(not(...) if we had it\n     # Instead we test defaults in context\n-    result = process(1, 2, c=not (not make_k()))\n+    result = process(1, 2, c=bool(make_k()))\n     print(f'Call log length: {len(call_log)}, Result: {result}')\n except Exception as e:\n     print(f'Error: {e}')\n"
+      }
+    }
+  ]
+}

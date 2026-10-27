@@ -1,0 +1,639 @@
+{
+  "runId": "2026-10-17T21-32-18-361Z-m0d8-ruff-FURB142",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB142",
+    "fixKind": "unknown",
+    "docs": "# for-loop-set-mutations (FURB142)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for code that updates a set with the contents of an iterable by\nusing a `for` loop to call `.add()` or `.discard()` on each element\nseparately.\n\n## Why is this bad?\nWhen adding or removing a batch of elements to or from a set, it's more\nidiomatic to use a single method call rather than adding or removing\nelements one by one.\n\n## Example\n```python\ns = set()\n\nfor x in (1, 2, 3):\n    s.add(x)\n\nfor x in (1, 2, 3):\n    s.discard(x)\n```\n\nUse instead:\n```python\ns = set()\n\ns.update((1, 2, 3))\ns.difference_update((1, 2, 3))\n```\n\n## Fix safety\nThe fix will be marked as unsafe if applying the fix would delete any comments.\nOtherwise, it is marked as safe.\n\n## References\n- [Python documentation: `set`](https://docs.python.org/3/library/stdtypes.html#set)\n"
+  },
+  "analysis": {
+    "summary": "Flags loops that mutate a set via repeated .add()/.discard() calls when they can be replaced with bulk update()/difference_update().",
+    "firingShapes": [
+      "for x in y:\n    s.add(x)",
+      "for x in range(5):\n    my_set.add(x)",
+      "for item in get_data():\n    items.discard(item)",
+      "for key in mapping.keys():\n    seen.discard(key)"
+    ],
+    "silentShapes": [
+      "for x in y:\n    s.add(x)\n    print(x)",
+      "if True:\n    for x in y:\n        s.add(x)",
+      "for x in y:\n    try:\n        s.add(x)\n    except:\n        pass"
+    ],
+    "fixDescription": "Replace the loop with a single call to set.update(iterable) for .add() loops or set.difference_update(iterable) for .discard() loops.",
+    "hazards": [
+      "If the loop body contains additional statements besides .add()/.discard(), removing them changes behavior.",
+      "If the loop variable is used after the loop, eliminating the loop may alter its final value.",
+      "If the iterable expression has side effects (e.g., a function call), evaluating it once vs. per iteration changes timing.",
+      "If the set is aliased elsewhere, the mutation timing affects concurrent readers.",
+      "If .add() or .discard() raises an exception, the bulk method may not replicate partial mutation state.",
+      "If the loop includes a break or continue, removing it alters control flow.",
+      "If the set is reassigned within the loop, the bulk method operates on the wrong set instance.",
+      "If comments exist inside the loop block, the fix may discard them when deemed unsafe."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032379,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 8,
+    "fixed": 8,
+    "disputed": 7
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Keyword-only args forcing list materialization",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              14,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'seen' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'seen' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:27.412192102 -0400\n+++ fixed.py\t2026-10-17 17:32:27.809186553 -0400\n@@ -11,8 +11,7 @@\n def add_all(seq):\n     nonlocal seen\n     seen = set()\n-    for x in seq:\n-        seen.add(x)\n+    seen.update(seq)\n     return len(seen)\n \n vals = [1, 2, 2, 3]\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Aliased set observed by thread-like reader",
+      "hazard": "If the set is aliased elsewhere, the mutation timing affects concurrent readers.",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "watch: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]\nfinal: 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Non-file context manager with buffered state",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "num:1\nnum:2\nnum:3\n flushed: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p004",
+      "title": "Generator exhausted mid-loop affecting set build",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              8,
+              1
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.discard()` in a for loop",
+            "span": [
+              12,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "after first loop: {0, 1, 2, 3}\nafter second loop: {0, 1, 2, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "after first loop: {0, 1, 2, 3}\nafter second loop: {0, 1, 2, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:28.278180002 -0400\n+++ fixed.py\t2026-10-17 17:32:28.435177811 -0400\n@@ -5,10 +5,8 @@\n g = gen()\n s = set()\n # first loop consumes gen\n-for x in g:\n-    s.add(x)\n+s.update(g)\n print('after first loop:', s)\n # second loop sees empty\n-for x in g:\n-    s.discard(x)\n+s.difference_update(g)\n print('after second loop:', s)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Set build used in f-string with delayed eval",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Set: [1, 2, 3]\nNow: [1, 2, 3, 99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set: [1, 2, 3]\nNow: [1, 2, 3, 99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:28.537176387 -0400\n+++ fixed.py\t2026-10-17 17:32:28.709173986 -0400\n@@ -1,7 +1,6 @@\n vals = [1, 2, 2, 3]\n s = set()\n-for v in vals:\n-    s.add(v)\n+s.update(vals)\n # f-string evaluates now\n out = f'Set: {sorted(s)}'\n # but we mutate after\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Typed set built in loop, annotation triggers at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "s1: [0, 1, 2]\ns2: [0, 1]\nintersection: [0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "s1: [0, 1, 2]\ns2: [0, 1]\nintersection: [0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:28.807172618 -0400\n+++ fixed.py\t2026-10-17 17:32:28.991170050 -0400\n@@ -2,8 +2,7 @@\n \n def make_set(n: int) -> Set[int]:\n     s: Set[int] = set()\n-    for i in range(n):\n-        s.add(i)\n+    s.update(range(n))\n     return s\n \n s1 = make_set(3)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Float coercion in set via loop",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              8,
+              1
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              13,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "mixed: [1, 2.0, 3]\nall 2: [2]\nbool/int: [False, True]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "mixed: [1, 2.0, 3]\nall 2: [2]\nbool/int: [False, True]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:29.100168530 -0400\n+++ fixed.py\t2026-10-17 17:32:29.261166286 -0400\n@@ -1,15 +1,12 @@\n vals = [1, 2.0, 3, 2]\n s = set()\n-for v in vals:\n-    s.add(v)\n+s.update(vals)\n print('mixed:', sorted(s))\n # all same value\n s2 = set()\n-for v in [2, 2.0, 2]:\n-    s2.add(v)\n+s2.update([2, 2.0, 2])\n print('all 2:', sorted(s2))\n # bool\n sb = set()\n-for v in [True, 1, False, 0]:\n-    sb.add(v)\n+sb.update([True, 1, False, 0])\n print('bool/int:', sorted(sb))\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Set arg with side effects duplicated by rewrite",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              7,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "log: [0, 1, 2]\nset: [0, 2, 4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "log: [0, 1, 2]\nset: [0, 2, 4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:29.363164864 -0400\n+++ fixed.py\t2026-10-17 17:32:29.528162564 -0400\n@@ -4,7 +4,6 @@\n     return x * 2\n \n s = set()\n-for i in range(3):\n-    s.add(log_and_return(i))\n+s.update(log_and_return(i) for i in range(3))\n print('log:', ref)\n print('set:', sorted(s))\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Exception during add prevents partial state replication",
+      "hazard": "If .add() or .discard() raises an exception, the bulk method may not replicate partial mutation state.",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              16,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:34.809089208 -0400\n+++ fixed.py\t2026-10-17 17:32:34.983086799 -0400\n@@ -13,7 +13,6 @@\n bad_items[1].__hash__ = lambda: (_ for _ in ()).throw(ValueError('fail'))  # type: ignore\n \n try:\n-    for item in bad_items:\n-        s.add(item)\n+    s.update(bad_items)\n except ValueError as e:\n     print(f'Caught: {e}, s={s}')\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Walrus assignment in loop condition affects scoping and late binding",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2, 2, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Aliased set observed by thread-like reader",
+      "hazard": "If the set is aliased elsewhere, the mutation timing affects concurrent readers.",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Log: [{1, 2}, {1, 2, 3}, {1, 2, 3, 4}]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comments inside loop block may be discarded by unsafe fix",
+      "hazard": "If comments exist inside the loop block, the fix may discard them when deemed unsafe.",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set after loop: {0, 1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Set reassigned within loop causes bulk method to operate on wrong instance",
+      "hazard": "If the set is reassigned within the loop, the bulk method operates on the wrong set instance.",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Final s: {1, 2, 99}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Exceptions inside rewritten code with finally/else clauses",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: bad\nFinally: s={0}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Generator exhausted mid-loop affects set build due to lazy evaluation",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              7,
+              1
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "FURB142",
+            "severity": "warning",
+            "message": "Use of `set.add()` in a for loop",
+            "span": [
+              11,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "After first loop: {0, 1, 2}\nAfter second loop: {0, 1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After first loop: {0, 1, 2}\nAfter second loop: {0, 1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:35.726076524 -0400\n+++ fixed.py\t2026-10-17 17:32:35.899074132 -0400\n@@ -4,10 +4,8 @@\n \n s = set()\n g = gen()\n-for x in g:\n-    s.add(x)\n+s.update(g)\n print(f'After first loop: {s}')\n # Reuse generator - now empty\n-for x in g:\n-    s.add(x)\n+s.update(g)\n print(f'After second loop: {s}')\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Class attribute vs instance attribute with descriptor side effects",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "FURB142",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Descriptor read\nDescriptor read\nDescriptor read\nContainer.s: {1, 2, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

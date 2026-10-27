@@ -1,0 +1,122 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLC0208 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLC0208 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-57-26-418Z-nguo-ruff-PLC0208 · fix labelled <b>unknown</b> · 16 programs, 3 fired, 3 fixed, 0 oracle-backed finding(s) · model cost $0.0030</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags iteration over set literals containing only literal elements.</p><p class="mut">Fix: Replace the set literal with a tuple literal containing the same elements in arbitrary order, preserving all literal values exactly as written.</p><details><summary>10 hazards</summary><ul><li>Rewriting a set literal used elsewhere in the same scope changes behavior if the original set was referenced by variable or attribute after the loop, as the tuple replacement is not equivalent for membership tests or mutation.</li><li>If the set literal appears in a context where its unhashable nature is relied upon (e.g., passed to a function expecting a set), replacing it with a tuple may cause TypeError or logic errors due to type mismatch.</li><li>When the set literal is part of a larger expression (e.g., union or intersection with another set), replacing it with a tuple breaks the operation as tuples do not support set methods.</li><li>If the loop variable is mutated within the loop body and later used to reconstruct a set, the original iteration order (arbitrary but consistent per run) may affect downstream logic differently than tuple order.</li><li>In rare cases where the set literal&#39;s hash randomization affects iteration order across runs, replacing it with a fixed-order tuple may make behavior deterministic where it was previously nondeterministic, altering probabilistic outcomes.</li><li>If the set literal contains duplicate literals (e.g., {1, 1, 2}), the set deduplicates them, but the tuple rewrite preserves duplicates, changing the number of iterations and potentially breaking logic relying on unique iteration.</li><li>Comments attached to the set literal (e.g., {1, 2  # inline}) may be lost or misplaced during the rewrite, as the autofix typically does not preserve comment placement within the literal.</li><li>If the set literal is defined on a line with a trailing comma (e.g., {1, 2,}), the autofix may incorrectly omit or mishandle the comma when generating the tuple, leading to a syntax error or unintended single-element tuple.</li><li>When the set literal is used in a default argument or class attribute, replacing it with a tuple may cause shared mutable state issues if the tuple is mistakenly treated as mutable, though tuples are immutable—this hazard is low but included for completeness regarding developer assumption.</li><li>In code that relies on the set literal being evaluated as a new object each time (e.g., in a loop or function call), the tuple rewrite also creates a new object each time, so no behavioral change occurs from object identity alone, but any reliance on set-specific identity (e.g., &#39;is&#39; checks against a known set) would fail.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>String Formatting Edge Cases</td><td class="mut">When iterating over a set literal used in string formatting via % or .format(), replacemen</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Loop Variable Mutation and Set Reconstruction</td><td class="mut">Mutating the loop variable during iteration and using it to rebuild a set can yield differ</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Star Imports, Module-Level Side Effects, __all__</td><td class="mut">If a module&#39;s __all__ is defined by iterating over a set literal of strings, replacing it </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation Order and Side Effects</td><td class="mut">When the set literal contains expressions with side effects (e.g., print or list append), </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Hash Randomization and Determinism</td><td class="mut">Although string and int literals have stable hash, this program simulates sensitivity by u</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dict Ordering, Duplicate Keys, __hash__/__eq__ Overrides</td><td class="mut">When the set contains custom objects with overridden __hash__ and __eq__, iteration order </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>File Modes and Truncation</td><td class="mut">Iterating over a set of file mode strings to open and write files: if the set is replaced </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Set Object Identity and &#39;is&#39; Checks</td><td class="mut">If code relies on the set literal being a fresh object each time (e.g., for identity check</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">invalid</span></td><td>Walrus assignment captures set identity before rewrite</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Set literal in union expression broken by tuple replacement</td><td class="mut">When the set literal is part of a larger expression (e.g., union or intersection with anot</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>Inline comment lost during set-to-tuple rewrite</td><td class="mut">Comments attached to the set literal (e.g., {1, 2  # inline}) may be lost or misplaced dur</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">invalid</span></td><td>Context manager relying on fresh set object identity</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type annotation evaluated at runtime from set literal</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>__all__ built from set literal triggers module-level side effect</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>Pathlib behavior depends on set iteration order</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Exception in loop body with finally clause affected by iteration order</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — String Formatting Edge Cases</summary><pre>def fmt_set(s):
+    return &#39;%s:%s&#39; % tuple(s)
+
+print(fmt_set({&#39;a&#39;, &#39;b&#39;}))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Loop Variable Mutation and Set Reconstruction</summary><pre>items = []
+for x in {&#39;a&#39;, &#39;b&#39;}:
+    items.append(x.upper())
+rebuilt = set(items)
+print(&#39;&#39;.join(sorted(rebuilt)))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:39.421610644 -0400
++++ fixed.py	2026-10-17 16:57:39.587612913 -0400
+@@ -1,5 +1,5 @@
+ items = []
+<span class="del">-for x in {&#39;a&#39;, &#39;b&#39;}:</span>
+<span class="add">+for x in (&#39;a&#39;, &#39;b&#39;):</span>
+     items.append(x.upper())
+ rebuilt = set(items)
+ print(&#39;&#39;.join(sorted(rebuilt)))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Star Imports, Module-Level Side Effects, __all__</summary><pre>__all__ = tuple(sorted({&#39;b&#39;, &#39;a&#39;}))
+print(__all__[0])
+</pre></details><details id="r1-p004"><summary>r1-p004 — Evaluation Order and Side Effects</summary><pre>effects = []
+def f(x):
+    effects.append(x)
+    return x
+for _ in {f(1), f(2)}:
+    pass
+print(effects)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Hash Randomization and Determinism</summary><pre>data = {&#39;a&#39;, &#39;b&#39;}
+result = list(data)
+print(&#39;&#39;.join(result))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Dict Ordering, Duplicate Keys, __hash__/__eq__ Overrides</summary><pre>class Obj:
+    def __init__(self, v): self.v = v
+    def __hash__(self): return hash(self.v)
+    def __eq__(self, other): return isinstance(other, Obj) and self.v == other.v
+    def __repr__(self): return f&#39;Obj({self.v})&#39;
+s = {Obj(1), Obj(2)}
+print([obj.v for obj in s])
+</pre></details><details id="r1-p007"><summary>r1-p007 — File Modes and Truncation</summary><pre>for mode in {&#39;w&#39;, &#39;a&#39;}:
+    with open(f&#39;test_{mode}.txt&#39;, mode) as f:
+        f.write(mode)
+    with open(f&#39;test_{mode}.txt&#39;, &#39;r&#39;) as f:
+        print(f.read(), end=&#39;&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Set Object Identity and &#39;is&#39; Checks</summary><pre>s = {&#39;a&#39;, &#39;b&#39;}
+print(s is {&#39;a&#39;, &#39;b&#39;})
+</pre></details><details id="r2-p001"><summary>r2-p001 — Walrus assignment captures set identity before rewrite</summary><pre>def f():
+    s = None
+    for x in ({} := {1, 2}):
+        s.add(x) if s else s := {x}
+    return len(s)
+print(f())
+</pre></details><details id="r2-p002"><summary>r2-p002 — Set literal in union expression broken by tuple replacement</summary><pre>for x in {1, 2} | {3}:
+    print(x, end=&#39;&#39;)
+print()
+</pre></details><details id="r2-p003"><summary>r2-p003 — Inline comment lost during set-to-tuple rewrite</summary><pre>for x in {1, 2  # first two}:
+    print(f&#39;{x}#&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Context manager relying on fresh set object identity</summary><pre>class Ctx:
+    def __init__(self, obj):
+        self.obj = obj
+        self.id = id(obj)
+    def __enter__(self):
+        print(f&#39;enter {self.id}&#39;)
+        return self
+    def __exit__(self, *e):
+        print(f&#39;exit {self.id}&#39;)
+with Ctx({1, 2}) as c:
+    pass
+</pre></details><details id="r2-p005"><summary>r2-p005 — Type annotation evaluated at runtime from set literal</summary><pre>T = {1, 2}
+def f(x: T) -&gt; int:
+    return x
+try:
+    print(f(1))
+except Exception as e:
+    print(type(e).__name__, e)
+</pre></details><details id="r2-p006"><summary>r2-p006 — __all__ built from set literal triggers module-level side effect</summary><pre>__all__ = [x for x in {&#39;a&#39;, &#39;b&#39;}]
+print(__all__)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:47.412719610 -0400
++++ fixed.py	2026-10-17 16:57:47.581721909 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-__all__ = [x for x in {&#39;a&#39;, &#39;b&#39;}]</span>
+<span class="add">+__all__ = [x for x in (&#39;a&#39;, &#39;b&#39;)]</span>
+ print(__all__)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Pathlib behavior depends on set iteration order</summary><pre>import os
+from pathlib import Path
+for p in {Path(&#39;a&#39;), Path(&#39;b&#39;)}:
+    p.write_text(p.name)
+    print(p.read_text().strip())
+for p in {Path(&#39;a&#39;), Path(&#39;b&#39;)}:
+    p.unlink()
+</pre></details><details id="r2-p008"><summary>r2-p008 — Exception in loop body with finally clause affected by iteration order</summary><pre>for x in {1, 2}:
+    try:
+        if x == 2:
+            raise ValueError(x)
+        print(x)
+    finally:
+        print(f&#39;finally {x}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:47.804724942 -0400
++++ fixed.py	2026-10-17 16:57:48.193730232 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-for x in {1, 2}:</span>
+<span class="add">+for x in (1, 2):</span>
+     try:
+         if x == 2:
+             raise ValueError(x)
+</pre></details></body></html>

@@ -1,0 +1,520 @@
+{
+  "runId": "2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/noYodaExpression",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noYodaExpression\n- Fix: safe\n- Default severity: info\n- Available from version: 1.8.0\n- Diagnostic category: lint/style/noYodaExpression\n\n\nDescription\n\n Disallow the use of yoda expressions.\n\n A Yoda expression is a programming style where, given a binary operation, the \"static\" part of the binary operation is placed on the left-hand side.\n This rule **forbids** the use of Yoda expressions and enforces the placing of the \"static\" part of the binary operations on the right-hand side.\n\nExceptions\n\n Range expressions like `0 < value && value < 1` or `value <= 0 || 1 < value` are allowed.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n if (\"red\" == value) {}\n ```\n\n ```js,expect_diagnostic\n if (true === value) {}\n ```\n\n ```js,expect_diagnostic\n if (5 != value) {}\n ```\n\nValid\n\n ```js\n if (value === \"red\") {}\n ```\n\n ```js\n if (value === value) {}\n ```\n\n ```js\n if (value != 5) {}\n ```\n\n ```js\n if (0 < value && value < 1) {}\n ```\n\nResources\n - [Wikipedia definition](https://en.wikipedia.org/wiki/Yoda_conditions)\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags binary comparisons where the static literal/expression appears on the left-hand side (a Yoda condition).",
+    "firingShapes": [
+      "if (\\\"red\\\" == value)",
+      "while (true === flag)",
+      "for (; 0 > count; ) {}",
+      "switch (value) { case 5: break; }",
+      "return (null !== obj);",
+      "!(\\\"active\\\" !== status)",
+      "delete prop[\\\"key\\\"]",
+      "new Array(42 === len)"
+    ],
+    "silentShapes": [
+      "if (value == \\\"red\\\")",
+      "if (0 < value && value < 1)",
+      "if (flag || value === true)",
+      "if ((value) === (\\\"red\\\"))",
+      "if (!value || 5 !== count)"
+    ],
+    "fixDescription": "Swaps the left and right operands of the binary operator while preserving the operator token and all surrounding syntactic context.",
+    "hazards": [
+      "Rewriting `if (\\\"red\\\" == value)` to `if (value == \\\"red\\\")` changes operator precedence when embedded in expressions like `x && \\\"red\\\" == value`, potentially altering evaluation order.",
+      "If the left-hand side is a getter with side effects (e.g., `if (getMagic() == value)`), swapping operands changes when the getter is invoked relative to other subexpressions.",
+      "When the right-hand side involves `void 0` or `undefined`, moving it left may trigger unintended global lookups in non-strict mode due to implicit property creation.",
+      "In `delete obj[\\\"prop\\\"] == value`, swapping operands produces invalid syntax because `delete` expects an unbound reference on its left, breaking parsing.",
+      "For `new Foo(5 == size)`, swapping yields `new Foo(size == 5)`, which changes argument evaluation timing if `size` is a getter with side effects.",
+      "In `if (\\\"\\\" + obj == value)`, moving the string literal left breaks concatenation order, yielding different intermediate values if `obj.valueOf` has side effects.",
+      "When the comparison is inside a `with` block, swapping operands may alter which object scope provides identifier resolution for the moved operand.",
+      "If the left-hand side is a comma expression like `if ((console.log(\\\"x\\\"), 0) == value)`, swapping moves the side effect (`console.log`) to a different evaluation point relative to surrounding expressions.",
+      "Rewriting `if (value != \\\"red\\\")` preserves `!=` but if the original relied on left-to-right short-circuiting in a larger expression like `a && \\\"red\\\" != value`, the swap changes short-circuit behavior.",
+      "In template literals such as ``if (`hello${world}` == msg)``, swapping operands is safe only if the template has no side effects in its substitutions; otherwise evaluation order shifts.",
+      "Moving a literal with attached comments (e.g., `if (\\\"red\\\" /* TODO */ == value)`) may detach or misplace those comments depending on how the formatter handles whitespace.",
+      "For `if ((value) == (\\\"red\\\"))`, excessive parentheses may be preserved or dropped inconsistently by the fixer, affecting readability though not semantics."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0035571000000000005,
+  "summary": {
+    "programs": 16,
+    "invalid": 6,
+    "fired": 5,
+    "fixed": 5,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Null/undefined distinction with optional chaining",
+      "hazard": "Rewriting 'null == value' to 'value == null' when value uses optional chaining can change short-circuit behavior\u2014original throws if base is null/undefined, swapped does not.",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noYodaExpression",
+            "severity": "info",
+            "message": "Avoid the use of yoda expressions.",
+            "span": null
+          },
+          {
+            "rule": "style/noYodaExpression",
+            "severity": "info",
+            "message": "Avoid the use of yoda expressions.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "matched\nmatched\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "matched\nmatched\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:58:49.574550036 -0400\n+++ fixed.js\t2026-10-17 16:58:49.866553869 -0400\n@@ -1,8 +1,8 @@\n let obj = null;\n try {\n-  if (null == obj?.prop) console.log('matched');\n+  if (obj?.prop == null) console.log('matched');\n } catch (e) {\n   console.log(e.name + ': ' + e.message);\n }\n obj = {prop: null};\n-if (null == obj?.prop) console.log('matched');\n+if (obj?.prop == null) console.log('matched');\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "New expression with getter side effects",
+      "hazard": "Swapping 'new Foo(5 == size)' to 'new Foo(size == 5)' changes when size getter is called\u2014original evaluates 5 first, swapped calls size getter first.",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noYodaExpression",
+            "severity": "info",
+            "message": "Avoid the use of yoda expressions.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Foo arg: true calls: 1\nAfter:\nFoo arg: true calls: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Foo arg: true calls: 1\nAfter:\nFoo arg: true calls: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:58:50.039556140 -0400\n+++ fixed.js\t2026-10-17 16:58:50.321559839 -0400\n@@ -5,6 +5,6 @@\n     console.log('Foo arg:', x, 'calls:', callCount);\n   }\n }\n-new Foo(5 == size.value);\n+new Foo(size.value == 5 );\n console.log('After:');\n new Foo(size.value == 5);\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Operator precedence in logical AND",
+      "hazard": "Rewriting 'x && \"red\" == value' to 'x && value == \"red\"' is same, but if rule fired on internal comparison alone, swap could change grouping in larger expression\u2014here we show dependency via explicit g",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noYodaExpression",
+            "severity": "info",
+            "message": "Avoid the use of yoda expressions.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false path\nfalse path 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false path\nfalse path 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:58:50.491562069 -0400\n+++ fixed.js\t2026-10-17 16:58:50.753565506 -0400\n@@ -1,5 +1,5 @@\n let value = 'blue';\n-if (false && (\"red\" == value)) {\n+if (false && (value == \"red\")) {\n   console.log('unreachable');\n } else {\n   console.log('false path');\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "With block scope interaction",
+      "hazard": "In 'with (scope) { if (\"x\" == y) }', swapping to 'if (y == \"x\")' changes whether y is resolved from scope object or outer scope if y is not in scope.",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression/r1-p004/orig.js:3\nwith (scope) {\n^^^^\n\nSyntaxError: Strict mode code may not include a with statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p005",
+      "title": "ASI with leading parenthesis",
+      "hazard": "Without semicolon, leading '(' on next line can be interpreted as function call. Swapping operands in a comparison before such line changes what gets called.",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first: 1\nsecond: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Inequality short-circuit in logical AND",
+      "hazard": "In 'a && \"red\" != value', if a is false, \"red\" != value is not evaluated. After swap 'a && value != \"red\"', same behavior\u2014but if value is a getter with side effects, original never calls it when a fal",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noYodaExpression",
+            "severity": "info",
+            "message": "Avoid the use of yoda expressions.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "unequal\nCalls after first: 1\nunequal swapped\nCalls after second: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "unequal\nCalls after first: 1\nunequal swapped\nCalls after second: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:58:51.197571329 -0400\n+++ fixed.js\t2026-10-17 16:58:51.476574987 -0400\n@@ -1,7 +1,7 @@\n let callCount = 0;\n const obj = {get val() { callCount++; return 'blue'; }};\n let a = true;\n-if (a && \"red\" != obj.val) {\n+if (a && obj.val != \"red\" ) {\n   console.log('unequal');\n }\n console.log('Calls after first:', callCount);\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Arguments object interaction",
+      "hazard": "In function with arguments, rewriting comparison may interfere with arguments aliasing in non-strict mode if parameters are reassigned.",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noYodaExpression",
+            "severity": "info",
+            "message": "Avoid the use of yoda expressions.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "match\nmatch\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "match\nmatch\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:58:51.651577281 -0400\n+++ fixed.js\t2026-10-17 16:58:51.927580900 -0400\n@@ -1,6 +1,6 @@\n function foo(a) {\n   arguments[0] = 99;\n-  if (5 == a) {\n+  if (a == 5) {\n     return 'match';\n   }\n   return 'no';\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "String concatenation with valueOf side effects",
+      "hazard": "In '\"\" + obj == value', swapping breaks concatenation order\u2014if obj.valueOf has side effects, original executes it before comparison, swapped after (but value is on left now). Actually, swap moves lite",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "equal, side= 1\nequal swapped, side= 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "var hoisting and redeclaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression/r2-p001/orig.js:3\n    if (\\\"test\\\" == x) console.log('match'); // rule triggers here\n        ^\n\nSyntaxError: Invalid or unexpected token\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p002",
+      "title": "arguments object interaction",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression/r2-p002/orig.js:2\n  if (\\\"hi\\\" == arguments[0]) console.log('first arg matched'); // rule triggers\n      ^\n\nSyntaxError: Invalid or unexpected token\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode."
+    },
+    {
+      "id": "r2-p003",
+      "title": "getter side effects",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression/r2-p003/orig.js:8\nif (\\\"5\\\" == obj.x) console.log('equal'); // rule triggers, val increments once\n    ^\n\nSyntaxError: Invalid or unexpected token\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js "
+    },
+    {
+      "id": "r2-p004",
+      "title": "comma expression side effect shift",
+      "hazard": "If the left-hand side is a comma expression like `if ((console.log(\"x\"), 0) == value)`, swapping moves the side effect (`console.log`) to a different evaluation point relative to surrounding expressio",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x\nmatched\nlogged: true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "delete operand invalid syntax",
+      "hazard": "In `delete obj[\"prop\"] == value`, swapping operands produces invalid syntax because `delete` expects an unbound reference on its left, breaking parsing.",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "prop in obj: true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "template literal substitution side effects",
+      "hazard": "In template literals such as ``if (`hello${world}` == msg)``, swapping operands is safe only if the template has no side effects in its substitutions; otherwise evaluation order shifts.",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "match\nworldVal: substituted\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "async/await ordering",
+      "hazard": "async/await ordering, generators and yield position",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression/r2-p007/orig.js:3\n  if (\\\"1\\\" == a) console.log('equal'); // rule triggers\n      ^\n\nSyntaxError: Invalid or unexpected token\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p008",
+      "title": "class fields interaction",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "style/noYodaExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression/r2-p008/orig.js:3\n    if (\\\"base\\\" == this.kind) console.log('base match'); // rule triggers\n        ^\n\nSyntaxError: Invalid or unexpected token\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v"
+    }
+  ]
+}

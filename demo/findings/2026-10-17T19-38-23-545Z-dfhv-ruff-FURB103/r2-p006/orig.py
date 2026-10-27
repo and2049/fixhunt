@@ -1,0 +1,1 @@
+enabled = False\nwith open('tmp.txt', 'w') as f:\n    enabled and f.write('should not happen')\nprint('enabled:', enabled)\ntry:\n    with open('tmp.txt') as f:\n        content = f.read()\n    print('file:', repr(content))\nexcept FileNotFoundError as e:\n    print('FileNotFoundError:', e)\nimport os\nif os.path.exists('tmp.txt'):\n    os.remove('tmp.txt')

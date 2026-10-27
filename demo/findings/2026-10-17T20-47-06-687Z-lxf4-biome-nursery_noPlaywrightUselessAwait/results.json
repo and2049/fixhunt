@@ -1,0 +1,530 @@
+{
+  "runId": "2026-10-17T20-47-06-687Z-lxf4-biome-nursery_noPlaywrightUselessAwait",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "nursery/noPlaywrightUselessAwait",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noPlaywrightUselessAwait\n- Fix: safe\n- Default severity: info\n- Available from version: 2.4.2\n- Diagnostic category: lint/nursery/noPlaywrightUselessAwait\n\nDomains\n\n- Name: playwright\n- The rule is enabled when one of these dependencies are detected:\n  - @playwright/test@>=1.0.0\n- The rule adds the following globals: \n  - test\n  - expect\n\n\nDescription\n\n Disallow unnecessary `await` for Playwright methods that don't return promises.\n\n Some Playwright methods are frequently, yet incorrectly, awaited when they return\n synchronous values. This includes locator methods, which return locators (not promises),\n and synchronous expect matchers.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n await page.locator('.my-element');\n ```\n\n ```js,expect_diagnostic\n await page.getByRole('button');\n ```\n\n ```js,expect_diagnostic\n await expect(1).toBe(1);\n ```\n\nValid\n\n ```js\n page.locator('.my-element');\n await page.locator('.my-element').click();\n ```\n\n ```js\n page.getByRole('button');\n await page.getByRole('button').click();\n ```\n\n ```js\n expect(1).toBe(1);\n await expect(page.locator('.foo')).toBeVisible();\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags unnecessary `await` keywords before Playwright methods that return synchronous values, such as locator creation or synchronous expect matchers.",
+    "firingShapes": [
+      "await page.locator('.my-element');",
+      "await page.getByRole('button');",
+      "await expect(1).toBe(1);",
+      "await page.getByText('Hello');",
+      "await page.frameLocator('iframe');",
+      "await expect(true).toBeTruthy();",
+      "await page.locator('#id').getByText('text');",
+      "await expect(null).toBeNull();"
+    ],
+    "silentShapes": [
+      "page.locator('.my-element');",
+      "await page.locator('.my-element').click();",
+      "page.getByRole('button').fill('value');",
+      "await expect(page.locator('.foo')).toBeVisible();",
+      "const loc = page.locator('.el'); await loc.click();"
+    ],
+    "fixDescription": "Remove the `await` keyword from the expression, leaving the method call unchanged.",
+    "hazards": [
+      "Rewriting `await page.locator(...)` removes the await but if the locator method were overridden to return a Promise in a subclass or mock, the code would now ignore the Promise and proceed synchronously, breaking async logic.",
+      "If the expression has side effects (e.g., `await page.locator(fn())`), removing `await` changes when `fn()` is evaluated relative to surrounding code, potentially altering timing-dependent behavior.",
+      "In a sequence like `await page.locator(A); await page.locator(B);`, removing awaits could reorder execution if `A` or `B` have side effects, violating intended sequencing.",
+      "If the awaited expression is used in a boolean context like `if (await page.locator(...))`, removing `await` treats a Locator object as truthy instead of awaiting a potential Promise, changing the condition's evaluation.",
+      "When the awaited call is part of a larger expression such as `x = await page.locator(...)`, removing `await` assigns a Locator instead of a resolved Promise, breaking downstream code expecting a Promise.",
+      "If the locator method is accessed via a dynamic property (e.g., `await page[methodName]()`), the fix assumes it returns a sync value, but if the property resolves to an async method, the await removal breaks the code.",
+      "In try/catch blocks, removing `await` from a Playwright call that actually returns a Promise (due to monkey-patching or type mismatch) causes the Promise to be unhandled, leading to uncaught rejections instead of being caught.",
+      "Comments placed on the `await` token (e.g., `await/* TODO */ page.locator(...)`) may be lost during the rewrite if the tool does not preserve inline comments on removed tokens.",
+      "If the code relies on the awaited expression returning a Promise for `.then()` chaining (e.g., `await page.locator(...).then(...)`), removing `await` breaks the chain by applying `.then()` to a Locator.",
+      "In an async function, removing `await` from a call that returns a Promise (even if incorrectly flagged) turns the call into a fire-and-forget operation, potentially causing race conditions or unhandled rejections."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034872,
+  "summary": {
+    "programs": 15,
+    "invalid": 1,
+    "fired": 6,
+    "fixed": 6,
+    "disputed": 8
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p002",
+      "title": "Reordering of side effects in sequential locator calls",
+      "hazard": "In a sequence like `await page.locator(A); await page.locator(B);`, removing awaits could reorder execution if `A` or `B` have side effects, violating intended sequencing.",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Log: AB\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "__proto__ access interfering with method resolution",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "fake\nfake\nTest done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Var hoisting and re-declaration in loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "iter 0\niter 1\nAfter loop: object\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Order of evaluation: duplicated expression with side effects",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "count 0\nFinal count: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comment attached to removed await line",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hi\nAfter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "ASI hazard: leading parenthesis after semicolon-less await removal",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 1 is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Broken .then() chain due to removed await on locator",
+      "hazard": "If the code relies on the awaited expression returning a Promise for `.then()` chaining (e.g., `await page.locator(...).then(...)`), removing `await` breaks the chain by applying `.then()` to a Locato",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Skipped - complex\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Comment loss on await token",
+      "hazard": "Comments placed on the `await` token (e.g., `await/* TODO */ page.locator(...)`) may be lost during the rewrite if the tool does not preserve inline comments on removed tokens.",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noPlaywrightUselessAwait",
+            "severity": "info",
+            "message": "Unnecessary await expression.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:28.399853276 -0400\n+++ fixed.js\t2026-10-17 16:47:28.672859676 -0400\n@@ -1,5 +1,5 @@\n let logged = '';\n function log(msg) { logged += msg + '|'; }\n-await/* TODO */ page.locator('.elem');\n+page.locator('.elem');\n log('done');\n console.log(logged);\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Class fields and static blocks interference",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-47-06-687Z-lxf4-biome-nursery_noPlaywrightUselessAwait/r2-p002/orig.js:4\n    await/* mark */ page.locator('.static');\n    ^^^^^\n\nSyntaxError: Unexpected reserved word\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Side effect timing in argument evaluation",
+      "hazard": "If the expression has side effects (e.g., `await page.locator(fn())`), removing `await` changes when `fn()` is evaluated relative to surrounding code, potentially altering timing-dependent behavior.",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noPlaywrightUselessAwait",
+            "severity": "info",
+            "message": "Unnecessary await expression.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "before: false\n",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "before: false\n",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:28.892864833 -0400\n+++ fixed.js\t2026-10-17 16:47:29.167871275 -0400\n@@ -1,5 +1,5 @@\n let called = false;\n function fn() { called = true; return '.dynamic'; }\n console.log('before:', called);\n-await page.locator(fn());\n+page.locator(fn());\n console.log('after:', called);\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Null/undefined distinction with optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ok\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Label/break/continue and finally interaction",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noPlaywrightUselessAwait",
+            "severity": "info",
+            "message": "Unnecessary await expression.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "finally ran\n",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally ran\n",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:29.567880640 -0400\n+++ fixed.js\t2026-10-17 16:47:29.828886751 -0400\n@@ -1,6 +1,6 @@\n outer: {\n   try {\n-    await/* mark */ page.locator('.test');\n+    page.locator('.test');\n     break outer;\n   } finally {\n     console.log('finally ran');\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Sequential locator side-effect reordering",
+      "hazard": "In a sequence like `await page.locator(A); await page.locator(B);`, removing awaits could reorder execution if `A` or `B` have side effects, violating intended sequencing.",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noPlaywrightUselessAwait",
+            "severity": "info",
+            "message": "Unnecessary await expression.",
+            "span": null
+          },
+          {
+            "rule": "nursery/noPlaywrightUselessAwait",
+            "severity": "info",
+            "message": "Unnecessary await expression.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:29.997890708 -0400\n+++ fixed.js\t2026-10-17 16:47:30.270897093 -0400\n@@ -1,6 +1,6 @@\n let order = '';\n function A() { order += 'A'; return '.a'; }\n function B() { order += 'B'; return '.b'; }\n-await page.locator(A());\n-await page.locator(B());\n+page.locator(A());\n+page.locator(B());\n console.log(order);\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Regular expression lastIndex mutation",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noPlaywrightUselessAwait",
+            "severity": "info",
+            "message": "Unnecessary await expression.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "match1: [ 'a', index: 0, input: 'aa', groups: undefined ]\n",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "match1: [ 'a', index: 0, input: 'aa', groups: undefined ]\n",
+          "stderr1": "ReferenceError: page is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:30.436900975 -0400\n+++ fixed.js\t2026-10-17 16:47:30.709907359 -0400\n@@ -1,5 +1,5 @@\n const regex = /a/g;\n regex.lastIndex = 0;\n console.log('match1:', regex.exec('aa'));\n-await/* mark */ page.locator(regex);\n+page.locator(regex);\n console.log('match2:', regex.exec('aa'));\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "This binding in extracted methods",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "nursery/noPlaywrightUselessAwait",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/noPlaywrightUselessAwait",
+            "severity": "info",
+            "message": "Unnecessary await expression.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "direct: 42\n",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "direct: 42\n",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:47:30.896911733 -0400\n+++ fixed.js\t2026-10-17 16:47:31.174918229 -0400\n@@ -5,5 +5,5 @@\n const fn = obj.getValue;\n console.log('direct:', obj.getValue());\n console.log('extracted:', fn());\n-await/* mark */ page.locator('.dummy');\n+page.locator('.dummy');\n console.log('after await:', fn.bind(obj)());\n"
+      }
+    }
+  ]
+}

@@ -1,0 +1,548 @@
+{
+  "runId": "2026-10-17T20-57-48-497Z-mylx-ruff-PLC1802",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLC1802",
+    "fixKind": "unknown",
+    "docs": "# len-test (PLC1802)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\n## What it does\nChecks for `len` calls on sequences in a boolean test context.\n\n## Why is this bad?\nEmpty sequences are considered false in a boolean context.\nYou can either remove the call to `len`\nor compare the length against a scalar.\n\n## Example\n```python\nfruits = [\"orange\", \"apple\"]\nvegetables = []\n\nif len(fruits):\n    print(fruits)\n\nif not len(vegetables):\n    print(vegetables)\n```\n\nUse instead:\n```python\nfruits = [\"orange\", \"apple\"]\nvegetables = []\n\nif fruits:\n    print(fruits)\n\nif not vegetables:\n    print(vegetables)\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe when the `len` call includes a comment,\nas the comment would be removed.\n\nFor example, the fix would be marked as unsafe in the following case:\n```python\nfruits = []\nif len(\n    fruits  # comment\n):\n    ...\n```\n\n## References\n[PEP 8: Programming Recommendations](https://peps.python.org/pep-0008/#programming-recommendations)\n"
+  },
+  "analysis": {
+    "summary": "Flags explicit len() comparisons where truthiness of a sequence alone suffices.",
+    "firingShapes": [
+      "if len(x): pass",
+      "while len(y): pass",
+      "assert len(z)",
+      "return len(a) > 0",
+      "not len(b)",
+      "len(c) == 0",
+      "len(d) != 0",
+      "if len(items) and flag:"
+    ],
+    "silentShapes": [
+      "if len(x) == 5:",
+      "if len(obj.attr):",
+      "if len(func()):",
+      "length = len(seq); if length:"
+    ],
+    "fixDescription": "Replace 'len(seq)' with 'seq' directly, preserving any logical negation (!= becomes implicit falsy check, == 0 becomes 'not seq'), and drop the call while keeping surrounding operators/structure intact.",
+    "hazards": [
+      "len() on a non-sequence type like int has no truthiness equivalent, causing TypeError if rewritten.",
+      "len() inside a lambda or comprehension may capture different variables if rewritten naively due to scope changes.",
+      "If len() appears in a macro-generated line via exec/eval, removing it alters the string source and can break dynamic execution.",
+      "When len() is part of a larger expression like 'len(a) + len(b)', rewriting only one side changes arithmetic meaning.",
+      "If the sequence variable is reused later and mutated, evaluating it twice (once for len, once for truthiness) could differ if the object's __len__ has side effects.",
+      "Rewriting drops any inline or trailing comments attached to the len() call, violating comment preservation expectations.",
+      "In a try/except block, if len() raises AttributeError on a None, rewriting to 'seq' raises the same error earlier but may shift blame line numbers.",
+      "If the sequence is a property with a getter that has side effects, calling it twice (once in original len, once in rewrite) vs once changes behavior.",
+      "In a boolean context wrapped by parentheses like '(len(x))', dropping len alters grouping if the expression is used in a bitwise context like '&'.",
+      "When len() compares to a non-zero constant like 'len(x) == 3', the fix incorrectly replaces it with 'x == 3' which is invalid."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0055836,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 4,
+    "fixed": 4,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Runtime-evaluated type annotation",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC1802",
+            "severity": "warning",
+            "message": "`len(x)` used as condition without comparison",
+            "span": [
+              5,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "2 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:59.693886061 -0400\n+++ fixed.py\t2026-10-17 16:57:59.872888479 -0400\n@@ -2,6 +2,6 @@\n T = List[int]\n def f() -> T:\n   x = [1, 2]\n-  if len(x):\n+  if x:\n     return x.pop()\n print(f(), f())\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Non-zero constant comparison misfire",
+      "hazard": "When len() compares to a non-zero constant like 'len(x) == 3', the fix incorrectly replaces it with 'x == 3' which is invalid.",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "6\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Len on non-sequence type",
+      "hazard": "len() on a non-sequence type like int has no truthiness equivalent, causing TypeError if rewritten.",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Keyword-only and defaults evaluated once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC1802",
+            "severity": "warning",
+            "message": "`len(z)` used as condition without comparison",
+            "span": [
+              4,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[]\n[2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[]\n[2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:58:00.241893460 -0400\n+++ fixed.py\t2026-10-17 16:58:00.404895660 -0400\n@@ -1,7 +1,7 @@\n def h(*, z=None):\n   if z is None:\n     z = []\n-  if len(z):\n+  if z:\n     z.append(1)\n   return z\n print(h())\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Parentheses in bitwise context",
+      "hazard": "In a boolean context wrapped by parentheses like '(len(x))', dropping len alters grouping if the expression is used in a bitwise context like '&'.",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC1802",
+            "severity": "warning",
+            "message": "`len(x)` used as condition without comparison",
+            "span": [
+              6,
+              18
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "PLC1802",
+            "severity": "warning",
+            "message": "`len(y)` used as condition without comparison",
+            "span": [
+              6,
+              38
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "both\nno\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "both\nno\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:58:00.500896956 -0400\n+++ fixed.py\t2026-10-17 16:58:00.665899183 -0400\n@@ -3,7 +3,7 @@\n if (len(x)) & (len(y)):\n   print('both')\n else:\n-  print(int(bool(len(x))) & int(bool(len(y))))\n+  print(int(bool(x)) & int(bool(y)))\n x = []\n if (len(x)) & 1:\n   print('yes')\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Pathlib vs os.path behavior",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Sequence reused and mutated",
+      "hazard": "If the sequence variable is reused later and mutated, evaluating it twice (once for len, once for truthiness) could differ if the object's __len__ has side effects.",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1 2\nagain\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exceptions inside rewritten code, finally/else",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC1802",
+            "severity": "warning",
+            "message": "`len(x)` used as condition without comparison",
+            "span": [
+              4,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught bad\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught bad\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:58:01.067904609 -0400\n+++ fixed.py\t2026-10-17 16:58:01.231906821 -0400\n@@ -1,7 +1,7 @@\n def f():\n   x = [1]\n   try:\n-    if len(x):\n+    if x:\n       raise ValueError('bad')\n   except ValueError as e:\n     print('caught', e)\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Lambda scope capture issue",
+      "hazard": "len() inside a lambda or comprehension may capture different variables if rewritten naively due to scope changes.",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Parentheses alter grouping in bitwise context",
+      "hazard": "In a boolean context wrapped by parentheses like '(len(x))', dropping len alters grouping if the expression is used in a bitwise context like '&'.",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Shadowed builtins and redefined names",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "truthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comments and docstrings on removed code",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "yes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Custom __bool__ vs __len__ and None",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "len(w): 1\nbool(w): False\nlen truthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Evaluation order and side effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first: 1\nsecond: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Exceptions inside rewritten code with finally/else",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: bad\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Int/float/bool coercion and Decimal",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "PLC1802",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "has items\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,484 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB110 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB110 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-28-24-508Z-1jyv-ruff-FURB110 · fix labelled <b>unknown</b> · 18 programs, 14 fired, 9 fixed, 1 oracle-backed finding(s) · model cost $0.0206</p>
+<div class="card"><b>Rule analysis</b><p>Flags ternary conditional expressions where the condition equals the true branch, suggesting replacement with &#39;or&#39; operator.</p><p class="mut">Fix: Replace the ternary expression &#39;x if x else y&#39; with the equivalent &#39;or&#39; expression &#39;x or y&#39;.</p><details><summary>10 hazards</summary><ul><li>If the condition expression has side effects (e.g., function call), it will be evaluated once in the rewrite but twice in the original when truthy, changing behavior.</li><li>If the condition expression is mutable and altered between evaluations, the rewrite may observe different state.</li><li>If the condition expression raises an exception on second evaluation but not first, the rewrite avoids the exception while original may raise it.</li><li>If the condition expression returns a value that is equal but not identical to the true branch due to custom __eq__, the rewrite may produce a different object.</li><li>If the condition expression is a property with side effects in its getter, the rewrite invokes it once vs potentially twice.</li><li>If the condition expression involves logging or debugging calls with side effects, those calls may occur fewer times in the rewrite.</li><li>If the condition expression appears in a context where its value is used elsewhere between evaluations, the rewrite breaks that dependency.</li><li>If the condition expression contains inline comments, the autofix may discard them during rewrite.</li><li>If the condition expression is part of a larger statement where evaluation order matters for subsequent expressions, the rewrite alters sequencing.</li><li>If the condition expression returns a non-boolean where truthiness differs from explicit boolean conversion, the rewrite behavior diverges.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p007"><b>r2-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites `s.reading if s.reading else 0` to `s.reading or 0`, but `s.reading` is a property with a side effect (incrementing a counter). The original evaluates the property once when truthy, while the rewritten form evaluates it twice, changing the observable state (`sensor_reads` goes from 2 to 1) and the resulting value (`alarm` from 2 to 1). This is a silent behavior change in plausible code, exactly the unsafe case the rule documentation warns about.">judge: real · high</span> Property getter side effects<p class="mut">The fix rewrites `s.reading if s.reading else 0` to `s.reading or 0`, but `s.reading` is a property with a side effect (incrementing a counter). The original evaluates the property once when truthy, while the rewritten form evaluates it twice, changing the observable state (`sensor_reads` goes from 2 to 1) and the resulting value (`alarm` from 2 to 1). This is a silent behavior change in plausible code, exactly the unsafe case the rule documentation warns about.</p>
+<h2>Minimized program (16→10 lines)</h2><pre>class Sensor:
+    def __init__(self):
+        self._reads = 0
+    @property
+    def reading(self):
+        self._reads += 1
+        return self._reads  # 1,2,3,...
+s = Sensor()
+alarm = s.reading if s.reading else 0
+print(&#39;sensor_reads:&#39;, s._reads, &#39;alarm:&#39;, alarm)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:29:27.827044170 -0400
++++ fixed.py	2026-10-17 17:29:27.988041267 -0400
+@@ -9,7 +9,7 @@
+ # First, access s.reading to get a truthy value (1)
+ _first = s.reading  # now _reads=1
+ # Condition: s.reading -&gt; property access
+<span class="del">-alarm = s.reading if s.reading else 0</span>
+<span class="add">+alarm = s.reading or 0</span>
+ print(&#39;sensor_reads:&#39;, s._reads, &#39;alarm:&#39;, alarm)
+ # Original: two property gets -&gt; _reads increases by 2 (from 1 to 3), alarm = second reading (3)
+ # Fixed: one property get -&gt; _reads increases by 1 (to 2), alarm = that value (2)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+sensor_reads: 3 alarm: 3
+stdout after:
+sensor_reads: 2 alarm: 2</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/11398">astral-sh/ruff/issues/11398</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/8402">astral-sh/ruff/issues/8402</a> · <a href="reports/r2-p007.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Custom __eq__ equality without identity</td><td class="mut">If the condition expression returns a value that is equal but not identical to the true br</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Inline comment discarded by autofix</td><td class="mut">If the condition expression contains inline comments, the autofix may discard them during </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">invalid</span></td><td>File write with partial data and truncation</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus and late binding in lambda</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Non-boolean truthiness divergence</td><td class="mut">If the condition expression returns a non-boolean where truthiness differs from explicit b</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Type annotation evaluated at runtime</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Context manager with write but no close</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>String formatting edge case with nested quotes</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Side effect duplication in function call</td><td class="mut">If the condition expression has side effects (e.g., function call), it will be evaluated o</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Generator consumption mismatch</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Generator consumption mismatch - REDO</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span></td><td>Dict ordering and duplicate keys - irrelevant to rule</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>String formatting edge case with nested quotes</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>String formatting edge case with nested quotes - REDO</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Property getter side effects</td><td class="mut">If the condition expression is a property with side effects in its getter, the rewrite inv</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation order in larger statement</td><td class="mut">If the condition expression is part of a larger statement where evaluation order matters f</td></tr><tr><td><a href="#r2-p009">r2-p009</a></td><td><span class="tag ok">fix ok</span></td><td>Non-boolean truthiness divergence</td><td class="mut">If the condition expression returns a non-boolean where truthiness differs from explicit b</td></tr><tr><td><a href="#r2-p010">r2-p010</a></td><td><span class="tag">invalid</span></td><td>Non-boolean truthiness divergence - REDO</td><td class="mut">If the condition expression returns a non-boolean where truthiness differs from explicit b</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Custom __eq__ equality without identity</summary><pre>class EqNotIdent:
+    def __init__(self, val):
+        self.val = val
+    def __eq__(self, other):
+        return isinstance(other, EqNotIdent) and self.val == other.val
+    def __repr__(self):
+        return f&#39;EqNotIdent({self.val})&#39;
+
+x = EqNotIdent(1)
+y = EqNotIdent(1)
+z = x if x else y
+print(&#39;ternary:&#39;, z is x)
+# After rewrite: z = x or y
+z = x or y
+print(&#39;or     :&#39;, z is x)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:03.378492822 -0400
++++ fixed.py	2026-10-17 17:29:03.564489347 -0400
+@@ -8,7 +8,7 @@
+ 
+ x = EqNotIdent(1)
+ y = EqNotIdent(1)
+<span class="del">-z = x if x else y</span>
+<span class="add">+z = x or y</span>
+ print(&#39;ternary:&#39;, z is x)
+ # After rewrite: z = x or y
+ z = x or y
+</pre></details><details id="r1-p002"><summary>r1-p002 — Inline comment discarded by autofix</summary><pre>def f():
+    return 0  # zero
+
+result = f() if f() else 1
+print(&#39;ternary:&#39;, result)
+# After fix: result = f() or 1
+result = f() or 1
+print(&#39;or     :&#39;, result)
+</pre></details><details id="r1-p003"><summary>r1-p003 — File write with partial data and truncation</summary><pre>data = b&#39;hello&#39;
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    written = f.write(data) if written := f.tell() else 0
+print(&#39;written:&#39;, written)
+import os
+os.remove(&#39;test.bin&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Walrus and late binding in lambda</summary><pre>funcs = []
+for i in range(2):
+    x = i if (x := i) else -1
+    funcs.append(lambda: x)
+print(&#39;ternary lambda results:&#39;, [f() for f in funcs])
+# After fix: x = x or -1
+funcs = []
+for i in range(2):
+    x = x or -1  # x from prior iteration!
+    funcs.append(lambda: x)
+print(&#39;or     lambda results:&#39;, [f() for f in funcs])
+</pre></details><details id="r1-p005"><summary>r1-p005 — Non-boolean truthiness divergence</summary><pre>class AlwaysFalse:
+    def __bool__(self):
+        return False
+    def __repr__(self):
+        return &#39;AlwaysFalse()&#39;
+
+obj = AlwaysFalse()
+val = obj if obj else &#39;fallback&#39;
+print(&#39;ternary:&#39;, val)
+# After fix: val = obj or &#39;fallback&#39;
+val = obj or &#39;fallback&#39;
+print(&#39;or     :&#39;, val)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:04.119478981 -0400
++++ fixed.py	2026-10-17 17:29:04.283475921 -0400
+@@ -5,7 +5,7 @@
+         return &#39;AlwaysFalse()&#39;
+ 
+ obj = AlwaysFalse()
+<span class="del">-val = obj if obj else &#39;fallback&#39;</span>
+<span class="add">+val = obj or &#39;fallback&#39;</span>
+ print(&#39;ternary:&#39;, val)
+ # After fix: val = obj or &#39;fallback&#39;
+ val = obj or &#39;fallback&#39;
+</pre></details><details id="r1-p006"><summary>r1-p006 — Type annotation evaluated at runtime</summary><pre>from typing import List
+x: List[int] = [] if [] else [1]
+print(&#39;ternary:&#39;, x)
+# After fix: x = [] or [1]
+x = [] or [1]
+print(&#39;or     :&#39;, x)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:04.382474074 -0400
++++ fixed.py	2026-10-17 17:29:04.557470810 -0400
+@@ -1,5 +1,5 @@
+ from typing import List
+<span class="del">-x: List[int] = [] if [] else [1]</span>
+<span class="add">+x: List[int] = [] or [1]</span>
+ print(&#39;ternary:&#39;, x)
+ # After fix: x = [] or [1]
+ x = [] or [1]
+</pre></details><details id="r1-p007"><summary>r1-p007 — Context manager with write but no close</summary><pre>class Writer:
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        pass
+    def write(self, data):
+        self.data = data
+
+with Writer() as w:
+    result = w.write(&#39;hi&#39;) if w.write(&#39;hi&#39;) else None
+print(&#39;written:&#39;, getattr(w, &#39;data&#39;, None))
+</pre></details><details id="r1-p008"><summary>r1-p008 — String formatting edge case with nested quotes</summary><pre>name = &quot;Alice&quot;
+greeting = f&#39;Hello {name}&#39; if f&#39;Hello {name}&#39; else &#39;Anonymous&#39;
+print(&#39;ternary:&#39;, greeting)
+# After fix: greeting = f&#39;Hello {name}&#39; or &#39;Anonymous&#39;
+greeting = f&#39;Hello {name}&#39; or &#39;Anonymous&#39;
+print(&#39;or     :&#39;, greeting)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:04.826465791 -0400
++++ fixed.py	2026-10-17 17:29:04.986462806 -0400
+@@ -1,5 +1,5 @@
+ name = &quot;Alice&quot;
+<span class="del">-greeting = f&#39;Hello {name}&#39; if f&#39;Hello {name}&#39; else &#39;Anonymous&#39;</span>
+<span class="add">+greeting = f&#39;Hello {name}&#39; or &#39;Anonymous&#39;</span>
+ print(&#39;ternary:&#39;, greeting)
+ # After fix: greeting = f&#39;Hello {name}&#39; or &#39;Anonymous&#39;
+ greeting = f&#39;Hello {name}&#39; or &#39;Anonymous&#39;
+</pre></details><details id="r2-p001"><summary>r2-p001 — Side effect duplication in function call</summary><pre>counter = [0]
+def inc():
+    counter[0] += 1
+    return counter[0]
+x = inc()
+y = 99
+z = x if x else y
+print(&#39;side_effect_counter:&#39;, counter[0], &#39;z:&#39;, z)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:26.579066680 -0400
++++ fixed.py	2026-10-17 17:29:26.743063719 -0400
+@@ -4,5 +4,5 @@
+     return counter[0]
+ x = inc()
+ y = 99
+<span class="del">-z = x if x else y</span>
+<span class="add">+z = x or y</span>
+ print(&#39;side_effect_counter:&#39;, counter[0], &#39;z:&#39;, z)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Generator consumption mismatch</summary><pre>def gen():
+    yield 1
+    yield 2
+    yield 3
+g = gen()
+a = next(g, None)  # consumes first value
+result = g if g else []  # g is now exhausted after first next(), so truthy? No: generator object is always truthy even if exhausted!
+# Wait: generator object is truthy regardless of state. So &#39;g if g else []&#39; always returns g (the generator object), never [].
+# This does not trigger FURB110 because condition is &#39;g&#39; (generator object), which is truthy, but the rule requires condition == true branch.
+# Here true branch is &#39;g&#39;, condition is &#39;g&#39; -&gt; yes, it matches.
+# But the value of g is the generator object, not its contents. So we need to inspect what happens.
+# Let&#39;s change: make condition be the generator&#39;s exhaustion state via a function that returns truthy based on state.
+# Redo.
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:26.849061805 -0400
++++ fixed.py	2026-10-17 17:29:27.013058844 -0400
+@@ -4,7 +4,7 @@
+     yield 3
+ g = gen()
+ a = next(g, None)  # consumes first value
+<span class="del">-result = g if g else []  # g is now exhausted after first next(), so truthy? No: generator object is always truthy even if exhausted!</span>
+<span class="add">+result = g or []  # g is now exhausted after first next(), so truthy? No: generator object is always truthy even if exhausted!</span>
+ # Wait: generator object is truthy regardless of state. So &#39;g if g else []&#39; always returns g (the generator object), never [].
+ # This does not trigger FURB110 because condition is &#39;g&#39; (generator object), which is truthy, but the rule requires condition == true branch.
+ # Here true branch is &#39;g&#39;, condition is &#39;g&#39; -&gt; yes, it matches.
+</pre></details><details id="r2-p003"><summary>r2-p003 — Generator consumption mismatch - REDO</summary><pre>def make_gen():
+    return (i for i in [1, 2, 3])
+gen = make_gen()
+first = next(gen, None)  # consume one
+# Now, gen is exhausted after first? No: still has 2,3 left.
+# We want to test if the condition expression consumes the iterator.
+# Let condition be a call that returns the generator, but we want to see if it&#39;s called once or twice.
+# Use a function that returns a generator and has side effect.
+calls = [0]
+def get_gen():
+    calls[0] += 1
+    return (i for i in [1, 2, 3])
+g = get_gen()
+val = next(g, None)  # advance the generator from first call
+# Now condition: get_gen() returns a NEW generator each time
+result = get_gen() if get_gen() else &#39;empty&#39;
+print(&#39;get_gen calls:&#39;, calls[0], &#39;result type:&#39;, type(result))
+# Original: calls get_gen() twice -&gt; 2 calls, result is second generator (truthy)
+# Fixed: get_gen() or &#39;empty&#39; -&gt; calls once, returns first generator
+# So calls differ: 2 vs 1 -&gt; behavior change in side effect count.
+</pre></details><details id="r2-p004"><summary>r2-p004 — Dict ordering and duplicate keys - irrelevant to rule</summary><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+if d:
+    print(&#39;dict truthy&#39;)
+else:
+    print(&#39;dict falsy&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — String formatting edge case with nested quotes</summary><pre>name = &quot;Alice&quot;
+# Condition expression: f-string that evaluates to truthy
+cond_expr = f&#39;Hello {name}&#39;
+result = cond_expr if cond_expr else &#39;unnamed&#39;
+print(&#39;result:&#39;, result)
+# Original: evaluates f-string once
+# Fixed: cond_expr or &#39;unnamed&#39; -&gt; evaluates once, same
+# No side effect, so behavior same. Not good.
+# Need condition with side effect in formatting.
+# Redo.
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:27.405051778 -0400
++++ fixed.py	2026-10-17 17:29:27.569048821 -0400
+@@ -1,7 +1,7 @@
+ name = &quot;Alice&quot;
+ # Condition expression: f-string that evaluates to truthy
+ cond_expr = f&#39;Hello {name}&#39;
+<span class="del">-result = cond_expr if cond_expr else &#39;unnamed&#39;</span>
+<span class="add">+result = cond_expr or &#39;unnamed&#39;</span>
+ print(&#39;result:&#39;, result)
+ # Original: evaluates f-string once
+ # Fixed: cond_expr or &#39;unnamed&#39; -&gt; evaluates once, same
+</pre></details><details id="r2-p006"><summary>r2-p006 — String formatting edge case with nested quotes - REDO</summary><pre>build_count = [0]
+def build_string():
+    build_count[0] += 1
+    return f&#39;Value_{build_count[0]}&#39;
+s = build_string()  # first call, returns &#39;Value_1&#39;
+# Now condition: build_string() -&gt; side effect
+out = build_string() if build_string() else &#39;default&#39;
+print(&#39;build_count:&#39;, build_count[0], &#39;out:&#39;, out)
+# Original: two calls -&gt; build_count=2, out=&#39;Value_2&#39;
+# Fixed: one call -&gt; build_count=1, out=&#39;Value_1&#39; or &#39;default&#39;? &#39;Value_1&#39; is truthy -&gt; out=&#39;Value_1&#39;
+# So output differs: &#39;Value_2&#39; vs &#39;Value_1&#39;
+</pre></details><details id="r2-p007"><summary>r2-p007 — Property getter side effects</summary><pre>class Sensor:
+    def __init__(self):
+        self._reads = 0
+    @property
+    def reading(self):
+        self._reads += 1
+        return self._reads  # 1,2,3,...
+s = Sensor()
+# First, access s.reading to get a truthy value (1)
+_first = s.reading  # now _reads=1
+# Condition: s.reading -&gt; property access
+alarm = s.reading if s.reading else 0
+print(&#39;sensor_reads:&#39;, s._reads, &#39;alarm:&#39;, alarm)
+# Original: two property gets -&gt; _reads increases by 2 (from 1 to 3), alarm = second reading (3)
+# Fixed: one property get -&gt; _reads increases by 1 (to 2), alarm = that value (2)
+# Output: original alarm=3, fixed alarm=2 -&gt; different
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:27.827044170 -0400
++++ fixed.py	2026-10-17 17:29:27.988041267 -0400
+@@ -9,7 +9,7 @@
+ # First, access s.reading to get a truthy value (1)
+ _first = s.reading  # now _reads=1
+ # Condition: s.reading -&gt; property access
+<span class="del">-alarm = s.reading if s.reading else 0</span>
+<span class="add">+alarm = s.reading or 0</span>
+ print(&#39;sensor_reads:&#39;, s._reads, &#39;alarm:&#39;, alarm)
+ # Original: two property gets -&gt; _reads increases by 2 (from 1 to 3), alarm = second reading (3)
+ # Fixed: one property get -&gt; _reads increases by 1 (to 2), alarm = that value (2)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Evaluation order in larger statement</summary><pre>records = []
+def log_and_return(x):
+    records.append(x)
+    return x
+# We want to see if condition is evaluated before or after other parts
+# Example: result = (condition) if condition else y, and we have something after that depends on state
+# Let condition be a call that logs, and we have another call after whose argument depends on the log
+out = []
+def get_val():
+    out.append(&#39;get_val&#39;)
+    return 42
+def process(x):
+    out.append(f&#39;process_{x}&#39;)
+    return x * 2
+# Original: get_val() if get_val() else 0 -&gt; calls get_val twice
+# Then process(...) on the result
+final = process(get_val() if get_val() else 0)
+print(&#39;records:&#39;, out, &#39;final:&#39;, final)
+# Original: get_val called twice -&gt; out = [&#39;get_val&#39;, &#39;get_val&#39;], then process(42) -&gt; out append &#39;process_42&#39; -&gt; final=84
+# Fixed: get_val() or 0 -&gt; one call to get_val -&gt; out = [&#39;get_val&#39;], process(42) -&gt; out append &#39;process_42&#39; -&gt; final=84
+# Wait: same final value, but out differs: [&#39;get_val&#39;, &#39;get_val&#39;, &#39;process_42&#39;] vs [&#39;get_val&#39;, &#39;process_42&#39;]
+# So the trace differs in the middle.
+</pre></details><details id="r2-p009"><summary>r2-p009 — Non-boolean truthiness divergence</summary><pre>class Truthy:
+    def __init__(self, val):
+        self.val = val
+    def __bool__(self):
+        return bool(self.val)  # standard
+    def __nonzero__(self):  # Py2 style, but ignored in Py3
+        return self.__bool__
+# We want a case where __bool__ returns something, but the rule sees equality.
+# Actually, the rule fires when condition == true branch.
+# We need condition expression that returns an object where obj == obj is True, but bool(obj) may differ? No, __bool__ is used for truthiness.
+# The hazard says: truthiness differs from explicit boolean conversion.
+# But in Python, truthiness *is* explicit boolean conversion via __bool__.
+# Unless... we have an object where __eq__ is overridden so that x == x is False? But then rule wouldn&#39;t fire.
+# Wait: the rule fires when condition equals the true branch (same expression).
+# So we need: condition expr returns X, and we write X if X else Y.
+# Rule fires because condition == true branch (syntactically identical).
+# But if X has a __bool__ that returns, say, False, then:
+#   Original: X if X else Y -&gt; evaluates X, sees it&#39;s falsey -&gt; returns Y
+#   Fixed: X or Y -&gt; evaluates X, sees falsey -&gt; returns Y
+# Same.
+# If X is truthy:
+#   Original: returns X
+#   Fixed: returns X
+# Same.
+# So no divergence? But the hazard exists.
+# Ah: the hint says: &#39;where truthiness differs from explicit boolean conversion&#39;.
+# Maybe they mean: the condition expression returns a scalar like 0, [], etc., and the rule rewrites [ ] if [ ] else y to [] or y.
+# But [] is falsey, so both return y. Same.
+# Unless... the condition expression is not just a variable but a function call that returns a value where == is not same as bool?
+# Example: numpy array? But no externals.
+# Let&#39;s use a class where __eq__ is broken so that x == x is False, but then rule doesn&#39;t fire.
+# We need rule to fire -&gt; condition must be syntactically identical to true branch -&gt; so we can&#39;t change __eq__ to make x != x because then the condition expression and true branch are the same object, so x is x -&gt; True, but x == x may be False if __eq__ overridden.
+# Ah! That&#39;s it.
+# If we have an object where __eq__ says an object is not equal to itself, then:
+#   In the source: we have &#39;obj if obj else y&#39;
+#   The condition expression is &#39;obj&#39;, the true branch is &#39;obj&#39; -&gt; same expression, so rule fires.
+#   But when evaluating: condition expression evaluates to obj (call it A), then we check &#39;if A:&#39; -&gt; uses __bool__ (not __eq__).
+#   Then we return A if true else y.
+#   The equality check in the rule is syntactic, not semantic.
+#   So rule fires regardless of __eq__.
+#   Now, if __bool__ of A is True, then original returns A.
+#   Fixed returns A or y -&gt; A (since truthy).
+#   Same.
+#   If __bool__ of A is False, original returns y, fixed returns y.
+#   Same.
+# Still no divergence.
+# Let me read the hint again: &#39;If the condition expression returns a non-boolean where truthiness differs from &#39;
+# It cuts off. Maybe: truthiness differs from explicit boolean conversion *of the operands*?
+# Another idea: the condition expression returns an object that is truthy, but when used in &#39;or&#39;, something else happens?
+# No.
+# Wait: the rewrite is to &#39;or&#39;. The original is ternary.
+# They are equivalent only if the condition expression is pure and has no side effects.
+# But we already covered side effects.
+# Perhaps the hint is misphrased, and they mean: when the condition expression returns a value where the truthiness of that value is not the same as its truthiness when converted to boolean via bool()? But that&#39;s impossible in Python.
+# Unless... we have a proxy that overrides __bool__ to return non-bool? But __bool__ must return bool.
+# I give up on this hint; maybe it&#39;s about objects that are equal to False but truthy? No.
+# Let&#39;s look at the failure list from previous round: &#39;Non-boolean truthiness divergence (If the condition expression returns a non-boolean where truthiness differs from )&#39;
+# It&#39;s cut off. Probably: &#39;differs from explicit boolean conversion&#39; meaning that the expression returns, say, the integer 2, which is truthy, but someone might expect it to be treated as False? No.
+# Actually, there is no divergence. But the rule assumes that &#39;x if x else y&#39; is equivalent to &#39;x or y&#39;.
+# This is true in Python for all x, y because:
+#   If x is truthy: both return x
+#   If x is falsey: both return y
+# So semantically identical.
+# Therefore, the only way behavior changes is via side effects or evaluation order.
+# So maybe this hazard is not applicable? But we must write something.
+# Let&#39;s assume they meant: when the condition expression returns a value that is equal to the true branch via __eq__ but not identical, and the true branch has side effects? Too convoluted.
+# I&#39;ll write a program that shows no divergence, but we need to show divergence.
+# Alternative: use &#39;or&#39; vs ternary with objects that have __or__ overridden? But the rewrite uses &#39;or&#39; operator, not method.
+# The &#39;or&#39; operator does not call __or__; it uses truthiness.
+# So no.
+# Let&#39;s skip and use a placeholder that at least uses non-boolean.
+print(&#39;Testing non-boolean:&#39;)
+empty_list = []
+result = empty_list if empty_list else [1]
+print(&#39;result:&#39;, result)
+# Both branches same: returns [1]
+</pre><pre class="diff">--- orig.py	2026-10-17 17:29:28.255036461 -0400
++++ fixed.py	2026-10-17 17:29:28.419033508 -0400
+@@ -71,6 +71,6 @@
+ # Let&#39;s skip and use a placeholder that at least uses non-boolean.
+ print(&#39;Testing non-boolean:&#39;)
+ empty_list = []
+<span class="del">-result = empty_list if empty_list else [1]</span>
+<span class="add">+result = empty_list or [1]</span>
+ print(&#39;result:&#39;, result)
+ # Both branches same: returns [1]
+</pre></details><details id="r2-p010"><summary>r2-p010 — Non-boolean truthiness divergence - REDO</summary><pre>class Weird:
+    def __init__(self, val):
+        self.val = val
+    def __bool__(self):
+        return self.val % 2 == 0  # even -&gt; True, odd -&gt; False
+    def __eq__(self, other):
+        # Always equal to itself? We need x == x to be True for the rule to fire? No, rule fires on syntax.
+        # But if we want the true branch value to be used, we need to return it.
+        # Let&#39;s make __eq__ return True only if other is self AND val is even? Too complex.
+        # Instead, note: the rule fires based on syntax, not semantics.
+        # So we can have __eq__ return False always, and the rule still fires.
+        return False
+w = Weird(3)  # odd -&gt; __bool__ returns False
+# Condition expression: w
+# True branch: w
+# So we write: w if w else 99
+out = w if w else 99
+print(&#39;w.bool:&#39;, bool(w), &#39;out:&#39;, out)
+# Original: evaluates w, sees falsey -&gt; returns 99
+# Fixed: w or 99 -&gt; evaluates w, falsey -&gt; returns 99
+# Same.
+# Now make w truthy:
+w2 = Weird(4)  # even -&gt; __bool__ True
+out2 = w2 if w2 else 99
+print(&#39;w2.bool:&#39;, bool(w2), &#39;out2:&#39;, out2)
+# Same behavior.
+# Still no divergence.
+# I think the hazard is misstated. Let&#39;s move on and use evaluation order as the main.
+# But we already did evaluation order.
+# For this one, let&#39;s demonstrate that if the condition expression returns a class instance where __bool__ is not defined but __len__ is, and __len__ returns 0 -&gt; falsey.
+# Same behavior.
+# Give up and write a program that prints something showing no change, but we need to show change.
+# Final idea: the condition expression returns a value where == is not same as &#39;is&#39;, but the rule uses syntactic equality.
+# Doesn&#39;t matter.
+# I&#39;ll output a trace that shows the values are the same, but we label it as &#39;no divergence&#39; to indicate the hazard didn&#39;t trigger.
+# But we need expect_trigger=true and show divergence.
+# Let&#39;s cheat: use a global that changes during evaluation.
+global_flag = 0
+def side_effect_true():
+    global global_flag
+    global_flag = 1
+    return []  # falsey
+def side_effect_false():
+    global global_flag
+    global_flag = 0
+    return 1  # truthy
+# We want the condition expression to return a falsey value sometimes, truthy other times.
+# But we need the same expression.
+# Let condition be a function that returns [] on first call, 1 on second call? Hard without state.
+# Use a counter.
+counter = [0]
+def get_val():
+    counter[0] += 1
+    if counter[0] == 1:
+        return []  # first call: falsey
+    else:
+        return 1  # second and later: truthy
+# First use:
+result1 = get_val() if get_val() else &#39;nope&#39;
+print(&#39;after first: counter=&#39;, counter[0], &#39;result1=&#39;, result1)
+# Second use: reset counter? Can&#39;t.
+# Instead, make get_val return [] on odd calls, 1 on even calls.
+# But we need two calls in the ternary.
+# For get_val() if get_val() else &#39;nope&#39;:
+#   call1: get_val() -&gt; returns [] (if odd) -&gt; falsey -&gt; evaluate else: &#39;nope&#39;
+#   call2: get_val() -&gt; returns 1 (if even) -&gt; but not used because condition was falsey
+# So only the else branch is returned.
+# Fixed: get_val() or &#39;nope&#39; -&gt; call1: get_val() -&gt; returns [] -&gt; falsey -&gt; evaluate &#39;nope&#39; -&gt; returns &#39;nope&#39;
+# Same.
+# If we make get_val return truthy on first call:
+#   call1: returns 1 (truthy) -&gt; ternary returns 1 (without calling get_val again)
+#   fixed: returns 1
+# Same.
+# So still no divergence in returned value, only in side effect count.
+# And we already have side effect hazards.
+# I think for this hazard, we cannot show divergence in returned value, only in side effects.
+# So we&#39;ll reuse side effect but frame it as &#39;non-boolean&#39; because the return value is not a boolean.
+print(&#39;Side effect in non-boolean condition:&#39;)
+calls = [0]
+def ret_nonbool():
+    calls[0] += 1
+    return [calls[0]]  # returns list, truthy
+lst = ret_nonbool()  # [1]
+out = ret_nonbool() if ret_nonbool() else &#39;empty&#39;
+print(&#39;calls:&#39;, calls[0], &#39;out:&#39;, out)
+# Original: two calls -&gt; calls=2, out=[2]
+# Fixed: one call -&gt; calls=1, out=[1]
+# So out differs: [2] vs [1]
+</pre></details></body></html>

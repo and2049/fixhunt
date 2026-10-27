@@ -1,0 +1,449 @@
+{
+  "runId": "2026-10-17T21-20-30-716Z-3u1v-ruff-UP037",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP037",
+    "fixKind": "unknown",
+    "docs": "# quoted-annotation (UP037)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for the presence of unnecessary quotes in type annotations.\n\n## Why is this bad?\nIn Python, type annotations can be quoted to avoid forward references.\n\nHowever, if `from __future__ import annotations` is present, Python\nwill always evaluate type annotations in a deferred manner, making\nthe quotes unnecessary.\n\nSimilarly, if the annotation is located in a typing-only context and\nwon't be evaluated by Python at runtime, the quotes will also be\nconsidered unnecessary. For example, Python does not evaluate type\nannotations on assignments in function bodies.\n\n## Example\n\nGiven:\n\n```python\nfrom __future__ import annotations\n\n\ndef foo(bar: \"Bar\") -> \"Bar\": ...\n```\n\nUse instead:\n\n```python\nfrom __future__ import annotations\n\n\ndef foo(bar: Bar) -> Bar: ...\n```\n\nGiven:\n\n```python\ndef foo() -> None:\n    bar: \"Bar\"\n```\n\nUse instead:\n\n```python\ndef foo() -> None:\n    bar: Bar\n```\n\n## Preview\n\nWhen [preview] is enabled, if [`lint.future-annotations`] is set to `true`,\n`from __future__ import annotations` will be added if doing so would allow an annotation to be\nunquoted.\n\n## Fix safety\n\nThe rule's fix is marked as safe, unless [preview] and\n[`lint.future-annotations`] are enabled and a `from __future__ import\nannotations` import is added. Such an import may change the behavior of all annotations in the\nfile.\n\n## Options\n- `lint.future-annotations`\n\n## See also\n- [`quoted-annotation-in-stub`][PYI020]: A rule that\n  removes all quoted annotations from stub files\n- [`quoted-type-alias`][TC008]: A rule that removes unnecessary quotes\n  from type aliases.\n\n## References\n- [PEP 563 – Postponed Evaluation of Annotations](https://peps.python.org/pep-0563/)\n- [Python documentation: `__future__`](https://docs.python.org/3/library/__future__.html#module-__future__)\n\n[PYI020]: https://docs.astral.sh/ruff/rules/quoted-annotation-in-stub/\n[TC008]: https://docs.astral.sh/ruff/rules/quoted-type-alias/\n[preview]: https://docs.astral.sh/ruff/preview/\n"
+  },
+  "analysis": {
+    "summary": "Removes unnecessary quotes from type annotations when they are made redundant by 'from __future__ import annotations' or typing-only contexts.",
+    "firingShapes": [
+      "def f(x: \"A\") -> None:",
+      "class C: def m(self) -> \"C\": pass",
+      "x: \"List[int]\" = []",
+      "def f() -> None: y: \"Dict[str, int]\"",
+      "def f(*args: \"int\", **kwargs: \"str\") -> None:",
+      "lambda x: \"int\"",
+      "def f() -> \"Union[A, B]\": pass",
+      "async def f() -> \"Coroutine[None, None, int]\":"
+    ],
+    "silentShapes": [
+      "def f(x: 'A') -> None:",
+      "if TYPE_CHECKING: x: \"A\"",
+      "def f() -> None: x: \"A\"  # type: ignore",
+      "from __future__ import annotations; def f(x: \"A\") -> None:",
+      "class Protocol: x: \"int\""
+    ],
+    "fixDescription": "Strips quotation marks from type annotations that are deemed unnecessary due to postponed evaluation or typing-only context, transforming e.g., '\"Bar\"' to Bar while preserving surrounding syntax and whitespace.",
+    "hazards": [
+      "Rewriting a quoted forward reference like '\"C\"' in a class method to C may fail if C is defined later in the same module and the code relies on runtime evaluation without postponed annotations.",
+      "Removing quotes from an annotation in a default argument like def f(x: \"List[]\") = [] may cause a NameError if the type is not yet defined at function definition time.",
+      "The fix may incorrectly unquote annotations inside string literals or comments if the linter misidentifies them as type annotations, altering non-code text.",
+      "In lambdas assigned to variables, removing quotes from return annotations like lambda: \"int\" may break if the annotation is evaluated immediately and the type is not in scope.",
+      "Unquoting annotations in nested scopes (e.g., inside a function) may fail if the referenced type is only defined in an outer scope and not accessible at runtime without postponed evaluation.",
+      "If the file lacks 'from __future__ import annotations' and the preview flag is off, removing quotes may cause runtime NameErrors for forward references that rely on deferred evaluation.",
+      "The fix may remove quotes from annotations in __slots__ or other special attributes where string form is required for correct interpretation by the interpreter.",
+      "In code that uses eval() or exec() on annotations, removing quotes may change the string passed to evaluation, altering behavior if the annotation is inspected dynamically.",
+      "Unquoting may break code that depends on the annotation being a string for introspection (e.g., via inspect.get_annotations()) when postponed evaluation is not active.",
+      "If a quoted annotation contains a trailing or leading space inside the quotes (e.g., \" int \"), the fix may not preserve internal whitespace, potentially changing the string value if used elsewhere."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.004631100000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "String literal confusion",
+      "hazard": "Fix may strip quotes from type annotations mistaken for actual string content.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Lambda immediate evaluation",
+      "hazard": "Unquoting lambda return annotation fails if type not in scope at definition time.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "lambda result: A\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Nested scope inaccessibility",
+      "hazard": "Unquoting in inner function fails when type is only in outer scope without postponed eval.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: T\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Introspection dependency",
+      "hazard": "Unquoting breaks runtime string inspection when annotations are evaluated eagerly.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "annotation type: <class 'str'>\nannotation value: int\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Descriptor side effects",
+      "hazard": "Unquoting annotation on descriptor attribute may trigger early evaluation with side effects.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Desc accessed\nC.x: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Path behavior mismatch",
+      "hazard": "Unquoting annotation in path-related function may alter runtime type expectations.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "exists: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Bytes/str encoding",
+      "hazard": "Unquoting annotation changes assumed type for bytes/str handling in I/O.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Custom truthiness interaction",
+      "hazard": "Unquoting annotation on variable with custom __bool__ may affect conditional logic if misparsed.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "truthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p001",
+      "title": "Comments/docstring interaction",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Class/instance attribute descriptor side effect",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Accessing attr\nDescriptor accessed\nGot 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Missing future import causes NameError",
+      "hazard": "If the file lacks 'from __future__ import annotations' and the preview flag is off, removing quotes may cause runtime NameErrors for forward references that rely on deferred evaluation.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Eval/exec on annotations alters behavior",
+      "hazard": "In code that uses eval() or exec() on annotations, removing quotes may change the string passed to evaluation, altering behavior if the annotation is inspected dynamically.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Annotation raw: 'int'\nEval result: <class 'int'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "__slots__ requires string form",
+      "hazard": "The fix may remove quotes from annotations in __slots__ or other special attributes where string form is required for correct interpretation by the interpreter.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: 'x' in __slots__ conflicts with class variable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "Late-defined class in same module",
+      "hazard": "Rewriting a quoted forward reference like '\"C\"' in a class method to C may fail if C is defined later in the same module and the code relies on runtime evaluation without postponed annotations.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "created\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Lambda immediate evaluation out of scope",
+      "hazard": "In lambdas assigned to variables, removing quotes from return annotations like lambda: \"int\" may break if the annotation is evaluated immediately and the type is not in scope.",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "No return annotation\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Int/float/bool coercion edge case",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "UP037",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Value: 42, type: <class 'str'>\nCoerced to int: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    }
+  ]
+}

@@ -1,0 +1,374 @@
+{
+  "runId": "2026-10-17T20-29-39-255Z-1pck-ruff-RSE102",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RSE102",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-paren-on-raise-exception (RSE102)\n\nDerived from the **flake8-raise** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary parentheses on raised exceptions.\n\n## Why is this bad?\nIf an exception is raised without any arguments, parentheses are not\nrequired, as the `raise` statement accepts either an exception instance\nor an exception class (which is then implicitly instantiated).\n\nRemoving the parentheses makes the code more concise.\n\n## Known problems\nParentheses can only be omitted if the exception is a class, as opposed to\na function call. This rule isn't always capable of distinguishing between\nthe two.\n\nFor example, if you import a function `module.get_exception` from another\nmodule, and `module.get_exception` returns an exception object, this rule will\nincorrectly mark the parentheses in `raise module.get_exception()` as\nunnecessary.\n\n## Example\n```python\nraise TypeError()\n```\n\nUse instead:\n```python\nraise TypeError\n```\n\n## Fix Safety\nThis rule's fix is marked as unsafe if removing the parentheses would also remove comments\nor if it’s unclear whether the expression is a class or a function call.\n\n## References\n- [Python documentation: The `raise` statement](https://docs.python.org/3/reference/simple_stmts.html#the-raise-statement)\n"
+  },
+  "analysis": {
+    "summary": "Flags raise statements where parentheses around a single exception argument are syntactically unnecessary.",
+    "firingShapes": [
+      "raise ValueError()",
+      "raise KeyError(\"missing\")",
+      "raise IndexError(42)",
+      "raise RuntimeError(x)",
+      "raise CustomError(a, b)",
+      "raise Exception()",
+      "raise MyError[arg]",
+      "raise (TypeError)()"
+    ],
+    "silentShapes": [
+      "raise ValueError",
+      "raise get_error()",
+      "raise (x, y)",
+      "raise",
+      "raise from None"
+    ],
+    "fixDescription": "Removes the opening and closing parentheses that directly surround the exception expression in a raise statement, leaving the inner expression unchanged.",
+    "hazards": [
+      "Rewriting `raise f()` to `raise f` changes a function call to a name reference, altering runtime behavior if `f` is a function rather than a class.",
+      "If the parentheses contain a tuple like `raise (ValueError,)`, removing them yields `raise ValueError,` which is a syntax error due to the trailing comma.",
+      "When the exception expression is a subscript such as `raise Errors[0]()`, stripping parentheses results in `raise Errors[0]` which may evaluate to a non-callable, breaking implicit instantiation.",
+      "If the parentheses enclose a named tuple or structured expression like `raise (err := ValueError)()`, the rewrite loses the walrus assignment side-effect.",
+      "In contexts where the parentheses are required for line continuation or visual grouping (e.g., multi-line expressions), removing them can break parsing or alter interpretation.",
+      "If the parentheses contain a comment-attached expression like `raise ValueError()  # inline`, the fix may drop the comment if it’s attached to the parentheses.",
+      "When the raised expression is a call to a property that returns a class, e.g., `raise ExcFactory.error`, the parentheses are unnecessary but the rule may not fire; however, if it did fire on a similar pattern, removing them could change binding timing.",
+      "If the exception is a class defined locally within a function and the parentheses are part of a larger expression (e.g., `raise (LocalError())()`), the rewrite misfires and breaks nesting.",
+      "In code relying on the call to trigger `__call__` logic in a metaclass or descriptor, removing parentheses prevents that invocation.",
+      "If the parentheses are the only thing preventing a syntax error due to ambiguous precedence (e.g., `raise a or b()` vs `raise a or b`), their removal can change meaning."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0058755000000000005,
+  "summary": {
+    "programs": 8,
+    "invalid": 0,
+    "fired": 5,
+    "fixed": 0,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r2-p001",
+      "title": "Trailing Comma Syntax Error",
+      "hazard": "If the parentheses contain a tuple like `raise (ValueError,)`, removing them yields `raise ValueError,` which is a syntax error due to the trailing comma.",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: exceptions must derive from BaseException",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Truthy/Falsy Confusion",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before raise: False 1\n",
+          "stderr1": "TypeError: 'Err' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Walrus Assignment Lost",
+      "hazard": "If the parentheses enclose a named tuple or structured expression like `raise (err := ValueError)()`, the rewrite loses the walrus assignment side-effect.",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RSE102",
+            "severity": "warning",
+            "message": "Unnecessary parentheses on raised exception",
+            "span": [
+              3,
+              34
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RSE102",
+            "severity": "warning",
+            "message": "Unnecessary parentheses on raised exception",
+            "span": [
+              9,
+              30
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "File Truncation Side Effect",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RSE102",
+            "severity": "warning",
+            "message": "Unnecessary parentheses on raised exception",
+            "span": [
+              5,
+              35
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Evaluation Order and Side Effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RSE102",
+            "severity": "warning",
+            "message": "Unnecessary parentheses on raised exception",
+            "span": [
+              6,
+              20
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RSE102",
+            "severity": "warning",
+            "message": "Unnecessary parentheses on raised exception",
+            "span": [
+              12,
+              18
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Walrus in Comprehension Scope",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: 1\n",
+          "stderr1": "NameError: name 'err' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Non-File Context Manager with Write",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RSE102",
+            "severity": "warning",
+            "message": "Unnecessary parentheses on raised exception",
+            "span": [
+              11,
+              36
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'RuntimeError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'RuntimeError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Async Generator Await Ordering",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "RSE102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RSE102",
+            "severity": "warning",
+            "message": "Unnecessary parentheses on raised exception",
+            "span": [
+              3,
+              32
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Yielded: 1\n",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Yielded: 1\n",
+          "stderr1": "TypeError: 'ValueError' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

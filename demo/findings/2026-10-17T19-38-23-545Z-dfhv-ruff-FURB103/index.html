@@ -1,0 +1,168 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB103 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB103 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T19-38-23-545Z-dfhv-ruff-FURB103 · fix labelled <b>unknown</b> · 16 programs, 7 fired, 4 fixed, 1 oracle-backed finding(s) · model cost $0.0119</p>
+<div class="card"><b>Rule analysis</b><p>Flags patterns where a file is opened, written to once within a with block, then closed—suggesting replacement with pathlib.Path.write_text/write_bytes.</p><p class="mut">Fix: Replaces the with open(...) as f: f.write(...) block with Path(file_path).write_text(...) or Path(file_path).write_bytes(...) depending on mode, adding &#39;from pathlib import Path&#39; if needed.</p><details><summary>10 hazards</summary><ul><li>Removes comments attached to the &#39;with&#39; statement or &#39;open&#39; call, as the fix discards syntactic structure.</li><li>If the file path variable is reassigned after the with block but before use, the fix may evaluate it too early.</li><li>If the write argument has side effects (e.g., a function call), moving it outside the with block changes evaluation timing relative to other statements in the block.</li><li>If the file object is used elsewhere via alias (e.g., g = f; g.write(...)), the fix breaks because the alias is no longer valid.</li><li>If the mode includes flags like &#39;+&#39; (e.g., &#39;w+&#39;), the fix incorrectly assumes write-only semantics and drops reading capability.</li><li>If the encoding is specified in text mode, the fix must preserve it—but if omitted, defaults may differ across Python versions or platforms.</li><li>If the open call uses a custom opener via opener= parameter, the fix ignores it, potentially breaking filesystem virtualization.</li><li>If the with block contains multiple statements and only the last is a write, the fix still removes prior statements, altering behavior.</li><li>If the write call is guarded by a short-circuiting expression (e.g., cond and f.write(s)), the fix hoists it unconditionally.</li><li>If the file path is a complex expression (e.g., os.path.join(a, b)), the fix may duplicate its evaluation if not carefully hoisted.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix unconditionally replaces a conditional write inside an `if`-like short-circuit expression (`flag and f.write(...)`) with an unconditional `Path.write_text` call, changing the program&#39;s observable output from an empty file to one containing &#39;should not happen&#39;. This construct—guarding a write with a boolean flag—is plausible in real code, and the fix silently introduces wrong behavior by dropping the condition.">judge: real · high</span> Short-circuiting expression guards write<p class="mut">The fix unconditionally replaces a conditional write inside an `if`-like short-circuit expression (`flag and f.write(...)`) with an unconditional `Path.write_text` call, changing the program&#39;s observable output from an empty file to one containing &#39;should not happen&#39;. This construct—guarding a write with a boolean flag—is plausible in real code, and the fix silently introduces wrong behavior by dropping the condition.</p>
+<h2>Minimized program (6→5 lines)</h2><pre>flag = False
+with open(&#39;s.txt&#39;, &#39;w&#39;) as f:
+    flag and f.write(&#39;should not happen&#39;)
+with open(&#39;s.txt&#39;, &#39;r&#39;) as f:
+    print(repr(f.read()))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 15:38:33.452462839 -0400
++++ fixed.py	2026-10-17 15:38:33.605460950 -0400
+@@ -1,6 +1,6 @@
+<span class="add">+import pathlib</span>
+ flag = False
+<span class="del">-with open(&#39;s.txt&#39;, &#39;w&#39;) as f:</span>
+<span class="del">-    flag and f.write(&#39;should not happen&#39;)</span>
+<span class="add">+pathlib.Path(&#39;s.txt&#39;).write_text(&#39;should not happen&#39;)</span>
+ with open(&#39;s.txt&#39;, &#39;r&#39;) as f:
+     print(repr(f.read()))
+ import os; os.remove(&#39;s.txt&#39;)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+&#39;&#39;
+stdout after:
+&#39;should not happen&#39;</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/29452">astral-sh/ruff/issues/29452</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/26920">astral-sh/ruff/issues/26920</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/26922">astral-sh/ruff/issues/26922</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/21483">astral-sh/ruff/issues/21483</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18409">astral-sh/ruff/issues/18409</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/20785">astral-sh/ruff/issues/20785</a> · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Side effect in write argument</td><td class="mut">If the write argument has side effects (e.g., a function call), moving it outside the with</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>File object aliased</td><td class="mut">If the file object is used elsewhere via alias (e.g., g = f; g.write(...)), the fix breaks</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Multiple statements, only last is write</td><td class="mut">If the with block contains multiple statements and only the last is a write, the fix still</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Comments and docstrings on removed code</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Complex file path expression</td><td class="mut">If the file path is a complex expression (e.g., os.path.join(a, b)), the fix may duplicate</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Short-circuiting expression guards write</td><td class="mut">If the write call is guarded by a short-circuiting expression (e.g., cond and f.write(s)),</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Path variable reassigned after with block</td><td class="mut">If the file path variable is reassigned after the with block but before use, the fix may e</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable default arguments and aliasing after rewrite</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">invalid</span></td><td>Keyword-only and positional-only parameters with forward defaults</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Side effect in write argument evaluated twice due to hoist</td><td class="mut">If the write argument has side effects (e.g., a function call), moving it outside the with</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>Non-file context manager with write() but no close()</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">invalid</span></td><td>Evaluation order: write arg uses variable modified in block</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">invalid</span></td><td>Mutable default and aliasing after rewrite</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">invalid</span></td><td>Short-circuiting expression hoisted unconditionally</td><td class="mut">If the write call is guarded by a short-circuiting expression (e.g., cond and f.write(s)),</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>Mode with &#39;+&#39; incorrectly assumed write-only</td><td class="mut">If the mode includes flags like &#39;+&#39; (e.g., &#39;w+&#39;), the fix incorrectly assumes write-only s</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">invalid</span></td><td>Binary write with partial data and truncation edge</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Side effect in write argument</summary><pre>import os
+side = []
+def get_data():
+    side.append(&#39;called&#39;)
+    return b&#39;test&#39;
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    print(&#39;before write&#39;)
+    f.write(get_data())
+print(&#39;after:&#39;, side)
+os.remove(&#39;test.bin&#39;)
+</pre></details><details id="r1-p002"><summary>r1-p002 — File object aliased</summary><pre>with open(&#39;tmp.txt&#39;, &#39;w&#39;) as f:
+    g = f
+    g.write(&#39;hello&#39;)
+with open(&#39;tmp.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Multiple statements, only last is write</summary><pre>log = []
+with open(&#39;x.txt&#39;, &#39;w&#39;) as f:
+    log.append(&#39;start&#39;)
+    f.write(&#39;data&#39;)
+    log.append(&#39;end&#39;)
+print(log)
+with open(&#39;x.txt&#39;, &#39;r&#39;) as f:
+    print(repr(f.read()))
+import os; os.remove(&#39;x.txt&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Comments and docstrings on removed code</summary><pre># init
+with open(&#39;c.txt&#39;, &#39;w&#39;) as f:
+    # write payload
+    f.write(&#39;keep&#39;)  # this line matters
+# done
+with open(&#39;c.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;c.txt&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Complex file path expression</summary><pre>import os
+call_count = 0
+def path():
+    global call_count
+    call_count += 1
+    return &#39;p.txt&#39;
+with open(path(), &#39;w&#39;) as f:
+    f.write(str(call_count))
+with open(&#39;p.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+print(&#39;path called:&#39;, call_count)
+os.remove(&#39;p.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 15:38:33.187466109 -0400
++++ fixed.py	2026-10-17 15:38:33.345464159 -0400
+@@ -1,11 +1,11 @@
+ import os
+<span class="add">+import pathlib</span>
+ call_count = 0
+ def path():
+     global call_count
+     call_count += 1
+     return &#39;p.txt&#39;
+<span class="del">-with open(path(), &#39;w&#39;) as f:</span>
+<span class="del">-    f.write(str(call_count))</span>
+<span class="add">+pathlib.Path(path()).write_text(str(call_count))</span>
+ with open(&#39;p.txt&#39;, &#39;r&#39;) as f:
+     print(f.read())
+ print(&#39;path called:&#39;, call_count)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Short-circuiting expression guards write</summary><pre>flag = False
+with open(&#39;s.txt&#39;, &#39;w&#39;) as f:
+    flag and f.write(&#39;should not happen&#39;)
+with open(&#39;s.txt&#39;, &#39;r&#39;) as f:
+    print(repr(f.read()))
+import os; os.remove(&#39;s.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 15:38:33.452462839 -0400
++++ fixed.py	2026-10-17 15:38:33.605460950 -0400
+@@ -1,6 +1,6 @@
+<span class="add">+import pathlib</span>
+ flag = False
+<span class="del">-with open(&#39;s.txt&#39;, &#39;w&#39;) as f:</span>
+<span class="del">-    flag and f.write(&#39;should not happen&#39;)</span>
+<span class="add">+pathlib.Path(&#39;s.txt&#39;).write_text(&#39;should not happen&#39;)</span>
+ with open(&#39;s.txt&#39;, &#39;r&#39;) as f:
+     print(repr(f.read()))
+ import os; os.remove(&#39;s.txt&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Path variable reassigned after with block</summary><pre>name = &#39;first.txt&#39;
+with open(name, &#39;w&#39;) as f:
+    f.write(&#39;original&#39;)
+name = &#39;second.txt&#39;
+with open(name, &#39;r&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;first.txt&#39;); os.remove(&#39;second.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 15:38:33.717459568 -0400
++++ fixed.py	2026-10-17 15:38:34.116454636 -0400
+@@ -1,6 +1,6 @@
+<span class="add">+import pathlib</span>
+ name = &#39;first.txt&#39;
+<span class="del">-with open(name, &#39;w&#39;) as f:</span>
+<span class="del">-    f.write(&#39;original&#39;)</span>
+<span class="add">+pathlib.Path(name).write_text(&#39;original&#39;)</span>
+ name = &#39;second.txt&#39;
+ with open(name, &#39;r&#39;) as f:
+     print(f.read())
+</pre></details><details id="r1-p008"><summary>r1-p008 — Mutable default arguments and aliasing after rewrite</summary><pre>def log(msg, buf=[]):
+    buf.append(msg)
+    return buf
+with open(&#39;log.txt&#39;, &#39;w&#39;) as f:
+    f.write(str(log(&#39;first&#39;)))
+with open(&#39;log.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;log.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 15:38:34.320452107 -0400
++++ fixed.py	2026-10-17 15:38:34.484450074 -0400
+@@ -1,8 +1,8 @@
+<span class="add">+import pathlib</span>
+ def log(msg, buf=[]):
+     buf.append(msg)
+     return buf
+<span class="del">-with open(&#39;log.txt&#39;, &#39;w&#39;) as f:</span>
+<span class="del">-    f.write(str(log(&#39;first&#39;)))</span>
+<span class="add">+pathlib.Path(&#39;log.txt&#39;).write_text(str(log(&#39;first&#39;)))</span>
+ with open(&#39;log.txt&#39;, &#39;r&#39;) as f:
+     print(f.read())
+ import os; os.remove(&#39;log.txt&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Keyword-only and positional-only parameters with forward defaults</summary><pre>def writer(data, *, sep=&#39;\n&#39;, _ignore=print(&#39;default&#39;)):\n    with open(&#39;tmp.txt&#39;, &#39;w&#39;, encoding=&#39;utf-8&#39;) as f:\n        f.write(str(data) + sep)\nwriter(42)\nwith open(&#39;tmp.txt&#39;) as f:\n    print(repr(f.read()))\nimport os\nos.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Side effect in write argument evaluated twice due to hoist</summary><pre>counter = 0\ndef inc():\n    global counter\n    counter += 1\n    return str(counter)\nwith open(&#39;tmp.txt&#39;, &#39;w&#39;) as f:\n    f.write(inc())\n    f.write(inc())\nprint(&#39;counter:&#39;, counter)\nwith open(&#39;tmp.txt&#39;) as f:\n    print(&#39;file:&#39;, repr(f.read()))\nimport os\nos.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Non-file context manager with write() but no close()</summary><pre>class SilentWriter:\n    def __enter__(self):\n        return self\n    def __exit__(self, *exc):\n        pass\n    def write(self, data):\n        self.data = data\nwith SilentWriter() as w:\n    w.write(&#39;hello&#39;)\nprint(writer.data if hasattr(writer, &#39;data&#39;) else &#39;none&#39;)\n# Note: writer not defined; meant to show no file touched\nprint(&#39;no file created&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Evaluation order: write arg uses variable modified in block</summary><pre>x = 0\nwith open(&#39;tmp.txt&#39;, &#39;w&#39;) as f:\n    x = 1\n    f.write(str(x))\nprint(&#39;x after block:&#39;, x)\nwith open(&#39;tmp.txt&#39;) as f:\n    print(&#39;file contains:&#39;, repr(f.read()))\nimport os\nos.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Mutable default and aliasing after rewrite</summary><pre>log = []\ndef log_writer(msg, buf=log):\n    with open(&#39;tmp.txt&#39;, &#39;w&#39;) as f:\n        buf.append(msg)\n        f.write(msg)\n    return buf\nlog_writer(&#39;first&#39;)\nlog_writer(&#39;second&#39;)\nprint(&#39;log:&#39;, log)\nwith open(&#39;tmp.txt&#39;) as f:\n    print(&#39;file:&#39;, repr(f.read()))\nimport os\nos.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Short-circuiting expression hoisted unconditionally</summary><pre>enabled = False\nwith open(&#39;tmp.txt&#39;, &#39;w&#39;) as f:\n    enabled and f.write(&#39;should not happen&#39;)\nprint(&#39;enabled:&#39;, enabled)\ntry:\n    with open(&#39;tmp.txt&#39;) as f:\n        content = f.read()\n    print(&#39;file:&#39;, repr(content))\nexcept FileNotFoundError as e:\n    print(&#39;FileNotFoundError:&#39;, e)\nimport os\nif os.path.exists(&#39;tmp.txt&#39;):\n    os.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Mode with &#39;+&#39; incorrectly assumed write-only</summary><pre>with open(&#39;tmp.txt&#39;, &#39;w+&#39;) as f:\n    f.write(&#39;hello&#39;)\n    f.seek(0)\n    print(&#39;read back:&#39;, repr(f.read()))\n# After bad fix: Path(...).write_text(...) loses read ability\n# But we test actual behavior\nimport os\nos.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Binary write with partial data and truncation edge</summary><pre>data = b&#39;abcdefghij&#39;\nwith open(&#39;tmp.bin&#39;, &#39;wb&#39;) as f:\n    f.write(data[:5])  # only first 5 bytes\nwith open(&#39;tmp.bin&#39;, &#39;rb&#39;) as f:\n    got = f.read()\n    print(&#39;wrote:&#39;, repr(data[:5]))\n    print(&#39;got:&#39;, repr(got))\n    assert got == data[:5]\nimport os\nos.remove(&#39;tmp.bin&#39;)
+</pre></details></body></html>

@@ -1,0 +1,795 @@
+{
+  "runId": "2026-10-17T21-34-02-887Z-p0ib-ruff-FURB161",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB161",
+    "fixKind": "unknown",
+    "docs": "# bit-count (FURB161)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `bin(...).count(\"1\")` to perform a population count.\n\n## Why is this bad?\nIn Python 3.10, a `bit_count()` method was added to the `int` class,\nwhich is more concise and efficient than converting to a binary\nrepresentation via `bin(...)`.\n\n## Example\n```python\nx = bin(123).count(\"1\")\ny = bin(0b1111011).count(\"1\")\n```\n\nUse instead:\n```python\nx = (123).bit_count()\ny = 0b1111011.bit_count()\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe unless the argument to `bin` can be inferred as\nan instance of a type that implements the `__index__` and `bit_count` methods because this can\nchange the exception raised at runtime for an invalid argument.\n\n## Options\n- `target-version`\n\n## References\n- [Python documentation:`int.bit_count`](https://docs.python.org/3/library/stdtypes.html#int.bit_count)\n"
+  },
+  "analysis": {
+    "summary": "Flags calls to bin(x).count('1') where x is an integer expression, recommending replacement with x.bit_count().",
+    "firingShapes": [
+      "bin(a).count(\"1\")",
+      "bin(0xff).count(\"1\")",
+      "bin(len(lst)).count(\"1\")",
+      "bin(obj.method()).count(\"1\")",
+      "bin(x + y).count(\"1\")",
+      "bin(func()).count(\"1\")",
+      "bin(getattr(o, 'a')).count(\"1\")",
+      "bin(-n).count(\"1\")"
+    ],
+    "silentShapes": [
+      "bin(s).count(\"1\")",
+      "bin(None).count(\"1\")",
+      "bin(obj).count(\"1\") if hasattr(obj, '__index__') else 0",
+      "bin(expr).count('0')",
+      "bin(expr).count('1', 0, 5)"
+    ],
+    "fixDescription": "Replaces bin(X).count('1') with X.bit_count(), preserving the inner expression X exactly as it appeared.",
+    "hazards": [
+      "If X is a function call with side effects, the rewrite changes evaluation timing but not frequency—still one call—but may affect interleaving with other expressions in larger statements.",
+      "If X raises an exception (e.g., AttributeError, TypeError), the exception type and timing remain identical; however, if X returns a non-int that defines __index__ but not bit_count (e.g., custom numeric type), the rewrite will raise AttributeError where the original would succeed after bin conversion.",
+      "If X returns a float, both versions raise TypeError, but the original does so during bin() conversion while the rewrite raises AttributeError on bit_count lookup, altering the exception type.",
+      "If X returns a bool, both work (bool inherits bit_count), but the rewrite may be misleading stylistically though behaviorally equivalent.",
+      "If X is an expression whose value is used elsewhere in the same statement (e.g., in a tuple or assignment), the rewrite preserves the value and any side effects, but intermediate reuse of X is not possible since it's evaluated once in both forms.",
+      "If X is a conditional expression like a if cond else b, the rewrite preserves short-circuiting behavior identically.",
+      "If the code contains a comment between bin( and .count (e.g., bin(/* hint */x).count('1')), the autofix will drop the comment as it only preserves the inner expression.",
+      "If X is a lambda or comprehension that captures local state, the rewrite preserves capture semantics since evaluation is otherwise identical.",
+      "If X is a super() call or attribute access on a nested object (e.g., bin(self.obj.x).count('1')), the rewrite preserves the same attribute lookup chain.",
+      "If the code relies on bin(X) returning a string for further use (impossible here since .count('1') is chained), no issue arises—the intermediate string is never accessible."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.004210500000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 13,
+    "fixed": 1,
+    "disputed": 7
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Float argument changes exception type from TypeError to AttributeError",
+      "hazard": "If X returns a float, both versions raise TypeError, but the original does so during bin() conversion while the rewrite raises AttributeError on bit_count lookup, altering the exception type.",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(f()).count('1')`",
+            "span": [
+              4,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError 'float' object cannot be interpreted as an integer\nAttributeError 'float' object has no attribute 'bit_count'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError 'float' object cannot be interpreted as an integer\nAttributeError 'float' object has no attribute 'bit_count'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Conditional expression preserves short-circuiting identically",
+      "hazard": "If X is a conditional expression like a if cond else b, the rewrite preserves short-circuiting behavior identically.",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(g() if cond else h()).count('1')`",
+            "span": [
+              9,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(g() if cond else h()).count('1')`",
+            "span": [
+              14,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "h called\ng called\ng called\ng called\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "h called\ng called\ng called\ng called\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Walrus operator scoping preserved in comprehension",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(x).count('1')`",
+            "span": [
+              3,
+              67
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[[], [1]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[[], [1]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Attribute chain preserved on super() and nested object access",
+      "hazard": "If X is a super() call or attribute access on a nested object (e.g., bin(self.obj.x).count('1')), the rewrite preserves the same attribute lookup chain.",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(obj.get()).count('1')`",
+            "span": [
+              7,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(obj2.x).count('1')`",
+            "span": [
+              9,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "2\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Generator vs list: single consumption preserved",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(x).count('1')`",
+            "span": [
+              4,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "5\n[7, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n[7, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Context manager with write but no close: no interference",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(15).count('1')`",
+            "span": [
+              10,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "['4']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['4']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:34:12.949814493 -0400\n+++ fixed.py\t2026-10-17 17:34:13.111812519 -0400\n@@ -7,5 +7,5 @@\n     def __exit__(self, *args):\n         pass\n with Writable() as w:\n-    w.write(str(bin(15).count('1')))\n+    w.write(str((15).bit_count()))\n print(w.data)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Star-imports and module-level side effects: no disruption",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(VALUE).count('1')`",
+            "span": [
+              7,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exception inside rewritten code: finally/else and chaining preserved",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(bad()).count('1')`",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "RuntimeError worse\nValueError bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "RuntimeError worse\nValueError bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Custom Truthiness and Identity",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(a).count('1')`",
+            "span": [
+              11,
+              4
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(b).count('1')`",
+            "span": [
+              13,
+              4
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(c).count('1')`",
+            "span": [
+              15,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a_bool=False a_len=1 a_is_none=False\nb_bool=False b_len=0 b_is_none=False\nc_bool=True c_len=1 c_is_none=False\n",
+          "stderr1": "TypeError: 'C' object cannot be interpreted as an integer",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a_bool=False a_len=1 a_is_none=False\nb_bool=False b_len=0 b_is_none=False\nc_bool=True c_len=1 c_is_none=False\n",
+          "stderr1": "TypeError: 'C' object cannot be interpreted as an integer",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Boolean Return Value",
+      "hazard": "If X returns a bool, both work (bool inherits bit_count), but the rewrite may be misleading stylistically though behaviorally equivalent.",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Function Call Side Effects Evaluation Timing",
+      "hazard": "If X is a function call with side effects, the rewrite changes evaluation timing but not frequency—still one call—but may affect interleaving with other expressions in larger statements.",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(log(3)).count('1')`",
+            "span": [
+              7,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Start: []\nAfter bin(log(3)).count('1'): ['called 3']\nError: AttributeError: 'str' object has no attribute 'bit_count'\nAfter bin(log(5)).bit_count(): ['reset', 'called 5']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Start: []\nAfter bin(log(3)).count('1'): ['called 3']\nError: AttributeError: 'str' object has no attribute 'bit_count'\nAfter bin(log(5)).bit_count(): ['reset', 'called 5']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Evaluation Order and Side Effects in Larger Expressions",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(g()).count('1')`",
+            "span": [
+              9,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(f()).count('1')`",
+            "span": [
+              12,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "f then g: side=['f', 'g'], result=5\nbin(f) then g: side=['f', 'g'], result=7\n",
+          "stderr1": "AttributeError: 'str' object has no attribute 'bit_count'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f then g: side=['f', 'g'], result=5\nbin(f) then g: side=['f', 'g'], result=7\n",
+          "stderr1": "AttributeError: 'str' object has no attribute 'bit_count'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Conditional Expression Short-Circuiting",
+      "hazard": "If X is a conditional expression like a if cond else b, the rewrite preserves short-circuiting behavior identically.",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(a() if cond else b()).count('1')`",
+            "span": [
+              6,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(a() if cond else b()).count('1')`",
+            "span": [
+              12,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Testing bin(a() if cond else b()).count('1'):\nb called\nTesting bin(a() if cond else b()).count('1'):\na called\nTesting bin(a() if cond else b()).bit_count():\nb called\n  Error: AttributeError: 'str' object has no attribute 'bit_count'\nTesting bin(a() if cond else b()).bit_count():\na called\n  Error: AttributeError: 'str' object has no attribute 'bit_count'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Testing bin(a() if cond else b()).count('1'):\nb called\nTesting bin(a() if cond else b()).count('1'):\na called\nTesting bin(a() if cond else b()).bit_count():\nb called\n  Error: AttributeError: 'str' object has no attribute 'bit_count'\nTesting bin(a() if cond else b()).bit_count():\na called\n  Error: AttributeError: 'str' object has no attribute 'bit_count'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Walrus and Comprehension Scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Runtime Type Annotations and Typing-Only Imports",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(x).count('1')`",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB161",
+            "severity": "warning",
+            "message": "Use of `bin(process.__annotations__['return']).count('1')`",
+            "span": [
+              7,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "process(5) = 2\nAnnotations: {'x': <class 'int'>, 'return': <class 'int'>}\nError checking annotation: TypeError: 'type' object cannot be interpreted as an integer\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "process(5) = 2\nAnnotations: {'x': <class 'int'>, 'return': <class 'int'>}\nError checking annotation: TypeError: 'type' object cannot be interpreted as an integer\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Pathlib vs os.path Behavior",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "FURB161",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    }
+  ]
+}

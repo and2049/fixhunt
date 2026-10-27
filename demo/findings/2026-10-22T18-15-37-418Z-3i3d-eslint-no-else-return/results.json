@@ -1,0 +1,659 @@
+{
+  "runId": "2026-10-22T18-15-37-418Z-3i3d-eslint-no-else-return",
+  "tool": "eslint",
+  "ext": "js",
+  "version": "9.39.5",
+  "rule": {
+    "tool": "eslint",
+    "rule": "no-else-return",
+    "fixKind": "safe",
+    "docs": "Rule: no-else-return\nFixable: code\nType: suggestion\nDeprecated: no\nDescription: Disallow `else` blocks after `return` statements in `if` statements\nDocs: https://eslint.org/docs/latest/rules/no-else-return\n\n---\ntitle: no-else-return\nrule_type: suggestion\n---\n\n\n\nIf an `if` block contains a `return` statement, the `else` block becomes unnecessary. Its contents can be placed outside of the block.\n\n```js\nfunction foo() {\n    if (x) {\n        return y;\n    } else {\n        return z;\n    }\n}\n```\n\n## Rule Details\n\nThis rule is aimed at highlighting an unnecessary block of code following an `if` containing a `return` statement. As such, it will warn when it encounters an `else` following a chain of `if`s, all of them containing a `return` statement.\n\nExamples of **incorrect** code for this rule:\n\n::: incorrect\n\n```js\n/*eslint no-else-return: \"error\"*/\n\nfunction foo1() {\n    if (x) {\n        return y;\n    } else {\n        return z;\n    }\n}\n\nfunction foo2() {\n    if (x) {\n        return y;\n    } else {\n        const t = \"foo\";\n    }\n}\n\nfunction foo3() {\n    if (error) {\n        return 'It failed';\n    } else {\n        if (loading) {\n            return \"It's still loading\";\n        }\n    }\n}\n\n// Two warnings for nested occurrences\nfunction foo4() {\n    if (x) {\n        if (y) {\n            return y;\n        } else {\n            return x;\n        }\n    } else {\n        return z;\n    }\n}\n```\n\n:::\n\nExamples of **correct** code for this rule:\n\n::: correct\n\n```js\n/*eslint no-else-return: \"error\"*/\n\nfunction foo1() {\n    if (x) {\n        return y;\n    }\n\n    return z;\n}\n\nfunction foo2() {\n    if (x) {\n        return y;\n    }\n\n    const t = \"foo\";\n}\n\nfunction foo3() {\n    if (error) {\n        return 'It failed';\n    }\n\n    if (loading) {\n        return \"It's still loading\";\n    }   \n}\n\nfunction foo4() {\n    if (x) {\n        if (y) {\n            return y;\n        }\n\n        return x;\n    }\n\n    return z;    \n}\n\nfunction foo5() {\n  if (x) {\n    const t = \"foo\";\n  } else {\n    return y\n  }\n}\n```\n\n:::\n\n## Options\n\n### allowElseIf\n\nThis rule has an object option:\n\n* `allowElseIf: true` (default) - If true, allows `else if` blocks after a `return`\n\nExamples of **correct** code for the default `{\"allowElseIf\": true}` option:\n\n::: correct\n\n```js\n/*eslint no-else-return: [\"error\", {allowElseIf: true}]*/\n\nfunction foo() {\n    if (error) {\n        return 'It failed';\n    } else if (loading) {\n        return \"It's still loading\";\n    }\n}\n\n// Using multiple `if` statements instead of `else if` is also allowed\nfunction foo2() {\n    if (error) {\n        return 'It failed';\n    }\n  \n    if (loading) {\n        return \"It's still loading\";\n    }\n}\n```\n\n:::\n\nExamples of **incorrect** code for the `{\"allowElseIf\": false}` option:\n\n::: incorrect\n\n```js\n/*eslint no-else-return: [\"error\", {allowElseIf: false}]*/\n\nfunction foo() {\n    if (error) {\n        return 'It failed';\n    } else if (loading) {\n        return \"It's still loading\";\n    }\n}\n```\n\n:::\n\nExamples of **correct** code for the `{\"allowElseIf\": false}` option:\n\n::: correct\n\n```js\n/*eslint no-else-return: [\"error\", {allowElseIf: false}]*/\n\nfunction foo() {\n    if (error) {\n        return 'It failed';\n    }\n\n    if (loading) {\n        return \"It's still loading\";\n    }\n}\n```\n\n:::\n"
+  },
+  "analysis": {
+    "summary": "The rule flags `else` blocks immediately following an `if` block that contains a `return` statement.",
+    "firingShapes": [
+      "if (a) { return b; } else { c; }",
+      "if (x) { return y; } else { return z; }",
+      "if (err) { return 'fail'; } else { if (load) { return 'wait'; } }",
+      "if (p) { if (q) { return r; } else { return s; } } else { return t; }"
+    ],
+    "silentShapes": [
+      "if (a) { return b; } c;",
+      "if (x) { return y; } if (z) { return w; }",
+      "if (e) { return 'f'; } else if (l) { return 's'; }",
+      "function f() { if (x) { return y; } else { return z; } }"
+    ],
+    "fixDescription": "Removes the `else` block and places its contents directly after the `if` block, preserving indentation and statements.",
+    "hazards": [
+      "The rewrite fails when the `else` block contains a `break` or `continue` statement, as these are only valid inside loops and would cause a syntax error when moved outside.",
+      "Moving a `throw` statement from the `else` block changes control flow by skipping any `finally` blocks that would have been executed had the `else` remained within the original function scope.",
+      "If the `else` block declares a function using a function declaration, hoisting behavior changes because the function is no longer conditionally defined and may be accessible earlier than intended.",
+      "When the `else` block contains a `var` declaration, the variable becomes function-scoped and may be accessed before the `if` block due to hoisting, altering timing-dependent behavior.",
+      "Labels inside the `else` block become invalid after the rewrite if the surrounding context is not a loop or switch, causing a syntax error due to misplaced label usage.",
+      "The rewrite incorrectly handles empty `else` blocks by leaving an unnecessary empty block or semicolon, which may affect automatic semicolon insertion in edge cases involving line breaks.",
+      "If the `else` block contains a `debugger` statement, its execution timing relative to prior expressions in the `if` block remains the same, but surrounding tooling or profiling that depends on block structure may behave differently.",
+      "Comments attached to the `else` keyword or braces may be lost during the rewrite, as the autofix typically operates on syntactic tokens and does not preserve comment attachment in all formatter contexts."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.003771,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 12,
+    "fixed": 12,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hoisting vulnerability from var redeclaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-22T18-15-37-418Z-3i3d-eslint-no-else-return/r1-p001/orig.js:3\n  for (let i = 0; i;; break) {\n                    ^\n\nSyntaxError: Unexpected token ';'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Comment loss on else keyword",
+      "hazard": "Comments attached to the `else` keyword or braces may be lost during the rewrite",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":7,\"column\":3,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":10,\"endColumn\":4,\"fix\":{\"range\":[0,464],\"text\":\"function logValue(flag) {\\n  const out = [];\\n  if (flag) {                  // Enter condition\\n    return 42;                 // Magic number\\n  } /* ignore */               // Comment on brace\\n                              // Brace with potential comment loss\\n    /* preserved */            // This should survive\\n    out.push('hi');\\n  \\n  out.push(flag ? 't' : 'f');\\n  return out.join('|');\\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              7,
+              3
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "42\nhi|f\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\nhi|f\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:15:49.613714250 -0400\n+++ fixed.js\t2026-10-22 14:15:53.579829312 -0400\n@@ -3,11 +3,10 @@\n   if (flag) {                  // Enter condition\n     return 42;                 // Magic number\n   } /* ignore */               // Comment on brace\n-  else                         // <- Critical: comment on else keyword\n-  {                            // Brace with potential comment loss\n+                              // Brace with potential comment loss\n     /* preserved */            // This should survive\n     out.push('hi');\n-  }\n+  \n   out.push(flag ? 't' : 'f');\n   return out.join('|');\n }\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Empty else block semicolon hazard",
+      "hazard": "The rewrite incorrectly handles empty `else` blocks by leaving an unnecessary empty block or semicolon",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "badstring\nok5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Label interaction with nested return",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":7,\"column\":10,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":9,\"endColumn\":6,\"fix\":{\"range\":[0,436],\"text\":\"function process(data) {\\n  outer: for (let i = 0; i < 3; i++) {\\n    if (data[i] === undefined) { continue outer; }\\n    if (data[i] === null) {    // Trigger point\\n      return i * 2;            // Returns from loop\\n    }                          \\n                         // Hazard: else after return\\n      break outer;             // Breaks labeled loop\\n    \\n    console.log('skipped', i); // Should not print\\n  }\\n  return -1;\\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              7,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "-1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "-1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:15:49.615714307 -0400\n+++ fixed.js\t2026-10-22 14:15:53.018812963 -0400\n@@ -4,9 +4,9 @@\n     if (data[i] === null) {    // Trigger point\n       return i * 2;            // Returns from loop\n     }                          \n-    else {                     // Hazard: else after return\n+                         // Hazard: else after return\n       break outer;             // Breaks labeled loop\n-    }\n+    \n     console.log('skipped', i); // Should not print\n   }\n   return -1;\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Var hoisting timing alteration",
+      "hazard": "When the `else` block contains a `var` declaration, the variable becomes function-scoped and may be accessed before the `if` block due to hoisting",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":6,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":10,\"endColumn\":4,\"fix\":{\"range\":[0,354],\"text\":\"function timingTest(val) {\\n  console.log('start:', typeof y); // Hazard: accessing hoisted var\\n  if (val > 0) {                   // Trigger: if with return\\n    return y * 2;\\n  }                                \\n                             // Else with var decl\\n    var y = 5;                     // Hoisted to top\\n    y += val;\\n    return y;\\n  \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              6,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "start: undefined\nNaN\nstart: undefined\n4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "start: undefined\nNaN\nstart: undefined\n4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:15:49.616714336 -0400\n+++ fixed.js\t2026-10-22 14:15:53.593829720 -0400\n@@ -3,11 +3,11 @@\n   if (val > 0) {                   // Trigger: if with return\n     return y * 2;\n   }                                \n-  else {                           // Else with var decl\n+                             // Else with var decl\n     var y = 5;                     // Hoisted to top\n     y += val;\n     return y;\n-  }\n+  \n }\n console.log(timingTest(3));\n console.log(timingTest(-1));\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comment attachment on moved code",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":6,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":12,\"endColumn\":4,\"fix\":{\"range\":[0,546],\"text\":\"function processFlag(mode) {\\n  const log = [];\\n  if (mode === 'fast') {         // fast path\\n    return 100;                  // <- value 100\\n  }                              \\n                           // <- Hazard: comment-rich else\\n    /* step 1 */                 // Comment on statement\\n    log.push('start');           // inline comment\\n    /* step 2 */                 \\n    mode.toUpperCase();          // side effect\\n    return log.join('|');        \\n  \\n  log.push('end');               // Should not execute\\n  return log.length;\\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              6,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "100\nstart\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "100\nstart\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:15:49.616714336 -0400\n+++ fixed.js\t2026-10-22 14:15:51.979782756 -0400\n@@ -3,13 +3,13 @@\n   if (mode === 'fast') {         // fast path\n     return 100;                  // <- value 100\n   }                              \n-  else {                         // <- Hazard: comment-rich else\n+                           // <- Hazard: comment-rich else\n     /* step 1 */                 // Comment on statement\n     log.push('start');           // inline comment\n     /* step 2 */                 \n     mode.toUpperCase();          // side effect\n     return log.join('|');        \n-  }\n+  \n   log.push('end');               // Should not execute\n   return log.length;\n }\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Sparse array interaction with else rewrite",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":7,\"column\":10,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":9,\"endColumn\":6,\"fix\":{\"range\":[0,390],\"text\":\"function sparseCheck(arr) {\\n  let sum = 0;\\n  for (let i = 0; i < arr.length; i++) {\\n    if (arr[i] === undefined) {  // Trigger: hole detection\\n      return sum;                // Returns early on hole\\n    }                            \\n                           // Hazard: else after return\\n      sum += arr[i] || 0;        // Would skip if rewritten poorly\\n    \\n  }\\n  return sum;\\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              7,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n6\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n6\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:15:49.660715606 -0400\n+++ fixed.js\t2026-10-22 14:15:53.567828962 -0400\n@@ -4,9 +4,9 @@\n     if (arr[i] === undefined) {  // Trigger: hole detection\n       return sum;                // Returns early on hole\n     }                            \n-    else {                       // Hazard: else after return\n+                           // Hazard: else after return\n       sum += arr[i] || 0;        // Would skip if rewritten poorly\n-    }\n+    \n   }\n   return sum;\n }\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "__proto__ key interference in object mutation",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":5,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":8,\"endColumn\":4,\"fix\":{\"range\":[0,315],\"text\":\"function protoTest(obj) {\\n  if ('__proto__' in obj) {      // Trigger: proto check\\n    return obj.__proto__;        // Returns prototype\\n  }                              \\n                           // Hazard: else block\\n    obj.custom = 'added';        // Mutates input\\n    return obj;                  \\n  \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              5,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "before: undefined\nafter: undefined\nresult: undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "before: undefined\nafter: undefined\nresult: undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:15:52.255790779 -0400\n+++ fixed.js\t2026-10-22 14:15:56.205906079 -0400\n@@ -2,10 +2,10 @@\n   if ('__proto__' in obj) {      // Trigger: proto check\n     return obj.__proto__;        // Returns prototype\n   }                              \n-  else {                         // Hazard: else block\n+                           // Hazard: else block\n     obj.custom = 'added';        // Mutates input\n     return obj;                  \n-  }\n+  \n }\n const map = { a: 1 };\n console.log('before:', map.custom);\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Strict vs Sloppy Mode Semantics Hazard",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":5,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":9,\"endColumn\":4,\"fix\":{\"range\":[31,199],\"text\":\"function test(x) {\\n  if (x === 0) { return \\\"zero\\\"; }\\n   \\n    try { eval(\\\"arguments[0] = 99\\\"); }\\n    catch(e) { result.push(e.message); }\\n    result.push(x);\\n  \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              5,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:07.021227045 -0400\n+++ fixed.js\t2026-10-22 14:16:10.442330153 -0400\n@@ -2,11 +2,11 @@\n let result = [];\n function test(x) {\n   if (x === 0) { return \"zero\"; }\n-  else { \n+   \n     try { eval(\"arguments[0] = 99\"); }\n     catch(e) { result.push(e.message); }\n     result.push(x);\n-  }\n+  \n }\n test(5);\n test(0);\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "This Binding: Arrow vs Function Hazard",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":5,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":5,\"endColumn\":28,\"fix\":{\"range\":[94,209],\"text\":\"function wrapper(fn) {\\n  if (typeof fn === \\\"function\\\") { return fn.call({val: 99}); }\\n   logs.push(fn()); \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              5,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "none\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "none\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:07.022227075 -0400\n+++ fixed.js\t2026-10-22 14:16:10.444330214 -0400\n@@ -2,7 +2,7 @@\n let logs = [];\n function wrapper(fn) {\n   if (typeof fn === \"function\") { return fn.call({val: 99}); }\n-  else { logs.push(fn()); }\n+   logs.push(fn()); \n }\n wrapper(obj.method);\n wrapper(obj.arrow);\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Break/Continue Outside Loop Hazard",
+      "hazard": "The rewrite fails when the `else` block contains a `break` or `continue` statement, as these are only valid inside loops and would cause a syntax error when moved outside.",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-22T18-15-37-418Z-3i3d-eslint-no-else-return/r2-p003/orig.js:2\n  if (false) { return 1; }\n               ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Regular Expressions: Escapes, Unicode Flag, LastIndex Hazard",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":4,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":4,\"endColumn\":54,\"fix\":{\"range\":[51,168],\"text\":\"function testChar(ch) {\\n  if (!re.test(ch)) { return false; }\\n   logs.push(re.lastIndex); re.lastIndex = 0; \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              4,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1,1,1,2,1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1,1,1,2,1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:07.023227105 -0400\n+++ fixed.js\t2026-10-22 14:16:09.856312436 -0400\n@@ -1,7 +1,7 @@\n let str = \"aßç🌟d\", logs = [], re = /[a-zßç🌟]/gu;\n function testChar(ch) {\n   if (!re.test(ch)) { return false; }\n-  else { logs.push(re.lastIndex); re.lastIndex = 0; }\n+   logs.push(re.lastIndex); re.lastIndex = 0; \n }\n for (const c of str) testChar(c);\n console.log(logs.join(\",\"));\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Debugger Statement Timing Hazard",
+      "hazard": "If the `else` block contains a `debugger` statement, its execution timing relative to prior expressions in the `if` block remains the same, but surrounding tooling or profiling that depends on block s",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":4,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":4,\"endColumn\":35,\"fix\":{\"range\":[14,113],\"text\":\"function check(val) {\\n  if (val < 0) { log += \\\"neg\\\"; return; }\\n   debugger; log += \\\"pos\\\"; \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              4,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "negpos\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "negpos\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:07.024227135 -0400\n+++ fixed.js\t2026-10-22 14:16:11.531363129 -0400\n@@ -1,7 +1,7 @@\n let log = \"\";\n function check(val) {\n   if (val < 0) { log += \"neg\"; return; }\n-  else { debugger; log += \"pos\"; }\n+   debugger; log += \"pos\"; \n }\n check(-1);\n check(1);\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Empty Else Block Semicolon Insertion Hazard",
+      "hazard": "The rewrite incorrectly handles empty `else` blocks by leaving an unnecessary empty block or semicolon, which may affect automatic semicolon insertion in edge cases involving line breaks.",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-22T18-15-37-418Z-3i3d-eslint-no-else-return/r2-p006/orig.js:3\nif (x === 1) { return } else {}\n               ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Getters, Setters and Object.defineProperty Side Effects Hazard",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":9,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":9,\"endColumn\":26,\"fix\":{\"range\":[167,253],\"text\":\"function test() {\\n  if (obj.prop > 5) { return obj.prop; }\\n   obj.prop = 20; \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              9,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "get|get|10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "get|get|10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:07.064228337 -0400\n+++ fixed.js\t2026-10-22 14:16:11.613365615 -0400\n@@ -6,7 +6,7 @@\n });\n function test() {\n   if (obj.prop > 5) { return obj.prop; }\n-  else { obj.prop = 20; }\n+   obj.prop = 20; \n }\n test();\n console.log(log.join(\"|\") + \"|\" + val);\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Numeric/String Coercion: + vs Template Literal Hazard",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "no-else-return",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-else-return",
+            "severity": "{\"ruleId\":\"no-else-return\",\"severity\":2,\"message\":\"Unnecessary 'else' after 'return'.\",\"line\":5,\"column\":8,\"nodeType\":\"BlockStatement\",\"messageId\":\"unexpected\",\"endLine\":5,\"endColumn\":40,\"fix\":{\"range\":[86,178],\"text\":\"function add(x) {\\n  if (x === 2) { return x + 3; }\\n   results.push(String(x) + 3); \\n}\"}}",
+            "message": "Unnecessary 'else' after 'return'.",
+            "span": [
+              5,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "523\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "523\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:07.079228788 -0400\n+++ fixed.js\t2026-10-22 14:16:11.734369283 -0400\n@@ -2,7 +2,7 @@\n let results = [];\n function add(x) {\n   if (x === 2) { return x + 3; }\n-  else { results.push(String(x) + 3); }\n+   results.push(String(x) + 3); \n }\n results.push(add(2));\n add(obj);\n"
+      }
+    }
+  ]
+}

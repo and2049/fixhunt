@@ -1,0 +1,175 @@
+{
+  "id": "clang-tidy",
+  "name": "clang-tidy",
+  "language": "cpp",
+  "ext": "cpp",
+  "repo": "llvm/llvm-project",
+  "sandboxImage": "gcc:14",
+  "docsFence": "cpp",
+  "runnerHint": "clang++ -std=c++20 file.cpp && ./a.out",
+  "vars": {
+    "TIDY": {
+      "env": "CLANG_TIDY",
+      "candidates": [
+        "clang-tidy",
+        "clang-tidy-21",
+        "clang-tidy-20",
+        "clang-tidy-19",
+        "clang-tidy-18"
+      ],
+      "default": "clang-tidy"
+    },
+    "CXX": {
+      "env": "CLANGXX",
+      "candidates": [
+        "clang++",
+        "clang++-21",
+        "clang++-20",
+        "clang++-19",
+        "clang++-18"
+      ],
+      "default": "clang++"
+    },
+    "CXXFLAGS": {
+      "env": "CXXFLAGS",
+      "default": "-std=c++20 -Wall",
+      "split": true
+    },
+    "DOCS": {
+      "env": "CLANG_TIDY_DOCS",
+      "default": "~/dev/llvm-project/clang-tools-extra/docs/clang-tidy/checks"
+    }
+  },
+  "version": {
+    "cmd": [
+      "{TIDY}",
+      "--version"
+    ],
+    "regex": "(?:LLVM|clang-tidy) version ([\\w.-]+)"
+  },
+  "rule": {
+    "split": "^(?<group>[^-]+)-(?<name>.+)$",
+    "docs": {
+      "file": "{DOCS}/{rule.group}/{rule.name}.rst",
+      "url": "https://raw.githubusercontent.com/llvm/llvm-project/main/clang-tools-extra/docs/clang-tidy/checks/{rule.group}/{rule.name}.rst",
+      "prefix": "Check: {rule}\n\n",
+      "fallback": "clang-tidy check {rule}. No documentation found; infer from the name."
+    },
+    "fixKind": {
+      "default": "unknown"
+    }
+  },
+  "lint": {
+    "cmd": [
+      "{TIDY}",
+      "--config={}",
+      "-checks=-*,{rule}",
+      "--quiet",
+      "{file}",
+      "--",
+      "{CXXFLAGS}"
+    ],
+    "parse": {
+      "format": "regex",
+      "pattern": "^[^\\n]*?:(?<line>\\d+):(?<col>\\d+): (?<severity>warning|error): (?<message>.*?) \\[(?<rule>[\\w.-]+)\\]$",
+      "fix": "unknown"
+    },
+    "crash": {
+      "okExit": [
+        0,
+        1
+      ],
+      "stderrRegex": "PLEASE submit a bug report|Assertion|Stack dump|Segmentation fault"
+    }
+  },
+  "fix": {
+    "cmd": [
+      "{TIDY}",
+      "--config={}",
+      "-checks=-*,{rule}",
+      "--fix",
+      "--quiet",
+      "{file}",
+      "--",
+      "{CXXFLAGS}"
+    ],
+    "crash": {
+      "okExit": [
+        0,
+        1
+      ],
+      "stderrRegex": "PLEASE submit a bug report|Assertion|Stack dump|Segmentation fault"
+    },
+    "perFile": true,
+    "fail": {
+      "stderrRegex": "\\d+ errors? generated\\."
+    }
+  },
+  "check": {
+    "cmd": [
+      "{CXX}",
+      "{CXXFLAGS}",
+      "-fsyntax-only",
+      "{file}"
+    ],
+    "timeoutMs": 60000,
+    "isolate": true,
+    "sandboxCmd": [
+      "g++",
+      "{CXXFLAGS}",
+      "-fsyntax-only",
+      "{file}"
+    ]
+  },
+  "run": {
+    "pre": [
+      "{CXX}",
+      "{CXXFLAGS}",
+      "-O0",
+      "-fsanitize=undefined",
+      "-fno-sanitize-recover=undefined",
+      "-o",
+      "{exe}",
+      "{file}"
+    ],
+    "cmd": [
+      "./{exe}"
+    ],
+    "sandboxCmd": [
+      "sh",
+      "-c",
+      "g++ {CXXFLAGS} -O0 -fsanitize=undefined -fno-sanitize-recover=undefined -o {exe} {file} || { echo 'compile failed' >&2; exit 97; }; ./{exe}"
+    ],
+    "timeoutMs": 5000
+  },
+  "repro": [
+    "{CXX} {CXXFLAGS} -o prog {file} && ./prog",
+    "{TIDY} -checks=-*,{rule} --fix {file} -- {CXXFLAGS}",
+    "{CXX} {CXXFLAGS} -o prog {file} && ./prog"
+  ],
+  "catalog": {
+    "cmd": [
+      "bun",
+      "tools/clang-tidy.catalog.ts"
+    ],
+    "parse": {
+      "items": "$",
+      "rule": "rule",
+      "name": "name",
+      "fixKind": "fixKind",
+      "languages": [
+        "cpp"
+      ]
+    }
+  },
+  "config": {
+    "files": [
+      ".clang-tidy"
+    ],
+    "format": "yaml",
+    "key": "Checks",
+    "default": [
+      "clang-analyzer-*"
+    ]
+  }
+}

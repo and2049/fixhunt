@@ -1,0 +1,27 @@
+{
+  "summary": "Flags loops where a set is directly modified via methods like add(), remove(), discard(), pop(), clear(), or update() while iterating over that same set.",
+  "firingShapes": [
+    "s = {1}; for x in s: s.add(x)",
+    "t = {'a'}; for y in t: t.remove(y)",
+    "u = {1,2}; for z in u: u.discard(z)",
+    "v = {3}; for w in v: v.pop()",
+    "x = {4,5}; for p in x: x.clear()",
+    "y = {6}; for q in y: y.update({q+1})"
+  ],
+  "silentShapes": [
+    "s = {1}; for x in s.copy(): s.add(x)",
+    "t = {'a'}; lst = list(t); for y in lst: t.remove(y)",
+    "u = {1,2}; iterator = iter(u); for z in iterator: u.discard(z)"
+  ],
+  "fixDescription": "Rewrites the for-loop header from 'for var in set_var:' to 'for var in set_var.copy():', leaving the loop body unchanged.",
+  "hazards": [
+    "The rewrite evaluates set_var.copy() at loop start, so if set_var is reassigned before the loop begins, the original code would iterate over the reassigned set while the fix iterates over a copy of the original set, changing which elements are processed.",
+    "If set_var is a property or item access (e.g., obj.attr or arr[i]), the fix evaluates it once for the copy, whereas the original re-evaluates it on each iteration, potentially iterating over a different object if the property/item changes during looping.",
+    "When the set variable is aliased (another name refers to the same set), modifications via the alias in the loop body affect the original set, but the fix iterates over a snapshot, so the loop may terminate earlier or later than in the original code.",
+    "If the loop body contains a break, continue, or return statement, the fix may execute fewer iterations than the original would have before the error, altering side effects that depend on the number of iterations.",
+    "Any expressions in the loop header beyond the set variable (e.g., in a nested loop or complex target list) are not adjusted by the fix, so malformed headers could become invalid or change meaning after rewriting.",
+    "The fix does not preserve trailing comments on the for line; they are dropped because the entire header is replaced.",
+    "If the set variable is used in a comprehension or lambda within the loop body that captures the variable by reference, the fix’s use of a copy may cause those inner functions to see a different set than the original code would have.",
+    "When the set is empty, the fix still evaluates .copy() (producing an empty set), which is behaviorally equivalent, but if .copy() is overridden in a subclass to have side effects, those side effects occur where none existed before."
+  ]
+}

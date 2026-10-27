@@ -1,0 +1,294 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/useCollapsedIf — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/useCollapsedIf <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-59-45-406Z-livv-biome-style_useCollapsedIf · fix labelled <b>safe</b> · 16 programs, 13 fired, 11 fixed, 0 oracle-backed finding(s) · model cost $0.0037</p>
+<div class="card"><b>Rule analysis</b><p>Flags nested if statements where the inner if is the sole statement in the outer if&#39;s body.</p><p class="mut">Fix: Rewrites the nested if statements into a single if with a logical AND (&amp;&amp;) condition, preserving the inner block&#39;s statements exactly as they were.</p><details><summary>11 hazards</summary><ul><li>The rewrite changes evaluation order: in the original, `b` is only evaluated if `a` is truthy, but in the fixed version `b` is always evaluated regardless of `a`&#39;s value, which can cause errors if `b` has side effects or throws when `a` is falsy.</li><li>If `a` is an expression with side effects (e.g., a function call), the original evaluates it once, but the fixed version may evaluate it twice due to how `&amp;&amp;` short-circuiting works in some contexts—though actually `a &amp;&amp; b` still evaluates `a` only once, so this hazard is invalid; instead, consider: if `a` is falsy, the original skips evaluating `b`, but the fixed version evaluates `b` unconditionally in the `&amp;&amp;` expression, leading to potential errors.</li><li>Comments inside the outer if block but outside the inner if (e.g., after the opening brace and before the inner if) are removed by the autofix because the fix collapses the entire block into a single line, discarding intermediate comments.</li><li>If the inner block contains a `break` statement, the original `break` applies to the nearest enclosing loop or switch, but after rewriting, the context may change if the if statement is nested within other constructs, potentially altering which construct the `break` targets.</li><li>If the inner block contains a `continue` statement, similar to `break`, its target loop may be misinterpreted after the structural change, especially if the if statement is not directly inside a loop.</li><li>If the inner block contains a `return` statement, the function return behavior is preserved, but if the outer if is part of a larger expression or statement, the control flow change could affect surrounding code—though `return` exits the function immediately, so this is less likely; however, in arrow functions or edge cases with commas, it might matter.</li><li>If the inner block declares a variable with `let` or `const`, the original confines that variable to the inner block&#39;s scope, but after rewriting into a single if block, the variable remains in the same scope (the outer if&#39;s block), so scoping is preserved—wait, no: in both cases, the variable is scoped to the outer if&#39;s block because the inner block is the only statement; thus, no change. Instead, consider: if the inner block is empty (though the rule requires a statement), but it&#39;s not. Another idea: if the condition `a` or `b` involves `this` or `super` in a method, the evaluation context is unchanged, so no issue. Focus on comments and evaluation order.</li><li>If the outer if block has trailing comments after the closing brace, they are unaffected, but if there are comments between the outer `{` and the inner `if`, they are lost.</li><li>In rare cases involving ASI (Automatic Semicolon Insertion), rewriting a nested if into a single line could alter semicolon insertion if the surrounding code relies on newlines, though this is highly speculative and unlikely in practice.</li><li>If the inner if statement is labeled (e.g., `inner: if (b) { ... }`), the label is discarded in the fix because the collapsed form does not retain labels, breaking any `break inner;` or `continue inner;` references.</li><li>If the inner block contains a debugger statement, it is preserved, but if the autofix process mishandles it due to formatting, it could be dropped—though formatters usually preserve it.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation order changed due to &amp;&amp;</td><td class="mut">In the original, `b` is only evaluated if `a` is truthy, but in the fixed version `b` is a</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Comment removed by autofix</td><td class="mut">Comments inside the outer if block but outside the inner if are removed by the autofix.</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Temporal Dead Zone hazard via let scoping misunderstanding</td><td class="mut">Although let scoping is preserved, this program checks for mistaken assumptions about hois</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Regex lastIndex side effect with g flag</td><td class="mut">Merging conditions with &amp;&amp; causes the regex to be tested twice, advancing lastIndex and sk</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Side effect duplication in merged condition</td><td class="mut">The condition `b()` is evaluated once in original but twice in fixed version due to &amp;&amp;, ca</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Async/await ordering changed by &amp;&amp; evaluation</td><td class="mut">In `if (a) { if (await b()) { ... } }`, the await is only called if a is true, but `if (a </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Function declaration in block affected by scoping perception</td><td class="mut">Function declarations inside blocks are hoisted to the function scope, but the collapse ma</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generator yield position affected by early exit</td><td class="mut">The collapse does not change yield position, but we test interaction with loops and re-ent</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Comment loss between braces</td><td class="mut">If the inner block contains a `break` statement, the original `break` applies to the neare</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Function declaration in block scoping</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Label/break/continue/finally control flow</td><td class="mut">label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Debugger statement preservation</td><td class="mut">If the inner block contains a debugger statement, it is preserved, but if the autofix proc</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Strict vs sloppy mode semantics</td><td class="mut">strict vs sloppy mode semantics</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Falsy outer condition skipping inner eval</td><td class="mut">if `a` is falsy, the original skips evaluating `b`, but the fixed version evaluates `b` un</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Arguments object and rest parameters interaction</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Comment loss between outer { and inner if</td><td class="mut">If the outer if block has trailing comments after the closing brace, they are unaffected, </td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Evaluation order changed due to &amp;&amp;</summary><pre>let a = false;
+let bEval = 0;
+function b() { bEval++; return true; }
+if (a) { if (b()) { console.log(&#39;inner&#39;); } }
+console.log(&#39;bEval:&#39;, bEval);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:00.026457539 -0400
++++ fixed.js	2026-10-17 17:00:00.298460978 -0400
+@@ -1,5 +1,5 @@
+ let a = false;
+ let bEval = 0;
+ function b() { bEval++; return true; }
+<span class="del">-if (a) { if (b()) { console.log(&#39;inner&#39;); } }</span>
+<span class="add">+if (a &amp;&amp; b()) { console.log(&#39;inner&#39;); }</span>
+ console.log(&#39;bEval:&#39;, bEval);
+</pre></details><details id="r1-p002"><summary>r1-p002 — Comment removed by autofix</summary><pre>if (true) {
+  // This comment should be preserved
+  if (false) { console.log(&#39;inner&#39;); }
+}
+// After fix, the above becomes: if (true &amp;&amp; false) { ... }, losing the comment
+console.log(&#39;Comment presence affects readability only; no runtime change.&#39;);
+</pre></details><details id="r1-p003"><summary>r1-p003 — Temporal Dead Zone hazard via let scoping misunderstanding</summary><pre>if (true) {
+  if (false) {
+    console.log(x); // TDZ if let x were here, but it&#39;s not
+  }
+  let x = 1;
+}
+console.log(&#39;x after:&#39;, typeof x === &#39;undefined&#39; ? &#39;undefined&#39; : x);
+</pre></details><details id="r1-p004"><summary>r1-p004 — Regex lastIndex side effect with g flag</summary><pre>let str = &#39;abab&#39;;
+let re = /a/g;
+if (true) {
+  if (re.test(str)) { console.log(&#39;1st:&#39;, re.lastIndex); }
+  if (re.test(str)) { console.log(&#39;2nd:&#39;, re.lastIndex); }
+}
+console.log(&#39;Final lastIndex:&#39;, re.lastIndex);
+</pre></details><details id="r1-p005"><summary>r1-p005 — Side effect duplication in merged condition</summary><pre>let a = true;
+let counter = 0;
+function b() { counter++; return true; }
+if (a) { if (b()) { console.log(&#39;inner&#39;); } }
+console.log(&#39;counter:&#39;, counter);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:01.186472206 -0400
++++ fixed.js	2026-10-17 17:00:01.443475455 -0400
+@@ -1,5 +1,5 @@
+ let a = true;
+ let counter = 0;
+ function b() { counter++; return true; }
+<span class="del">-if (a) { if (b()) { console.log(&#39;inner&#39;); } }</span>
+<span class="add">+if (a &amp;&amp; b()) { console.log(&#39;inner&#39;); }</span>
+ console.log(&#39;counter:&#39;, counter);
+</pre></details><details id="r1-p006"><summary>r1-p006 — Async/await ordering changed by &amp;&amp; evaluation</summary><pre>let a = false;
+let bCalled = false;
+async function b() { bCalled = true; return true; }
+(async () =&gt; {
+  if (a) { if (await b()) { console.log(&#39;inner&#39;); } }
+  console.log(&#39;bCalled:&#39;, bCalled);
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:01.608477540 -0400
++++ fixed.js	2026-10-17 17:00:01.881480991 -0400
+@@ -2,6 +2,6 @@
+ let bCalled = false;
+ async function b() { bCalled = true; return true; }
+ (async () =&gt; {
+<span class="del">-  if (a) { if (await b()) { console.log(&#39;inner&#39;); } }</span>
+<span class="add">+  if (a &amp;&amp; (await b())) { console.log(&#39;inner&#39;); }</span>
+   console.log(&#39;bCalled:&#39;, bCalled);
+ })();
+</pre></details><details id="r1-p007"><summary>r1-p007 — Function declaration in block affected by scoping perception</summary><pre>if (true) {
+  if (false) {
+    function inner() { return 1; }
+    console.log(typeof inner); // &#39;function&#39; due to hoisting
+  }
+}
+console.log(&#39;inner after:&#39;, typeof inner); // &#39;function&#39; due to hoisting to outer scope
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:02.049483114 -0400
++++ fixed.js	2026-10-17 17:00:02.322486563 -0400
+@@ -1,7 +1,5 @@
+<span class="del">-if (true) {</span>
+<span class="del">-  if (false) {</span>
+<span class="add">+if (true &amp;&amp; false) {</span>
+     function inner() { return 1; }
+     console.log(typeof inner); // &#39;function&#39; due to hoisting
+   }
+<span class="del">-}</span>
+ console.log(&#39;inner after:&#39;, typeof inner); // &#39;function&#39; due to hoisting to outer scope
+</pre></details><details id="r1-p008"><summary>r1-p008 — Generator yield position affected by early exit</summary><pre>function* gen() {
+  if (true) {
+    if (false) { yield 1; }
+    yield 2;
+  }
+}
+let g = gen();
+console.log([...g]);
+</pre></details><details id="r2-p001"><summary>r2-p001 — Comment loss between braces</summary><pre>// Hazard 2: break target change
+let sum = 0;
+outer:
+for (let i = 0; i &lt; 2; i++) {
+  if (i === 0) {
+    if (true) {
+      break outer;
+    }
+  }
+  sum += i;
+}
+console.log(&#39;sum:&#39;, sum);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:08.628566110 -0400
++++ fixed.js	2026-10-17 17:00:08.904569586 -0400
+@@ -2,11 +2,9 @@
+ let sum = 0;
+ outer:
+ for (let i = 0; i &lt; 2; i++) {
+<span class="del">-  if (i === 0) {</span>
+<span class="del">-    if (true) {</span>
+<span class="add">+  if (i === 0 &amp;&amp; true) {</span>
+       break outer;
+     }
+<span class="del">-  }</span>
+   sum += i;
+ }
+ console.log(&#39;sum:&#39;, sum);
+</pre></details><details id="r2-p002"><summary>r2-p002 — Function declaration in block scoping</summary><pre>// Hazard 3: function declaration in block
+(function() {
+  if (true) {
+    if (false) {
+      function f() { return 1; }
+      return f();
+    }
+  }
+  return typeof f === &#39;function&#39; ? f() : 0;
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:09.074571727 -0400
++++ fixed.js	2026-10-17 17:00:09.311574710 -0400
+@@ -1,10 +1,8 @@
+ // Hazard 3: function declaration in block
+ (function() {
+<span class="del">-  if (true) {</span>
+<span class="del">-    if (false) {</span>
+<span class="add">+  if (true &amp;&amp; false) {</span>
+       function f() { return 1; }
+       return f();
+     }
+<span class="del">-  }</span>
+   return typeof f === &#39;function&#39; ? f() : 0;
+ })();
+</pre></details><details id="r2-p003"><summary>r2-p003 — Label/break/continue/finally control flow</summary><pre>// Hazard 4: label and finally with break
+let result = [];
+loop:
+for (let i = 0; i &lt; 2; i++) {
+  try {
+    if (i === 0) {
+      if (true) {
+        break loop;
+      }
+    }
+    result.push(i);
+  } finally {
+    result.push(&#39;finally&#39;);
+  }
+}
+console.log(result.join(&#39;,&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:09.471576725 -0400
++++ fixed.js	2026-10-17 17:00:09.751580250 -0400
+@@ -3,11 +3,9 @@
+ loop:
+ for (let i = 0; i &lt; 2; i++) {
+   try {
+<span class="del">-    if (i === 0) {</span>
+<span class="del">-      if (true) {</span>
+<span class="add">+    if (i === 0 &amp;&amp; true) {</span>
+         break loop;
+       }
+<span class="del">-    }</span>
+     result.push(i);
+   } finally {
+     result.push(&#39;finally&#39;);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Debugger statement preservation</summary><pre>// Hazard 5: debugger statement
+let x = 0;
+if (true) {
+  if (false) {
+    debugger;
+    x = 1;
+  }
+}
+console.log(&#39;x:&#39;, x);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:09.928582478 -0400
++++ fixed.js	2026-10-17 17:00:10.197585864 -0400
+@@ -1,9 +1,7 @@
+ // Hazard 5: debugger statement
+ let x = 0;
+<span class="del">-if (true) {</span>
+<span class="del">-  if (false) {</span>
+<span class="add">+if (true &amp;&amp; false) {</span>
+     debugger;
+     x = 1;
+   }
+<span class="del">-}</span>
+ console.log(&#39;x:&#39;, x);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Strict vs sloppy mode semantics</summary><pre>&#39;use strict&#39;;
+// Hazard 6: strict mode
+let obj = {};
+if (obj) {
+  if (obj.prop === undefined) {
+    obj.prop = 42;
+  }
+}
+console.log(&#39;obj.prop:&#39;, obj.prop);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:10.374588091 -0400
++++ fixed.js	2026-10-17 17:00:10.640591438 -0400
+@@ -1,9 +1,7 @@
+ &#39;use strict&#39;;
+ // Hazard 6: strict mode
+ let obj = {};
+<span class="del">-if (obj) {</span>
+<span class="del">-  if (obj.prop === undefined) {</span>
+<span class="add">+if (obj &amp;&amp; obj.prop === undefined) {</span>
+     obj.prop = 42;
+   }
+<span class="del">-}</span>
+ console.log(&#39;obj.prop:&#39;, obj.prop);
+</pre></details><details id="r2-p006"><summary>r2-p006 — Falsy outer condition skipping inner eval</summary><pre>// Hazard 7: falsy outer skips inner
+let called = false;
+function side() {
+  called = true;
+  return true;
+}
+if (false) {
+  if (side()) {
+    // should not run
+  }
+}
+console.log(&#39;side called:&#39;, called);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:10.808593552 -0400
++++ fixed.js	2026-10-17 17:00:11.082596999 -0400
+@@ -4,9 +4,7 @@
+   called = true;
+   return true;
+ }
+<span class="del">-if (false) {</span>
+<span class="del">-  if (side()) {</span>
+<span class="add">+if (false &amp;&amp; side()) {</span>
+     // should not run
+   }
+<span class="del">-}</span>
+ console.log(&#39;side called:&#39;, called);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Arguments object and rest parameters interaction</summary><pre>// Hazard 8: arguments and rest
+function test(...args) {
+  if (args.length &gt; 0) {
+    if (args[0] === 42) {
+      return arguments[0];
+    }
+  }
+  return -1;
+}
+console.log(&#39;result:&#39;, test(42, 99));
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:11.250599112 -0400
++++ fixed.js	2026-10-17 17:00:11.531602646 -0400
+@@ -1,10 +1,8 @@
+ // Hazard 8: arguments and rest
+ function test(...args) {
+<span class="del">-  if (args.length &gt; 0) {</span>
+<span class="del">-    if (args[0] === 42) {</span>
+<span class="add">+  if (args.length &gt; 0 &amp;&amp; args[0] === 42) {</span>
+       return arguments[0];
+     }
+<span class="del">-  }</span>
+   return -1;
+ }
+ console.log(&#39;result:&#39;, test(42, 99));
+</pre></details><details id="r2-p008"><summary>r2-p008 — Comment loss between outer { and inner if</summary><pre>// Hazard 1: comment between braces
+let log = &#39;&#39;;
+if (true) { /* keep me */
+  if (false) {
+    log += &#39;inner&#39;;
+  }
+}
+if (log === &#39;&#39;) log = &#39;none&#39;;
+console.log(&#39;log:&#39;, log);
+</pre></details></body></html>

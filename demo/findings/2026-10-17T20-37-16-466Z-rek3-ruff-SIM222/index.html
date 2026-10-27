@@ -1,0 +1,131 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff SIM222 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff SIM222 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-37-16-466Z-rek3-ruff-SIM222 · fix labelled <b>unknown</b> · 10 programs, 1 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0031</p>
+<div class="card"><b>Rule analysis</b><p>Flags &#39;or&#39; expressions containing at least one truthy literal where the entire expression can be simplified to True (in boolean context) or shortened by removing trailing falsy-or-truthy terms after the first truthy term.</p><p class="mut">Fix: Replace the entire &#39;or&#39; expression with True when used in a boolean context (if/while/assert/etc.), otherwise replace it with the first truthy operand (short-circuiting the rest).</p><details><summary>10 hazards</summary><ul><li>The rewrite removes side effects from evaluating operands after the first truthy term, changing behavior if those operands have side effects (e.g., function calls, assignments).</li><li>In non-boolean contexts, replacing &#39;x or [1] or y&#39; with &#39;x or [1]&#39; alters the result when x is falsy but [1] is truthy and y is used elsewhere via aliasing or mutation.</li><li>If the first truthy term is a mutable literal like [1], replacing the expression with just that literal may cause unintended sharing if the result is stored and mutated later.</li><li>Removing trailing operands can break code that relies on those operands for their type or value in subsequent expressions (e.g., unpacking, indexing).</li><li>The fix may incorrectly remove parentheses that were grouping the &#39;or&#39; expression with other operators, altering precedence.</li><li>Comments attached to removed operands (e.g., &#39;x or [1]  # important&#39;) would be lost.</li><li>In boolean contexts, replacing with True is safe only if the original expression was guaranteed truthy; however, if the context expects a falsy value (e.g., in &#39;not (x or [1])&#39;), the logic flips incorrectly unless the whole negated expression is handled.</li><li>If the &#39;or&#39; expression appears in a default argument or lambda, early termination changes when default values are evaluated.</li><li>Replacing part of a larger expression (e.g., &#39;z = (x or [1]) + 5&#39;) with a subexpression may break if the original relied on the full expression&#39;s value for arithmetic or concatenation.</li><li>When the first truthy term is not a literal but a variable (e.g., &#39;x or flag or y&#39;), the fix should not apply per rule intent, but if misapplied, it would incorrectly shorten the expression.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Keyword-only, positional-only, *args/**kwargs forwarding</td><td class="mut">Rule SIM222 may rewrite `x or [1]` as `[1]` in a function call argument position, breaking</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Mutable literal sharing after rewrite</td><td class="mut">If SIM222 replaces `x or [1]` with `[1]` and the result is stored and mutated, all referen</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default arguments and aliasing</td><td class="mut">Rewriting `x or []` in a default argument to `[]` causes the mutable default to be shared </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>First truthy term is a variable (near-miss)</td><td class="mut">Rule SIM222 should not trigger on `x or flag or y` because the first term `x` is not a lit</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Class vs instance attributes, descriptors, properties</td><td class="mut">Rewriting a class attribute access in an `or` expression (e.g., `self.x or [1]`) may lose </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Comments attached to removed operands</td><td class="mut">When SIM222 removes trailing terms in an `or` expression (e.g., `x or [1]  # important`), </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Incorrect parentheses removal altering precedence</td><td class="mut">The fix may strip parentheses around an `or` expression that is part of a larger expressio</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus, comprehensions, late binding in closures</td><td class="mut">In a comprehension or lambda, rewriting `x or [1]` to `[1]` may break late-binding behavio</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span></td><td>Variable truthy term prevents shortening</td><td class="mut">When the first truthy term is not a literal but a variable (e.g., &#39;x or flag or y&#39;), the f</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>pathlib vs os.path symlink resolution</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Keyword-only, positional-only, *args/**kwargs forwarding</summary><pre>def f(/, a, *, b=None):
+    return a, b
+
+def g(x, /, *, y=None, **kw):
+    return f(x, b=(y or [1]), **kw)
+
+# Test: y=None triggers fallback to [1]
+try:
+    r = g(10)
+except Exception as e:
+    print(&#39;error:&#39;, type(e).__name__, str(e))
+else:
+    print(&#39;g(10):&#39;, r)
+
+# Now simulate rule rewrite: (y or [1]) -&gt; [1] always
+# This breaks fallback when y is provided
+print(&#39;g(10, y=[]):&#39;, g(10, y=[]))  # Should use [], but rewrite forces [1]
+</pre></details><details id="r1-p002"><summary>r1-p002 — Mutable literal sharing after rewrite</summary><pre>flag = 0
+lst1 = flag or [1]
+lst2 = flag or [1]
+print(&#39;initial ids:&#39;, id(lst1), id(lst2), lst1 is lst2)
+
+lst1.append(99)
+print(&#39;after lst1.append(99):&#39;, lst1, lst2)
+
+# Simulate incorrect rewrite: both become same [1] object
+# Correct behavior: each `flag or [1]` creates a new list
+# But if rule rewrites to `[1]` and it&#39;s reused, sharing occurs
+</pre></details><details id="r1-p003"><summary>r1-p003 — Mutable default arguments and aliasing</summary><pre>def append_val(val, lst=None):
+    if lst is None:
+        lst = val or []  # Rule may fire here
+    lst.append(val)
+    return lst
+
+print(&#39;append_val(1):&#39;, append_val(1))
+print(&#39;append_val(2):&#39;, append_val(2))
+print(&#39;append_val(3):&#39;, append_val(3))
+
+# Expected: each call returns [1], [2], [3]
+# If rewritten to `lst = []`, then all calls share same list: [1, 2, 3]
+</pre></details><details id="r1-p004"><summary>r1-p004 — First truthy term is a variable (near-miss)</summary><pre>x = 0
+flag = [1, 2]
+y = [3, 4]
+result = x or flag or y
+print(&#39;result:&#39;, result)
+
+# Simulate incorrect rewrite: x or flag or y -&gt; x
+wrong_result = x
+print(&#39;incorrect rewrite:&#39;, wrong_result)
+
+# Show that x is falsy, so shortening loses the intended fallback
+</pre></details><details id="r1-p005"><summary>r1-p005 — Class vs instance attributes, descriptors, properties</summary><pre>class A:
+    _val = None
+    @property
+    def x(self):
+        if self._val is None:
+            self._val = [len(self.__dict__)]  # side effect: capture size
+        return self._val
+
+a = A()
+print(&#39;first access:&#39;, a.x or [1])  # triggers property, returns [0]
+print(&#39;second access:&#39;, a.x or [1])  # returns [1] (cached)
+
+# If rewritten to `[1]`, property never called, _val remains None,
+# and all results are [1] regardless of state
+</pre></details><details id="r1-p006"><summary>r1-p006 — Comments attached to removed operands</summary><pre># This comment explains why [1] is the fallback
+flag = 0
+value = flag or [1]  # important: non-empty list for processing
+print(&#39;value:&#39;, value)
+
+# Simulate rewrite: value = [1]  # important -&gt; but comment may be dropped
+# If comment is lost, we lose intent; if kept, it&#39;s misleading since no fallback occurs
+</pre></details><details id="r1-p007"><summary>r1-p007 — Incorrect parentheses removal altering precedence</summary><pre>x = 0
+# Original: not (x or [1]) -&gt; not ([1]) -&gt; False
+# If parentheses stripped incorrectly: not x or [1] -&gt; (not 0) or [1] -&gt; True or [1] -&gt; True
+result = not (x or [1])
+print(&#39;not (x or [1]):&#39;, result)
+
+# Show what happens if parentheses are removed
+result_bad = not x or [1]
+print(&#39;not x or [1] (precedence broken):&#39;, result_bad)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Walrus, comprehensions, late binding in closures</summary><pre>flags = [0, 0, 0]
+# Walrus in list comprehension: each iteration should see updated flag via assignment
+results = [(flag := i) or [1] for i in flags]
+print(&#39;walrus results:&#39;, results)
+
+# Simulate rewrite: (flag := i) or [1] -&gt; [1] always
+# Then results would be [[1], [1], [1]], losing the walrus assignment effect
+# Also show that flag ends up as last i only if walrus runs
+print(&#39;final flag:&#39;, flag)
+
+# Lambda late-binding: each lambda should capture current value of `or` expression
+funcs = [lambda: (x or [1]) for x in [0, 0, 0]]
+print(&#39;lambda results:&#39;, [f() for f in funcs])
+</pre></details><details id="r2-p001"><summary>r2-p001 — Variable truthy term prevents shortening</summary><pre>flag = 0
+x = []
+y = {}
+result = x or flag or y
+print(&#39;result:&#39;, result)
+# After rewrite (if misapplied): result = x or flag -&gt; []
+# Correct: flag=0 (falsy), then y={} -&gt; result = {}
+</pre></details><details id="r2-p002"><summary>r2-p002 — pathlib vs os.path symlink resolution</summary><pre>import os
+import tempfile
+with tempfile.TemporaryDirectory() as d:
+    link = os.path.join(d, &#39;link&#39;)
+    target = os.path.join(d, &#39;target&#39;)
+    open(target, &#39;w&#39;).close()
+    os.symlink(target, link)
+    p = link
+    exists = os.path.exists(p) or (p := os.path.realpath(p)) or False
+    print(&#39;exists:&#39;, exists, &#39;resolved:&#39;, p if &#39;p&#39; in locals() else None)
+    # Rule sees: os.path.exists(p) or [] or False -&gt; but wait, adjust to trigger
+</pre></details></body></html>

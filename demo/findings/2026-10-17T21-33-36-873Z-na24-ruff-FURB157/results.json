@@ -1,0 +1,488 @@
+{
+  "runId": "2026-10-17T21-33-36-873Z-na24-ruff-FURB157",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB157",
+    "fixKind": "unknown",
+    "docs": "# verbose-decimal-constructor (FURB157)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary string literal or float casts in `Decimal`\nconstructors.\n\n## Why is this bad?\nThe `Decimal` constructor accepts a variety of arguments, including\nintegers, floats, and strings. However, it's not necessary to cast\ninteger literals to strings when passing them to the `Decimal`.\n\nSimilarly, `Decimal` accepts `inf`, `-inf`, and `nan` as string literals,\nso there's no need to wrap those values in a `float` call when passing\nthem to the `Decimal` constructor.\n\nPrefer the more concise form of argument passing for `Decimal`\nconstructors, as it's more readable and idiomatic.\n\nNote that this rule does not flag quoted float literals such as `Decimal(\"0.1\")`, which will\nproduce a more precise `Decimal` value than the unquoted `Decimal(0.1)`.\n\n## Example\n```python\nfrom decimal import Decimal\n\nDecimal(\"0\")\nDecimal(float(\"Infinity\"))\n```\n\nUse instead:\n```python\nfrom decimal import Decimal\n\nDecimal(0)\nDecimal(\"Infinity\")\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the expression contains comments.\n\n## References\n- [Python documentation: `decimal`](https://docs.python.org/3/library/decimal.html)\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant str() or float() calls around integer literals or special float string literals ('inf', '-inf', 'nan') passed to Decimal constructors.",
+    "firingShapes": [
+      "Decimal(str(0))",
+      "Decimal(float('inf'))",
+      "Decimal(str(-42))",
+      "Decimal(float('-inf'))",
+      "Decimal(str(n)) where n is an integer literal",
+      "Decimal(float('nan'))",
+      "Decimal(str(+5))",
+      "Decimal(float('Infinity'))"
+    ],
+    "silentShapes": [
+      "Decimal(\"0\")",
+      "Decimal(0.1)",
+      "Decimal(float(x)) where x is a variable",
+      "Decimal(str(s)) where s is a variable",
+      "Decimal(\"Infinity\")"
+    ],
+    "fixDescription": "Replaces str(integer_literal) with the integer_literal itself and float(string_literal) with the string_literal itself when the string literal is 'inf', '-inf', 'nan', or case variants, within Decimal() constructor arguments.",
+    "hazards": [
+      "Rewriting Decimal(str(x)) to Decimal(x) changes behavior if x is not an integer literal (e.g., variable or expression), altering type or value.",
+      "Rewriting Decimal(float(s)) to Decimal(s) fails if s is not exactly 'inf', '-inf', or 'nan' (case-sensitive), producing invalid Decimal input.",
+      "The fix may remove necessary parentheses in complex expressions, altering precedence if the argument is part of a larger expression.",
+      "If the str() or float() call contains a comment (e.g., str(0 # comment)), removing it would delete the comment, violating fix safety conditions.",
+      "Using Decimal(float('inf')) vs Decimal('inf') may differ in signaling NaNs or context-dependent behavior, though value is same; but strict equivalence is not guaranteed across all contexts.",
+      "If the integer literal is part of a larger expression like Decimal(str(0)+str(1)), the fix would incorrectly apply only to part, breaking syntax.",
+      "The rule assumes the argument is a literal; if the integer is a named constant (e.g., ZERO), rewriting Decimal(str(ZERO)) to Decimal(ZERO) may change meaning if ZERO is not an int.",
+      "Rewriting could interfere with debugging or profiling if the str/float call was intentionally placed for breakpoint or side effect (though pure, still alters source structure).",
+      "In rare cases, float('inf') might raise in restricted environments, but str(int) never does—removing float call could hide intended error handling.",
+      "The fix does not account for Unicode or locale-specific number formatting; assuming ASCII literals only."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0045623999999999994,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 10
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "dict ordering and duplicate keys",
+      "hazard": "Rewriting Decimal(str(...)) inside dict literals changes key insertion order when duplicate keys exist due to hash collisions.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\nDecimal('0') second\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "comment inside str() call",
+      "hazard": "Removing str(0 # comment) deletes the comment, violating fix safety if the comment is semantically meaningful (e.g., TODO).",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p003",
+      "title": "class vs instance attributes with descriptor",
+      "hazard": "Rewriting Decimal(str(5)) to Decimal(5) in a class attribute affects __get__ descriptor behavior when accessed via instance vs class.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'IntDesc' object has no attribute 'value'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Unicode/locale number formatting",
+      "hazard": "Assuming ASCII-only ignores that str() of integer literals is always ASCII, but rule misapplies if user expects localized digits (though str(int) never produces them).",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "str(42) repr: '42' is ascii: True\nDecimal(str(42)): 42\nDecimal(42): 42\nEqual? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "bytes vs str encoding",
+      "hazard": "Confusing str() on integer with bytes conversion; rule only applies to str, but user might intend bytes via .encode().",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "str(val): '42' <class 'str'>\nencoded: b'42'\nd1: 42 d2: 42 equal: True\nbytes fail: TypeError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "signaling NaN context difference",
+      "hazard": "Decimal(float('inf')) vs Decimal('inf') may differ in signaling NaN generation under certain contexts, though value compares equal.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB157",
+            "severity": "warning",
+            "message": "Verbose expression in `Decimal` constructor",
+            "span": [
+              5,
+              20
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: type object 'decimal.Decimal' has no attribute 'InvalidOperation'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: type object 'decimal.Decimal' has no attribute 'InvalidOperation'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:33:49.210108221 -0400\n+++ fixed.py\t2026-10-17 17:33:49.618103098 -0400\n@@ -2,7 +2,7 @@\n getcontext().traps[Decimal.InvalidOperation] = 0\n # Create sNaN via operation that differs by construction\n try:\n-    inf1 = Decimal(float('inf'))  # via float\n+    inf1 = Decimal('inf')  # via float\n     inf2 = Decimal('inf')         # direct string\n     diff = inf1 - inf2\n     print('inf1 - inf2:', diff, 'is_nan:', diff.is_nan())\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "invalid float string rewrite",
+      "hazard": "Rewriting Decimal(float(s)) to Decimal(s) fails if s is not exactly 'inf', '-inf', or 'nan' (case-sensitive), producing invalid input.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "float(s) works: Infinity\nDecimal(s): Infinity\nRule only fires on 'inf','-inf','nan' variants\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "evaluation order and side effects",
+      "hazard": "Rewriting str(0) in f(str(0), g()) changes evaluation order if g() has side effects and str(0) is removed.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "log before: ['g']\nlog after: ['g']\nBefore fix: []\nAfter str(s): ['strcalled']\nDecimal: 0\nAfter str(0): []\nDecimal: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "signaling NaN context",
+      "hazard": "Using Decimal(float('inf')) vs Decimal('inf') may differ in signaling NaNs or context-dependent behavior, though value is same.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB157",
+            "severity": "warning",
+            "message": "Verbose expression in `Decimal` constructor",
+            "span": [
+              6,
+              24
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "result: Infinity\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: Infinity\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:34:00.503967385 -0400\n+++ fixed.py\t2026-10-17 17:34:00.687965107 -0400\n@@ -3,7 +3,7 @@\n getcontext().traps[decimal.InvalidOperation] = True\n def trap_inf():\n     try:\n-        return Decimal(float('inf'))\n+        return Decimal('inf')\n     except InvalidOperation as e:\n         return f'trapped: {type(e).__name__}'\n try:\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "keyword-only positional forwarding",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'Decimal' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "named constant not int",
+      "hazard": "The rule assumes the argument is a literal; if the integer is a named constant (e.g., ZERO), rewriting Decimal(str(ZERO)) to Decimal(ZERO) may change meaning if ZERO is not an int.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'Decimal' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "bytes vs str encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "str then encode: b'42'\nneeds_str(str(42)): b'42'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "precedence in complex expression",
+      "hazard": "The fix may remove necessary parentheses in complex expressions, altering precedence if the argument is part of a larger expression.",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: unsupported operand type(s) for +: 'int' and 'str'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "pathlib vs os.path behavior",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Path(str(42)): False\nPath(42) error: argument should be a str or an os.PathLike object where __fspath__ returns a str, not 'int'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p007",
+      "title": "generators vs lists",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first list: ['0', '1', '2']\nsecond list: []\n",
+          "stderr1": "NameError: name 'Decimal' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "exceptions finally else",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "FURB157",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally ran\n",
+          "stderr1": "NameError: name 'Decimal' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

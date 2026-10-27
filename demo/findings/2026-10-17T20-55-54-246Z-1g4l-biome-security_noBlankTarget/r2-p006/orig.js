@@ -1,0 +1,1 @@
+const obj = {}; let internalRel = ''; Object.defineProperty(obj, 'rel', { get() { return internalRel; }, set(v) { internalRel = v + '-set'; } }); obj.rel = 'nofollow'; console.log(obj.rel); // should be 'nofollow-set', but fix may interfere

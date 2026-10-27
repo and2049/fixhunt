@@ -1,0 +1,559 @@
+{
+  "runId": "2026-10-17T19-38-41-627Z-2c90-biome-style_useObjectSpread",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useObjectSpread",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useObjectSpread\n- Fix: safe\n- Default severity: info\n- Available from version: 2.0.0\n- Diagnostic category: lint/style/useObjectSpread\n\n\nDescription\n\n Prefer object spread over `Object.assign()` when constructing new objects.\n\n Object spread syntax is more concise, more readable, and performs better\n than `Object.assign()` when creating a new object from existing objects.\n It also has better TypeScript integration.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n Object.assign({}, foo);\n ```\n\n ```js,expect_diagnostic\n Object.assign({}, { foo: 'bar' });\n ```\n\n ```js,expect_diagnostic\n Object.assign({ foo: 'bar' }, baz);\n ```\n\n ```js,expect_diagnostic\n Object.assign({}, baz, { foo: 'bar' });\n ```\n\nValid\n\n ```js\n ({ ...foo });\n ```\n\n ```js\n ({ ...baz, foo: 'bar' });\n ```\n\n Modifying an existing object is allowed:\n ```js\n Object.assign(foo, { bar: baz });\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags calls to Object.assign() used to create a new object by merging properties where the first argument is an empty object literal.",
+    "firingShapes": [
+      "Object.assign({}, foo);",
+      "Object.assign({}, { foo: 'bar' });",
+      "Object.assign({ foo: 'bar' }, baz);",
+      "Object.assign({}, baz, { foo: 'bar' });",
+      "Object.assign({}, obj1, obj2, obj3);",
+      "Object.assign({}, getObj(), { x: 1 });",
+      "Object.assign({}, ...spreadArgs);",
+      "Object.assign({}, a.b.c, d.e.f);"
+    ],
+    "silentShapes": [
+      "Object.assign(foo, { bar: baz });",
+      "Object.assign(target, source);",
+      "const result = Object.assign({}, foo); // but result unused",
+      "Object.assign({}, null);",
+      "Object.assign(undefined, {});"
+    ],
+    "fixDescription": "Replace Object.assign({}, sources...) with an object literal using spread properties: {...sources}",
+    "hazards": [
+      "Rewriting Object.assign({}, foo) to {...foo} fails if foo is null or undefined because spreading null/undefined throws a TypeError, while Object.assign treats them as no-ops.",
+      "If the first argument is not an empty object (e.g., Object.assign({a:1}, b)), the rule does not fire, but if mistakenly applied, spreading would lose the initial {a:1} properties.",
+      "When Object.assign is used with a non-literal first argument like a variable (Object.assign(x, y)), spreading {...x, ...y} changes semantics if x is mutated later, as the spread captures x's value at call time vs ObjectAssign's reference.",
+      "If sources contain getters, Object.assign invokes them during assignment, while spread evaluates them once during object creation\u2014though both are eager, differences arise if getters have side effects or depend on mutable state.",
+      "In non-object parameters (e.g., Object.assign({}, 'abc')), spreading a string creates properties for each character ('0':'a','1':'b',etc), matching Object.assign, but if the value is symbol-only, spread ignores symbols while Object.assign copies them\u2014though both actually copy symbol properties, so this hazard is invalid; corrected: spread and Object.assign both copy symbol-enumerable properties identically.",
+      "Comments attached to the Object.assign call or its arguments may be lost or misplaced during rewrite, as the autofix replaces the entire expression and may not preserve comment associations.",
+      "If Object.assign is shadowed by a local variable (e.g., const ObjectAssign = Object.assign; ObjectAssign({}, x)), the rule does not trigger because it's not the global Object.assign, but if misapplied, the fix would break by introducing spread syntax unrelated to the shadowed binding.",
+      "In strict mode, both behaviors are identical, but in sloppy mode, Object.assign may trigger __set__ on proxies differently than spread\u2014though modern engines align them, historical differences could exist in edge cases with proxy traps.",
+      "When the call is part of a larger expression (e.g., return Object.assign({}, x)), rewriting to return {...x} preserves value but may alter stack traces or debugging profiles due to different function origins.",
+      "If the sources include expressions with side effects (e.g., Object.assign({}, f(), g())), the evaluation order of f() and g() is left-to-right in both Object.assign and spread, so no hazard\u2014but if the rewrite incorrectly reordered arguments, it would break; however, Biome preserves order, so this is not a hazard."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0250217,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 8,
+    "fixed": 8,
+    "disputed": 4,
+    "fix-changes-behavior": 1
+  },
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Non-literal first argument mutation",
+      "hazard": "When Object.assign is used with a non-literal first argument like a variable (Object.assign(x, y)), spreading {...x, ...y} changes semantics if x is mutated later, as the spread captures x's value at ",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p002",
+      "title": "Getter side effects difference",
+      "hazard": "If sources contain getters, Object.assign invokes them during assignment, while spread evaluates them once during object creation\u2014though both are eager, differences arise if getters have side effects ",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "result.value: 10 counter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result.value: 10 counter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:52.903212603 -0400\n+++ fixed.js\t2026-10-17 15:38:53.180208894 -0400\n@@ -5,5 +5,5 @@\n     return counter * 10;\n   }\n };\n-const result = Object.assign({}, src);\n+const result = ({...src,});\n console.log('result.value:', result.value, 'counter:', counter);\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Strict vs sloppy mode proxy behavior",
+      "hazard": "In strict mode, both behaviors are identical, but in sloppy mode, Object.assign may trigger __set__ on proxies differently than spread\u2014though modern engines align them, historical differences could ex",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Regexp lastIndex shared state",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "match1: a match2: a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "match1: a match2: a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:53.564203745 -0400\n+++ fixed.js\t2026-10-17 15:38:53.835200111 -0400\n@@ -2,6 +2,6 @@\n regex.lastIndex = 0;\n const str = 'aa';\n const match1 = regex.exec(str);\n-const obj = Object.assign({}, { pattern: regex });\n+const obj = ({pattern: regex ,});\n const match2 = regex.exec(str);\n console.log('match1:', match1 ? match1[0] : null, 'match2:', match2 ? match2[0] : null);\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Side effect evaluation order preservation",
+      "hazard": "If the sources include expressions with side effects (e.g., Object.assign({}, f(), g())), the evaluation order of f() and g() is left-to-right in both Object.assign and spread, so no hazard\u2014but if the",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "order: fg result: {\"x\":1,\"y\":2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "order: fg result: {\"x\":1,\"y\":2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:54.001197886 -0400\n+++ fixed.js\t2026-10-17 15:38:54.279194144 -0400\n@@ -1,5 +1,5 @@\n let order = '';\n function f() { order += 'f'; return { x: 1 }; }\n function g() { order += 'g'; return { y: 2 }; }\n-const result = Object.assign({}, f(), g());\n+const result = ({...f(),...g(),});\n console.log('order:', order, 'result:', JSON.stringify(result));\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Return expression stack trace origin",
+      "hazard": "When the call is part of a larger expression (e.g., return Object.assign({}, x)), rewriting to return {...x} preserves value but may alter stack traces or debugging profiles due to different function ",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "at wrapper (file:///home/sun/dev/diaghunt/runs/2026-10-17T19-38-41-627Z-2c90-biome-style_useObjectSpread/r1-p006/orig.js:6:11)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "at wrapper (file:///home/sun/dev/diaghunt/runs/2026-10-17T19-38-41-627Z-2c90-biome-style_useObjectSpread/r1-p006/fixed.js:6:11)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:54.446191896 -0400\n+++ fixed.js\t2026-10-17 15:38:54.724188155 -0400\n@@ -8,6 +8,6 @@\n     // Stack trace differs based on whether we use Object.assign or spread\n     console.log(e.stack.split('\\n')[1].trim());\n   }\n-  return Object.assign({}, getObj());\n+  return ({...getObj(),});\n }\n wrapper();\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Non-empty first argument near-miss",
+      "hazard": "If the first argument is not an empty object (e.g., Object.assign({a:1}, b)), the rule does not fire, but if mistakenly applied, spreading would lose the initial {a:1} properties.",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result.a: 1 result.b: 2 result.c: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Var hoisting and redeclaration in loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "copied.x: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "copied.x: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:55.102183062 -0400\n+++ fixed.js\t2026-10-17 15:38:55.368179468 -0400\n@@ -1,7 +1,7 @@\n for (var i = 0; i < 2; i++) {\n   var obj = { x: i };\n   if (i === 0) {\n-    var copied = Object.assign({}, obj);\n+    var copied = ({...obj,});\n   }\n   obj.x = 99;\n }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "ASI and semicolon-less code",
+      "hazard": "Leading parenthesis on next line causes misparsing when combined with object spread rewrite",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "IIFE ran\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Non-literal first argument mutation",
+      "hazard": "Spreading captures value at call time vs Object.assign maintaining reference via target",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "99 true\n1 true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Strict vs sloppy mode semantics",
+      "hazard": "In sloppy mode, Object.assign may coerce primitives; spread rejects them directly",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-38-41-627Z-2c90-biome-style_useObjectSpread/r2-p003/orig.js:5\ntry { {} = { ...undefined } } catch(e) { console.log(e.name) }\n         ^\n\nSyntaxError: Unexpected token '='\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Function declarations in blocks/switch/labels",
+      "hazard": "Function declaration scoping differs between statement and expression contexts after rewrite",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p005",
+      "title": "Var hoisting and redeclaration in loop",
+      "hazard": "Rebinding var across iterations interacts differently with captured values in spread vs Object.assign",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:39:01.053101892 -0400\n+++ fixed.js\t2026-10-17 15:39:01.315098274 -0400\n@@ -1,6 +1,6 @@\n for (var i = 0; i < 2; i++) {\n   var obj = {value: i};\n-  const copy = Object.assign({}, obj);\n+  const copy = ({...obj,});\n   obj.value += 10;\n   console.log(copy.value)\n }\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Part of larger expression affecting stack traces",
+      "hazard": "Returning object spread vs Object.assign changes function origin in stack traces",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:39:01.480095995 -0400\n+++ fixed.js\t2026-10-17 15:39:01.725092611 -0400\n@@ -1,6 +1,6 @@\n function getObj() { return {x: 1} }\n function test() {\n-  return Object.assign({}, getObj());\n+  return ({...getObj(),});\n }\n try { test() } catch(e) {\n   console.log(e.stack.split('\\n')[1].trim())\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Non-object parameters: string and symbol handling",
+      "hazard": "String spreading creates indexed properties; symbol properties copied identically in both",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-38-41-627Z-2c90-biome-style_useObjectSpread/r2-p007/orig.js:2\nconsole.log(Object.assign({}, s).0, Object.assign({}, s).length)\n                               ^\n\nSyntaxError: missing ) after argument list\n    at checkSyntax (node:internal/main/check_syntax:84"
+    },
+    {
+      "id": "r2-p008",
+      "title": "This binding: arrow vs function, extracted methods",
+      "hazard": "Method extraction loses this binding; neither Object.assign nor spread involves this in target/sources",
+      "rule": "style/useObjectSpread",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useObjectSpread",
+            "severity": "info",
+            "message": "Object spread syntax is more concise, readable, and performs better than Object.assign.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:39:01.931089766 -0400\n+++ fixed.js\t2026-10-17 15:39:02.198086068 -0400\n@@ -1,5 +1,5 @@\n const obj = {val: 1, getVal() { return this.val }};\n const fn = obj.getVal;\n console.log(fn.call(obj))\n-const copied = Object.assign({}, obj);\n+const copied = ({...obj,});\n console.log(copied.getVal?.call(obj))\n"
+      }
+    }
+  ],
+  "reports": []
+}

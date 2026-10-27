@@ -1,0 +1,1649 @@
+{
+  "runId": "2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/noUselessElse",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessElse\n- Fix: safe\n- Default severity: info\n- Available from version: 1.3.0\n- Diagnostic category: lint/style/noUselessElse\n\n\nDescription\n\n Disallow `else` block when the `if` block breaks early.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes useless.\n Its contents can be placed outside of the block.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes unnecessary.\n This is because the content of the `else` block will never be executed in conjunction with the `if` block,\n as the breaking statement ensures the control flow exits the `if` block immediately.\n Therefore, the `else` block is redundant, and its content can be placed outside of the block,\n reducing the indentation level by one.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n while (x > 0) {\n     if (f(x)) {\n         break;\n     } else {\n         x++\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         return 0;\n     } else {\n         return x;\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         throw new RangeError();\n     } else {\n         return x;\n     }\n }\n ```\n\nValid\n\n ```js\n function f(x) {\n     if (x < 0) {\n         return 0;\n     }\n     return x;\n }\n ```\n\n ```js\n function f(x) {\n     if (x < 0) {\n         console.info(\"negative number\");\n     } else if (x > 0) {\n         return x;\n     } else {\n         console.info(\"number 0\");\n     }\n }\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "Flags else blocks that follow an if block containing a breaking statement (return, break, continue, throw), as they are unreachable and redundant.",
+    "firingShapes": [
+      "if (a) { return; } else { b(); }",
+      "while (x) { if (y) { break; } else { z++; } }",
+      "for (let i=0; i<n; i++) { if (arr[i]) { continue; } else { arr[i] = 0; } }",
+      "try { if (cond) { throw e; } else { log(); } } catch {}",
+      "function f() { if (x) { return 1; } else { return 2; } }",
+      "switch(v) { case 1: if (x) { break; } else { y++; } default: }",
+      "if (x) { throw new Error(); } else { y = 5; }",
+      "do { if (a) { continue; } else { b--; } } while (true);"
+    ],
+    "silentShapes": [
+      "if (a) { b(); } else { c(); }",
+      "if (a) { return; } else if (b) { return; } else { c(); }",
+      "function f() { if (x) { return; } }",
+      "if (x) { try { return; } finally {} } else { y++; }",
+      "if (a) { break; label: else { c(); } }"
+    ],
+    "fixDescription": "Removes the else block and places its statements directly after the if block, preserving their original order and indentation relative to the function or block scope.",
+    "hazards": [
+      "Moving a break statement out of a switch case alters fall-through behavior, potentially executing unintended cases.",
+      "Relocating a continue statement may cause it to target an outer loop instead of the innermost one, changing iteration behavior.",
+      "Hoisting a function declaration from within the else block could make it available earlier than intended, causing premature invocation.",
+      "Moving a variable declaration with let/const from the else block risks referencing it before initialization if used prior to the if block.",
+      "Extracting a labeled statement from the else block may break label targeting if the label is referenced elsewhere via break/continue.",
+      "Relocating a throw statement could change the stack trace by altering the point of origin, affecting error handling logic.",
+      "Moving a return statement from within a try block may skip execution of a finally block that was meant to run regardless.",
+      "Duplicating a side-effecting expression (e.g., a function call) from the else block into multiple paths due to code duplication during refactoring is not applicable here, but the fix assumes single occurrence—however, if the else block contains multiple statements, their relative order is preserved but their execution context changes.",
+      "If the else block contains a debugger statement, moving it may alter developer tooling behavior if the surrounding scope has different blackboxing settings.",
+      "Comments attached to the else brace or internal to the else block may be lost or misplaced during the rewrite, degrading code readability."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.060949859999999995,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 14,
+    "fixed": 14,
+    "fix-changes-behavior": 2,
+    "fix-breaks-syntax": 1
+  },
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Continue targeting wrong loop",
+      "hazard": "Relocating a continue statement may cause it to target an outer loop instead of the innermost one, changing iteration behavior.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:21.261561278 -0400\n+++ fixed.js\t2026-10-17 15:42:21.532555670 -0400\n@@ -3,7 +3,7 @@\n   L1: for (let i = 0; i < 2; i++) {\n     for (let j = 0; j < 2; j++) {\n       if (j === 0) { continue L1; }\n-      else { out += i + ',' + j + '|'; }\n+      out += i + ',' + j + '|'; \n     }\n   }\n   console.log(out);\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Class field timing",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:21.701552173 -0400\n+++ fixed.js\t2026-10-17 15:42:21.967546668 -0400\n@@ -4,7 +4,7 @@\n   constructor() {\n     this.#p = 0;\n     if (false) { return; }\n-    else { this.#p = 2; }\n+    this.#p = 2; \n   }\n   get p() { return this.#p; }\n }\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Label and finally interaction",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "f\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:22.127543355 -0400\n+++ fixed.js\t2026-10-17 15:42:22.396537782 -0400\n@@ -3,7 +3,7 @@\n   L: for (let i = 0; i < 2; i++) {\n     try {\n       if (i === 0) { break L; }\n-      else { out += i; }\n+      out += i; \n     } finally { out += 'f'; }\n   }\n   console.log(out);\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Labeled statement extraction",
+      "hazard": "Extracting a labeled statement from the else block may break label targeting if the label is referenced elsewhere via break/continue.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/r1-p004/orig.js:5\n    else { L: out += i; break L; }\n           ^\n\nSyntaxError: Label 'L' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p005",
+      "title": "Comment displacement",
+      "hazard": "Comments attached to the else brace or internal to the else block may be lost or misplaced during the rewrite, degrading code readability.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:22.618533183 -0400\n+++ fixed.js\t2026-10-17 15:42:22.899527362 -0400\n@@ -2,7 +2,7 @@\n   let x = 0;\n   if (false) { return; }\n   /* keep-me */\n-  else { x = 1; /* inner */ }\n+  x = 1; /* inner */ \n   console.log(x);\n }\n main();\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Side effect duplication",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:23.061524004 -0400\n+++ fixed.js\t2026-10-17 15:42:23.339518239 -0400\n@@ -1,7 +1,7 @@\n function main() {\n   let a = 0, b = 0;\n   if (false) { return; }\n-  else { a++; b += a; }\n+  a++; b += a; \n   console.log(a, b);\n }\n main();\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Premature function hoist",
+      "hazard": "Hoisting a function declaration from within the else block could make it available earlier than intended, causing premature invocation.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ReferenceError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nReferenceError\nstdout after:\n1"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:23.507514755 -0400\n+++ fixed.js\t2026-10-17 15:42:23.777509156 -0400\n@@ -1,6 +1,6 @@\n function main() {\n   if (false) { return; }\n-  else { function f() { return 1; } }\n+  function f() { return 1; } \n   try { console.log(f()); } catch (e) { console.log(e.name); }\n }\n main();\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Block-scoped function in switch",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nundefined\nstdout after:\nfunction"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:23.938505817 -0400\n+++ fixed.js\t2026-10-17 15:42:24.206500254 -0400\n@@ -2,7 +2,7 @@\n   switch (0) {\n     case 0:\n       if (false) { return; }\n-      else { function g() { return 2; } }\n+      function g() { return 2; } \n       console.log(typeof g);\n       break;\n   }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Shadowing after removal of else block",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-breaks-syntax",
+          "safeLabel": true,
+          "detail": "/home/sun/dev/diaghunt/runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/r2-p001/fixed.js:5\n    let x = 2;\n        ^\n\nSyntaxError: Identifier 'x' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": false,
+        "diff": "--- orig.js\t2026-10-17 15:42:28.435412284 -0400\n+++ fixed.js\t2026-10-17 15:42:28.696406842 -0400\n@@ -1,9 +1,8 @@\n function f() {\n   let x = 1;\n   if (true) { return x; }\n-  else {\n+  \n     let x = 2;\n     console.log(x);\n-  }\n }\n f();\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Label targeting broken by else block extraction",
+      "hazard": "Extracting a labeled statement from the else block may break label targeting if the label is referenced elsewhere via break/continue.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "reached\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "reached\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:28.746405799 -0400\n+++ fixed.js\t2026-10-17 15:42:29.010400295 -0400\n@@ -1,7 +1,6 @@\n outer: for (let i = 0; i < 2; i++) {\n   if (i === 0) { continue outer; }\n-  else {\n+  \n     console.log('reached');\n     break outer;\n-  }\n }\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Function declaration hoisted from else block",
+      "hazard": "Hoisting a function declaration from within the else block could make it available earlier than intended, causing premature invocation.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "early\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "early\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:29.177396809 -0400\n+++ fixed.js\t2026-10-17 15:42:29.432391487 -0400\n@@ -1,9 +1,8 @@\n function f() {\n   if (false) {\n     return g();\n-  } else {\n+  }\n     function g() { return 'early'; }\n     return g();\n-  }\n }\n console.log(f());\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comment displaced when else block removed",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:29.599388001 -0400\n+++ fixed.js\t2026-10-17 15:42:29.839382992 -0400\n@@ -1,9 +1,8 @@\n function f() {\n   if (true) { return 1; }\n   // This comment should stay\n-  else {\n+  \n     // This comment may be lost\n     console.log(2);\n-  }\n }\n f();\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Debugger statement moved alters tooling behavior",
+      "hazard": "If the else block contains a debugger statement, moving it may alter developer tooling behavior if the surrounding scope has different blackboxing settings.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:29.990379840 -0400\n+++ fixed.js\t2026-10-17 15:42:30.237374680 -0400\n@@ -1,8 +1,7 @@\n function f() {\n   if (true) { return; }\n-  else {\n+  \n     debugger;\n     console.log('unreachable');\n-  }\n }\n f();\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Function declaration in else block of switch case",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:30.382371650 -0400\n+++ fixed.js\t2026-10-17 15:42:30.664365758 -0400\n@@ -2,10 +2,9 @@\n   switch (0) {\n     case 0:\n       if (true) { break; }\n-      else {\n+      \n         function g() { return 1; }\n         return g();\n-      }\n   }\n }\n console.log(f());\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Order preservation but context change in else block",
+      "hazard": "Duplicating a side-effecting expression [...] their relative order is preserved but their execution context changes.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:42:30.830362290 -0400\n+++ fixed.js\t2026-10-17 15:42:31.095356751 -0400\n@@ -1,10 +1,9 @@\n let log = [];\n function f() {\n   if (true) { return; }\n-  else {\n+  \n     log.push(1);\n     log.push(2);\n-  }\n }\n f();\n console.log(log);\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Nullish vs falsy in else block after move",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/r2-p008/orig.js:3\n  return;\n  ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    }
+  ],
+  "reports": [
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "function main() {\n  if (false) { return; }\n  else { function f() { return 1; } }\n  try { console.log(f()); } catch (e) { console.log(e.name); }\n}\nmain();\n",
+      "lines": {
+        "before": 6,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/11937",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3770",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/1191",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/4354",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix hoists the function declaration out of the else block, changing it from a block-scoped declaration (ES2015+) that only exists when the else runs to a function-scoped declaration that is always created. The original program throws a ReferenceError because f is never declared; after the fix f exists and prints 1. The documentation presents the rewrite as equivalent but does not account for block-scoped function declarations.",
+        "docsQuote": "Its contents can be placed outside of the block.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noUselessElse fix",
+          "style noUselessElse conditional block",
+          "style noUselessElse empty if body",
+          "style noUselessElse function declaration"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUselessElse` safe fix hoists a declaration that collides with an outer binding",
+            "url": "https://github.com/biomejs/biome/issues/11937",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:           npm\n  JS_RUNTIME_NAME:              node\n```\n\n</details>\n\n### Rule name\n\n`"
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedClasses` cannot sort TailwindCSS classname corretly",
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.0.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BIO"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 Corrupted CLI safe fix for `useConsistentArrowReturn`",
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.3.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUselessElse reports useful else · Issue #3770 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3770",
+            "snippet": "In this code branch the noUselessElse clause is hit on the else statement even though it obviously should not.  \n Removing the break keyword fixes the error but the break is needed for the for loop. [...] Closed\n\nClosed\n\n💅 noUselessElse reports useful else#3770\n\nCopy link\n\n## Description\n\n@redsuper"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `noUselessElse` recommendation is wrong · Issue #1191 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1191",
+            "snippet": "./rollup/plugins/extractPolyfillsPlugin.js:121:5 lint/style/noUselessElse FIXABLE ━━━━━━━━━━━━━━━━ ✖ This else clause can be omitted. 119 │ // or 120 │ // `const { dogs } = { dogs: () => \"are great\" }` > 121 │ else if (declarationId.type === 'ObjectPattern') { │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Biome ignoring config? · Issue #6459 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6459",
+            "snippet": "\"off\" \" \" \"useTemplate\" \"fix\" \"safe\" \" \" \"level\" \"warn\" \" \" \"noUselessElse\" \"fix\" \"safe\" \" \" \"level\" \"warn\" \" \" \"noParameterAssign\" \"error\" \" \" \"useAsConstAssertion\" \"error\" \" \" \"useDefaultParameterLast\" \"error\" \" \" \"useEnumInitializers\" \"error\" \" \" \"useSelfClosingElements\" \"error\" \" \" \"useSingleVar"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "--skip=suspicious/noGlobalIsNan --skip=a11y --skip=style/noParameterAssign --skip=style/noUselessElse --skip=style/useTemplate --skip=complexity/useOptionalChain --skip=correctness/useExhaustiv eDependencies --skip=correctness/noChildrenProp --skip=suspicious/noImplicitAnyLet --skip=complexity/useLi"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessElse does not respect else if conditional",
+            "url": "https://github.com/biomejs/biome/issues/4354",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\r\n  Version:                      1.9.4\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             x86_64\r\n  OS:                           windows\r\n\r\nEnvironment:\r\n  BIOME_LOG_PATH:               unset\r\n  BIOME_LOG_PREFIX_NAME:       "
+          },
+          {
+            "source": "github",
+            "title": "🐛 Parser fails with \"Expected a compound selector\" due to @media query",
+            "url": "https://github.com/biomejs/biome/issues/3091",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```block\nCLI:\r\n  Version:                      1.8.0\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             x86_64\r\n  OS:                           linux\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                     "
+          },
+          {
+            "source": "tavily",
+            "title": "format duplicates HTML comments on format. · Issue #11430 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11430",
+            "snippet": "\"always\" \" \" \"trailingCommas\" \"all\" \" \" \"json\" \"parser\" \"allowComments\" true \"linter\" \"enabled\" true \"rules\" \"preset\" \"recommended\" \" \" \"style\" \"noParameterAssign\" \"error\" \" \" \"useAsConstAssertion\" \"error\" \" \" \"useDefaultParameterLast\" \"error\" \" \" \"useEnumInitializers\" \"error\" \" \" \"useSelfClosingEle"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Linter does not understand svelte block bindings. Destructuring makes it fail to parse. · Issue #9540 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9540",
+            "snippet": "Details\n\n```\ntrue unset unset unset unset unset unset unset unset unset true true true true true unset unset unset unset true\n```\n\n### Rule name\n\nnoUndeclaredVariables\n\n### Playground link\n\n### Expected result\n\nSvelte lets you sometimes bind variables within blocks using stuff like this:\n\n```\n#each "
+          },
+          {
+            "source": "github",
+            "title": "💅 False positive by lint/nursery/noUselessUndefined",
+            "url": "https://github.com/biomejs/biome/issues/6577",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.0.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           windows\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  B"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Biome LSP is treating typescript files as if they were javascript files · Issue #3839 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3839",
+            "snippet": "\" \"outerHeight\" \" \" \"outerWidth\" \" \" \"pageXOffset\" \" \" \"pageYOffset\" \" \" \"parent\" \" \" \"print\" \" \" \"removeEventListener\" \" \" \"resizeBy\" \" \" \"resizeTo\" \" \" \"screen\" \" \" \"screenLeft\" \" \" \"screenTop\" \" \" \"screenX\" \" \" \"screenY\" \" \" \"scroll\" \" \" \"scrollbars\" \" \" \"scrollBy\" \" \" \"scrollTo\" \" \" \"scrollX\" \" "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: a generic call's explicit type argument is ignored",
+            "url": "https://github.com/biomejs/biome/issues/11446",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 New rule for `noDeprecatedImports` not working with declarations",
+            "url": "https://github.com/biomejs/biome/issues/7635",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.2.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useHookAtTopLevel` false positive when used with forwardRef",
+            "url": "https://github.com/biomejs/biome/issues/9195",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:  "
+          },
+          {
+            "source": "github",
+            "title": "💅 noFloatingPromises doesn't respect TypeScript overloads",
+            "url": "https://github.com/biomejs/biome/issues/9568",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 `nusery/noShadow` should not flag parameter names of function types",
+            "url": "https://github.com/biomejs/biome/issues/9482",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.7\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:   "
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedVariables` triggering on namespaces used to define component props",
+            "url": "https://github.com/biomejs/biome/issues/7664",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.2.3\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "github",
+            "title": "💅 False error (or at least a misleading one) - private class member never used",
+            "url": "https://github.com/biomejs/biome/issues/6933",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.1.2\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "github",
+            "title": "💅 Function parameters with spread operator are not correctly checked by `noUnusedFunctionParameters`",
+            "url": "https://github.com/biomejs/biome/issues/5941",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      1.9.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 lint/nursery/noUselessUndefined fix is unsafe for functions with union return types · Issue #6906 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6906",
+            "snippet": "Yes, it would probably make more sense to define the function return type as `string | undefined | void`, but in my case that is defined upstream on another library so I don't have that choice.\n5. ### ematipicocommentedon Sep 7, 2026\n\n   @ematipico\n\n   ematipico\n\n   on Sep 7, 2026\n\n   Member\n\n   Mor"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Should allow `void` returns when function return type is `void` · Issue #4173 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/4173",
+            "snippet": "```\nfunction fn() void void{if(something()) return void doSomething(); dosSmethingElse();}\n```\n\n### Code of Conduct\n\n I agree to follow Biome's Code of Conduct\n\nReactions are currently unavailable\n\n## Activity\n\n1. ematipico\n\n   added\n\n   S-Help-wantedStatus: you're familiar with the code base and wa"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 lint/correctness/noUnusedVariables for `catch` clause should suggest removing variable definition as unsafe fix · Issue #6476 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6476",
+            "snippet": "on Jun 24, 2025\n\n   Member\n\n   More actions\n\n   ES2019 is very old for me, I think it's acceptable to use the syntax by default. However we may need to make ECMAScript language version configurable for rules that uses newer syntaxes.\n\n   Reacted by Victorien Elvinger\n9. ### tats-ucommentedon Jun 24,"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/11937",
+            "relation": "duplicate",
+            "why": "same rule noUselessElse hoisting a function declaration out of an else block and colliding with an outer binding"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule noUnnecessaryConditions and different construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule noSkippedTests"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "performance issue unrelated to noUselessElse"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule noUnusedImports"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "relation": "unrelated",
+            "why": "different rule useSortedClasses"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule useSimplifiedLogicExpression"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule useExplicitLengthCheck"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule noUselessTernary"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "relation": "unrelated",
+            "why": "different rule useConsistentArrowReturn"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3770",
+            "relation": "related",
+            "why": "same rule noUselessElse but different construct (break in loop)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1191",
+            "relation": "related",
+            "why": "same rule noUselessElse but different construct (else-if chain)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6459",
+            "relation": "unrelated",
+            "why": "config parsing issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "CLI flag handling issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4354",
+            "relation": "related",
+            "why": "same rule noUselessElse but different construct (else-if conditional)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3091",
+            "relation": "unrelated",
+            "why": "parser issue with @media query"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11430",
+            "relation": "unrelated",
+            "why": "formatter duplicating HTML comments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9540",
+            "relation": "unrelated",
+            "why": "Svelte parsing issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6577",
+            "relation": "unrelated",
+            "why": "different rule noUselessUndefined"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3839",
+            "relation": "unrelated",
+            "why": "LSP TypeScript handling issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11446",
+            "relation": "unrelated",
+            "why": "different rule noUnnecessaryConditions"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7635",
+            "relation": "unrelated",
+            "why": "different rule noDeprecatedImports"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9195",
+            "relation": "unrelated",
+            "why": "different rule useHookAtTopLevel"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9568",
+            "relation": "unrelated",
+            "why": "different rule noFloatingPromises"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9482",
+            "relation": "unrelated",
+            "why": "different rule noShadow"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7664",
+            "relation": "unrelated",
+            "why": "different rule noUnusedVariables"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6933",
+            "relation": "unrelated",
+            "why": "different rule about private class members"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/5941",
+            "relation": "unrelated",
+            "why": "different rule noUnusedFunctionParameters"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6906",
+            "relation": "unrelated",
+            "why": "different rule noUselessUndefined"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4173",
+            "relation": "unrelated",
+            "why": "different rule about void returns"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6476",
+            "relation": "unrelated",
+            "why": "different rule noUnusedVariables for catch clause"
+          }
+        ],
+        "cost": 0.0076362
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:25:14.403790975 -0400\n+++ fixed.js\t2026-10-22 13:25:14.564793632 -0400\n@@ -1,6 +1,6 @@\n function main() {\n   if (false) { return; }\n-  else { function f() { return 1; } }\n+  function f() { return 1; } \n   try { console.log(f()); } catch (e) { console.log(e.name); }\n }\n main();\n",
+        "observed": "stdout before:\nReferenceError\nstdout after:\n1",
+        "before": {
+          "stdout": "ReferenceError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "function main() {\n  if (false) { return; }\n  function f() { return 1; } \n  try { console.log(f()); } catch (e) { console.log(e.name); }\n}\nmain();\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/noUselessElse --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original `else` block defines `f` only when the condition is false—always true here—but its scope is limited to that block due to JavaScript’s lexical scoping rules for function declarations inside blocks. After removing the `else`, `f` becomes globally scoped within `main`, so it exists in the `try` block regardless of the conditional. Originally, although logically reachable, the function declaration was still confined to the `else` block’s scope per ES2015+ semantics, making `f` inaccessible outside it despite the condition being constant-false. The rewrite hoists `f` to the function level, changing its visibility and causing different behavior. This violates semantic preservation because scope, not just execution, determines identifier accessibility. The fix incorrectly assumes dead code removal preserves scope, but block-scoped function declarations are not interchangeable with outer-scope ones even when unreachable.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p008",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "function main() {\n  switch (0) {\n    case 0:\n      if (false) { return; }\n      else { function g() { return 2; } }\n      console.log(typeof g);\n  }\n}\nmain();\n",
+      "lines": {
+        "before": 10,
+        "after": 9
+      },
+      "reportPath": "runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/reports/r1-p008.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/11937",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3770",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/1191",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/4354",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix hoists a function declaration out of an else block into a switch case clause, where function declarations are not allowed in strict mode and have implementation-dependent semantics in sloppy mode. Before the fix the function was never created (the else was dead code), so typeof g yielded 'undefined'; after the fix the function is created (or a syntax error occurs), changing the observable behavior.",
+        "docsQuote": "Its contents can be placed outside of the block",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noUselessElse fix",
+          "style noUselessElse conditional block",
+          "else clause containing function declaration",
+          "switch case if-else refactoring"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUselessElse` safe fix hoists a declaration that collides with an outer binding",
+            "url": "https://github.com/biomejs/biome/issues/11937",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:           npm\n  JS_RUNTIME_NAME:              node\n```\n\n</details>\n\n### Rule name\n\n`"
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedClasses` cannot sort TailwindCSS classname corretly",
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.0.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BIO"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 Corrupted CLI safe fix for `useConsistentArrowReturn`",
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.3.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUselessElse reports useful else · Issue #3770 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3770",
+            "snippet": "In this code branch the noUselessElse clause is hit on the else statement even though it obviously should not.  \n Removing the break keyword fixes the error but the break is needed for the for loop. [...] Closed\n\nClosed\n\n💅 noUselessElse reports useful else#3770\n\nCopy link\n\n## Description\n\n@redsuper"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `noUselessElse` recommendation is wrong · Issue #1191 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1191",
+            "snippet": "./rollup/plugins/extractPolyfillsPlugin.js:121:5 lint/style/noUselessElse FIXABLE ━━━━━━━━━━━━━━━━ ✖ This else clause can be omitted. 119 │ // or 120 │ // `const { dogs } = { dogs: () => \"are great\" }` > 121 │ else if (declarationId.type === 'ObjectPattern') { │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Biome ignoring config? · Issue #6459 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6459",
+            "snippet": "\"off\" \" \" \"useTemplate\" \"fix\" \"safe\" \" \" \"level\" \"warn\" \" \" \"noUselessElse\" \"fix\" \"safe\" \" \" \"level\" \"warn\" \" \" \"noParameterAssign\" \"error\" \" \" \"useAsConstAssertion\" \"error\" \" \" \"useDefaultParameterLast\" \"error\" \" \" \"useEnumInitializers\" \"error\" \" \" \"useSelfClosingElements\" \"error\" \" \" \"useSingleVar"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "--skip=suspicious/noGlobalIsNan --skip=a11y --skip=style/noParameterAssign --skip=style/noUselessElse --skip=style/useTemplate --skip=complexity/useOptionalChain --skip=correctness/useExhaustiv eDependencies --skip=correctness/noChildrenProp --skip=suspicious/noImplicitAnyLet --skip=complexity/useLi"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessElse does not respect else if conditional",
+            "url": "https://github.com/biomejs/biome/issues/4354",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\r\n  Version:                      1.9.4\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             x86_64\r\n  OS:                           windows\r\n\r\nEnvironment:\r\n  BIOME_LOG_PATH:               unset\r\n  BIOME_LOG_PREFIX_NAME:       "
+          },
+          {
+            "source": "github",
+            "title": "🐛 Parser fails with \"Expected a compound selector\" due to @media query",
+            "url": "https://github.com/biomejs/biome/issues/3091",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```block\nCLI:\r\n  Version:                      1.8.0\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             x86_64\r\n  OS:                           linux\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                     "
+          },
+          {
+            "source": "tavily",
+            "title": "format duplicates HTML comments on format. · Issue #11430 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11430",
+            "snippet": "\"always\" \" \" \"trailingCommas\" \"all\" \" \" \"json\" \"parser\" \"allowComments\" true \"linter\" \"enabled\" true \"rules\" \"preset\" \"recommended\" \" \" \"style\" \"noParameterAssign\" \"error\" \" \" \"useAsConstAssertion\" \"error\" \" \" \"useDefaultParameterLast\" \"error\" \" \" \"useEnumInitializers\" \"error\" \" \" \"useSelfClosingEle"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Linter does not understand svelte block bindings. Destructuring makes it fail to parse. · Issue #9540 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9540",
+            "snippet": "Details\n\n```\ntrue unset unset unset unset unset unset unset unset unset true true true true true unset unset unset unset true\n```\n\n### Rule name\n\nnoUndeclaredVariables\n\n### Playground link\n\n### Expected result\n\nSvelte lets you sometimes bind variables within blocks using stuff like this:\n\n```\n#each "
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Embedded language formatting · Issue #3334 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3334",
+            "snippet": "on Jul 2, 2024\n3. ### Sec-antcommentedon Jul 2, 2024\n\n   @Sec-ant\n\n   on Jul 2, 2024\n\n   More actions\n\n   Great great work 🚀 . I'd like to add some additional notes. I will update them in this comment later.\n\n   TLDR, I think we should broaden the concept of embedded language. I'll provide my ratio"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/11937",
+            "relation": "duplicate",
+            "why": "same rule noUselessElse hoisting a function declaration out of an else block into a switch case, colliding with an outer binding and changing typeof g from undefined to function"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule noUnnecessaryConditions about overloaded calls with undefined default arguments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule noSkippedTests about conditionally skipping fix suggestions"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "performance issue with extension on large files, not a lint rule fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule noUnusedImports about imports used in comments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "relation": "unrelated",
+            "why": "different rule useSortedClasses about TailwindCSS class sorting"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule useSimplifiedLogicExpression breaking code with its safe fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule useExplicitLengthCheck with false positive and broken fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule noUselessTernary producing double space in quick fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "relation": "unrelated",
+            "why": "different rule useConsistentArrowReturn with corrupted CLI safe fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3770",
+            "relation": "related",
+            "why": "same rule noUselessElse but about a useful else with break in a for loop, not a function declaration hoisting in a switch case"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1191",
+            "relation": "related",
+            "why": "same rule noUselessElse but about an else-if chain in object pattern matching, not a function declaration hoisting in a switch case"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6459",
+            "relation": "unrelated",
+            "why": "config parsing issue ignoring rule settings, not a specific rule fix defect"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "CLI flag --write applying fixes to all rules ignoring --only, not a rule-specific fix defect"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4354",
+            "relation": "related",
+            "why": "same rule noUselessElse but about not respecting else-if conditional, not a function declaration hoisting in a switch case"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3091",
+            "relation": "unrelated",
+            "why": "parser failure on @media query in CSS, not a JavaScript lint rule fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11430",
+            "relation": "unrelated",
+            "why": "formatter duplicating HTML comments, not a lint rule fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9540",
+            "relation": "unrelated",
+            "why": "Svelte parsing issue with block bindings, not a JavaScript lint rule fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3334",
+            "relation": "unrelated",
+            "why": "feature request for embedded language formatting, not a bug fix"
+          }
+        ],
+        "cost": 0.0054506
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:25:25.283970587 -0400\n+++ fixed.js\t2026-10-22 13:25:25.422972882 -0400\n@@ -2,7 +2,7 @@\n   switch (0) {\n     case 0:\n       if (false) { return; }\n-      else { function g() { return 2; } }\n+      function g() { return 2; } \n       console.log(typeof g);\n   }\n }\n",
+        "observed": "stdout before:\nundefined\nstdout after:\nfunction",
+        "before": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "function main() {\n  switch (0) {\n    case 0:\n      if (false) { return; }\n      function g() { return 2; } \n      console.log(typeof g);\n  }\n}\nmain();\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/noUselessElse --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original `else` block defines `g` only when the condition is false—here always executed because `if(false)` never runs—but as a function declaration inside a block, it remains scoped to that block in strict mode, making `g` inaccessible outside. After rewriting, `g` becomes a top-level function declaration within the same block scope but now hoisted to the block’s start, still confined to the block. However, JavaScript treats block-scoped function declarations inconsistently across engines; here, the engine likely hoists `g` to the function scope of `main`, making it accessible for `typeof`. Thus, `typeof g` changes from `undefined` (original, due to block scoping) to `function` (rewritten, due to hoisting to outer scope). This alters observable behavior.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p001",
+      "kind": "fix-breaks-syntax",
+      "safeLabel": true,
+      "minimized": "function f() {\n  let x = 1;\n  if (true) { return x; }\n  else {\n    let x = 2;\n  }\n}\n",
+      "lines": {
+        "before": 9,
+        "after": 7
+      },
+      "reportPath": "runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/reports/r2-p001.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/11937",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/11351",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/11558",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/11092",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/8347",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3770",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/1191",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix hoists the `let x = 2` declaration out of the `else` block into the same scope where `let x = 1` already exists, causing a duplicate declaration SyntaxError. The documentation presents the rewrite as equivalent but does not account for block-scoped declarations that would collide when moved outward.",
+        "docsQuote": "Its contents can be placed outside of the block",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noUselessElse fix",
+          "style noUselessElse block-scoped variable",
+          "if-else redundant branch declaration conflict",
+          "useless else shadowing outer scope"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUselessElse` safe fix hoists a declaration that collides with an outer binding",
+            "url": "https://github.com/biomejs/biome/issues/11937",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:           npm\n  JS_RUNTIME_NAME:              node\n```\n\n</details>\n\n### Rule name\n\n`"
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedClasses` cannot sort TailwindCSS classname corretly",
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.0.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BIO"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 Corrupted CLI safe fix for `useConsistentArrowReturn`",
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.3.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUselessElse reports useful else · Issue #3770 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3770",
+            "snippet": "In this code branch the noUselessElse clause is hit on the else statement even though it obviously should not.  \n Removing the break keyword fixes the error but the break is needed for the for loop. [...] Closed\n\nClosed\n\n💅 noUselessElse reports useful else#3770\n\nCopy link\n\n## Description\n\n@redsuper"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `noUselessElse` recommendation is wrong · Issue #1191 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1191",
+            "snippet": "./rollup/plugins/extractPolyfillsPlugin.js:121:5 lint/style/noUselessElse FIXABLE ━━━━━━━━━━━━━━━━ ✖ This else clause can be omitted. 119 │ // or 120 │ // `const { dogs } = { dogs: () => \"are great\" }` > 121 │ else if (declarationId.type === 'ObjectPattern') { │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Biome ignoring config? · Issue #6459 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6459",
+            "snippet": "\"off\" \" \" \"useTemplate\" \"fix\" \"safe\" \" \" \"level\" \"warn\" \" \" \"noUselessElse\" \"fix\" \"safe\" \" \" \"level\" \"warn\" \" \" \"noParameterAssign\" \"error\" \" \" \"useAsConstAssertion\" \"error\" \" \" \"useDefaultParameterLast\" \"error\" \" \" \"useEnumInitializers\" \"error\" \" \" \"useSelfClosingElements\" \"error\" \" \" \"useSingleVar"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "--skip=suspicious/noGlobalIsNan --skip=a11y --skip=style/noParameterAssign --skip=style/noUselessElse --skip=style/useTemplate --skip=complexity/useOptionalChain --skip=correctness/useExhaustiv eDependencies --skip=correctness/noChildrenProp --skip=suspicious/noImplicitAnyLet --skip=complexity/useLi"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/11937",
+            "relation": "duplicate",
+            "why": "same rule noUselessElse removing an else block that contains a let declaration colliding with an outer let x"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule noUnnecessaryConditions about overloaded calls with undefined default arguments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule noSkippedTests about conditional skip fix suggestions"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "extension performance issue on large files unrelated to noUselessElse"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule noUnusedImports about imports used in comments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "relation": "unrelated",
+            "why": "different rule useSortedClasses about TailwindCSS class sorting"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "related",
+            "why": "same class of defect safe fix breaking code but different rule useSimplifiedLogicExpression"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "related",
+            "why": "same class of defect broken fix but different rule useExplicitLengthCheck"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "related",
+            "why": "same rule noUselessElse but different defect double space in quick fix not declaration collision"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "relation": "related",
+            "why": "same class of defect corrupted safe fix but different rule useConsistentArrowReturn"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3770",
+            "relation": "related",
+            "why": "same rule noUselessElse but different construct else with break in loop not declaration collision"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1191",
+            "relation": "related",
+            "why": "same rule noUselessElse but different construct else if with ObjectPattern not declaration collision"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6459",
+            "relation": "unrelated",
+            "why": "config ignoring issue unrelated to noUselessElse fix logic"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "CLI --write flag applying fixes to all rules unrelated to noUselessElse logic"
+          }
+        ],
+        "cost": 0.0041711000000000005
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:25:30.364054491 -0400\n+++ fixed.js\t2026-10-22 13:25:32.428088588 -0400\n@@ -1,7 +1,6 @@\n function f() {\n   let x = 1;\n   if (true) { return x; }\n-  else {\n+  \n     let x = 2;\n-  }\n }\n",
+        "observed": "/home/sun/dev/diaghunt/runs/2026-10-17T19-42-12-619Z-e4vp-biome-style_noUselessElse/r2-p001/min/r2-p001-reuse/fixed.js:5\n    let x = 2;\n        ^\n\nSyntaxError: Identifier 'x' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "function f() {\n  let x = 1;\n  if (true) { return x; }\n  \n    let x = 2;\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/noUselessElse --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original code declares `x` in two separate scopes: one in the outer block (`let x = 1`) and another inside the `else` block (`let x = 2`). These are distinct variables due to lexical scoping. Removing the `else` keyword merges both declarations into the same scope—the function body—causing a duplicate declaration of `x`, which is invalid syntax. Thus, the transformation breaks correctness by violating JavaScript’s block-scoped variable rules, making the rewritten program fail to parse.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ]
+}

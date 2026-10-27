@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags calls to Object.assign() used to create a new object by merging properties where the first argument is an empty object literal.",
+  "firingShapes": [
+    "Object.assign({}, foo);",
+    "Object.assign({}, { foo: 'bar' });",
+    "Object.assign({ foo: 'bar' }, baz);",
+    "Object.assign({}, baz, { foo: 'bar' });",
+    "Object.assign({}, obj1, obj2, obj3);",
+    "Object.assign({}, getObj(), { x: 1 });",
+    "Object.assign({}, ...spreadArgs);",
+    "Object.assign({}, a.b.c, d.e.f);"
+  ],
+  "silentShapes": [
+    "Object.assign(foo, { bar: baz });",
+    "Object.assign(target, source);",
+    "const result = Object.assign({}, foo); // but result unused",
+    "Object.assign({}, null);",
+    "Object.assign(undefined, {});"
+  ],
+  "fixDescription": "Replace Object.assign({}, sources...) with an object literal using spread properties: {...sources}",
+  "hazards": [
+    "Rewriting Object.assign({}, foo) to {...foo} fails if foo is null or undefined because spreading null/undefined throws a TypeError, while Object.assign treats them as no-ops.",
+    "If the first argument is not an empty object (e.g., Object.assign({a:1}, b)), the rule does not fire, but if mistakenly applied, spreading would lose the initial {a:1} properties.",
+    "When Object.assign is used with a non-literal first argument like a variable (Object.assign(x, y)), spreading {...x, ...y} changes semantics if x is mutated later, as the spread captures x's value at call time vs ObjectAssign's reference.",
+    "If sources contain getters, Object.assign invokes them during assignment, while spread evaluates them once during object creation—though both are eager, differences arise if getters have side effects or depend on mutable state.",
+    "In non-object parameters (e.g., Object.assign({}, 'abc')), spreading a string creates properties for each character ('0':'a','1':'b',etc), matching Object.assign, but if the value is symbol-only, spread ignores symbols while Object.assign copies them—though both actually copy symbol properties, so this hazard is invalid; corrected: spread and Object.assign both copy symbol-enumerable properties identically.",
+    "Comments attached to the Object.assign call or its arguments may be lost or misplaced during rewrite, as the autofix replaces the entire expression and may not preserve comment associations.",
+    "If Object.assign is shadowed by a local variable (e.g., const ObjectAssign = Object.assign; ObjectAssign({}, x)), the rule does not trigger because it's not the global Object.assign, but if misapplied, the fix would break by introducing spread syntax unrelated to the shadowed binding.",
+    "In strict mode, both behaviors are identical, but in sloppy mode, Object.assign may trigger __set__ on proxies differently than spread—though modern engines align them, historical differences could exist in edge cases with proxy traps.",
+    "When the call is part of a larger expression (e.g., return Object.assign({}, x)), rewriting to return {...x} preserves value but may alter stack traces or debugging profiles due to different function origins.",
+    "If the sources include expressions with side effects (e.g., Object.assign({}, f(), g())), the evaluation order of f() and g() is left-to-right in both Object.assign and spread, so no hazard—but if the rewrite incorrectly reordered arguments, it would break; however, Biome preserves order, so this is not a hazard."
+  ]
+}

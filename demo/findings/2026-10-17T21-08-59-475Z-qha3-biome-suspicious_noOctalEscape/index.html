@@ -1,0 +1,84 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome suspicious/noOctalEscape — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome suspicious/noOctalEscape <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T21-08-59-475Z-qha3-biome-suspicious_noOctalEscape · fix labelled <b>safe</b> · 15 programs, 0 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0032</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags octal escape sequences like \251 inside string literals as they are deprecated per ES5.</p><p class="mut">Fix: Replace each octal escape sequence \ddd (where ddd is one to three octal digits) with its equivalent Unicode escape sequence \u00hh, where hh is the two-digit hexadecimal representation of the octal value.</p><details><summary>10 hazards</summary><ul><li>In template literals, the autofix may incorrectly process \251 as an escape when it was intended as literal backslash followed by &#39;251&#39;, changing the string value.</li><li>If the octal escape appears inside a larger string with adjacent characters, the fix could alter tokenization if the replacement introduces characters that form new escape sequences with neighboring text.</li><li>The fix assumes the octal value represents a Unicode code point; however, in legacy environments, octal escapes were sometimes used for byte values in binary data, and converting to Unicode escapes may change how the string is interpreted when encoded to UTF-8.</li><li>If the string is used in a context where it is later evaluated as code (e.g., via eval), the rewritten escape may not behave identically due to differences in how escape sequences are processed in eval vs. literal strings.</li><li>The autofix does not preserve leading zeros in the octal sequence (e.g., \007 becomes \u0007), which is semantically equivalent but may affect code that relies on the exact source length for parsing or metadata.</li><li>If the octal escape is part of a concatenated string built across multiple lines using backslash continuation, the fix could disrupt the continuation if the replacement alters line length or introduces unintended line terminators.</li><li>In regex literals mistakenly written as strings (e.g., &quot;\251&quot; used in RegExp constructor), the fix changes the string passed to RegExp, potentially altering the resulting regex pattern if the escape was meant to be a literal digit sequence.</li><li>If the code relies on the string&#39;s raw character count for indexing or buffer operations, the fix preserves semantics but may interfere with tools that measure string length based on source representation rather than runtime value.</li><li>When the octal escape appears in a string that is stringified and compared against a known literal (e.g., in snapshot testing), the fix changes the source form, causing false mismatches even if runtime values are equal.</li><li>If the string contains multiple octal escapes and the fix processes them sequentially, overlapping or adjacent sequences (e.g., \25\1) might be misparsed, though such sequences are invalid and unlikely to appear in practice.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Comments attached to the removed or moved code</td><td class="mut">If the octal escape is within a comment that gets inadvertently modified by the linter due</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Name collisions across scopes after a move (shadowing)</td><td class="mut">Moving code containing an octal escape into a scope with a conflicting variable name cause</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">invalid</span></td><td>Arguments object, function.length, default parameters, rest parameters</td><td class="mut">Function parameters involving strings with octal escapes affect .length or arguments handl</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">invalid</span></td><td>This binding: arrow vs function, methods extracted from objects, call/apply/bind</td><td class="mut">String with octal escape used in method extraction or bind alters this-contextual behavior</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Unicode assumption vs byte interpretation in binary contexts</td><td class="mut">Octal escape \377 treated as Unicode U+00FF versus byte 255 changes UTF-8 encoding outcome</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">invalid</span></td><td>Snapshot testing: source form change despite runtime equality</td><td class="mut">Fix changes \251 to \u00A9, altering string literal form used in snapshots even if value e</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>Null/undefined distinction, optional chaining, nullish vs falsy</td><td class="mut">String with octal escape used in optional chain; if falsy/nullish behavior changes due to </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Adjacent characters forming new escape sequences after replacement</td><td class="mut">Replacing \251 with \u00A9 in &quot;a\251x&quot; could create &quot;a\u00A9x&quot; which is safe, but if follo</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">invalid</span></td><td>Leading zero preservation in octal escape</td><td class="mut">Autofix removes leading zeros (\007 → \u0007); while semantically identical, some parsers </td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Strict vs sloppy mode semantics</td><td class="mut">In sloppy mode, octal escapes are allowed; in strict mode they throw SyntaxError before an</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>This binding: arrow vs function, method extraction</td><td class="mut">Extracting a method that returns a string with octal escape; if using .call() with differe</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">invalid</span></td><td>Class fields, static blocks, private names, super calls</td><td class="mut">Class field initializer contains octal escape; autofix changes it but behavior should be s</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>Template literal: literal backslash + digits mistaken for escape</td><td class="mut">In template literal, &#39;\251&#39; intended as literal backslash + &#39;2&#39;,&#39;5&#39;,&#39;1&#39;, but autofix incor</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>Function declarations inside blocks, switch cases, labeled statements</td><td class="mut">Function declared in case block returns string with octal escape; autofix changes it. Ensu</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">invalid</span></td><td>Comments attached to the removed or moved code</td><td class="mut">Line comment immediately after octal escape in string; if autofix alters formatting or mov</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Comments attached to the removed or moved code</summary><pre>// \251 copyright notice
+let s = &quot;\251&quot;; // end
+console.log(s);
+</pre></details><details id="r1-p002"><summary>r1-p002 — Name collisions across scopes after a move (shadowing)</summary><pre>{ let \251 = 1; } // invalid? No—simulate via dynamic eval context
+try {
+  eval(&#39;let str = &quot;\251&quot;; console.log(str.charCodeAt(0));&#39;);
+} catch (e) { console.log(e.name + &#39;: &#39; + e.message); }
+// Now introduce shadowing
+{ let str = &quot;shadow&quot;; try { eval(&#39;str = &quot;\251&quot;&#39;); } catch(e){} }
+</pre></details><details id="r1-p003"><summary>r1-p003 — Arguments object, function.length, default parameters, rest parameters</summary><pre>function f(a = &quot;\251&quot;, b) { return [a, b, arguments.length]; }
+console.log(f().join(&#39;|&#39;));
+console.log(f(undefined, &#39;x&#39;).join(&#39;|&#39;));
+</pre></details><details id="r1-p004"><summary>r1-p004 — This binding: arrow vs function, methods extracted from objects, call/apply/bind</summary><pre>const obj = { m() { return this.val + &quot;\251&quot;; }, val: &#39;X&#39; };
+const fn = obj.m;
+console.log(fn.call(obj));
+console.log(obj.m());
+</pre></details><details id="r1-p005"><summary>r1-p005 — Unicode assumption vs byte interpretation in binary contexts</summary><pre>const s = &quot;\377&quot;; // intended as byte 255
+const utf8 = new TextEncoder().encode(s);
+console.log(utf8.length, &#39;[&#39;, utf8.join(&#39;,&#39;],]&#39;);
+</pre></details><details id="r1-p006"><summary>r1-p006 — Snapshot testing: source form change despite runtime equality</summary><pre>const actual = &quot;a\251b&quot;;
+const expected = &quot;a\u00A9b&quot;; // pre-fix source would differ
+console.log(actual === expected ? &#39;equal&#39; : &#39;not equal&#39;, &#39;|&#39;, actual, &#39;|&#39;, expected);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Null/undefined distinction, optional chaining, nullish vs falsy</summary><pre>let s = &quot;\251&quot;;
+console.log(s?.length ?? &#39;null&#39;);
+s = &#39;&#39;;
+console.log(s?.length ?? &#39;empty&#39;);
+s = null;
+console.log(s?.length ?? &#39;null&#39;);
+</pre></details><details id="r1-p008"><summary>r1-p008 — Adjacent characters forming new escape sequences after replacement</summary><pre>const s = &quot;\2513&quot;; // octal esc + digit
+console.log(s); // should be © + &#39;3&#39;
+const t = &quot;\251&quot; + &quot;3&quot;;
+console.log(t === s ? &#39;same&#39; : &#39;diff&#39;);
+</pre></details><details id="r2-p001"><summary>r2-p001 — Leading zero preservation in octal escape</summary><pre>const s = &#39;\007&#39;;
+console.log(s.length, s.charCodeAt(0));
+</pre></details><details id="r2-p002"><summary>r2-p002 — Strict vs sloppy mode semantics</summary><pre>&#39;use strict&#39;; try { eval(&#39;&quot;\251&quot;&#39;); console.log(&#39;should not reach&#39;); } catch(e) { console.log(e.name, e.message); }
+try { console.log(&#39;\251&#39;.charCodeAt(0)); } catch(e) { console.log(e.name, e.message); }
+</pre></details><details id="r2-p003"><summary>r2-p003 — This binding: arrow vs function, method extraction</summary><pre>const obj = { get: function() { return this.val + &#39;\251&#39;; }, val: &#39;X&#39; };
+const f = obj.get;
+console.log(f.call({val: &#39;Y&#39;}));
+console.log(obj.get());
+</pre></details><details id="r2-p004"><summary>r2-p004 — Class fields, static blocks, private names, super calls</summary><pre>class Base { constructor() { this.base = true; } getVal() { return &#39;\251&#39;; } }
+class Derived extends Base { #pri = 42; str = super.getVal(); getStr() { return this.str + this.#pri; } }
+const d = new Derived();
+console.log(d.getStr());
+</pre></details><details id="r2-p006"><summary>r2-p006 — Template literal: literal backslash + digits mistaken for escape</summary><pre>const s = `\\251`; // intended: backslash + &#39;251&#39;
+console.log(s, s.length);
+// After bad fix: would become `\u00A9` (c.r) + &#39;251&#39;? No — but rule shouldn&#39;t fire here.
+// Actual issue: if code had `\251` without double backslash, rule fires but shouldn&#39;t.
+// So we show a case where it should NOT fire but might be misapplied.
+console.log(s === &#39;\\251&#39; ? &#39;ok&#39; : &#39;broken&#39;);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Function declarations inside blocks, switch cases, labeled statements</summary><pre>let result = &#39;&#39;;
+for (let i = 0; i &lt; 2; i++) {
+  switch(i) {
+    case 0:
+      function f() { return &#39;a\251b&#39;; }
+      result += f();
+      break;
+    case 1:
+      result += f(); // reuse function from case 0
+      break;
+  }
+}
+console.log(result);
+</pre></details><details id="r2-p008"><summary>r2-p008 — Comments attached to the removed or moved code</summary><pre>const s = &#39;\251&#39;; // copyright symbol
+console.log(s.charCodeAt(0) === 169 ? &#39;ok&#39; : &#39;bad&#39;, s);
+</pre></details></body></html>

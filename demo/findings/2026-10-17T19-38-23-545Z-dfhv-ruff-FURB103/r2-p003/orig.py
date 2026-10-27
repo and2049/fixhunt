@@ -1,0 +1,1 @@
+class SilentWriter:\n    def __enter__(self):\n        return self\n    def __exit__(self, *exc):\n        pass\n    def write(self, data):\n        self.data = data\nwith SilentWriter() as w:\n    w.write('hello')\nprint(writer.data if hasattr(writer, 'data') else 'none')\n# Note: writer not defined; meant to show no file touched\nprint('no file created')

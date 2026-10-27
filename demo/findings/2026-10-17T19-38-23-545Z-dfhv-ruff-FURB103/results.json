@@ -1,0 +1,717 @@
+{
+  "runId": "2026-10-17T19-38-23-545Z-dfhv-ruff-FURB103",
+  "tool": "ruff",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB103",
+    "fixKind": "unknown",
+    "docs": "# write-whole-file (FURB103)\n\nDerived from the **refurb** linter.\n\nFix is sometimes available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for uses of `open` and `write` that can be replaced by `pathlib`\nmethods, like `Path.write_text` and `Path.write_bytes`.\n\n## Why is this bad?\nWhen writing a single string to a file, it's simpler and more concise\nto use `pathlib` methods like `Path.write_text` and `Path.write_bytes`\ninstead of `open` and `write` calls via `with` statements.\n\n## Example\n```python\nwith open(\"file.txt\", \"w\") as f:\n    f.write(\"some text\")\n```\n\nUse instead:\n```python\nfrom pathlib import Path\n\nPath(\"file.txt\").write_text(\"some text\")\n```\n\n## Fix Safety\nThis rule's fix is marked as unsafe if the replacement would remove comments attached to the original expression.\n\n## References\n- [Python documentation: `Path.write_bytes`](https://docs.python.org/3/library/pathlib.html#pathlib.Path.write_bytes)\n- [Python documentation: `Path.write_text`](https://docs.python.org/3/library/pathlib.html#pathlib.Path.write_text)\n"
+  },
+  "analysis": {
+    "summary": "Flags patterns where a file is opened, written to once within a with block, then closed—suggesting replacement with pathlib.Path.write_text/write_bytes.",
+    "firingShapes": [
+      "with open('file.txt', 'w') as f:\\n    f.write(data)",
+      "with open(path, 'wb') as f:\\n    f.write(b'data')",
+      "with open(filename, 'w', encoding='utf-8') as f:\\n    f.write(text)",
+      "with open(file, 'w') as f:\\n    f.write(s)",
+      "with open('out.log', 'a') as f:\\n    f.write(msg)\\n",
+      "with open(tmp, 'w') as f:\\n    f.write(result)\\n",
+      "with open(name, 'w') as fp:\\n    fp.write(val)",
+      "with open(dest, 'wb') as fout:\\n    fout.write(chunk)"
+    ],
+    "silentShapes": [
+      "with open('file.txt', 'r') as f:\\n    data = f.read()",
+      "with open('file.txt', 'w') as f:\\n    f.write(a)\\n    f.write(b)",
+      "with open('file.txt', 'w') as f:\\n    print(f.write(x))",
+      "with open('file.txt', 'w') as f:\\n    if cond:\\n        f.write(data)",
+      "with open('file.txt', 'w') as f:\\n    f.write(data); f.seek(0)"
+    ],
+    "fixDescription": "Replaces the with open(...) as f: f.write(...) block with Path(file_path).write_text(...) or Path(file_path).write_bytes(...) depending on mode, adding 'from pathlib import Path' if needed.",
+    "hazards": [
+      "Removes comments attached to the 'with' statement or 'open' call, as the fix discards syntactic structure.",
+      "If the file path variable is reassigned after the with block but before use, the fix may evaluate it too early.",
+      "If the write argument has side effects (e.g., a function call), moving it outside the with block changes evaluation timing relative to other statements in the block.",
+      "If the file object is used elsewhere via alias (e.g., g = f; g.write(...)), the fix breaks because the alias is no longer valid.",
+      "If the mode includes flags like '+' (e.g., 'w+'), the fix incorrectly assumes write-only semantics and drops reading capability.",
+      "If the encoding is specified in text mode, the fix must preserve it—but if omitted, defaults may differ across Python versions or platforms.",
+      "If the open call uses a custom opener via opener= parameter, the fix ignores it, potentially breaking filesystem virtualization.",
+      "If the with block contains multiple statements and only the last is a write, the fix still removes prior statements, altering behavior.",
+      "If the write call is guarded by a short-circuiting expression (e.g., cond and f.write(s)), the fix hoists it unconditionally.",
+      "If the file path is a complex expression (e.g., os.path.join(a, b)), the fix may duplicate its evaluation if not carefully hoisted."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0140789,
+  "summary": {
+    "programs": 16,
+    "invalid": 8,
+    "fired": 7,
+    "fixed": 4,
+    "disputed": 1,
+    "fix-changes-behavior": 1
+  },
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Side effect in write argument",
+      "hazard": "If the write argument has side effects (e.g., a function call), moving it outside the with block changes evaluation timing relative to other statements in the block.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path('test.bin').write_bytes(get_data())`",
+            "span": [
+              6,
+              6
+            ],
+            "fix": "none"
+          }
+        ],
+        "run": {
+          "stdout": "before write\nafter: ['called']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "before write\nafter: ['called']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "File object aliased",
+      "hazard": "If the file object is used elsewhere via alias (e.g., g = f; g.write(...)), the fix breaks because the alias is no longer valid.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Multiple statements, only last is write",
+      "hazard": "If the with block contains multiple statements and only the last is a write, the fix still removes prior statements, altering behavior.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path('x.txt').write_text('data')`",
+            "span": [
+              2,
+              6
+            ],
+            "fix": "none"
+          }
+        ],
+        "run": {
+          "stdout": "['start', 'end']\n'data'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['start', 'end']\n'data'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Comments and docstrings on removed code",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path('c.txt').write_text('keep')`",
+            "span": [
+              2,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "keep\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "keep\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Complex file path expression",
+      "hazard": "If the file path is a complex expression (e.g., os.path.join(a, b)), the fix may duplicate its evaluation if not carefully hoisted.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path(path()).write_text(str(call_count))`",
+            "span": [
+              7,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\npath called: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\npath called: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 15:38:33.187466109 -0400\n+++ fixed.py\t2026-10-17 15:38:33.345464159 -0400\n@@ -1,11 +1,11 @@\n import os\n+import pathlib\n call_count = 0\n def path():\n     global call_count\n     call_count += 1\n     return 'p.txt'\n-with open(path(), 'w') as f:\n-    f.write(str(call_count))\n+pathlib.Path(path()).write_text(str(call_count))\n with open('p.txt', 'r') as f:\n     print(f.read())\n print('path called:', call_count)\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Short-circuiting expression guards write",
+      "hazard": "If the write call is guarded by a short-circuiting expression (e.g., cond and f.write(s)), the fix hoists it unconditionally.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path('s.txt').write_text('should not happen')`",
+            "span": [
+              2,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n''\nstdout after:\n'should not happen'"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'should not happen'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 15:38:33.452462839 -0400\n+++ fixed.py\t2026-10-17 15:38:33.605460950 -0400\n@@ -1,6 +1,6 @@\n+import pathlib\n flag = False\n-with open('s.txt', 'w') as f:\n-    flag and f.write('should not happen')\n+pathlib.Path('s.txt').write_text('should not happen')\n with open('s.txt', 'r') as f:\n     print(repr(f.read()))\n import os; os.remove('s.txt')\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Path variable reassigned after with block",
+      "hazard": "If the file path variable is reassigned after the with block but before use, the fix may evaluate it too early.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path(name).write_text('original')`",
+            "span": [
+              2,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'second.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'second.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 15:38:33.717459568 -0400\n+++ fixed.py\t2026-10-17 15:38:34.116454636 -0400\n@@ -1,6 +1,6 @@\n+import pathlib\n name = 'first.txt'\n-with open(name, 'w') as f:\n-    f.write('original')\n+pathlib.Path(name).write_text('original')\n name = 'second.txt'\n with open(name, 'r') as f:\n     print(f.read())\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Mutable default arguments and aliasing after rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path('log.txt').write_text(str(log('first')))`",
+            "span": [
+              4,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "['first']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['first']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 15:38:34.320452107 -0400\n+++ fixed.py\t2026-10-17 15:38:34.484450074 -0400\n@@ -1,8 +1,8 @@\n+import pathlib\n def log(msg, buf=[]):\n     buf.append(msg)\n     return buf\n-with open('log.txt', 'w') as f:\n-    f.write(str(log('first')))\n+pathlib.Path('log.txt').write_text(str(log('first')))\n with open('log.txt', 'r') as f:\n     print(f.read())\n import os; os.remove('log.txt')\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Keyword-only and positional-only parameters with forward defaults",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p002",
+      "title": "Side effect in write argument evaluated twice due to hoist",
+      "hazard": "If the write argument has side effects (e.g., a function call), moving it outside the with block changes evaluation timing relative to other statements in the block.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Non-file context manager with write() but no close()",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Evaluation order: write arg uses variable modified in block",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mutable default and aliasing after rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p006",
+      "title": "Short-circuiting expression hoisted unconditionally",
+      "hazard": "If the write call is guarded by a short-circuiting expression (e.g., cond and f.write(s)), the fix hoists it unconditionally.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Mode with '+' incorrectly assumed write-only",
+      "hazard": "If the mode includes flags like '+' (e.g., 'w+'), the fix incorrectly assumes write-only semantics and drops reading capability.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Binary write with partial data and truncation edge",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    }
+  ],
+  "reports": [
+    {
+      "programId": "r1-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "flag = False\nwith open('s.txt', 'w') as f:\n    flag and f.write('should not happen')\nwith open('s.txt', 'r') as f:\n    print(repr(f.read()))\n",
+      "lines": {
+        "before": 6,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T19-38-23-545Z-dfhv-ruff-FURB103/reports/r1-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/29452",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/26920",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/26922",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/21483",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18409",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/20785",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule rewrites a guarded write (`flag and f.write(...)`) inside a `with open` block to an unguarded `Path.write_text(...)`, removing the conditional that prevented the write when `flag` is False. The documentation presents the rewrite as equivalent for writing a single string, but does not account for conditional writes, so the fix changes program behavior silently.",
+        "docsQuote": "When writing a single string to a file, it's simpler and more concise to use pathlib methods like Path.write_text and Path.write_bytes instead of open and write calls via with statements.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "FURB103 fix",
+          "FURB103 short-circuit logical expression",
+          "FURB103 boolean flag file write",
+          "FURB103 conditional file operation"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "FURB103 safe fix drops expressions surrounding write()",
+            "url": "https://github.com/astral-sh/ruff/issues/29452",
+            "state": "open",
+            "snippet": "### Summary\n\nA `write()` nested inside an expression triggers a fix that deletes the surrounding expression when applied with an ordinary `--fix`.\n\nThis can make conditional writes unconditional or remove other function calls while expected behaviour is to withhold the replacement when the fix canno"
+          },
+          {
+            "source": "github",
+            "title": "FURB103 fix skips file truncation when the data to write has the wrong type",
+            "url": "https://github.com/astral-sh/ruff/issues/26920",
+            "state": "open",
+            "snippet": "### Summary\n\nThe fix for [`write-whole-file` (FURB103)](https://docs.astral.sh/ruff/rules/write-whole-file/) can change the program’s behavior. `open` truncates the file. If the `write` call fails because the argument is of the wrong type, nothing is written, but the file is still already truncated."
+          },
+          {
+            "source": "github",
+            "title": "`FURB101` and `FURB103` apply safe fixes that cause runtime errors",
+            "url": "https://github.com/astral-sh/ruff/issues/26922",
+            "state": "open",
+            "snippet": "### Summary\n\nAfter seeing https://github.com/astral-sh/ruff/issues/26920, I found a fix safety issue in FURB101. The rule offers a safe fix:\n\n```console\n❯ ruff check --select FURB101 --preview - <<EOF\nwith open(b\"file.txt\") as f:\n    contents = f.read()\nEOF\nerror[[FURB101](https://docs.astral.sh/ruf"
+          },
+          {
+            "source": "github",
+            "title": "FURB101 and FURB103 shouldn’t apply when the I/O variable is used later",
+            "url": "https://github.com/astral-sh/ruff/issues/21483",
+            "state": "closed",
+            "snippet": "### Summary\n\n[`read-whole-file` (FURB101)](https://docs.astral.sh/ruff/rules/read-whole-file/) and [`write-whole-file` (FURB103)](https://docs.astral.sh/ruff/rules/write-whole-file/) should be suppressed when the I/O variable is used after the `with` block (unless the variable is unconditionally reb"
+          },
+          {
+            "source": "github",
+            "title": "[FURB] Path write",
+            "url": "https://github.com/astral-sh/ruff/issues/18409",
+            "state": "closed",
+            "snippet": "### Summary\n\n## Case 1\n```py\nwith open(\"hello.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"Hello, world!\")\n```\n\nrun `ruff check`\n\n```console\nPTH123 `open()` should be replaced by `Path.open()`\nFURB103 `open` and `write` should be replaced by `Path(\"hello.txt\").write_text(\"Hello, world!\")`\n```\n\n##"
+          },
+          {
+            "source": "github",
+            "title": "`FURB103` fixes breaks code",
+            "url": "https://github.com/astral-sh/ruff/issues/20785",
+            "state": "closed",
+            "snippet": "### Summary\n\n[Playground](https://play.ruff.rs/0d5d7aed-acd4-419e-83f3-623b961c774b) \n\nThis PR breaks: https://github.com/astral-sh/ruff/pull/20520\n```python\nimport json\n\ndata = {\n    \"title\": \"Fahrenheit 451\",\n    \"price\": 100,\n}\n\nwith open(\"test.json\", \"wb\") as f:\n    f.write(json.dumps(data, inde"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/29452",
+            "relation": "duplicate",
+            "why": "same rule FURB103 dropping the surrounding expression (flag and ...) when rewriting a conditional write to Path.write_text"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/26920",
+            "relation": "related",
+            "why": "same rule FURB103 but different defect: truncation semantics vs. dropped conditional expression"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/26922",
+            "relation": "related",
+            "why": "same rule family FURB101/FURB103 but different defect: runtime errors from safe fixes vs. dropped conditional expression"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/21483",
+            "relation": "related",
+            "why": "same rule FURB103 but different defect: variable used later vs. dropped conditional expression"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18409",
+            "relation": "related",
+            "why": "same rule FURB103 but different context: encoding/path.open suggestion vs. dropped conditional expression"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20785",
+            "relation": "related",
+            "why": "same rule FURB103 but different defect: json.dumps serialization breakage vs. dropped conditional expression"
+          }
+        ],
+        "cost": 0.0023219
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:25:04.496627533 -0400\n+++ fixed.py\t2026-10-22 13:25:07.702680413 -0400\n@@ -1,5 +1,5 @@\n+import pathlib\n flag = False\n-with open('s.txt', 'w') as f:\n-    flag and f.write('should not happen')\n+pathlib.Path('s.txt').write_text('should not happen')\n with open('s.txt', 'r') as f:\n     print(repr(f.read()))\n",
+        "observed": "stdout before:\n''\nstdout after:\n'should not happen'",
+        "before": {
+          "stdout": "''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "'should not happen'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "import pathlib\nflag = False\npathlib.Path('s.txt').write_text('should not happen')\nwith open('s.txt', 'r') as f:\n    print(repr(f.read()))\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select FURB103 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition `flag and f.write(...)` short‑circuits because `flag` is `False`, so `f.write` is never called; the file remains empty. The replacement unconditionally writes `'should not happen'` via `pathlib.Path.write_text`, creating content that did not exist before, thus changing the program’s output from an empty string to `'should not happen'`. This alters observable behavior, violating semantic equivalence.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ]
+}

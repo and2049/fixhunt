@@ -1,0 +1,32 @@
+{
+  "summary": "Flags implicit type coercions like !!expr, +expr, expr+'', etc., suggesting explicit Boolean(), Number(), String() calls.",
+  "firingShapes": [
+    "!!foo",
+    "+foo",
+    "-(-foo)",
+    "foo - 0",
+    "1 * foo",
+    "\"\" + foo",
+    "`` + foo",
+    "foo += \"\""
+  ],
+  "silentShapes": [
+    "Boolean(foo)",
+    "Number(foo)",
+    "String(foo)",
+    "parseInt(foo, 10)",
+    "~foo"
+  ],
+  "fixDescription": "Rewrites implicit coercions to explicit constructor calls: !!expr → Boolean(expr), +expr/-expr patterns → Number(expr), ''+expr/template literals → String(expr), and compound assignments like foo+= '' → foo = String(foo).",
+  "hazards": [
+    "The fix assumes expr has no side effects; if expr is a function call or property access with side effects, duplicating it in the fix (e.g., Number(foo()) vs original +foo()) changes evaluation count.",
+    "If expr evaluates to an object with a custom valueOf/toString, the implicit coercion may trigger those methods differently than the explicit constructor (though ES6+ spec aligns them, edge cases exist in proxy objects).",
+    "In expressions like foo += '', the fix foo = String(foo) changes the assignment target if foo is a complex lhs (e.g., obj.prop += '' becomes obj.prop = String(obj.prop), which is safe, but if foo is a dereference like arr[0] += '', it remains safe; however, if the lhs involves getters/setters, the fix may invoke the setter once instead of twice (get + set vs just set).",
+    "The fix removes any whitespace or formatting from the original expression (e.g., +  foo becomes Number(foo)), which is harmless but strips user formatting.",
+    "If the original code relied on the implicit coercion producing NaN or 0 for non-numeric inputs (e.g., +undefined), the fix behaves identically, so no hazard here—this is actually safe.",
+    "In rare cases involving @@toPrimitive symbols, the order of hint preference between implicit and explicit coercion could differ pre-ES2015, but modern engines unify this.",
+    "If the expression is wrapped in parentheses with a comment (e.g., +(/* hint */foo)), the fix may drop the comment during rewrite, losing developer intent.",
+    "When the coerced result is used immediately in a larger expression (e.g., +foo + 1), the fix Number(foo) + 1 preserves precedence and behavior, so no hazard.",
+    "If the variable foo is const and the fix attempts to reassign it (only relevant for foo += '' cases), the linter would not suggest the fix for const variables, so this hazard does not apply—the tool correctly avoids proposing invalid fixes."
+  ]
+}

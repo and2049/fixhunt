@@ -1,0 +1,591 @@
+{
+  "runId": "2026-10-17T20-58-24-882Z-y6u4-ruff-PLE1141",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLE1141",
+    "fixKind": "unknown",
+    "docs": "# dict-iter-missing-items (PLE1141)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for dictionary unpacking in a for loop without calling `.items()`.\n\n## Why is this bad?\nWhen iterating over a dictionary in a for loop, if a dictionary is unpacked\nwithout calling `.items()`, it could lead to a runtime error if the keys are not\na tuple of two elements.\n\nIt is likely that you're looking for an iteration over (key, value) pairs which\ncan only be achieved when calling `.items()`.\n\n## Example\n```python\ndata = {\"Paris\": 2_165_423, \"New York City\": 8_804_190, \"Tokyo\": 13_988_129}\n\nfor city, population in data:\n    print(f\"{city} has population {population}.\")\n```\n\nUse instead:\n```python\ndata = {\"Paris\": 2_165_423, \"New York City\": 8_804_190, \"Tokyo\": 13_988_129}\n\nfor city, population in data.items():\n    print(f\"{city} has population {population}.\")\n```\n\n## Known problems\nIf the dictionary key is a tuple, e.g.:\n\n```python\nd = {(1, 2): 3, (3, 4): 5}\nfor x, y in d:\n    print(x, y)\n```\n\nThe tuple key is unpacked into `x` and `y` instead of the key and values. This means that\nthe suggested fix of using `d.items()` would result in different runtime behavior. Ruff\ncannot consistently infer the type of a dictionary's keys.\n\n## Fix safety\nDue to the known problem with tuple keys, this fix is unsafe.\n"
+  },
+  "analysis": {
+    "summary": "Flags dictionary unpacking in a for-loop target where .items() is missing.",
+    "firingShapes": [
+      "for k, v in d:",
+      "for (k, v) in d:",
+      "for [k, v] in d:",
+      "for *rest in d:",
+      "for a, b, c in d:"
+    ],
+    "silentShapes": [
+      "for item in d:",
+      "for k, v in d.items():",
+      "for k in d.keys():",
+      "for v in d.values():",
+      "for k, v in sorted(d):"
+    ],
+    "fixDescription": "Rewrites the for-loop target expression by appending '.items()' to the iterated dictionary variable.",
+    "hazards": [
+      "If the dictionary key is a tuple (e.g., {(1, 2): 3}), the original loop unpacks the tuple key into the loop variables, but after the fix, .items() yields (key, value) pairs where the key is the tuple and the value is the mapped value, changing what gets assigned to the loop variables and thus altering runtime behavior.",
+      "If the dictionary is actually a non-dict object that defines __iter__ to yield 2-tuples (e.g., a list of pairs), the fix incorrectly assumes it is a dict and calls .items(), which may not exist, causing an AttributeError at runtime.",
+      "If the iterated variable is not a simple name but an attribute or subscript (e.g., obj.d or d[key]), the fix naively appends '.items()' resulting in invalid syntax like obj.d.items() or d[key].items() which may not be intended or may produce different results due to evaluation timing or side effects.",
+      "If the loop variable appears in a lambda or nested function within the loop body that captures the loop variable, changing what the loop variable refers to (from key to (key, value) pair) alters the closure semantics and may affect behavior if the captured variable is used later.",
+      "If the dictionary expression has side effects (e.g., a function call that returns a dict and mutates state), the original code evaluates it once per iteration check, but the fix still evaluates it once; however, if the fix were incorrectly applied multiple times due to faulty tooling, it could cause multiple evaluations, though Ruff's fix applies once.",
+      "If the code relies on the iterator being exhausted in a certain way (e.g., checking len(d) after the loop), the behavior differs because iterating over d yields keys while iterating over d.items() yields items, potentially exhausting a different view if the dict is mutated during iteration (though both are unsafe with mutation).",
+      "If the dictionary is a subclass that overrides __iter__ to return something other than keys (e.g., a custom mapping that yields values or pairs), the fix incorrectly assumes standard dict behavior and may break intended iteration logic.",
+      "If the loop target uses star unpacking (e.g., for *rest in d:) and the dictionary keys are not iterable or have unexpected structure, the fix may cause TypeError during unpacking of .items() output where the original succeeded due to different yielded values.",
+      "If the loop is inside a try-except block catching ValueError from unpacking, the fix may prevent the exception from being raised (if keys are 2-tuples) or cause a different exception (if keys are not 2-tuples), altering error handling flow.",
+      "If the dictionary variable is deleted or reassigned within the loop body, the fix does not change that behavior, but the timing of when .items() is called (at loop start) vs. the original iter() call (also at loop start) is equivalent; however, if the variable is rebound, the fix uses the new value's .items() which may differ from the original intent if the rebinding was meant to affect iteration."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0054551999999999995,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 7,
+    "fixed": 0,
+    "disputed": 7
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "async for with .items() fix",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              5,
+              23
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "truthiness in loop condition",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              27,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "iterator exhaustion and len() after loop",
+      "hazard": "If the code relies on the iterator being exhausted in a certain way...",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              3,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "generator vs list consumption",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "list(d) first: ['a', 'b']\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "evaluation order and side effects in target",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: name 'i' is used prior to global declaration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "attribute/subscript target invalid syntax",
+      "hazard": "If the iterated variable is not a simple name but an attribute or subscript...",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              28,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "c.data.items() works\nRule does not trigger on c.data (attribute)\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "c.data.items() works\nRule does not trigger on c.data (attribute)\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "numeric coercion in loop body",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              7,
+              13
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              21,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "rebound variable during iteration",
+      "hazard": "If the dictionary variable is deleted or reassigned within the loop body...",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              3,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "PLE1141 Side Effects in Dict Expression",
+      "hazard": "If the dictionary expression has side effects (e.g., a function call that returns a dict and mutates state), the original code evaluates it once per iteration check, but the fix still evaluates it onc",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before loop: 0\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "PLE1141 Defaults Evaluated Once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE1141",
+            "severity": "warning",
+            "message": "Unpacking a dictionary in iteration without calling `.items()`",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "default\nStart\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "default\nStart\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "PLE1141 Tuple Key Unpacking Changed",
+      "hazard": "If the dictionary key is a tuple (e.g., {(1, 2): 3}), the original loop unpacks the tuple key into the loop variables, but after the fix, .items() yields (key, value) pairs where the key is the tuple ",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Original:\nk=1, v=2\nk=3, v=4\n\nExpected after .items():\nitem=((1, 2), 'found')\nitem=((3, 4), 'lost')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "PLE1141 Non-Dict with __iter__ Yielding 2-Tuples",
+      "hazard": "If the dictionary is actually a non-dict object that defines __iter__ to yield 2-tuples (e.g., a list of pairs), the fix incorrectly assumes it is a dict and calls .items(), which may not exist, causi",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Iterating pairs directly:\na->1 b->2 \nNow trying .items() on list:\nAttributeError: 'list' object has no attribute 'items'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "PLE1141 Custom Mapping Overriding __iter__",
+      "hazard": "If the dictionary is a subclass that overrides __iter__ to return something other than keys (e.g., a custom mapping that yields values or pairs), the fix incorrectly assumes standard dict behavior and",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "OddDict iteration (yields values):\n10 20 \nForcing rule to fire with unpacking:\n",
+          "stderr1": "TypeError: cannot unpack non-iterable int object",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "PLE1141 Bytes vs Str Encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Line count: 2\n0: hello\n1: world\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p007",
+      "title": "PLE1141 Star-Imports and Module Side Effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "State: ['loaded']\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p008",
+      "title": "PLE1141 Evaluation Order and Side Effects in Target",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PLE1141",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Start ref: 0\n",
+          "stderr1": "ValueError: not enough values to unpack (expected 2, got 1)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

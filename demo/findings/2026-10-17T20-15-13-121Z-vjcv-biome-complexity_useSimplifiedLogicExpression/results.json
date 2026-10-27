@@ -1,0 +1,972 @@
+{
+  "runId": "2026-10-17T20-15-13-121Z-vjcv-biome-complexity_useSimplifiedLogicExpression",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/useSimplifiedLogicExpression",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useSimplifiedLogicExpression\n- Fix: safe\n- Default severity: info\n- Available from version: 1.0.0\n- Diagnostic category: lint/complexity/useSimplifiedLogicExpression\n\n\nDescription\n\n Discard redundant terms from logical expressions.\n\n The rule applies the [De Morgan's Law](https://en.wikipedia.org/wiki/De_Morgan%27s_laws) rule to simplify logical expressions.\n This means that some simplified expressions that are fixed by the rule might seem less intuitive to read, but they are more efficient to evaluate.\n\n `value || false` and `value && true` are only reported in a boolean context, such as an `if`\n condition or the operand of `!`, where only the truthiness of the result matters. Elsewhere,\n removing the literal changes the result when `value` is not a boolean.\n `value || true` and `value && false` are never reported, since the literal alone would skip\n evaluating `value`.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n const boolExp = true;\n const r = true && boolExp;\n ```\n\n ```js,expect_diagnostic\n const boolExp2 = true;\n const r2 = false || boolExp2;\n ```\n\n ```js,expect_diagnostic\n const boolExp3 = true;\n if (boolExp3 || false) {\n     doSomething();\n }\n ```\n\n ```js,expect_diagnostic\n const nonNullExp = 123;\n const r3 = null ?? nonNullExp;\n ```\n\n ```js,expect_diagnostic\n const boolExpr1 = true;\n const boolExpr2 = false;\n const r4 = !boolExpr1 || !boolExpr2;\n ```\n\nValid\n ```js\n const boolExpr3 = true;\n const boolExpr4 = false;\n const r5 = !(boolExpr1 && boolExpr2);\n const boolExpr5 = true;\n const boolExpr6 = false;\n ```\n\n ```js\n const value = undefined;\n const r6 = value || false;\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant literals in logical expressions (`&&`, `||`, `!!`) that can be removed without changing truthiness in boolean contexts.",
+    "firingShapes": [
+      "true && expr",
+      "false || expr",
+      "expr || false",
+      "expr && true",
+      "!a || !b",
+      "null ?? expr",
+      "undefined || expr",
+      "expr && undefined"
+    ],
+    "silentShapes": [
+      "expr || true",
+      "expr && false",
+      "value || false",
+      "value && true",
+      "!(a && b)"
+    ],
+    "fixDescription": "Removes the redundant literal: `true && expr` → `expr`, `false || expr` → `expr`, `expr || false` → `expr`, `expr && true` → `expr`, `!a || !b` → `!(a && b)`, `null ?? expr` → `expr`.",
+    "hazards": [
+      "Rewriting `true && expr` to `expr` changes behavior if `expr` has side effects and the surrounding context relies on short-circuiting (e.g., in `if` conditions where `expr` must not run).",
+      "Rewriting `false || expr` to `expr` alters evaluation order and may cause `expr` to execute when it previously would not have due to short-circuiting.",
+      "Rewriting `expr || false` to `expr` removes a falsy fallback, potentially changing the result when `expr` is `undefined` or `null` in non-boolean contexts (though rule only fires in boolean contexts, this notes boundary risk).",
+      "Rewriting `expr && true` to `expr` eliminates a truthy guard, which could affect outcomes if `expr` is falsy and the result is used in a non-boolean context (rule restricts to boolean contexts, but notes potential misuse).",
+      "Rewriting `!a || !b` to `!(a && b)` via De Morgan’s law is logically equivalent but may interfere with debugging or intent if the original form was used for readability or breakpoint placement.",
+      "Rewriting `null ?? expr` to `expr` removes nullish coalescing, causing `expr` to evaluate even when `null` is present (but note: `null ?? expr` only fires if `expr` is truthy? Actually, rule flags `null ?? nonNullExp` as invalid — fix removes `null ??`, so rewrites to `expr`; hazard: if `expr` has side effects, it now runs unconditionally whereas before it only ran if `null` was null/undefined).",
+      "If the expression contains comments (e.g., `true && /* comment */ foo()`), the autofix may drop inline comments attached to the literal or expression.",
+      "In rare cases involving `eval` or `with`, the rewritten expression might resolve variables differently due to scope changes, though unlikely.",
+      "If `expr` is a getter with side effects, removing the literal may change the number of times it is invoked.",
+      "The fix may break parsing if `expr` begins with a lookahead ambiguity (e.g., `true && function(){}()` → `function(){}()` which is invalid as a statement).",
+      "In template literals or tagged templates, removing literals could alter the shape of passed arguments if the expression is spread or concatenated.",
+      "If the logical expression is part of a larger sequence (e.g., `return true && expr, other;`), removing `true &&` may alter comma operator behavior."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.027519999999999996,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 10,
+    "fixed": 10,
+    "disputed": 5,
+    "fix-breaks-syntax": 1
+  },
+  "reports": [
+    {
+      "programId": "r2-p001",
+      "kind": "fix-breaks-syntax",
+      "safeLabel": true,
+      "minimized": "try {\n  true && function() { return 1; }();\n} catch (e) {\n}\n",
+      "lines": {
+        "before": 6,
+        "after": 4
+      },
+      "reportPath": "runs/2026-10-17T20-15-13-121Z-vjcv-biome-complexity_useSimplifiedLogicExpression/reports/r2-p001.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/11351",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/7984",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/8577",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/279",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule rewrites 'true && function() { return 1; }()' to 'function() { return 1; }()', but a function expression in statement position is a syntax error because function statements require a name. The original code was valid because the function expression was an operand of &&, making it an expression statement; the fix changes the parse context and breaks syntax.",
+        "docsQuote": "Discard redundant terms from logical expressions. The rule applies the De Morgan's Law rule to simplify logical expressions.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useSimplifiedLogicExpression fix",
+          "complexity useSimplifiedLogicExpression logical AND",
+          "Biome rule simplify truthy expressions",
+          "remove redundant true && in try block"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "useExplicitLengthCheck ruins multi-line conditions that have single-line comments",
+            "url": "https://github.com/biomejs/biome/issues/7984",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.3.3\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive",
+            "url": "https://github.com/biomejs/biome/issues/11352",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 Corrupted CLI safe fix for `useConsistentArrowReturn`",
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.3.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/nursery/noUselessUndefined fix is unsafe for functions with union return types",
+            "url": "https://github.com/biomejs/biome/issues/6906",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.0.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           windows\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  B"
+          },
+          {
+            "source": "github",
+            "title": "💅 `correctness/noUnusedVariables` shows class as unused, when `namespace` with the same name is present",
+            "url": "https://github.com/biomejs/biome/issues/4928",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      1.9.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BIO"
+          },
+          {
+            "source": "github",
+            "title": "💅 useImportExtensions doesn't respect tsconfig paths from referenced project configs",
+            "url": "https://github.com/biomejs/biome/issues/7644",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.2.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noNoninteractiveElementInteractions marks `dialog` as non-interactive · Issue #7783 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7783",
+            "snippet": "- #​11731 `1534885` Thanks @​ematipico! - Fixed #​7984: The fix from `useSimplifiedLogicExpression` now preserves line breaks in multiline conditions with line comments, preventing the right-hand side condition from being commented out.\n   - #​11735 `9bd70c7` Thanks @​ematipico! - Fixed #​7304: the "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Incorrectly suggest to discard redundant terms (useSimplifiedLogicExpression) · Issue #8577 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8577",
+            "snippet": "on Dec 25, 2025\n8. github-actions\n\n   removed\n\n   S-Needs triageStatus: this issue needs to be triagedStatus: this issue needs to be triaged\n\n   on Dec 25, 2025\n9. ddmoney420\n\n   added a commit that references this issue on Jan 29, 2026\n\n   fix(lint/complexity): skip `useSimplifiedLogicExpression` f"
+          },
+          {
+            "source": "tavily",
+            "title": "One does not simply enable just one lint rule · Issue #1768 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1768",
+            "snippet": "\"noUselessThisAlias\": \"off\",\n\"noUselessTypeConstraint\": \"off\",\n\"noVoid\": \"off\",\n\"noWith\": \"off\",\n\"useArrowFunction\": \"off\",\n\"useFlatMap\": \"error\", // this one is enabled\n\"useLiteralKeys\": \"off\",\n\"useOptionalChain\": \"off\",\n\"useSimpleNumberKeys\": \"off\",\n\"useSimplifiedLogicExpression\": \"off\"\n}\n}` [...]"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 useShorthandArrayType fix produces invalid syntax in `class extends` clause · Issue #3247 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3247",
+            "snippet": "No projects\n\nNo milestone\n\nNone yet\n\nNo branches or pull requests\n\n## Issue actions\n\nYou can’t perform that action at this time. [...] L-JavaScriptLanguage: JavaScript and super languagesLanguage: JavaScript and super languages\n\n   S-Bug-confirmedStatus: report has been confirmed as a valid bugStatu"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 CSS formatter messes up Tailwind theme(...) arguments · Issue #3863 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3863",
+            "snippet": "### Configuration\n\n```\n\"$schema\"\" \" \" \"organizeImports\" \"enabled\" true \"linter\" \"enabled\" true \"rules\" \"recommended\" true \"style\" \"useImportType\" \"level\" \"error\" \" \" \"fix\" \"safe\" \" \" \"suspicious\" \"noConsoleLog\" \"warn\" \" \" \"complexity\" \"useSimplifiedLogicExpression\" \"warn\" \" \" \"correctness\" \"noUnused"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 OOM when using certain rules after 2.1.x · Issue #7179 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7179",
+            "snippet": "\"$schema\"\" \" \" \"vcs\" \"enabled\" true \"clientKind\" \"git\" \" \" \"useIgnoreFile\" true \"files\" \"includes\"\"\" \" \"\"!/dist/\" \" \"\"!/.gen.ts\" \" \"\"!/coverage.json\" \" \"\"!/coverage/\" \" \"\"!/.next\" \" \" \"ignoreUnknown\" false \"formatter\" \"enabled\" true \"indentStyle\" \"space\" \" \" \"useEditorconfig\" true \"linter\" \"enabled\""
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Sorting tailwind class with a calc is broken · Issue #5496 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/5496",
+            "snippet": "\"error\" \" \" \"a11y\" \"noNoninteractiveElementToInteractiveRole\" \"off\" \" \" \"complexity\" \"noExcessiveCognitiveComplexity\" \"off\" \" \" \"noUselessUndefinedInitialization\" \"error\" \" \" \"useDateNow\" \"error\" \" \" \"useSimplifiedLogicExpression\" \"error\" \" \" \"nursery\" \"noCommonJs\" \"error\" \" \" \"noDescendingSpecifici"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Typescript narrowing problem with `useSimplifiedLogicExpression` · Issue #279 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/279",
+            "snippet": "Hi!\n\n   I think you wrongly refactored your code to satisfy the rule.  \n    If you take a look at the suggestion, the rule suggests using `!(data && value)`, while you refactored the condition to `!(data || value)`. This results in different truth table and then different type narrowing.\n2. ### Andr"
+          },
+          {
+            "source": "tavily",
+            "title": "☂️ Tailwind class sorting lint rule · Issue #1274 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1274",
+            "snippet": "+ Single sort pass / lexicographical sort as last compare sort?\n  + Better name for the rule (`useSortedUtilityClasses`?)\n  + Avoid string allocations whenever possible. [...] Visitor:\n  + Custom functions (`clsx`, etc).\n  + Custom functions: tagged template support\n  + JSX attributes (`class` and `"
+          },
+          {
+            "source": "github",
+            "title": "🐛 `noUnusedVariables` not looking at inner functions against a declared variable for a match",
+            "url": "https://github.com/biomejs/biome/issues/105",
+            "state": "closed",
+            "snippet": "### Environment information\r\n\r\n```block\r\nCLI:\r\n  Version:                      1.0.0\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             aarch64\r\n  OS:                           macos\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                 "
+          },
+          {
+            "source": "github",
+            "title": "🐛 `noUnusedVariables` misreporting imports used for type definitions",
+            "url": "https://github.com/biomejs/biome/issues/104",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```block\nCLI:\r\n  Version:                      1.0.0\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             aarch64\r\n  OS:                           macos\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                    "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 lint/correctness/noUnusedVariables for `catch` clause should suggest removing variable definition as unsafe fix · Issue #6476 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6476",
+            "snippet": "on Jun 24, 2025\n\n   Member\n\n   More actions\n\n   ES2019 is very old for me, I think it's acceptable to use the syntax by default. However we may need to make ECMAScript language version configurable for rules that uses newer syntaxes.\n\n   Reacted by Victorien Elvinger\n9. ### tats-ucommentedon Jun 24,"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛panic when trying to fix 'Redundant use strict directive' - `crates\\biome_js_formatter\\src\\utils\\string_utils.rs:164:33` - `byte index 1 is out of bounds of` · Issue #9180 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9180",
+            "snippet": "```\n'use strict'; console. log('this is going to panic');\n```\n\n`biome check` output\n\n```\ntest.js:1:1 lint/suspicious/noRedundantUseStrict FIXABLE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ! Redundant use strict directive. > 1 │ 'use strict'; │ ^^^^^^^^^^^^^ 2 │ i The entire conte"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Linter: `lint --write` is not idempotent on Astro frontmatter, while `lint` reports no issues · Issue #7912 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7912",
+            "snippet": "ematipico\n\nLabels\n\nA-CoreArea: coreArea: coreL-HTMLLanguage: HTML and super languagesLanguage: HTML and super languagesS-Bug-confirmedStatus: report has been confirmed as a valid bugStatus: report has been confirmed as a valid bug\n\n## Description\n\n@klevercorrea\n\nklevercorrea\n\nopened on Oct 29, 2025\n"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `useImportType` fixes `import React from 'react'` into `import type React from 'react'` · Issue #2004 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/2004",
+            "snippet": "added\n\n    S-Help-wantedStatus: you're familiar with the code base and want to help the projectStatus: you're familiar with the code base and want to help the project\n\n    A-LinterArea: linterArea: linter\n\n    on Apr 9, 2024\n15. ### 6 remaining items\n16. ### Conacloscommentedon Apr 9, 2024\n\n    @Con"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "duplicate",
+            "why": "same rule useSimplifiedLogicExpression removing a leading literal in a logical expression and breaking syntax"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule noUnnecessaryConditions and different construct overloaded call with undefined default"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "performance issue about extension choking on large files"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule useExplicitLengthCheck with false positive and broken fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7984",
+            "relation": "related",
+            "why": "same rule useSimplifiedLogicExpression but different construct multiline conditions with comments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11352",
+            "relation": "unrelated",
+            "why": "different rule useExplicitLengthCheck false positive"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "relation": "unrelated",
+            "why": "different rule useConsistentArrowReturn corrupted CLI safe fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6906",
+            "relation": "unrelated",
+            "why": "different rule noUselessUndefined with union return types"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4928",
+            "relation": "unrelated",
+            "why": "different rule noUnusedVariables with class and namespace collision"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7644",
+            "relation": "unrelated",
+            "why": "different rule useImportExtensions with tsconfig paths"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7783",
+            "relation": "unrelated",
+            "why": "different rule noNoninteractiveElementInteractions marking dialog"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8577",
+            "relation": "related",
+            "why": "same rule useSimplifiedLogicExpression but different construct redundant terms in logical expression"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1768",
+            "relation": "unrelated",
+            "why": "meta issue about enabling lint rules"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3247",
+            "relation": "unrelated",
+            "why": "different rule useShorthandArrayType in class extends clause"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3863",
+            "relation": "unrelated",
+            "why": "CSS formatter issue with Tailwind theme arguments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7179",
+            "relation": "unrelated",
+            "why": "OOM performance issue with certain rules"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/5496",
+            "relation": "unrelated",
+            "why": "Tailwind class sorting lint rule configuration"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/279",
+            "relation": "related",
+            "why": "same rule useSimplifiedLogicExpression but different construct type narrowing with logical negation"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1274",
+            "relation": "unrelated",
+            "why": "Tailwind class sorting lint rule feature request"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/105",
+            "relation": "unrelated",
+            "why": "different rule noUnusedVariables with inner functions"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/104",
+            "relation": "unrelated",
+            "why": "different rule noUnusedVariables with type imports"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6476",
+            "relation": "unrelated",
+            "why": "different rule noUnusedVariables for catch clause"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9180",
+            "relation": "unrelated",
+            "why": "panic in formatter for noRedundantUseStrict rule"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7912",
+            "relation": "unrelated",
+            "why": "linter idempotency issue with Astro frontmatter"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/2004",
+            "relation": "unrelated",
+            "why": "different rule useImportType with React import"
+          }
+        ],
+        "cost": 0.0069015000000000005
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:26:40.370213262 -0400\n+++ fixed.js\t2026-10-22 13:26:42.425247346 -0400\n@@ -1,4 +1,4 @@\n try {\n-  true && function() { return 1; }();\n+  function() { return 1; }();\n } catch (e) {\n }\n",
+        "observed": "/home/sun/dev/diaghunt/runs/2026-10-17T20-15-13-121Z-vjcv-biome-complexity_useSimplifiedLogicExpression/r2-p001/min/r2-p001-reuse/fixed.js:2\n  function() { return 1; }();\n  ^^^^^^^^\n\nSyntaxError: Function statements require a function name\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "try {\n  function() { return 1; }();\n} catch (e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=complexity/useSimplifiedLogicExpression --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original expression `true && function(){return 1;}()` evaluates to either false or 1 depending on truthiness of left operand but always executes the IIFE due to grouping parentheses after function definition. After rewriting as just `function(){return 1;}();`, it becomes a bare function declaration followed by a call expression which JavaScript parses as invalid syntax—function declarations require an identifier—and thus throws before any execution occurs, changing behavior from potentially returning a value to unconditionally throwing a SyntaxError. This alters both control flow and outcome.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Rewriting expr || false loses falsy fallback",
+      "hazard": "In boolean contexts like ternary conditionals, replacing `x || false` with `x` removes the guarantee that falsy values become `false`. When `x` is `undefined` or `null`, the conditional branch selecti",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "falsy\nfalsy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "falsy\nfalsy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:29.514988087 -0400\n+++ fixed.js\t2026-10-17 16:15:29.781984182 -0400\n@@ -1,5 +1,5 @@\n function test(val) {\n-  return (val || false) ? 'truthy' : 'falsy';\n+  return (val) ? 'truthy' : 'falsy';\n }\n console.log(test(undefined));\n console.log(test(null));\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Getter side effects invocation count changed",
+      "hazard": "If `expr` is a getter with side effects, rewriting `getter || false` to `getter` does not change evaluation count in boolean context—but rewriting `true && getter` to `getter` reduces invocations from",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Getter called: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Getter called: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:29.940981857 -0400\n+++ fixed.js\t2026-10-17 16:15:30.203978018 -0400\n@@ -5,7 +5,7 @@\n     return 42;\n   }\n };\n-if (true && obj.value) {\n+if (obj.value) {\n   // first call\n }\n if (obj.value) {\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Sparse array holes treated as undefined in logical expressions",
+      "hazard": "Accessing a hole in a sparse array yields `undefined`. In `arr[i] || false`, if `arr[i]` is a hole, it evaluates to `undefined || false → false`. After fix: `arr[i]` alone is `undefined`, which in boo",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Stored value: false boolean\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Class field initialization with logical expressions",
+      "hazard": "Class field initializers run during construction. If an initializer contains `expr || false`, rewriting it to `expr` may cause `undefined` to be stored instead of `false`, affecting later behavior. Th",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "flag: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "__proto__ assignment altered by truthiness shift",
+      "hazard": "When assigning to `__proto__`, the value must be an object or `null`. Using `expr || false` ensures a fallback to `false`, which coerces to object-like behavior in some engines? Actually, `__proto__` ",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "True && expr removal breaks short-circuiting expectation",
+      "hazard": "Although `true && expr` always evaluates `expr`, rewriting it to `expr` removes the explicit `true` that might be relied upon for readability or tooling. More importantly, if this pattern appears in a",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Iteration: 0\nIteration: 1\nIteration: 2\nLoop exited at i=3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Iteration: 0\nIteration: 1\nIteration: 2\nLoop exited at i=3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:31.009966261 -0400\n+++ fixed.js\t2026-10-17 16:15:31.261962594 -0400\n@@ -1,5 +1,5 @@\n let i = 0;\n-while (true && i < 3) {\n+while (i < 3) {\n   console.log('Iteration:', i);\n   i++;\n }\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Nullish coalescing fallback removal",
+      "hazard": "Rewriting `null ?? expr` to `expr` removes the intentional fallback to `expr` when the left side is `null` or `undefined`. If `expr` has side effects, those still occur—but the fallback logic is gone.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "settings.debug: true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Tagged template literal argument shape changed",
+      "hazard": "In tagged templates, expressions inside `${}` are passed as arguments. If such an expression is `expr || false`, rewriting it to `expr` changes the value passed when `expr` is `undefined` or `null`—fr",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Values received: [ 'false' ]\nResult: value: \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Lookahead ambiguity breaking parse",
+      "hazard": "Fix removing 'true &&' leaves a function expression starting at statement position, which is invalid syntax.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-breaks-syntax",
+          "safeLabel": true,
+          "detail": "/home/sun/dev/diaghunt/runs/2026-10-17T20-15-13-121Z-vjcv-biome-complexity_useSimplifiedLogicExpression/r2-p001/fixed.js:2\n  function() { return 1; }();\n  ^^^^^^^^\n\nSyntaxError: Function statements require a function name\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": false,
+        "diff": "--- orig.js\t2026-10-17 16:15:37.605870939 -0400\n+++ fixed.js\t2026-10-17 16:15:37.866867196 -0400\n@@ -1,5 +1,5 @@\n try {\n-  true && function() { return 1; }();\n+  function() { return 1; }();\n   console.log('ok');\n } catch (e) {\n   console.log(e.name + ': ' + e.message);\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Var hoisting and redeclaration",
+      "hazard": "After fixing 'true && var x = 1' to 'var x = 1', hoisting and redeclaration in loop cause ReferenceError or wrong value.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-15-13-121Z-vjcv-biome-complexity_useSimplifiedLogicExpression/r2-p002/orig.js:3\n    true && var x = i;\n            ^^^\n\nSyntaxError: Unexpected token 'var'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p003",
+      "title": "False || expr evaluation order changed",
+      "hazard": "Fixing 'false || (a=1)' to '(a=1)' causes assignment to run unconditionally, whereas before it was skipped due to short-circuit.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:37.968865734 -0400\n+++ fixed.js\t2026-10-17 16:15:38.234861928 -0400\n@@ -1,3 +1,3 @@\n let a = 0;\n-false || (a = 1);\n+(a = 1);\n console.log(a); // should remain 0 if short-circuited\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comments attached to removed code",
+      "hazard": "Fix removes 'true &&' and drops the inline comment on the expression, losing documentation.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:38.398859582 -0400\n+++ fixed.js\t2026-10-17 16:15:38.666855749 -0400\n@@ -1,2 +1,2 @@\n-let x = true && /* important */ 42;\n+let x = 42;\n console.log(x);\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Nullish coalescing fallback removal",
+      "hazard": "Fix rewrites 'null ?? expr' to 'expr', causing expr to run unconditionally even when null is present.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "result=99, called=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result=99, called=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:38.826853461 -0400\n+++ fixed.js\t2026-10-17 16:15:39.100849545 -0400\n@@ -1,4 +1,4 @@\n let called = 0;\n const f = () => { called++; return 99; };\n-let result = null ?? f();\n+let result = f();\n console.log('result=' + result + ', called=' + called);\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Inline comment dropped",
+      "hazard": "Autofix removes 'true &&' and the attached inline comment on the expression.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:39.263847220 -0400\n+++ fixed.js\t2026-10-17 16:15:39.530843410 -0400\n@@ -1,2 +1,2 @@\n-let y = true && /* note */ parseInt('5');\n+let y = parseInt('5');\n console.log(y);\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "ASI with leading paren",
+      "hazard": "After fix, expression starts with '(' on next line, causing ASI to misinterpret as function call.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "7\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "7\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:39.693841084 -0400\n+++ fixed.js\t2026-10-17 16:15:39.958837303 -0400\n@@ -1,4 +1,3 @@\n let z =\n-true &&\n ( () => 7 )()\n console.log(z);\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Numeric/string coercion hazard",
+      "hazard": "Fix removes 'true &&' from expression involving Symbol.toPrimitive, altering coercion path and result.",
+      "rule": "complexity/useSimplifiedLogicExpression",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useSimplifiedLogicExpression",
+            "severity": "info",
+            "message": "Logical expression contains unnecessary complexity.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "str\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "str\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:15:40.131834840 -0400\n+++ fixed.js\t2026-10-17 16:15:40.399831026 -0400\n@@ -3,5 +3,5 @@\n     return hint === 'string' ? 'str' : 42;\n   }\n };\n-let res = true && String(obj);\n+let res = String(obj);\n console.log(res);\n"
+      }
+    }
+  ]
+}

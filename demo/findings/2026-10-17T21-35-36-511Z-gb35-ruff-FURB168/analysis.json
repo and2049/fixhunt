@@ -1,0 +1,31 @@
+{
+  "summary": "Flags isinstance checks against type(None), recommending replacement with identity comparison.",
+  "firingShapes": [
+    "isinstance(x, type(None))",
+    "isinstance(a, type(b)) where b is None",
+    "isinstance(var, type(None)) + 1",
+    "if isinstance(obj, type(None)):",
+    "while isinstance(item, type(None)):",
+    "return isinstance(val, type(None))",
+    "[isinstance(i, type(None)) for i in seq]",
+    "{k: isinstance(v, type(None)) for k, v in d.items()}"
+  ],
+  "silentShapes": [
+    "isinstance(x, type(y))",
+    "isinstance(None, type(obj))",
+    "isinstance(obj, None)",
+    "type(obj) is type(None)",
+    "obj == None"
+  ],
+  "fixDescription": "Replaces isinstance(expr, type(None)) with expr is None, preserving the original expression and surrounding context exactly.",
+  "hazards": [
+    "Rewriting isinstance(obj, type(None)) when obj has a __class__ attribute that raises during access changes timing of AttributeError.",
+    "If obj is a property with side effects in its getter, evaluating it once for isinstance vs once for is may differ if the property is not idempotent.",
+    "In code like isinstance(getattr(x, 'y', type(None)), type(None)), the fix alters which expression is identity-compared, potentially changing None vs type(None) confusion.",
+    "When isinstance appears in a lambda default argument, moving the expression may alter closure capture timing.",
+    "If the isinstance call is inside a statement with a trailing comment, the fix may drop the comment if not carefully reapplied.",
+    "In isinstance(obj, type(None)) where obj is None, both versions are True, but if obj is a custom object with __eq__ overriding equality to None, the semantic intent differs (though rule targets only type(None) checks).",
+    "In isinstance(1/0, type(None)), the ZeroDivisionError occurs during isinstance evaluation; after fix, it occurs during 'is' evaluation—same timing, but if wrapped in a context that catches exceptions differently due to stack depth, rare but possible.",
+    "If type(None) is rebound in local scope (e.g., type = lambda: None), isinstance(x, type(None)) uses the local binding, but fix uses global None—this is a hazard only if type is shadowed, which the rule assumes is not the case per documentation."
+  ]
+}

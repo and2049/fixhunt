@@ -1,0 +1,210 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/useRegexLiterals — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/useRegexLiterals <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-13-15-620Z-xspf-biome-complexity_useRegexLiterals · fix labelled <b>safe</b> · 16 programs, 6 fired, 6 fixed, 1 oracle-backed finding(s) · model cost $0.0281</p>
+<div class="card"><b>Rule analysis</b><p>Flags uses of the RegExp constructor where both arguments are static strings, recommending replacement with a regex literal.</p><p class="mut">Fix: Replaces `new RegExp(pattern, flags)` with `/pattern/flags` when both `pattern` and `flags` are string literals, preserving the exact literal values including escape sequences.</p><details><summary>10 hazards</summary><ul><li>If the pattern contains a forward slash (`/`), the regex literal may terminate early, causing a syntax error or incorrect pattern (e.g., `new RegExp(&quot;/abc/&quot;, &quot;&quot;)` becomes `///abc///`, which is invalid).</li><li>If the pattern contains unescaped regex metacharacters that were intended to be literal (e.g., `new RegExp(&quot;[abc]&quot;, &quot;&quot;)`), the literal behaves the same, but future maintainers might misinterpret intent—though behavior is preserved, this is noted as a readability hazard in some contexts.</li><li>If the flags string contains characters not valid in regex literals (e.g., `new RegExp(&quot;a&quot;, &quot;xy&quot;)`), the literal `/a/xy` is invalid and throws a SyntaxError, whereas the constructor would have thrown a runtime TypeError—changing error timing and type.</li><li>If the pattern is an empty string (`new RegExp(&quot;&quot;, &quot;g&quot;)`), the literal `//g` is invalid due to ambiguous comment start, causing a parse failure where the constructor succeeded.</li><li>If the flags string is empty (`new RegExp(&quot;abc&quot;, &quot;&quot;)`), the literal `/abc/` is valid and equivalent, so no hazard here—but included for completeness in edge-case analysis.</li><li>If the RegExp call is inside a larger expression (e.g., `x = new RegExp(&quot;a&quot;, &quot;b&quot;) + 1`), the rewrite changes the expression structure and may affect operator precedence or parsing if not properly parenthesized (though Biome’s fix assumes standalone or safe contexts).</li><li>If the code relies on the RegExp constructor creating a distinct object each time (e.g., for testing `instanceof`), the literal also creates a new object per evaluation, so behavior is preserved—no hazard in this case.</li><li>If the pattern or flags string literals contain line terminators (e.g., via template literals misidentified as literals—though rule only fires on string literals), the rewrite would fail, but the rule only triggers on actual string literals, so this is excluded by precondition.</li><li>If a comment is between `new` and `RegExp` (e.g., `new /* hint */ RegExp(&quot;a&quot;, &quot;b&quot;)`), Biome’s fixer may not trigger or may mishandle spacing, but the rule as documented flags the call shape regardless of whitespace—so assuming the fixer handles whitespace, no semantic hazard, but potential formatting loss.</li><li>If the code is in a context where `RegExp` has been shadowed (e.g., `let RegExp = String;`), the rule should not fire because it’s not the built-in, but if it does due to flawed detection, rewriting to a literal would break behavior by bypassing the shadow.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-breaks-syntax</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites `new RegExp(&#39;a&#39;, &#39;xy&#39;)` to the literal `/a/xy`, but &#39;xy&#39; are not valid RegExp flags (only g, i, m, s, u, y are allowed). The constructor throws a SyntaxError at runtime for invalid flags, while the literal is a syntax error at parse time, so the program&#39;s observable behavior changes from catching a runtime exception to failing to parse.">judge: real · high</span> Invalid flags in regex literal cause SyntaxError instead of TypeError<p class="mut">The fix rewrites `new RegExp(&#39;a&#39;, &#39;xy&#39;)` to the literal `/a/xy`, but &#39;xy&#39; are not valid RegExp flags (only g, i, m, s, u, y are allowed). The constructor throws a SyntaxError at runtime for invalid flags, while the literal is a syntax error at parse time, so the program&#39;s observable behavior changes from catching a runtime exception to failing to parse.</p>
+<h2>Minimized program (5→4 lines)</h2><pre>try {
+  console.log(new RegExp(&#39;a&#39;, &#39;xy&#39;).test(&#39;&#39;));
+} catch (e) {
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:13:37.696865576 -0400
++++ fixed.js	2026-10-17 16:13:37.977860201 -0400
+@@ -1,5 +1,5 @@
+ try {
+<span class="del">-  console.log(new RegExp(&#39;a&#39;, &#39;xy&#39;).test(&#39;&#39;));</span>
+<span class="add">+  console.log(/a/xy.test(&#39;&#39;));</span>
+ } catch (e) {
+   console.log(e.constructor.name + &#39;: &#39; + e.message);
+ }
+</pre>
+<h2>Observed</h2><pre>/home/sun/dev/diaghunt/runs/2026-10-17T20-13-15-620Z-xspf-biome-complexity_useRegexLiterals/r2-p001/fixed.js:2
+  console.log(/a/xy.test(&#39;&#39;));
+              ^
+
+SyntaxError: Invalid regular expression flags
+    at checkSyntax (node:internal/main/check_syntax:84:5)
+
+Node.js v26.8.1
+</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11939">biomejs/biome/issues/11939</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1704">biomejs/biome/issues/1704</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/5693">biomejs/biome/issues/5693</a> · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Var hoisting and redeclaration</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Name collision across scopes</td><td class="mut">name collisions across scopes after a move (shadowing)</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Distinct object creation</td><td class="mut">If the code relies on the RegExp constructor creating a distinct object each time (e.g., f</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>RegExp shadowing</td><td class="mut">If the code is in a context where `RegExp` has been shadowed (e.g., `let RegExp = String;`</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Null/undefined distinction</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>This binding</td><td class="mut">this binding: arrow vs function, methods extracted from objects, call/apply/bind</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Pattern contains forward slash</td><td class="mut">If the pattern contains a forward slash (`/`), the regex literal may terminate early, caus</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Numeric/string coercion</td><td class="mut">numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, Big</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-breaks-syntax</span></td><td>Invalid flags in regex literal cause SyntaxError instead of TypeError</td><td class="mut">If the flags string contains characters not valid in regex literals (e.g., `new RegExp(&quot;a&quot;</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Name collision across scopes after a move (shadowing)</td><td class="mut">name collisions across scopes after a move (shadowing)</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Null/undefined distinction with optional chaining</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Sparse arrays and holes interaction</td><td class="mut">sparse arrays, holes, Array(n) vs [n], array-likes</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Order of evaluation with side effects duplicated</td><td class="mut">order of evaluation when expressions are merged, duplicated or deleted (side effects run t</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Temporal dead zone after hoisting/reordering</td><td class="mut">temporal dead zone after code is hoisted or reordered</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Function declaration inside block interacts with rewrite</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Var hoisting and redeclaration inside loop</td><td class="mut">Var hoisting and redeclaration (var hoisting and re-declaration inside loops or after use)</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Var hoisting and redeclaration</summary><pre>for (var i = 0; i &lt; 2; i++) {
+  var re = new RegExp(&#39;a&#39;, &#39;&#39;);
+  console.log(re.test(&#39;a&#39;));
+}
+console.log(typeof re);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:28.891035700 -0400
++++ fixed.js	2026-10-17 16:13:29.198029711 -0400
+@@ -1,5 +1,5 @@
+ for (var i = 0; i &lt; 2; i++) {
+<span class="del">-  var re = new RegExp(&#39;a&#39;, &#39;&#39;);</span>
+<span class="add">+  var re = /a/;</span>
+   console.log(re.test(&#39;a&#39;));
+ }
+ console.log(typeof re);
+</pre></details><details id="r1-p002"><summary>r1-p002 — Name collision across scopes</summary><pre>function outer() {
+  var RegExp = Array;
+  function inner() {
+    var re = new RegExp(&#39;x&#39;, &#39;&#39;);
+    console.log(re instanceof RegExp);
+  }
+  inner();
+}
+outer();
+</pre></details><details id="r1-p003"><summary>r1-p003 — Distinct object creation</summary><pre>function test() {
+  var a = new RegExp(&#39;a&#39;, &#39;&#39;);
+  var b = new RegExp(&#39;a&#39;, &#39;&#39;);
+  console.log(a !== b);
+}
+test();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:29.583022207 -0400
++++ fixed.js	2026-10-17 16:13:29.864016730 -0400
+@@ -1,6 +1,6 @@
+ function test() {
+<span class="del">-  var a = new RegExp(&#39;a&#39;, &#39;&#39;);</span>
+<span class="del">-  var b = new RegExp(&#39;a&#39;, &#39;&#39;);</span>
+<span class="add">+  var a = /a/;</span>
+<span class="add">+  var b = /a/;</span>
+   console.log(a !== b);
+ }
+ test();
+</pre></details><details id="r1-p004"><summary>r1-p004 — RegExp shadowing</summary><pre>let RegExp = String;
+try {
+  var re = new RegExp(&#39;a&#39;, &#39;&#39;);
+  console.log(re);
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre></details><details id="r1-p005"><summary>r1-p005 — Null/undefined distinction</summary><pre>function getPattern() { return null; }
+var re = new RegExp(getPattern(), &#39;&#39;);
+console.log(re === null ? &#39;null&#39; : typeof re);
+</pre></details><details id="r1-p006"><summary>r1-p006 — This binding</summary><pre>var obj = {
+  getPattern: function() { return &#39;a&#39;; },
+  makeRE: function() { return new RegExp(this.getPattern(), &#39;&#39;); }
+};
+var fn = obj.makeRE;
+console.log(fn().test(&#39;a&#39;)); // Should be false due to lost this
+</pre></details><details id="r1-p007"><summary>r1-p007 — Pattern contains forward slash</summary><pre>try {
+  var re = new RegExp(&#39;/abc/&#39;, &#39;&#39;);
+  console.log(re.test(&#39;/abc/&#39;));
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:30.706000351 -0400
++++ fixed.js	2026-10-17 16:13:30.959995412 -0400
+@@ -1,5 +1,5 @@
+ try {
+<span class="del">-  var re = new RegExp(&#39;/abc/&#39;, &#39;&#39;);</span>
+<span class="add">+  var re = /\/abc\//;</span>
+   console.log(re.test(&#39;/abc/&#39;));
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+</pre></details><details id="r1-p008"><summary>r1-p008 — Numeric/string coercion</summary><pre>var obj = {
+  toString: function() { return &#39;\\d+&#39;; }
+};
+var re = new RegExp(obj, &#39;g&#39;);
+console.log(re.test(&#39;123&#39;));
+</pre></details><details id="r2-p001"><summary>r2-p001 — Invalid flags in regex literal cause SyntaxError instead of TypeError</summary><pre>try {
+  console.log(new RegExp(&#39;a&#39;, &#39;xy&#39;).test(&#39;&#39;));
+} catch (e) {
+  console.log(e.constructor.name + &#39;: &#39; + e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:37.696865576 -0400
++++ fixed.js	2026-10-17 16:13:37.977860201 -0400
+@@ -1,5 +1,5 @@
+ try {
+<span class="del">-  console.log(new RegExp(&#39;a&#39;, &#39;xy&#39;).test(&#39;&#39;));</span>
+<span class="add">+  console.log(/a/xy.test(&#39;&#39;));</span>
+ } catch (e) {
+   console.log(e.constructor.name + &#39;: &#39; + e.message);
+ }
+</pre></details><details id="r2-p002"><summary>r2-p002 — Name collision across scopes after a move (shadowing)</summary><pre>function outer() {
+  let RegExp = class {};
+  try {
+    console.log(new RegExp(&#39;a&#39;, &#39;g&#39;).test(&#39;a&#39;));
+  } catch (e) {
+    console.log(e.constructor.name + &#39;: &#39; + e.message);
+  }
+}
+outer();
+</pre></details><details id="r2-p003"><summary>r2-p003 — Null/undefined distinction with optional chaining</summary><pre>const maybePattern = null;
+console.log((maybePattern ?? &#39;\\d+&#39;).length);
+try {
+  console.log(new RegExp(maybePattern ?? &#39;\\d+&#39;, &#39;g&#39;).test(&#39;1&#39;));
+} catch (e) {
+  console.log(e.constructor.name + &#39;: &#39; + e.message);
+}
+</pre></details><details id="r2-p004"><summary>r2-p004 — Sparse arrays and holes interaction</summary><pre>const arr = Array(2);
+arr[0] = new RegExp(&#39;a&#39;, &#39;g&#39;);
+console.log(arr[0].test(&#39;a&#39;));
+console.log(arr[1] === undefined ? &#39;hole&#39; : arr[1]);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:38.464850905 -0400
++++ fixed.js	2026-10-17 16:13:38.734845752 -0400
+@@ -1,4 +1,4 @@
+ const arr = Array(2);
+<span class="del">-arr[0] = new RegExp(&#39;a&#39;, &#39;g&#39;);</span>
+<span class="add">+arr[0] = /a/g;</span>
+ console.log(arr[0].test(&#39;a&#39;));
+ console.log(arr[1] === undefined ? &#39;hole&#39; : arr[1]);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Order of evaluation with side effects duplicated</summary><pre>let count = 0;
+function getPattern() {
+  count++;
+  return &#39;a&#39;;
+}
+function getFlags() {
+  count++;
+  return &#39;g&#39;;
+}
+try {
+  console.log(new RegExp(getPattern(), getFlags()).test(&#39;a&#39;));
+} catch (e) {
+  console.log(e.constructor.name + &#39;: &#39; + e.message);
+}
+console.log(&#39;count: &#39; + count);
+</pre></details><details id="r2-p006"><summary>r2-p006 — Temporal dead zone after hoisting/reordering</summary><pre>function test() {
+  console.log(typeof pattern);
+  const pattern = &#39;\\d+&#39;;
+  try {
+    console.log(new RegExp(pattern, &#39;g&#39;).test(&#39;1&#39;));
+  } catch (e) {
+    console.log(e.constructor.name + &#39;: &#39; + e.message);
+  }
+}
+test();
+</pre></details><details id="r2-p007"><summary>r2-p007 — Function declaration inside block interacts with rewrite</summary><pre>{
+  function getFlags() { return &#39;g&#39;; }
+  try {
+    console.log(new RegExp(&#39;a&#39;, getFlags()).test(&#39;a&#39;));
+  } catch (e) {
+    console.log(e.constructor.name + &#39;: &#39; + e.message);
+  }
+}
+</pre></details><details id="r2-p008"><summary>r2-p008 — Var hoisting and redeclaration inside loop</summary><pre>for (var i = 0; i &lt; 2; i++) {
+  var re = new RegExp(&#39;a&#39;, &#39;g&#39;);
+  console.log(re.test(&#39;a&#39;));
+}
+console.log(typeof re);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:39.594829366 -0400
++++ fixed.js	2026-10-17 16:13:39.853824434 -0400
+@@ -1,5 +1,5 @@
+ for (var i = 0; i &lt; 2; i++) {
+<span class="del">-  var re = new RegExp(&#39;a&#39;, &#39;g&#39;);</span>
+<span class="add">+  var re = /a/g;</span>
+   console.log(re.test(&#39;a&#39;));
+ }
+ console.log(typeof re);
+</pre></details></body></html>

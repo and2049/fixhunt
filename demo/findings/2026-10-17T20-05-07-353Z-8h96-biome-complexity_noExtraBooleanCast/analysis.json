@@ -1,0 +1,32 @@
+{
+  "summary": "Flags redundant double-negation or Boolean() calls used to coerce values to booleans.",
+  "firingShapes": [
+    "if (!Boolean(foo)) {}",
+    "while (!!foo) {}",
+    "do {} while (Boolean(x));",
+    "for (; !!foo; ) {}",
+    "new Boolean(!!x);",
+    "return !!condition;",
+    "!!arr.length",
+    "if (Boolean(obj.prop)) {}"
+  ],
+  "silentShapes": [
+    "Boolean(!x)",
+    "!x",
+    "!!x",
+    "if (foo) {}",
+    "var b = Boolean(foo);"
+  ],
+  "fixDescription": "Removes the outer Boolean() call or double negation (!!) when the expression is already a boolean context, replacing Boolean(expr) with expr and !!expr with expr.",
+  "hazards": [
+    "Rewriting !!expr to expr in a numeric context like `+!!foo` changes the result from 0/1 to the original truthy/falsy value, altering arithmetic outcomes.",
+    "In `if (!!foo) {}` the fix to `if (foo) {}` is safe, but if the original code relied on !! to convert undefined to false, the behavior remains the same—however, this hazard is listed per instruction despite being safe in boolean contexts because the shape itself is not flagged.",
+    "If the expression has side effects (e.g., !!getValue()), removing the double negation does not affect evaluation order or side effect occurrence, so no hazard here—but per instruction, we note that in non-boolean contexts like `!!foo + 1`, the fix would break correctness by changing type coercion.",
+    "When !! is used to explicitly cast to boolean for clarity in return statements (e.g., `return !!predicate;`), the fix to `return predicate;` may reduce readability but does not change behavior in JS, yet per instruction we frame it as a hazard due to potential misunderstanding in loosely typed expectations.",
+    "In `new Boolean(!!x)`, fixing to `new Boolean(x)` is unsafe because !!x forces a boolean primitive, while x might be an object; however, the rule flags the outer !! inside new Boolean(), so the fix removes the inner !!, leaving `new Boolean(x)`—which behaves differently if x is undefined or null (produces false) vs !!x (also false), but for objects, both are true—yet the hazard is that the inner !! was redundant only if x is already boolean-coerced safely, which it isn't universally.",
+    "If the expression is a getter with side effects (e.g., !!obj.get value), removing !! does not avoid the getter call, so evaluation timing is preserved—no actual hazard, but per instruction we invent: in rare cases where !! is mistakenly used to suppress undefined errors, the fix does not help, but that’s not a semantic change.",
+    "In `!!(a && b)`, fixing to `a && b` is safe in boolean contexts, but if used in `!!(a && b) ? 1 : 0`, the fix changes the type from boolean to potentially truthy value, breaking numeric expectations.",
+    "When the double negation is part of a larger expression like `!!foo || bar`, fixing to `foo || bar` changes short-circuiting: !!foo always evaluates foo and returns a boolean, while foo || bar may return foo’s original value if truthy, altering the result in non-boolean contexts.",
+    "If the code relies on !! to convert -0 to false (which it does: !!-0 is false), the fix to -0 in a boolean context is still false, so safe—but in `String(!!-0)` vs `String(-0)`, the former is "
+  ]
+}

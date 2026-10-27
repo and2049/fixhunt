@@ -1,0 +1,281 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB157 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB157 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-33-36-873Z-na24-ruff-FURB157 · fix labelled <b>unknown</b> · 16 programs, 2 fired, 2 fixed, 0 oracle-backed finding(s) · model cost $0.0046</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant str() or float() calls around integer literals or special float string literals (&#39;inf&#39;, &#39;-inf&#39;, &#39;nan&#39;) passed to Decimal constructors.</p><p class="mut">Fix: Replaces str(integer_literal) with the integer_literal itself and float(string_literal) with the string_literal itself when the string literal is &#39;inf&#39;, &#39;-inf&#39;, &#39;nan&#39;, or case variants, within Decimal() constructor arguments.</p><details><summary>10 hazards</summary><ul><li>Rewriting Decimal(str(x)) to Decimal(x) changes behavior if x is not an integer literal (e.g., variable or expression), altering type or value.</li><li>Rewriting Decimal(float(s)) to Decimal(s) fails if s is not exactly &#39;inf&#39;, &#39;-inf&#39;, or &#39;nan&#39; (case-sensitive), producing invalid Decimal input.</li><li>The fix may remove necessary parentheses in complex expressions, altering precedence if the argument is part of a larger expression.</li><li>If the str() or float() call contains a comment (e.g., str(0 # comment)), removing it would delete the comment, violating fix safety conditions.</li><li>Using Decimal(float(&#39;inf&#39;)) vs Decimal(&#39;inf&#39;) may differ in signaling NaNs or context-dependent behavior, though value is same; but strict equivalence is not guaranteed across all contexts.</li><li>If the integer literal is part of a larger expression like Decimal(str(0)+str(1)), the fix would incorrectly apply only to part, breaking syntax.</li><li>The rule assumes the argument is a literal; if the integer is a named constant (e.g., ZERO), rewriting Decimal(str(ZERO)) to Decimal(ZERO) may change meaning if ZERO is not an int.</li><li>Rewriting could interfere with debugging or profiling if the str/float call was intentionally placed for breakpoint or side effect (though pure, still alters source structure).</li><li>In rare cases, float(&#39;inf&#39;) might raise in restricted environments, but str(int) never does—removing float call could hide intended error handling.</li><li>The fix does not account for Unicode or locale-specific number formatting; assuming ASCII literals only.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>dict ordering and duplicate keys</td><td class="mut">Rewriting Decimal(str(...)) inside dict literals changes key insertion order when duplicat</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>comment inside str() call</td><td class="mut">Removing str(0 # comment) deletes the comment, violating fix safety if the comment is sema</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>class vs instance attributes with descriptor</td><td class="mut">Rewriting Decimal(str(5)) to Decimal(5) in a class attribute affects __get__ descriptor be</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>Unicode/locale number formatting</td><td class="mut">Assuming ASCII-only ignores that str() of integer literals is always ASCII, but rule misap</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>bytes vs str encoding</td><td class="mut">Confusing str() on integer with bytes conversion; rule only applies to str, but user might</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>signaling NaN context difference</td><td class="mut">Decimal(float(&#39;inf&#39;)) vs Decimal(&#39;inf&#39;) may differ in signaling NaN generation under certa</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>invalid float string rewrite</td><td class="mut">Rewriting Decimal(float(s)) to Decimal(s) fails if s is not exactly &#39;inf&#39;, &#39;-inf&#39;, or &#39;nan</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>evaluation order and side effects</td><td class="mut">Rewriting str(0) in f(str(0), g()) changes evaluation order if g() has side effects and st</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>signaling NaN context</td><td class="mut">Using Decimal(float(&#39;inf&#39;)) vs Decimal(&#39;inf&#39;) may differ in signaling NaNs or context-depe</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>keyword-only positional forwarding</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>named constant not int</td><td class="mut">The rule assumes the argument is a literal; if the integer is a named constant (e.g., ZERO</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>bytes vs str encoding</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>precedence in complex expression</td><td class="mut">The fix may remove necessary parentheses in complex expressions, altering precedence if th</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>pathlib vs os.path behavior</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>generators vs lists</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>exceptions finally else</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — dict ordering and duplicate keys</summary><pre>from decimal import Decimal
+
+d = {}
+# Insert keys that collide under hash but differ as strings vs ints
+d[Decimal(str(0))] = &#39;first&#39;
+d[Decimal(0)] = &#39;second&#39;  # This overwrites because Decimal(&#39;0&#39;) == Decimal(0)
+print(len(d))
+for k in d:
+    print(repr(k), d[k])
+</pre></details><details id="r1-p002"><summary>r1-p002 — comment inside str() call</summary><pre>from decimal import Decimal
+import ast
+
+code = &quot;str(0 # TODO: validate zero)&quot;
+tree = ast.parse(code, mode=&#39;eval&#39;)
+print(ast.unparse(tree))
+try:
+    v = Decimal(str(0 # TODO: validate zero))
+    print(&#39;Decimal:&#39;, v)
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre></details><details id="r1-p003"><summary>r1-p003 — class vs instance attributes with descriptor</summary><pre>from decimal import Decimal
+
+class IntDesc:
+    def __get__(self, obj, owner):
+        return f&#39;desc:{self.value}&#39;
+
+class A:
+    value = Decimal(str(5))  # Rule target
+    desc = IntDesc()
+
+print(&#39;Class access:&#39;, A.desc)
+print(&#39;Instance access:&#39;, A().desc)
+# After fix: value becomes Decimal(5), but desc still uses class.value via descriptor
+# However, if value were used in desc, it would change -- here we show attr access depends on value type
+print(&#39;A.value:&#39;, A.value, type(A.value))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Unicode/locale number formatting</summary><pre>from decimal import Decimal
+# str(integer) always returns ASCII digits, even if locale set
+import locale
+try:
+    locale.setlocale(locale.LC_ALL, &#39;de_DE.UTF-8&#39;)
+except:
+    pass
+s = str(42)
+print(&#39;str(42) repr:&#39;, repr(s), &#39;is ascii:&#39;, s.isascii())
+print(&#39;Decimal(str(42)):&#39;, Decimal(str(42)))
+print(&#39;Decimal(42):&#39;, Decimal(42))
+print(&#39;Equal?&#39;, Decimal(str(42)) == Decimal(42))
+</pre></details><details id="r1-p005"><summary>r1-p005 — bytes vs str encoding</summary><pre>from decimal import Decimal
+val = 42
+# User might think str(val) -&gt; bytes, but it&#39;s str
+s = str(val)
+print(&#39;str(val):&#39;, repr(s), type(s))
+try:
+    b = s.encode(&#39;utf-8&#39;)
+    print(&#39;encoded:&#39;, b)
+except:
+    pass
+# Rule target: Decimal(str(42))
+d1 = Decimal(str(42))
+d2 = Decimal(42)
+print(&#39;d1:&#39;, d1, &#39;d2:&#39;, d2, &#39;equal:&#39;, d1 == d2)
+# If mistakenly used bytes: Decimal(b&#39;42&#39;) would fail
+try:
+    Decimal(b&#39;42&#39;)
+    print(&#39;bytes worked&#39;)
+except Exception as e:
+    print(&#39;bytes fail:&#39;, type(e).__name__)
+</pre></details><details id="r1-p006"><summary>r1-p006 — signaling NaN context difference</summary><pre>from decimal import Decimal, getcontext
+getcontext().traps[Decimal.InvalidOperation] = 0
+# Create sNaN via operation that differs by construction
+try:
+    inf1 = Decimal(float(&#39;inf&#39;))  # via float
+    inf2 = Decimal(&#39;inf&#39;)         # direct string
+    diff = inf1 - inf2
+    print(&#39;inf1 - inf2:&#39;, diff, &#39;is_nan:&#39;, diff.is_nan())
+    if diff.is_nan():
+        print(&#39;  signaling:&#39;, diff.is_snan())
+except Exception as e:
+    print(type(e).__name__, str(e))
+# Reset context
+getcontext().traps[Decimal.InvalidOperation] = 1
+</pre><pre class="diff">--- orig.py	2026-10-17 17:33:49.210108221 -0400
++++ fixed.py	2026-10-17 17:33:49.618103098 -0400
+@@ -2,7 +2,7 @@
+ getcontext().traps[Decimal.InvalidOperation] = 0
+ # Create sNaN via operation that differs by construction
+ try:
+<span class="del">-    inf1 = Decimal(float(&#39;inf&#39;))  # via float</span>
+<span class="add">+    inf1 = Decimal(&#39;inf&#39;)  # via float</span>
+     inf2 = Decimal(&#39;inf&#39;)         # direct string
+     diff = inf1 - inf2
+     print(&#39;inf1 - inf2:&#39;, diff, &#39;is_nan:&#39;, diff.is_nan())
+</pre></details><details id="r1-p007"><summary>r1-p007 — invalid float string rewrite</summary><pre>from decimal import Decimal
+s = &#39;infinity&#39;  # Not canonical
+try:
+    v = Decimal(float(s))
+    print(&#39;float(s) works:&#39;, v)
+except Exception as e:
+    print(&#39;float(s) fail:&#39;, type(e).__name__, str(e))
+try:
+    v = Decimal(s)  # Direct string
+    print(&#39;Decimal(s):&#39;, v)
+except Exception as e:
+    print(&#39;Decimal(s) fail:&#39;, type(e).__name__, str(e))
+# Show rule would incorrectly fire if s were &#39;infinity&#39; (but it doesn&#39;t, per spec)
+print(&quot;Rule only fires on &#39;inf&#39;,&#39;-inf&#39;,&#39;nan&#39; variants&quot;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — evaluation order and side effects</summary><pre>from decimal import Decimal
+
+log = []
+def g():
+    log.append(&#39;g&#39;)
+    return 42
+
+# Rule target: str(0) in first arg
+result = Decimal(str(0)), g(), log
+print(&#39;log before:&#39;, log)
+# Access to force eval
+_ = result
+print(&#39;log after:&#39;, log)
+# If str(0) were removed, g() still runs once, but if code were f(g(), str(0)) and str(0) removed, still runs.
+# To show order: make first arg have side effect via str() on var with __str__ side effect
+class StrWithSide:
+    def __str__(self):
+        log.append(&#39;strcalled&#39;)
+        return &#39;0&#39;
+
+log.clear()
+s = StrWithSide()
+print(&#39;Before fix:&#39;, log)
+v = Decimal(str(s))  # Would trigger if s were int literal, but it&#39;s not
+print(&#39;After str(s):&#39;, log)
+print(&#39;Decimal:&#39;, v)
+# Now with literal: this is the trigger
+log.clear()
+v2 = Decimal(str(0))  # Rule target
+print(&#39;After str(0):&#39;, log)
+print(&#39;Decimal:&#39;, v2)
+# After fix: becomes Decimal(0), no __str__ call, so log empty
+# We simulate by showing what log *would* be if fix removed call
+</pre></details><details id="r2-p001"><summary>r2-p001 — signaling NaN context</summary><pre>import decimal
+from decimal import Decimal, getcontext, InvalidOperation
+getcontext().traps[decimal.InvalidOperation] = True
+def trap_inf():
+    try:
+        return Decimal(float(&#39;inf&#39;))
+    except InvalidOperation as e:
+        return f&#39;trapped: {type(e).__name__}&#39;
+try:
+    result = trap_inf()
+    print(&#39;result:&#39;, result)
+except Exception as e:
+    print(&#39;unexpected:&#39;, type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:34:00.503967385 -0400
++++ fixed.py	2026-10-17 17:34:00.687965107 -0400
+@@ -3,7 +3,7 @@
+ getcontext().traps[decimal.InvalidOperation] = True
+ def trap_inf():
+     try:
+<span class="del">-        return Decimal(float(&#39;inf&#39;))</span>
+<span class="add">+        return Decimal(&#39;inf&#39;)</span>
+     except InvalidOperation as e:
+         return f&#39;trapped: {type(e).__name__}&#39;
+ try:
+</pre></details><details id="r2-p002"><summary>r2-p002 — keyword-only positional forwarding</summary><pre>def make_decimal(*, base=str):
+    def inner(val=base(0)):
+        return Decimal(val)
+    return inner
+f = make_decimal()
+print(&#39;first:&#39;, f())
+print(&#39;second:&#39;, f(5))
+# second call uses str(5) -&gt; &#39;5&#39; -&gt; Decimal(&#39;5&#39;), fix would break by using 5 directly
+</pre></details><details id="r2-p003"><summary>r2-p003 — named constant not int</summary><pre>ZERO = &#39;0&#39;
+def get_zero():
+    return ZERO
+print(&#39;before fix:&#39;, Decimal(str(get_zero())))
+# After fix: Decimal(get_zero()) -&gt; Decimal(&#39;0&#39;) works, but if ZERO were int, str(ZERO) vs ZERO matters
+# To show hazard: make ZERO a string that looks like int but isn&#39;t
+ZERO = &#39;0x0&#39;
+print(&#39;after reassignment:&#39;, Decimal(str(ZERO)))
+# Fix would do Decimal(ZERO) -&gt; invalid literal
+</pre></details><details id="r2-p004"><summary>r2-p004 — bytes vs str encoding</summary><pre>data = b&#39;hello\nworld&#39;
+try:
+    # Rule does not fire on bytes, but if someone mistakenly uses str on int thinking it&#39;s bytes
+    num = 42
+    s = str(num)  # &#39;42&#39; as str
+    b = s.encode()  # b&#39;42&#39;
+    print(&#39;str then encode:&#39;, b)
+    # If fix removes str: s = num -&gt; int, then .encode() fails
+    # Simulate risk: function expects str
+    def needs_str(x):
+        return x.encode()
+    print(&#39;needs_str(str(42)):&#39;, needs_str(str(42)))
+except AttributeError as e:
+    print(&#39;AttributeError:&#39;, e)
+</pre></details><details id="r2-p005"><summary>r2-p005 — precedence in complex expression</summary><pre>def compute():
+    return 1 + Decimal(str(2)) * 3  # str(2) -&gt; &#39;2&#39; -&gt; Decimal(&#39;2&#39;), then *3 then +1
+# Without str: 1 + Decimal(2) * 3 -&gt; same due to Decimal __mul__ precedence? Actually Decimal*int is allowed.
+# But: make it depend on string vs int in addition
+class Dummy:
+    def __add__(self, other):
+        return f&#39;add({self}, {other})&#39;
+    def __mul__(self, other):
+        return f&#39;mul({self}, {other})&#39;
+d = Dummy()
+print(&#39;with str:&#39;, 1 + d * 3)  # d*3 first -&gt; mul(d,3), then 1 + that -&gt; add(1, mul(d,3))
+# If we had str(d) it would be different, but rule doesn&#39;t apply.
+# Instead: show that str() affects type in expression
+print(&#39;Decimal(str(2)) * 3:&#39;, Decimal(str(2)) * 3)
+print(&#39;Decimal(2) * 3:&#39;, Decimal(2) * 3)
+# Same value, but if we had overloaded * for str vs int...
+</pre></details><details id="r2-p006"><summary>r2-p006 — pathlib vs os.path behavior</summary><pre>import os
+from pathlib import Path
+# Rule doesn&#39;t fire here, but show where str() on int is used in path context
+num = 42
+p = Path(str(num))  # creates Path(&#39;42&#39;)
+print(&#39;Path(str(42)):&#39;, p.exists())
+# Fix would do Path(42) -&gt; TypeError: expected str, bytes or os.PathLike object, not int
+try:
+    Path(42)
+except TypeError as e:
+    print(&#39;Path(42) error:&#39;, e)
+</pre></details><details id="r2-p007"><summary>r2-p007 — generators vs lists</summary><pre>def gen():
+    yield from [str(i) for i in range(3)]
+g = gen()
+print(&#39;first list:&#39;, list(g))  # consumes generator
+print(&#39;second list:&#39;, list(g))  # empty
+# Now with fix hazard: if we had Decimal(str(next(gen()))) etc.
+# Instead: show that str() on iterator item matters
+def process():
+    return [Decimal(str(x)) for x in gen()]  # gen is exhausted!
+print(&#39;process():&#39;, process())
+# If fix removes str: Decimal(x) where x is str -&gt; works, but if x were int...
+# Make gen yield ints
+</pre></details><details id="r2-p008"><summary>r2-p008 — exceptions finally else</summary><pre>def risky():
+    try:
+        return Decimal(str(1 / 0))  # ZeroDivisionError in str() arg
+    except ZeroDivisionError as e:
+        raise ValueError(&#39;bad&#39;) from e
+    else:
+        return &#39;ok&#39;
+    finally:
+        print(&#39;finally ran&#39;)
+try:
+    risky()
+except ValueError as e:
+    print(&#39;caught:&#39;, e)
+    print(&#39;cause:&#39;, type(e.__cause__).__name__ if e.__cause__ else None)
+# If fix removes str: Decimal(1 / 0) -&gt; same ZeroDivisionError, but now inside Decimal()
+# Difference: if str() had side effects... but it doesn&#39;t.
+# Instead: make str() raise on certain input
+class BadStr:
+    def __str__(self):
+        raise RuntimeError(&#39;str failed&#39;)
+    __repr__ = __str__
+try:
+    Decimal(str(BadStr()))
+except RuntimeError as e:
+    print(&#39;str failed:&#39;, e)
+# Fix would do Decimal(BadStr()) -&gt; calls __repr__ or __str__? Decimal constructor uses str() internally?
+# Actually Decimal(BadStr()) will call str(BadStr()) anyway, so same.
+# Need: where str() is not used by Decimal but we rely on it.
+# Hazard overstated; use: str() in arg that is used elsewhere
+</pre></details></body></html>

@@ -1,0 +1,35 @@
+{
+  "summary": "Flags `let` declarations where the variable is never reassigned after initialization.",
+  "firingShapes": [
+    "let x = 5;",
+    "for (let i of arr) {}",
+    "for (let key in obj) {}",
+    "let y; y = 10;",
+    "{ let z = 7; }",
+    "let a = 1, b = 2;",
+    "function f() { let c = 3; }",
+    "try { let e = 9; } catch {}"
+  ],
+  "silentShapes": [
+    "let p = 1; p = 2;",
+    "let q; q; q = 3;",
+    "let r; function s() { return r; } r = 4;",
+    "if (true) { let t = 6; } else { let t = 7; }",
+    "for (let u = 0; u < 3; u++) { u = u + 1; }"
+  ],
+  "fixDescription": "Replaces `let` with `const` for each variable declarator that has an initializer or is assigned exactly once before any reassignment, preserving declarators, commas, and block structure while removing the `let` keyword and inserting `const`.",
+  "hazards": [
+    "Rewriting `let` in a loop header like `for (let i of arr)` to `const` causes a TypeError because `const` bindings cannot be reassigned per iteration.",
+    "Changing `let` to `const` in a block-scoped redeclaration such as `{ let a = 1; let a = 2; }` results in a SyntaxError due to duplicate `const` declarations in the same block.",
+    "If the initializer contains a `delete` expression targeting an unqualified identifier (e.g., `let x = delete y;`), converting to `const` may throw a SyntaxError in strict mode because `const` bindings cannot be deleted.",
+    "When the variable is conditionally declared (e.g., `if (x) let y = 1;`), replacing `let` with `const` can cause a ReferenceError if the block is not entered, as `const` is not hoisted and remains inaccessible outside its block.",
+    "In non-strict mode, if the initializer assigns to an undeclared variable (e.g., `let a = (b = 5);`), switching to `const` may silently create a global variable instead of throwing, altering implicit globals behavior.",
+    "If the declarator lacks an initializer and is assigned later (e.g., `let a; a = 1;`), the fix incorrectly applies `const` to the uninitialized declarator, causing a SyntaxError because `const` must be initialized at declaration.",
+    "Moving a `let` declaration to `const` across a function boundary (e.g., from outer to inner scope via hoisting misunderstandings) breaks encapsulation and may expose unintended variables.",
+    "Comments attached to the `let` keyword or declarators (e.g., `let /* ignored */ x = 1;`) may be stripped or misplaced during the rewrite, altering source formatting or tooling expectations.",
+    "In a `try` block (e.g., `try { let e = 5; }`), rewriting to `const` is safe only if no reassignment occurs, but if the variable is referenced in `finally` after potential reassignment in `catch`, the timing of binding initialization may differ.",
+    "When used with `export let` (non-standard but possible in some environments), replacing with `export const` may break bindings expected to be mutable by importers.",
+    "If the variable name is `let` or `const` itself (e.g., `let let = 5;`), the rewrite produces invalid syntax (`const const = 5;`).",
+    "In eval contexts or dynamic scope manipulations, changing `let` to `const` alters the mutability of the binding, which may be relied upon for runtime redefinition via indirect eval."
+  ]
+}

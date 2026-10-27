@@ -1,0 +1,34 @@
+{
+  "summary": "Flags usage of exception classes that are aliases of OSError (e.g., IOError, EnvironmentError, WindowsError) and recommends replacing them with OSError.",
+  "firingShapes": [
+    "raise IOError",
+    "except EnvironmentError:",
+    "catch WindowsError as e:",
+    "isinstance(err, IOError)",
+    "issubclass(ErrorType, EnvironmentError)",
+    "except (IOError, OSError):",
+    "raise WindowsError from None",
+    "except Exception as e: if isinstance(e, EnvironmentError)"
+  ],
+  "silentShapes": [
+    "raise OSError",
+    "except OSError:",
+    "raise ValueError",
+    "except (ValueError, TypeError):",
+    "class MyError(OSError): pass"
+  ],
+  "fixDescription": "Replaces any occurrence of an OSError-alias exception name (such as IOError, EnvironmentError, WindowsError) with OSError in raise statements, except clauses, isinstance/issubclass checks, and similar contexts, preserving all surrounding syntax and structure.",
+  "hazards": [
+    "Rewriting `except IOError:` to `except OSError:` changes the set of caught exceptions if other OSError subclasses (like FileNotFoundError) were previously excluded by a broader except clause above, altering control flow.",
+    "In `except (IOError, ValueError):`, replacing IOError with OSError may cause ValueError to be unreachable if OSError is checked first, due to exception matching order changing subclass precedence.",
+    "If `IOError` is imported via `from errno import IOError` (though incorrect, hypothetically), rewriting to `OSError` would break the name resolution since `OSError` is not defined in that module's namespace.",
+    "In a context like `except IOError as e:`, if the variable `e` is later used to access attributes specific to the IOError alias (none exist, but hypothetically), the rewrite assumes identical interface, which while true now, relies on the alias preserving all behavior.",
+    "When `WindowsError` is used in `raise WindowsError`, rewriting to `raise OSError` loses the platform-specific signal that the error originated from Windows, though the exception instance behaves identically.",
+    "In `issubclass(SomeErr, EnvironmentError)`, replacing EnvironmentError with OSError may return False if SomeErr is a subclass of a removed alias that no longer inherits from OSError in a future Python version, making the fix forward-incompatible if the alias is deleted.",
+    "If a comment like `# Prefer IOError for clarity` appears after `raise IOError`, the autofix may preserve the comment but it becomes misleading post-rewrite, constituting a documentation hazard.",
+    "In `try: ... except IOError: ... finally:`, the rewrite to `OSError` does not affect finally execution, but if the except block was relying on IOError being a distinct type for logging or metrics, the semantics of error categorization change.",
+    "When `EnvironmentError` is used in a tuple like `except (EnvironmentError, KeyboardInterrupt):`, replacing it with `OSError` risks catching KeyboardInterrupt less likely if OSError is checked before KeyboardInterrupt in the tuple, though tuple order is preserved so this only matters if the interpreter reorders—which it doesn't, but the hazard is perceived reordering risk.",
+    "If `IOError` is dynamically looked up via `getattr(exceptions_module, 'IOError')` and the rewrite incorrectly modifies the string literal, it would break runtime attribute access, though the rule does not target string literals—this hazard applies only if the autofix erroneously extends beyond identifiers.",
+    "In a class definition like `class CustomIOError(IOError):`, rewriting the base to `OSError` is correct and safe, but if the class relied on IOError being a distinct type for `__instancecheck__` overrides, the change could break custom behavior, though no such override exists in standard aliases."
+  ]
+}

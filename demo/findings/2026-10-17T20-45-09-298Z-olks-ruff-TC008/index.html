@@ -1,0 +1,137 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff TC008 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff TC008 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-45-09-298Z-olks-ruff-TC008 · fix labelled <b>unknown</b> · 8 programs, 5 fired, 5 fixed, 1 oracle-backed finding(s) · model cost $0.0086</p>
+<div class="card"><b>Rule analysis</b><p>Flags unnecessary quotes in PEP 613 explicit type aliases and PEP 695 type statements when the quoted content is a valid type expression without forward references.</p><p class="mut">Fix: Removes the outer double quotes around the type expression while preserving whitespace and inner structure, converting e.g., &quot;int | None&quot; to int | None.</p><details><summary>8 hazards</summary><ul><li>Rewriting may break code if the quoted string contains a comment, as the fix does not preserve comments inside the quotes.</li><li>If the type expression relies on a name only available via TYPE_CHECKING imports, removing quotes could cause a NameError at runtime.</li><li>In stub files, removing quotes might violate stub-only type contracts where the unquoted form is not available at runtime.</li><li>If the quoted expression includes a forward reference to a class defined later in the same module, the fix assumes it is defined, which may not hold during execution.</li><li>The fix does not account for string concatenation inside quotes (e.g., &quot;int&quot; &quot;|&quot; &quot;None&quot;), leaving it unchanged but potentially misleading users.</li><li>If the quoted string contains escaped quotes (e.g., &quot;\&quot;int\&quot; |&quot;), the fix incorrectly strips outer quotes, corrupting the expression.</li><li>When the type alias is used in a runtime context (e.g., isinstance), removing quotes could alter behavior if the string was intentionally used as a fallback.</li><li>The fix may interfere with tools that inspect source strings directly, expecting the quotes to be present for metadata or code generation.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p005"><b>r1-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes quotes from a PEP 613 type alias that uses implicit string concatenation (&quot;int&quot; &quot;|&quot; &quot;None&quot;), changing the runtime value from the string &#39;int|None&#39; to the union type int | None. Since the program prints repr(BadAlias), the observable behavior changes from a string to a type object, which is a silent semantic change in plausible code.">judge: real · high</span> String Concatenation Inside Quotes Left Unchanged<p class="mut">The fix removes quotes from a PEP 613 type alias that uses implicit string concatenation (&quot;int&quot; &quot;|&quot; &quot;None&quot;), changing the runtime value from the string &#39;int|None&#39; to the union type int | None. Since the program prints repr(BadAlias), the observable behavior changes from a string to a type object, which is a silent semantic change in plausible code.</p>
+<h2>Minimized program (4→3 lines)</h2><pre>from typing import TypeAlias
+BadAlias: TypeAlias = &quot;int&quot; &quot;|&quot; &quot;None&quot;
+print(repr(BadAlias))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:45:19.800591576 -0400
++++ fixed.py	2026-10-17 16:45:20.001597096 -0400
+@@ -1,4 +1,4 @@
+ from typing import TypeAlias
+<span class="del">-BadAlias: TypeAlias = &quot;int&quot; &quot;|&quot; &quot;None&quot;</span>
+<span class="add">+BadAlias: TypeAlias = int|None</span>
+ print(type(BadAlias))
+ print(repr(BadAlias))
+</pre>
+<h2>Observed</h2><pre>stdout before:
+&lt;class &#39;str&#39;&gt;
+&#39;int|None&#39;
+stdout after:
+&lt;class &#39;typing.Union&#39;&gt;
+int | None</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r1-p005.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable Default Arguments &amp; Aliasing After Rewrite</td><td class="mut">TC008 removes quotes from &#39;list[int]&#39; used as a function default argument; if the alias po</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes vs Str Encoding &amp; Newline Handling</td><td class="mut">Rewriting &#39;bytes&#39; to bare identifier breaks code that relied on the string being a type an</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Forward Reference Assumed Defined Later</td><td class="mut">Rule removes quotes from &#39;SomeClass&#39; assuming it&#39;s defined, but if SomeClass is defined la</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>pathlib vs os.path Behavior on Relative Paths</td><td class="mut">Rewriting &#39;Path&#39; to bare identifier in alias breaks if user mistakenly uses os.path functi</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag bad">fix-changes-behavior</span><span class="tag warn">disputed</span></td><td>String Concatenation Inside Quotes Left Unchanged</td><td class="mut">Rule does not rewrite &#39;&quot;int&quot; &quot;|&quot; &quot;None&quot;&#39; (concatenated strings), so alias remains quoted; </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Tool Expecting Quotes for Metadata Inspection</td><td class="mut">A tool that scans source for quoted type aliases to extract documentation expects quotes; </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String Formatting Edge Cases: % , format(), f-strings</td><td class="mut">If the quoted type alias is used in an f-string or % formatting, removing quotes changes b</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation Order &amp; Side Effects in Merged Expressions</td><td class="mut">If the quoted expression has side effects (e.g., function call), removing quotes doesn&#39;t c</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Mutable Default Arguments &amp; Aliasing After Rewrite</summary><pre>from typing import TypeAlias
+ListInt: TypeAlias = &quot;list[int]&quot;
+def f(x=ListInt()):
+    x.append(1)
+    return x
+print(f())
+print(f())
+</pre></details><details id="r1-p002"><summary>r1-p002 — Bytes vs Str Encoding &amp; Newline Handling</summary><pre>from typing import TypeAlias
+MyBytes: TypeAlias = &quot;bytes&quot;
+def g(b: MyBytes) -&gt; str:
+    return b.decode(&#39;utf-8&#39;)
+try:
+    print(g(b&#39;hello\n&#39;))
+except Exception as e:
+    print(type(e).__name__, e)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:45:18.878566251 -0400
++++ fixed.py	2026-10-17 16:45:19.063571336 -0400
+@@ -1,5 +1,5 @@
+ from typing import TypeAlias
+<span class="del">-MyBytes: TypeAlias = &quot;bytes&quot;</span>
+<span class="add">+MyBytes: TypeAlias = bytes</span>
+ def g(b: MyBytes) -&gt; str:
+     return b.decode(&#39;utf-8&#39;)
+ try:
+</pre></details><details id="r1-p003"><summary>r1-p003 — Forward Reference Assumed Defined Later</summary><pre>type OptCls = &quot;SomeClass&quot;
+class SomeClass:
+    pass
+inst: OptCls = SomeClass()
+print(type(inst).__name__)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:45:19.193574906 -0400
++++ fixed.py	2026-10-17 16:45:19.362579547 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-type OptCls = &quot;SomeClass&quot;</span>
+<span class="add">+type OptCls = SomeClass</span>
+ class SomeClass:
+     pass
+ inst: OptCls = SomeClass()
+</pre></details><details id="r1-p004"><summary>r1-p004 — pathlib vs os.path Behavior on Relative Paths</summary><pre>from typing import TypeAlias
+from pathlib import Path
+P: TypeAlias = &quot;Path&quot;
+p: P = Path(&#39;.&#39;)
+print(p.exists())
+print(p.is_absolute())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:45:19.463582321 -0400
++++ fixed.py	2026-10-17 16:45:19.675588143 -0400
+@@ -1,6 +1,6 @@
+ from typing import TypeAlias
+ from pathlib import Path
+<span class="del">-P: TypeAlias = &quot;Path&quot;</span>
+<span class="add">+P: TypeAlias = Path</span>
+ p: P = Path(&#39;.&#39;)
+ print(p.exists())
+ print(p.is_absolute())
+</pre></details><details id="r1-p005"><summary>r1-p005 — String Concatenation Inside Quotes Left Unchanged</summary><pre>from typing import TypeAlias
+BadAlias: TypeAlias = &quot;int&quot; &quot;|&quot; &quot;None&quot;
+print(type(BadAlias))
+print(repr(BadAlias))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:45:19.800591576 -0400
++++ fixed.py	2026-10-17 16:45:20.001597096 -0400
+@@ -1,4 +1,4 @@
+ from typing import TypeAlias
+<span class="del">-BadAlias: TypeAlias = &quot;int&quot; &quot;|&quot; &quot;None&quot;</span>
+<span class="add">+BadAlias: TypeAlias = int|None</span>
+ print(type(BadAlias))
+ print(repr(BadAlias))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Tool Expecting Quotes for Metadata Inspection</summary><pre>from typing import TypeAlias
+DocAlias: TypeAlias = &quot;str | None&quot;  # Tool expects this format
+source = open(__file__).read()
+if &#39;&quot;DocAlias:&#39; in source and &#39;=&quot;&#39; in source:
+    print(&#39;Tool would find it&#39;)
+else:
+    print(&#39;Tool misses it&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:45:20.115600222 -0400
++++ fixed.py	2026-10-17 16:45:20.294605132 -0400
+@@ -1,5 +1,5 @@
+ from typing import TypeAlias
+<span class="del">-DocAlias: TypeAlias = &quot;str | None&quot;  # Tool expects this format</span>
+<span class="add">+DocAlias: TypeAlias = str | None  # Tool expects this format</span>
+ source = open(__file__).read()
+ if &#39;&quot;DocAlias:&#39; in source and &#39;=&quot;&#39; in source:
+     print(&#39;Tool would find it&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — String Formatting Edge Cases: % , format(), f-strings</summary><pre>from typing import TypeAlias
+ListInt: TypeAlias = &quot;list[int]&quot;
+s = f&quot;{ListInt}&quot;
+print(s)
+try:
+    eval(s)
+except Exception as e:
+    print(type(e).__name__, e)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Evaluation Order &amp; Side Effects in Merged Expressions</summary><pre>from typing import TypeAlias
+def get_type():
+    print(&#39;Side effect&#39;)
+    return &#39;int&#39;
+SideAlias: TypeAlias = f&quot;{get_type()} | None&quot;
+print(&#39;Before use&#39;)
+x: SideAlias = 5
+print(&#39;After use&#39;)
+</pre></details></body></html>

@@ -1,0 +1,419 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff SIM208 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff SIM208 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-34-24-321Z-f1do-ruff-SIM208 · fix labelled <b>unknown</b> · 16 programs, 15 fired, 15 fixed, 0 oracle-backed finding(s) · model cost $0.0168</p>
+<div class="card"><b>Rule analysis</b><p>Flags expressions containing two consecutive &#39;not&#39; operators applied to the same subexpression.</p><p class="mut">Fix: Removes the outer &#39;not&#39; and its surrounding parentheses if present, leaving only the inner expression after the inner &#39;not&#39;.</p><details><summary>10 hazards</summary><ul><li>Rewriting &#39;not (not x)&#39; when &#39;x&#39; is a property with a side-effecting __get__ method changes behavior because the property is accessed twice in the original but once in the fix.</li><li>If &#39;x&#39; is a function call, the original evaluates it twice while the fix evaluates it once, altering side effects and performance.</li><li>When &#39;x&#39; is an indexing operation like &#39;a[b]&#39;, the original may raise IndexError twice (if the first access succeeds but the second fails on a mutated object), whereas the fix only risks it once.</li><li>In &#39;not (not obj.method())&#39;, if &#39;method&#39; returns a mutable object that changes state on first call, the second call operates on a different state than the fix assumes.</li><li>For &#39;not (not x)&#39; where &#39;x&#39; is a conditional expression like &#39;a if b else c&#39;, the original evaluates the condition twice, potentially observing different values if &#39;b&#39; is mutable between evaluations.</li><li>If the inner &#39;not&#39; applies to a comma-separated tuple like &#39;not (not (a, b))&#39;, removing the outer &#39;not&#39; and parentheses alters the expression&#39;s structure and may break tuple display or unpacking expectations.</li><li>When the double negation appears inside a larger expression like &#39;f(not (not x))&#39;, the fix changes the number of times &#39;x&#39; is evaluated, affecting side effects visible to &#39;f&#39;.</li><li>If the code relies on the traceback depth for debugging or testing, removing the extra &#39;not&#39; frame alters the call stack.</li><li>A comment placed between the &#39;not&#39; tokens like &#39;not # comment
+(not x)&#39; would be lost if the autofix removes the inner &#39;not&#39; and whitespace without preserving comment placement.</li><li>In code using &#39;not (not x)&#39; to deliberately force a boolean context (e.g., for truthiness testing in a numeric setting), the fix may change the type of the result in edge cases involving numpy arrays or custom __bool__ implementations.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Context manager without close(): resource leak risk</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable default argument aliasing after rewrite</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Function call evaluated twice vs once: side effect divergence</td><td class="mut">If &#39;x&#39; is a function call, the original evaluates it twice while the fix evaluates it once</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation order and side effects in merged expressions</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Double negation inside function call alters evaluation count</td><td class="mut">When the double negation appears inside a larger expression like &#39;f(not (not x))&#39;, the fix</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Boolean forcing with numpy-like truthiness altered by fix</td><td class="mut">In code using &#39;not (not x)&#39; to deliberately force a boolean context (e.g., for truthiness </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Class vs instance attribute with property side effect</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Star-imports and module-level side effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Double Negation Inside Function Call Alters Evaluation Count</td><td class="mut">When the double negation appears inside a larger expression like &#39;f(not (not x))&#39;, the fix</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Indexing Operation May Raise IndexError Twice vs Once</td><td class="mut">When &#39;x&#39; is an indexing operation like &#39;a[b]&#39;, the original may raise IndexError twice (if</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>Conditional Expression Evaluates Condition Twice</td><td class="mut">For &#39;not (not x)&#39; where &#39;x&#39; is a conditional expression like &#39;a if b else c&#39;, the original</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Comment Between Not Tokens Would Be Lost</td><td class="mut">A comment placed between the &#39;not&#39; tokens like &#39;not # comment\n(not x)&#39; would be lost if t</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Pathlib Vs Os.Path Behavior On Relative Paths Etc</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Method Returns Mutable Object That Changes State</td><td class="mut">In &#39;not (not obj.method())&#39;, if &#39;method&#39; returns a mutable object that changes state on fi</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Property With Side-Effecting __Get__ Accessed Twice</td><td class="mut">Rewriting &#39;not (not x)&#39; when &#39;x&#39; is a property with a side-effecting __get__ method change</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Keyword-Only Positional-Only *Args/**Kwargs Forwarding Defaults Evaluated Once</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Context manager without close(): resource leak risk</summary><pre>class Writer:
+    def __init__(self, name):
+        self.name = name
+        self.log = []
+    def write(self, data):
+        self.log.append(data)
+        print(f&quot;write: {data}&quot;)
+
+w = Writer(&#39;test&#39;)
+def use_writer():
+    return w
+
+if not (not use_writer()):
+    use_writer().write(&#39;hello&#39;)
+print(&#39;log:&#39;, Writer(&#39;test&#39;).log)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:33.988907100 -0400
++++ fixed.py	2026-10-17 16:34:34.164907420 -0400
+@@ -10,6 +10,6 @@
+ def use_writer():
+     return w
+ 
+<span class="del">-if not (not use_writer()):</span>
+<span class="add">+if use_writer():</span>
+     use_writer().write(&#39;hello&#39;)
+ print(&#39;log:&#39;, Writer(&#39;test&#39;).log)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Mutable default argument aliasing after rewrite</summary><pre>def f(x=[]):
+    x.append(1)
+    return x
+
+def g():
+    return f()
+
+if not (not g()):
+    print(&#39;first:&#39;, g())
+else:
+    print(&#39;unreachable&#39;)
+print(&#39;second:&#39;, g())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:34.267907608 -0400
++++ fixed.py	2026-10-17 16:34:34.439907921 -0400
+@@ -5,7 +5,7 @@
+ def g():
+     return f()
+ 
+<span class="del">-if not (not g()):</span>
+<span class="add">+if g():</span>
+     print(&#39;first:&#39;, g())
+ else:
+     print(&#39;unreachable&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Function call evaluated twice vs once: side effect divergence</summary><pre>counter = 0
+
+def inc():
+    global counter
+    counter += 1
+    print(f&#39;inc called, counter={counter}&#39;)
+    return counter &gt; 0
+
+if not (not inc()):
+    print(&#39;branch taken&#39;)
+print(&#39;final counter:&#39;, counter)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:34.540908105 -0400
++++ fixed.py	2026-10-17 16:34:34.703908401 -0400
+@@ -6,6 +6,6 @@
+     print(f&#39;inc called, counter={counter}&#39;)
+     return counter &gt; 0
+ 
+<span class="del">-if not (not inc()):</span>
+<span class="add">+if inc():</span>
+     print(&#39;branch taken&#39;)
+ print(&#39;final counter:&#39;, counter)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Evaluation order and side effects in merged expressions</summary><pre>side = []
+
+def log(msg):
+    side.append(msg)
+    return True
+
+result = [log(&#39;A&#39;), log(&#39;B&#39;)]
+if not (not (result[0] and result[1])):
+    side.append(&#39;taken&#39;)
+print(&#39;side effects:&#39;, side)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:34.808908593 -0400
++++ fixed.py	2026-10-17 16:34:34.971908889 -0400
+@@ -5,6 +5,6 @@
+     return True
+ 
+ result = [log(&#39;A&#39;), log(&#39;B&#39;)]
+<span class="del">-if not (not (result[0] and result[1])):</span>
+<span class="add">+if result[0] and result[1]:</span>
+     side.append(&#39;taken&#39;)
+ print(&#39;side effects:&#39;, side)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Double negation inside function call alters evaluation count</summary><pre>calls = []
+
+def get_val():
+    calls.append(len(calls))
+    return len(calls) % 2 == 0
+
+def f(arg):
+    return arg, len(calls)
+
+out = f(not (not get_val()))
+print(&#39;result:&#39;, out)
+calls.clear()
+out2 = f(get_val())
+print(&#39;after fix simulation:&#39;, out2)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:35.071909072 -0400
++++ fixed.py	2026-10-17 16:34:35.237909374 -0400
+@@ -7,7 +7,7 @@
+ def f(arg):
+     return arg, len(calls)
+ 
+<span class="del">-out = f(not (not get_val()))</span>
+<span class="add">+out = f(bool(get_val()))</span>
+ print(&#39;result:&#39;, out)
+ calls.clear()
+ out2 = f(get_val())
+</pre></details><details id="r1-p006"><summary>r1-p006 — Boolean forcing with numpy-like truthiness altered by fix</summary><pre>class BoolLike:
+    def __init__(self, val):
+        self.val = val
+    def __bool__(self):
+        return bool(self.val)
+    def __repr__(self):
+        return f&#39;BoolLike({self.val})&#39;
+
+x = BoolLike(0)
+forced = not (not x)
+direct = x
+print(&#39;forced type:&#39;, type(forced), forced)
+print(&#39;direct type:&#39;, type(direct), direct)
+print(&#39;are they same object?&#39;, forced is direct)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:35.343909568 -0400
++++ fixed.py	2026-10-17 16:34:35.504909861 -0400
+@@ -7,7 +7,7 @@
+         return f&#39;BoolLike({self.val})&#39;
+ 
+ x = BoolLike(0)
+<span class="del">-forced = not (not x)</span>
+<span class="add">+forced = bool(x)</span>
+ direct = x
+ print(&#39;forced type:&#39;, type(forced), forced)
+ print(&#39;direct type:&#39;, type(direct), direct)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Class vs instance attribute with property side effect</summary><pre>class Counter:
+    count = 0
+    @property
+    def value(self):
+        Counter.count += 1
+        return Counter.count &gt; 0
+
+obj = Counter()
+if not (not obj.value):
+    print(&#39;first access:&#39;, Counter.count)
+else:
+    print(&#39;unreachable&#39;)
+print(&#39;second access:&#39;, Counter.count)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:35.605910046 -0400
++++ fixed.py	2026-10-17 16:34:35.768910343 -0400
+@@ -6,7 +6,7 @@
+         return Counter.count &gt; 0
+ 
+ obj = Counter()
+<span class="del">-if not (not obj.value):</span>
+<span class="add">+if obj.value:</span>
+     print(&#39;first access:&#39;, Counter.count)
+ else:
+     print(&#39;unreachable&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Star-imports and module-level side effects</summary><pre>import sys
+mod = sys.modules[__name__]
+if not hasattr(mod, &#39;_init&#39;):
+    mod._init = True
+    mod.state = 0
+
+def side_effect():
+    mod.state += 1
+    return mod.state &gt; 0
+
+if not (not side_effect()):
+    print(&#39;state after:&#39;, mod.state)
+else:
+    print(&#39;unreachable&#39;)
+print(&#39;final state:&#39;, mod.state)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:34:35.869910527 -0400
++++ fixed.py	2026-10-17 16:34:36.034910828 -0400
+@@ -8,7 +8,7 @@
+     mod.state += 1
+     return mod.state &gt; 0
+ 
+<span class="del">-if not (not side_effect()):</span>
+<span class="add">+if side_effect():</span>
+     print(&#39;state after:&#39;, mod.state)
+ else:
+     print(&#39;unreachable&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Double Negation Inside Function Call Alters Evaluation Count</summary><pre>def f(arg):
+    global counter
+    counter += arg
+    return arg
+counter = 0
+result = f(not (not True))
+expected_calls = 2
+actual_calls = counter
+print(f&#39;{expected_calls=} {actual_calls=}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:35:52.976062087 -0400
++++ fixed.py	2026-10-17 16:35:53.144062439 -0400
+@@ -3,7 +3,7 @@
+     counter += arg
+     return arg
+ counter = 0
+<span class="del">-result = f(not (not True))</span>
+<span class="add">+result = f(bool(True))</span>
+ expected_calls = 2
+ actual_calls = counter
+ print(f&#39;{expected_calls=} {actual_calls=}&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Indexing Operation May Raise IndexError Twice vs Once</summary><pre>lst = [1]  # length 1
+idx_list = []
+def get_idx():
+    idx_list.append(0)
+    val = len(idx_list)
+    lst.clear()
+    return val
+try:
+    result = not (not lst[get_idx()])
+except IndexError as e:
+    passes = len([i for i in range(len(idx_list)) if i &lt; len(lst)])
+    print(f&#39;Exception caught: {type(e).__name__}: {e}, index evaluations: {len(idx_list)}&#39;)
+else:
+    print(f&#39;Result: {result}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:35:53.244062650 -0400
++++ fixed.py	2026-10-17 16:35:53.407062992 -0400
+@@ -6,7 +6,7 @@
+     lst.clear()
+     return val
+ try:
+<span class="del">-    result = not (not lst[get_idx()])</span>
+<span class="add">+    result = bool(lst[get_idx()])</span>
+ except IndexError as e:
+     passes = len([i for i in range(len(idx_list)) if i &lt; len(lst)])
+     print(f&#39;Exception caught: {type(e).__name__}: {e}, index evaluations: {len(idx_list)}&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Conditional Expression Evaluates Condition Twice</summary><pre>cond = [True]
+def get_cond():
+    val = cond[0]
+    cond.clear()
+    cond.append(False)
+    return val
+branch_taken = None
+x = 1 if get_cond() else 2
+# Simulate what not(not(x)) does internally
+first_eval = branch_taken := (1 if get_cond() else 2)
+second_eval = branch_taken := (1 if get_cond() else 2)
+print(f&#39;First branch eval: {first_eval}, Second branch eval: {second_eval}&#39;)
+# Actual code under test
+try:
+    result = not (not (1 if get_cond() else 2))
+except Exception as e:
+    print(f&#39;Error: {e}&#39;)
+else:
+    print(f&#39;Result: {result}&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Comment Between Not Tokens Would Be Lost</summary><pre># This line tests comment preservation in double negation
+# Ruff may drop internal comments when fixing not(not x)
+# We cannot observe comment loss directly, so we use a marker
+marker = &#39;preserved&#39;
+val = not (
+    # comment that should stay
+    not marker
+)
+print(f&#39;Marker value: {marker}, Result: {val}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:35:53.654063511 -0400
++++ fixed.py	2026-10-17 16:35:53.821063862 -0400
+@@ -2,8 +2,5 @@
+ # Ruff may drop internal comments when fixing not(not x)
+ # We cannot observe comment loss directly, so we use a marker
+ marker = &#39;preserved&#39;
+<span class="del">-val = not (</span>
+<span class="del">-    # comment that should stay</span>
+<span class="del">-    not marker</span>
+<span class="del">-)</span>
+<span class="add">+val = bool(marker)</span>
+ print(f&#39;Marker value: {marker}, Result: {val}&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Pathlib Vs Os.Path Behavior On Relative Paths Etc</summary><pre>import os
+name = &#39;testfile&#39;
+with open(name, &#39;w&#39;) as f:
+    f.write(&#39;data&#39;)
+try:
+    # Using os.path.exists - not(not(...)) form
+    exists = not (not os.path.exists(name))
+    print(f&#39;os.path: {exists}&#39;)
+    os.remove(name)
+    # Second check after delete - would differ if duplicated
+    exists2 = not (not os.path.exists(name))
+    print(f&#39;os.path after remove: {exists2}&#39;)
+except Exception as e:
+    print(f&#39;OS error: {e}&#39;)
+finally:
+    if os.path.exists(name):
+        os.remove(name)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:35:53.921064072 -0400
++++ fixed.py	2026-10-17 16:35:54.104064456 -0400
+@@ -4,11 +4,11 @@
+     f.write(&#39;data&#39;)
+ try:
+     # Using os.path.exists - not(not(...)) form
+<span class="del">-    exists = not (not os.path.exists(name))</span>
+<span class="add">+    exists = bool(os.path.exists(name))</span>
+     print(f&#39;os.path: {exists}&#39;)
+     os.remove(name)
+     # Second check after delete - would differ if duplicated
+<span class="del">-    exists2 = not (not os.path.exists(name))</span>
+<span class="add">+    exists2 = bool(os.path.exists(name))</span>
+     print(f&#39;os.path after remove: {exists2}&#39;)
+ except Exception as e:
+     print(f&#39;OS error: {e}&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Method Returns Mutable Object That Changes State</summary><pre>class MutableReturn:
+    def __init__(self):
+        self.state = &#39;original&#39;
+    def mutate(self):
+        self.state = &#39;mutated&#39;
+        return self
+class Obj:
+    def __init__(self):
+        self.call_count = 0
+    def method(self):
+        self.call_count += 1
+        return MutableReturn().mutate() if self.call_count == 1 else MutableReturn()
+obj = Obj()
+try:
+    # First call: returns mutated object
+    # Second call: returns fresh object
+    result = not (not obj.method())
+    print(f&#39;Method calls: {obj.call_count}, Result truthiness: {bool(result)}&#39;)
+except Exception as e:
+    print(f&#39;Error: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:35:54.205064669 -0400
++++ fixed.py	2026-10-17 16:35:54.373065023 -0400
+@@ -14,7 +14,7 @@
+ try:
+     # First call: returns mutated object
+     # Second call: returns fresh object
+<span class="del">-    result = not (not obj.method())</span>
+<span class="add">+    result = bool(obj.method())</span>
+     print(f&#39;Method calls: {obj.call_count}, Result truthiness: {bool(result)}&#39;)
+ except Exception as e:
+     print(f&#39;Error: {e}&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Property With Side-Effecting __Get__ Accessed Twice</summary><pre>class SideEffectProp:
+    def __init__(self):
+        self.access_count = 0
+    @property
+    def prop(self):
+        self.access_count += 1
+        return self.access_count == 1  # True only on first access
+obj = SideEffectProp()
+try:
+    # Original: accesses prop twice -&gt; first True, second False -&gt; not(not(...)) = False
+    # Fix: accesses once -&gt; True -&gt; not(False) = True? Wait: not(not(x)) where x=prop
+    # First access: prop=True -&gt; not(True)=False -&gt; not(False)=True
+    # But second access happens in original: prop becomes False on second access
+    # So: not(not(obj.prop)) evaluates obj.prop twice
+    first = obj.prop  # access_count=1, returns True
+    second = obj.prop # access_count=2, returns False
+    inner = not second  # not False = True
+    result = not inner  # not True = False
+    print(f&#39;Access count: {obj.access_count}, Expected result: {result}&#39;)
+    # Now test actual expression
+    obj2 = SideEffectProp()
+    actual = not (not obj2.prop)
+    print(f&#39;Actual access count: {obj2.access_count}, Actual result: {actual}&#39;)
+except Exception as e:
+    print(f&#39;Error: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:35:54.475065237 -0400
++++ fixed.py	2026-10-17 16:35:54.641065586 -0400
+@@ -19,7 +19,7 @@
+     print(f&#39;Access count: {obj.access_count}, Expected result: {result}&#39;)
+     # Now test actual expression
+     obj2 = SideEffectProp()
+<span class="del">-    actual = not (not obj2.prop)</span>
+<span class="add">+    actual = bool(obj2.prop)</span>
+     print(f&#39;Actual access count: {obj2.access_count}, Actual result: {actual}&#39;)
+ except Exception as e:
+     print(f&#39;Error: {e}&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Keyword-Only Positional-Only *Args/**Kwargs Forwarding Defaults Evaluated Once</summary><pre>def process(a, /, b, *, c=[]):
+    c.append(a + b)
+    return c
+call_log = []
+def make_k():
+    call_log.append(&#39;eval&#39;)
+    return [99]
+try:
+    # This will trigger SIM208 on the inner not(not(...) if we had it
+    # Instead we test defaults in context
+    result = process(1, 2, c=not (not make_k()))
+    print(f&#39;Call log length: {len(call_log)}, Result: {result}&#39;)
+except Exception as e:
+    print(f&#39;Error: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:35:54.741065797 -0400
++++ fixed.py	2026-10-17 16:35:54.905066142 -0400
+@@ -8,7 +8,7 @@
+ try:
+     # This will trigger SIM208 on the inner not(not(...) if we had it
+     # Instead we test defaults in context
+<span class="del">-    result = process(1, 2, c=not (not make_k()))</span>
+<span class="add">+    result = process(1, 2, c=bool(make_k()))</span>
+     print(f&#39;Call log length: {len(call_log)}, Result: {result}&#39;)
+ except Exception as e:
+     print(f&#39;Error: {e}&#39;)
+</pre></details></body></html>

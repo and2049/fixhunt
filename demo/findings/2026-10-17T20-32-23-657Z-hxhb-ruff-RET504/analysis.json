@@ -1,0 +1,35 @@
+{
+  "summary": "Flags redundant variable assignments where the assigned variable is returned immediately afterward.",
+  "firingShapes": [
+    "def f():\\n    x = expr; return x",
+    "def f():\\n    x = expr\\n    return x",
+    "def f():\\n    if True:\\n        x = expr; return x",
+    "def f():\\n    try:\\n        x = expr\\n    finally:\\n        pass\\n    return x",
+    "def f():\\n    while False:\\n        pass\\n    x = expr\\n    return x",
+    "def f():\\n    [x := expr]\\n    return x",
+    "class C:\\n    def m(self):\\n        x = expr\\n        return x",
+    "async def f():\\n    x = await g(); return x"
+  ],
+  "silentShapes": [
+    "def f():\\n    x = expr\\n    y = x + 1\\n    return y",
+    "def f():\\n    x = expr\\n    print(x)\\n    return x",
+    "def f():\\n    global x\\n    x = expr\\n    return x",
+    "def f():\\n    nonlocal x\\n    x = expr\\n    return x",
+    "def f():\\n    del x\\n    x = expr\\n    return x"
+  ],
+  "fixDescription": "Remove the assignment statement and replace the returned variable with the expression originally assigned to it.",
+  "hazards": [
+    "Assignment inside a conditional block may skip execution when condition is false, but moving expression to return would evaluate it unconditionally.",
+    "Assignment inside a loop body may execute zero or multiple times, but returning the expression directly evaluates it once before loop entry.",
+    "Assignment inside a try block where finally reassigns the variable would lose the finally's effect on the returned value.",
+    "Assignment to a variable that is also read in a lambda or nested function defined later in the same scope would break closure capture.",
+    "Assignment to a variable that has the same name as an imported symbol would shadow the import only locally; removing the assignment could cause the return to use the imported value instead.",
+    "Assignment with a walrus operator (:=) inside a list comprehension or other comprehension changes the iteration semantics if the variable is used elsewhere in the comprehension.",
+    "Assignment to a variable that is annotated with a type comment or type hint would drop the annotation if the assignment is removed, affecting static analysis.",
+    "Assignment that includes a delayed evaluation via a property setter would lose the setter invocation if the expression is returned directly.",
+    "Assignment that occurs after a side-effecting expression (e.g., function call) but before a return would still have executed the side effect; removing the assignment does not drop the side effect, but if the expression is moved into the return, the side effect remains—however, if the expression is duplicated due to common subexpression assumptions, it could be evaluated twice.",
+    "Assignment where the expression is a yield or yield-from expression would change the generator's behavior if the yield is moved into a return statement.",
+    "Assignment where the variable is deleted later in the same block (e.g., 'del x') would cause a NameError if the return uses the variable after deletion, but removing the assignment avoids the deletion error—however, the fix assumes no such deletion exists between assignment and return, so this hazard is mitigated by the rule's pattern but still relevant if the linter misses intervening code.",
+    "Assignment that is the only statement in a block that ends with a return, but the block is part of a multi-line statement (e.g., continuation lines), could break parsing if the fix removes indentation incorrectly."
+  ]
+}

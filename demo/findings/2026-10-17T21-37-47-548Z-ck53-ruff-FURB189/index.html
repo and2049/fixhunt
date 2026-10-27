@@ -1,0 +1,179 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB189 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB189 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-37-47-548Z-ck53-ruff-FURB189 · fix labelled <b>unknown</b> · 16 programs, 13 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0053</p>
+<div class="card"><b>Rule analysis</b><p>Flags classes that inherit directly from built-in dict, list, or str due to inconsistent dunder method usage.</p><p class="mut">Fix: Replaces direct inheritance from dict, list, or str with the corresponding collections.UserDict, UserList, or UserString base class, preserving all other bases and class body content.</p><details><summary>12 hazards</summary><ul><li>The rewrite changes the MRO, potentially altering method resolution order in multiple inheritance scenarios involving the replaced base.</li><li>isinstance(obj, dict/list/str) checks will return False for instances after the rewrite, breaking type tests that rely on the original built-in type.</li><li>Code relying on the exact type (type(obj) is dict/list/str) will fail after the rewrite, as the type becomes the User* subclass.</li><li>If the class defines __slots__, the rewrite may conflict with User*&#39;s __slots__ or cause layout incompatibilities, leading to attribute errors.</li><li>If the class overrides __new__ or __init__ and depends on the built-in&#39;s memory layout or initialization behavior, the User* alternative may not replicate it exactly.</li><li>If the class is used in C extensions or via CPython&#39;s internal APIs that expect the exact built-in type, the rewrite may cause segmentation faults or undefined behavior.</li><li>If the class relies on the built-in&#39;s hash implementation (e.g., for use in sets or as dict keys), the User* version may have different hashing behavior.</li><li>If the class is pickled/unpickled, the rewrite changes the serialized form and may break compatibility with existing pickles expecting the built-in type.</li><li>If the class is documented or inspected via __mro__, __bases__, or similar introspection, the output will differ after the rewrite.</li><li>Any decorators or metaclasses that inspect or modify the base classes at definition time may behave differently due to the changed base list.</li><li>If the code imports dict/list/str from elsewhere (e.g., via aliasing or shadowing), the fix may incorrectly replace the wrong base or fail to detect the inheritance.</li><li>Comments placed on the same line as the class declaration or within the parentheses of the base class list may be lost or misplaced during the rewrite.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Exact type check fails after rewrite</td><td class="mut">Code relying on type(obj) is dict/list/str breaks when type becomes User* subclass.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>__mro__ inspection differs after rewrite</td><td class="mut">Introspection via __mro__, __bases__ etc. shows different inheritance chain post-fix.</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span></td><td>Aliased built-in causes misfire or missed detection</td><td class="mut">If dict/list/str imported/aliased/shadowed, fix may replace wrong identifier or miss trigg</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Descriptor/properties with side effects behave differently</td><td class="mut">__get__/__set__ logic assumes dict storage; UserDict stores data in .data attribute.</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Bytes vs str confusion in UserString rewrite</td><td class="mut">UserString expects str input; passing bytes breaks or encodes unexpectedly post-fix.</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>*args/**kwargs forwarding broken by signature mismatch</td><td class="mut">UserList.__init__ signature differs from list; forwarding fails or misbehaves.</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>MRO changed in multiple inheritance alters method resolution</td><td class="mut">Replacing list with UserList shifts MRO, calling different parent method in diamond inheri</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Context manager with write() but no close() misbehaves</td><td class="mut">UserDict/UserList/UserString lack file-like semantics; write() may exist but context proto</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>MRO and Base Inspection</td><td class="mut">If the class is documented or inspected via __mro__, __bases__, or similar introspection, </td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>__slots__ Conflict</td><td class="mut">If the class defines __slots__, the rewrite may conflict with User*&#39;s __slots__ or cause l</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>dict Ordering and Duplicate Keys</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Inline Comments Lost</td><td class="mut">Comments placed on the same line as the class declaration or within the parentheses of the</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>C Extension Expectation</td><td class="mut">If the class is used in C extensions or via CPython&#39;s internal APIs that expect the exact </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation Order Side Effects</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Attached Comments/Docstrings</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Mutable Default Arguments Aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Exact type check fails after rewrite</summary><pre>import sys
+
+def f():
+    d = {}  # baseline dict
+    c = MyDict()  # user-defined dict-like
+    print(type(d) is dict)
+    print(type(c) is dict)
+
+class MyDict(dict):
+    pass
+
+f()
+</pre></details><details id="r1-p002"><summary>r1-p002 — __mro__ inspection differs after rewrite</summary><pre>class A(dict):
+    pass
+
+print(A.__mro__)
+print(A.__bases__)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Aliased built-in causes misfire or missed detection</summary><pre>d = dict
+class A(d):
+    pass
+print(type(A()))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Descriptor/properties with side effects behave differently</summary><pre>class Desc:
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        return obj[&#39;x&#39;]  # assumes dict-like storage
+
+    def __set__(self, obj, value):
+        obj[&#39;x&#39;] = value  # writes to internal dict
+
+class MyDict(dict):
+    attr = Desc()
+
+d = MyDict()
+d.attr = 42
+print(d.attr)
+print(d[&#39;x&#39;])
+</pre></details><details id="r1-p005"><summary>r1-p005 — Bytes vs str confusion in UserString rewrite</summary><pre>class MyStr(str):
+    def __new__(cls, s):
+        return super().__new__(cls, s)
+
+s = MyStr(b&#39;hello&#39;.decode())
+print(type(s))
+print(repr(s))
+</pre></details><details id="r1-p006"><summary>r1-p006 — *args/**kwargs forwarding broken by signature mismatch</summary><pre>class MyList(list):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.extra = len(args)
+
+l = MyList([1, 2], extra=3)
+print(l)
+print(l.extra)
+</pre></details><details id="r1-p007"><summary>r1-p007 — MRO changed in multiple inheritance alters method resolution</summary><pre>class A:
+    def extend(self, x):
+        print(&#39;A.extend&#39;)
+
+class B(list, A):
+    pass
+
+b = B()
+b.extend([1])  # which extend is called?
+</pre></details><details id="r1-p008"><summary>r1-p008 — Context manager with write() but no close() misbehaves</summary><pre>class MyDict(dict):
+    def write(self, s):
+        self[&#39;log&#39;] = self.get(&#39;log&#39;, &#39;&#39;) + s
+
+d = MyDict()
+d.write(&#39;hello&#39;)
+print(d[&#39;log&#39;])
+try:
+    with d:
+        pass
+except Exception as e:
+    print(type(e).__name__, e)
+</pre></details><details id="r2-p001"><summary>r2-p001 — MRO and Base Inspection</summary><pre>class A(dict):
+    pass
+print(&#39;bases:&#39;, A.__bases__)
+print(&#39;mro:&#39;, [c.__name__ for c in A.__mro__])
+x = A()
+print(&#39;type(x).__name__:&#39;, type(x).__name__)
+</pre></details><details id="r2-p002"><summary>r2-p002 — __slots__ Conflict</summary><pre>class A(dict):
+    __slots__ = (&#39;x&#39;,)
+    def __init__(self):
+        super().__init__()
+        self.x = 1
+try:
+    a = A()
+    print(&#39;a.x:&#39;, a.x)
+except Exception as e:
+    print(type(e).__name__, &#39;:&#39;, e)
+</pre></details><details id="r2-p003"><summary>r2-p003 — dict Ordering and Duplicate Keys</summary><pre>class A(dict):
+    def __setitem__(self, k, v):
+        super().__setitem__(k, v * 2)
+    def __hash__(self):
+        return id(self)
+a = A()
+a[1] = 2
+a[1] = 3
+print(&#39;a[1]:&#39;, a[1])
+print(&#39;len(a):&#39;, len(a))
+print(&#39;dict(a):&#39;, dict(a))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Inline Comments Lost</summary><pre>class A(dict):  # comment on decl
+    &quot;&quot;&quot;doc&quot;&quot;&quot;
+    x = 1
+class B(list):  # another
+    y = 2
+print(&#39;A.x:&#39;, A.x)
+print(&#39;B.y:&#39;, B.y)
+print(&#39;A.__doc__:&#39;, A.__doc__)
+print(&#39;B.__doc__:&#39;, B.__doc__)
+</pre></details><details id="r2-p005"><summary>r2-p005 — C Extension Expectation</summary><pre>import sys
+class A(dict):
+    pass
+def check(obj):
+    return isinstance(obj, dict) and type(obj) is dict  # strict built-in check
+a = A()
+print(&#39;isinstance(a, dict):&#39;, isinstance(a, dict))
+print(&#39;check(a):&#39;, check(a))
+print(&#39;type(a) is dict:&#39;, type(a) is dict)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Evaluation Order Side Effects</summary><pre>def f():
+    print(&#39;f called&#39;)
+    return dict
+class A(f()):  # side effect in base
+    pass
+print(&#39;A.__bases__[0].__name__:&#39;, A.__bases__[0].__name__)
+a = A()
+print(&#39;type(a).__name__:&#39;, type(a).__name__)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Attached Comments/Docstrings</summary><pre>class A(dict):  # inline comment
+    &quot;&quot;&quot;This is a docstring.&quot;&quot;&quot;
+    def method(self):
+        return &#39;ok&#39;
+print(&#39;A.__doc__:&#39;, A.__doc__)
+# Simulate checking comment attachment via AST-like behavior
+import ast
+tree = ast.parse(&#39;&#39;&#39;class A(dict):  # inline comment
+    \&quot;\&quot;\&quot;This is a docstring.\&quot;\&quot;\&quot;
+    def method(self):
+        return &#39;ok&#39; &#39;&#39;&#39;)
+cls = tree.body[0]
+print(&#39;has inline comment?&#39;, hasattr(cls, &#39;comment&#39;) if hasattr(cls, &#39;comment&#39;) else &#39;N/A&#39;)
+print(&#39;method result:&#39;, A().method())
+</pre></details><details id="r2-p008"><summary>r2-p008 — Mutable Default Arguments Aliasing</summary><pre>def f(x=None):
+    if x is None:
+        x = {}
+    if not hasattr(f, &#39;counter&#39;):
+        f.counter = 0
+    f.counter += 1
+    x[&#39;key&#39;] = f.counter
+    return x
+class A(dict):
+    pass
+# Use class in default arg
+call_log = []
+def g(val=A()):  # mutable default: class instance
+    call_log.append(val.copy())
+    return val
+g()
+g()
+g()
+print(&#39;call log lengths:&#39;, [len(d) for d in call_log])
+print(&#39;call log contents:&#39;, call_log)
+</pre></details></body></html>

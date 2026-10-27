@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags 'and' expressions where one operand is the logical negation of the other, such as 'x and not x', which always evaluates to False.",
+  "firingShapes": [
+    "a and not a",
+    "not b and b",
+    "(x + y) and not (x + y)",
+    "func() and not func()",
+    "obj.attr and not obj.attr",
+    "lst[0] and not lst[0]",
+    "d['key'] and not d['key']",
+    "True and not True"
+  ],
+  "silentShapes": [
+    "a and not b",
+    "not a and b and c",
+    "a and (not b or c)",
+    "(a and b) and not c",
+    "a and not (b and c)"
+  ],
+  "fixDescription": "Replace the entire 'and' expression with the literal 'False'.",
+  "hazards": [
+    "Rewriting 'func() and not func()' to 'False' changes behavior if func() has side effects, as the second call is omitted but the first may still be intended to execute.",
+    "In '(x + y) and not (x + y)', if x or y are properties with getters that have side effects, the rewrite eliminates the second evaluation but preserves the first, altering observable state.",
+    "For 'obj.attr and not obj.attr', if obj.attr is a descriptor with a __get__ method that performs side effects, the rewrite reduces the number of invocations from two to one, changing behavior.",
+    "When used as 'lst[0] and not lst[0]', if lst[0] triggers a __getitem__ that raises an exception on the second access due to state change from the first, the rewrite avoids the exception but may hide intended error handling.",
+    "In 'd[key] and not d[key]', if the dictionary's __getitem__ has side effects (e.g., logging or caching), the rewrite halves the number of calls, affecting program diagnostics or performance.",
+    "If the expression is part of a larger statement like 'return a and not a', replacing it with 'return False' is safe, but if it's in a context relying on the expression's type being something other than bool (though unlikely), it could cause issues—though Python treats it as bool, so low risk.",
+    "Comments attached to the expression, such as 'a and not a  # important check', would be lost if the autofix replaces the whole line or expression without preserving trailing comments.",
+    "In a macro-generated or templated code context where the duplication is intentional for code generation symmetry, replacing with 'False' could break the generator's assumptions about paired evaluations.",
+    "If the expression is inside a lambda or comprehension where the duplicate evaluation is meant to ensure idempotency or retry logic (though logically flawed), removing the duplicate alters the intended fault-tolerance pattern.",
+    "When the expression appears in a debug or logging condition like 'if debug and not debug:', the rewrite to 'False' silences the condition, but if debug is a mutable flag changed by the first eval, the second eval was meant to catch the change—now missed."
+  ]
+}

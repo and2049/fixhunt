@@ -1,0 +1,634 @@
+{
+  "runId": "2026-10-17T20-58-59-051Z-dnrf-biome-style_useArrayLiterals",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useArrayLiterals",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useArrayLiterals\n- Fix: safe\n- Default severity: info\n- Available from version: 1.7.2\n- Diagnostic category: lint/style/useArrayLiterals\n- This rule is recommended\n\nDescription\n\n Disallow Array constructors.\n\n Use of the Array constructor to construct a new array is generally discouraged in favor of array literal notation because of the single-argument pitfall and because the Array global may be redefined.\n The exception is when the Array constructor intentionally creates sparse arrays of a specified size by giving the constructor a single numeric argument.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n const xs = Array();\n ```\n\n ```js,expect_diagnostic\n const xs = Array(0, 1, 2);\n ```\n\n ```js,expect_diagnostic\n const xs = new Array(0, 1, 2);\n ```\n\n ```js,expect_diagnostic\n const xs = Array(...args);\n ```\n\n ```ts,expect_diagnostic\n const xs = new Array<number>()\n ```\n\nValid\n\n ```js\n const xs = Array(65000);\n ```\n\n ```js\n const xs = [0, 1, 2];\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags uses of the Array constructor without exactly one numeric argument, recommending replacement with array literals.",
+    "firingShapes": [
+      "const xs = Array();",
+      "const xs = Array(0, 1, 2);",
+      "const xs = new Array(0, 1, 2);",
+      "const xs = Array(...args);",
+      "const xs = new Array<number>();",
+      "const xs = Array(undefined);",
+      "const xs = Array(null);",
+      "const xs = Array(false);"
+    ],
+    "silentShapes": [
+      "const xs = Array(5);",
+      "const xs = new Array(3);",
+      "const xs = Array(Number(n)); // where n is guaranteed integer >= 0",
+      "const xs = [];",
+      "const xs = [1, 2, 3];"
+    ],
+    "fixDescription": "Replace Array(...) calls with [...] containing the same arguments, preserving spread elements and argument order; replace new Array(...) similarly while dropping the 'new' keyword.",
+    "hazards": [
+      "Rewriting Array(x) where x is non-numeric changes behavior: Array(undefined) becomes [undefined] instead of [], altering length and element values.",
+      "If Array is shadowed by a local variable, replacing Array(...) with [...] breaks the reference to the local binding, potentially changing the constructor used.",
+      "When Array(...) appears in a larger expression (e.g., return Array(...)), moving comments attached to the parentheses or arguments may alter comment placement relative to surrounding tokens.",
+      "In contexts like typeof Array(...) === 'function', replacing with [...] changes the result from 'object' to 'object' but may affect type checks relying on constructor identity in non-standard environments.",
+      "If the Array constructor call has trailing comments (e.g., Array(1, 2 /* comment */)), the autofix may drop or misplace those comments during rewrite.",
+      "Using Array(...) in a comma sequence (e.g., let x = Array(1), y;) risks breaking parsing if the fix removes necessary delimiters or alters precedence unexpectedly.",
+      "When Array(...) is used as a function argument (e.g., fn(Array(1, 2))), the fix preserves semantics only if Array is the global constructor; if redefined locally, the literal [] behaves differently.",
+      "In eval() or Function() constructor contexts, the rewritten literal may be parsed differently due to strict mode implications or reserved word handling.",
+      "If the argument to Array(...) is an expression with side effects (e.g., Array(f())), the fix evaluates f() once as before, but if the literal is placed in a different syntactic position, evaluation order relative to other expressions could shift.",
+      "For Array(...) with more than 2^32-1 arguments, the literal may fail silently or throw where the constructor would have succeeded, though both are practically infeasible.",
+      "In rare cases involving __proto__ manipulation, replacing Array(...) with [] may alter inheritance if the literal is assigned to a prototype property expecting Array instance traits."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0028278,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 12,
+    "fixed": 12,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Label/break/continue/finally interaction",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "finally 0\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally 0\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:09.951816001 -0400\n+++ fixed.js\t2026-10-17 16:59:10.234819674 -0400\n@@ -1,7 +1,7 @@\n outer:\n for (let i = 0; i < 2; i++) {\n   try {\n-    const arr = Array(i, i + 1);\n+    const arr = [i, i + 1];\n     if (arr[0] === 0) break outer;\n     console.log('loop', arr);\n   } finally {\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Trailing comments preservation",
+      "hazard": "If the Array constructor call has trailing comments (e.g., Array(1, 2 /* comment */)), the autofix may drop or misplace those comments during rewrite.",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:10.405821893 -0400\n+++ fixed.js\t2026-10-17 16:59:10.681825474 -0400\n@@ -1,3 +1,3 @@\n function fn(x) { return x; }\n-const result = fn(Array(1, 2 /* keep this */));\n+const result = fn([1, 2 /* keep this */]);\n console.log(result);\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Local Array shadowing",
+      "hazard": "When Array(...) is used as a function argument (e.g., fn(Array(1, 2))), the fix preserves semantics only if Array is the global constructor; if redefined locally, the literal [] behaves differently.",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Var hoisting and redeclaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[ 0, 1 ]\n[ 1, 2 ]\nredeclare: object\nafter: [ 99 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ 0, 1 ]\n[ 1, 2 ]\nredeclare: object\nafter: [ 99 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:11.080830651 -0400\n+++ fixed.js\t2026-10-17 16:59:11.346834101 -0400\n@@ -1,5 +1,5 @@\n for (var i = 0; i < 2; i++) {\n-  var arr = Array(i, i + 1);\n+  var arr = [i, i + 1];\n   console.log(arr);\n }\n console.log('redeclare:', typeof arr);\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "__proto__ and prototype interaction",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:11.507836189 -0400\n+++ fixed.js\t2026-10-17 16:59:11.782839756 -0400\n@@ -1,5 +1,5 @@\n const obj = {};\n-obj.__proto__ = Array(0, 1);\n+obj.__proto__ = [0, 1];\n console.log(obj.length);\n const copy = { ...obj };\n console.log(copy.length);\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comment attachment to removed/moved code",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:11.952841961 -0400\n+++ fixed.js\t2026-10-17 16:59:12.228845539 -0400\n@@ -1,4 +1,4 @@\n // start\n-const x = Array(/* hello */1, /* world */2);\n+const x = [/* hello */1, /* world */2];\n // end\n console.log(x);\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Side effects in argument evaluation order",
+      "hazard": "If the argument to Array(...) is an expression with side effects (e.g., Array(f())), the fix evaluates f() once as before, but if the literal is placed in a different syntactic position, evaluation or",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "fg [ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "fg [ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:12.401847782 -0400\n+++ fixed.js\t2026-10-17 16:59:12.664851191 -0400\n@@ -1,5 +1,5 @@\n let log = '';\n function f() { log += 'f'; return 1; }\n function g() { log += 'g'; return 2; }\n-const arr = Array(f(), g());\n+const arr = [f(), g()];\n console.log(log, arr);\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Arguments object and parameters interaction",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "args: 1 undefined\nb: [ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "args: 1 undefined\nb: [ 1, 2 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:12.835853407 -0400\n+++ fixed.js\t2026-10-17 16:59:13.105856906 -0400\n@@ -1,4 +1,4 @@\n-function test(a, b = Array(1, 2)) {\n+function test(a, b = [1, 2]) {\n   console.log('args:', arguments.length, arguments[1]);\n   console.log('b:', b);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Order of evaluation duplication - side effect executed twice",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[ 0, 1 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ 0, 1 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:18.552927389 -0400\n+++ fixed.js\t2026-10-17 16:59:18.825930916 -0400\n@@ -1,4 +1,4 @@\n let i = 0;\n function next() { return i++; }\n-const arr = Array(next(), next());\n+const arr = [next(), next()];\n console.log(arr);\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "__proto__ key assignment via computed property using array constructor",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:18.989933035 -0400\n+++ fixed.js\t2026-10-17 16:59:19.272936690 -0400\n@@ -1,3 +1,3 @@\n const obj = {};\n-obj[`__proto__`] = Array(1, 2);\n+obj[`__proto__`] = [1, 2];\n console.log(obj.__proto__.length === 2 && obj.__proto__[0] === 1);\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Numeric/string coercion with custom valueOf affecting resulting array contents",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Static block initialization using array constructor influencing class field",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:19.665941766 -0400\n+++ fixed.js\t2026-10-17 16:59:19.944945369 -0400\n@@ -1,5 +1,5 @@\n class C {\n   static arr;\n-  static { C.arr = Array(1, 2); }\n+  static { C.arr = [1, 2]; }\n }\n console.log(C.arr.length === 2 && C.arr[0] === 1);\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Eval context altering parsing of rewritten array literal due to strict mode",
+      "hazard": "In eval() or Function() constructor contexts, the rewritten literal may be parsed differently due to strict mode implications or reserved word handling.",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Function declaration inside switch case capturing array constructor via closure",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: f is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: f is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:20.341950494 -0400\n+++ fixed.js\t2026-10-17 16:59:20.615954030 -0400\n@@ -1,6 +1,6 @@\n switch (0) {\n   case 0:\n-    function f() { return Array(1, 2); }\n+    function f() { return [1, 2]; }\n     break;\n }\n const arr = f();\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "__proto__ assignment replacing Array instance with literal altering prototype chain expectations",
+      "hazard": "In rare cases involving __proto__ manipulation, replacing Array(...) with [] may alter inheritance if the literal is assigned to a prototype property expecting Array instance traits.",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Name collision after hoisting due to var redeclaration in loop interacting with array constructor",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "style/useArrayLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useArrayLiterals",
+            "severity": "info",
+            "message": "Use an array literal instead of the Array constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:20.999958987 -0400\n+++ fixed.js\t2026-10-17 16:59:21.282962638 -0400\n@@ -1,4 +1,4 @@\n for (let i = 0; i < 1; i++) {\n-  var xs = Array(1, 2);\n+  var xs = [1, 2];\n }\n console.log(xs.length === 2 && xs[0] === 1);\n"
+      }
+    }
+  ]
+}

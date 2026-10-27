@@ -1,0 +1,273 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP005 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP005 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-11-13-477Z-9jdd-ruff-UP005 · fix labelled <b>unknown</b> · 8 programs, 6 fired, 6 fixed, 4 oracle-backed finding(s) · model cost $0.0545</p>
+<div class="card"><b>Rule analysis</b><p>Flags usage of deprecated unittest method aliases like assertEquals, assertNotEquals, etc.</p><p class="mut">Fix: Replaces deprecated unittest method aliases with their non-deprecated counterparts (e.g., assertEquals → assertEqual, assertNotEquals → assertNotEqual, failUnless → assertTrue, failIf → assertFalse, assertRaisesRegexp → assertRaisesRegex, assertRegexpMatches → assertRegex).</p><details><summary>12 hazards</summary><ul><li>Rewriting self.assertEquals to self.assertEqual changes behavior if a subclass overrides assertEquals but not assertEqual, breaking polymorphism.</li><li>If &#39;self&#39; is not a TestCase instance (e.g., a mock or wrapper), the rewritten method may not exist, causing AttributeError.</li><li>Comments attached to the deprecated method name (e.g., self.assertEquals  # TODO) are lost during token replacement.</li><li>In dynamically generated code via exec() or eval(), the string &#39;assertEquals&#39; may be referenced elsewhere, and rewriting breaks string-based lookups.</li><li>If a variable named &#39;assertEquals&#39; exists in local scope (e.g., assertEquals = 5), the rewrite incorrectly modifies it to &#39;assertEqual&#39;, causing a NameError.</li><li>When using getattr(self, &#39;assertEquals&#39;) dynamically, the rewrite does not update the string argument, causing a mismatch.</li><li>In code that inspects method names via __dict__ or dir(), the renamed method alters introspection results, affecting frameworks that rely on deprecated names.</li><li>If the code runs under Python &lt;3.12 where deprecated aliases still exist, the fix is unnecessary but harmless; however, in rare cases of custom unittest subclasses that deliberately shadow the deprecated name, the rewrite may bypass intended overrides.</li><li>Rewriting assertRaisesRegexp to assertRaisesRegex fails if the test framework or monkey-patched version expects the old name for plugin compatibility.</li><li>In code that uses functools.partial or methodcaller with the deprecated name as a string, the fix does not update those references, leading to runtime errors.</li><li>If the deprecated method is accessed via a class variable alias (e.g., eq = self.assertEquals), the rewrite does not propagate to the alias, leaving stale references.</li><li>In IPython notebooks or interactive environments where unittest is reloaded, the fix may misfire due to delayed module state.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p001"><b>r1-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The original program already fails with an AttributeError because assertEquals was removed in Python 3.12, so the &#39;before&#39; run is broken for an unrelated reason. The fix correctly replaces the deprecated alias with assertEqual, but the test logic itself is flawed (using an assignment expression in a comprehension filter that depends on the assertion&#39;s return value), causing a different error after the fix.">judge: program-bug · low</span> Walrus and comprehension scoping interaction<p class="mut">The original program already fails with an AttributeError because assertEquals was removed in Python 3.12, so the &#39;before&#39; run is broken for an unrelated reason. The fix correctly replaces the deprecated alias with assertEqual, but the test logic itself is flawed (using an assignment expression in a comprehension filter that depends on the assertion&#39;s return value), causing a different error after the fix.</p>
+<h2>Minimized program (8→6 lines)</h2><pre>import unittest
+class Test(unittest.TestCase):
+    def test(self):
+        data = [1, 2, 3]
+        results = [(x := i) for i in data if self.assertEquals(x, i)]
+Test().test()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:11:31.333194520 -0400
++++ fixed.py	2026-10-17 17:11:31.786199166 -0400
+@@ -2,7 +2,7 @@
+ class Test(unittest.TestCase):
+     def test(self):
+         data = [1, 2, 3]
+<span class="del">-        results = [(x := i) for i in data if self.assertEquals(x, i)]</span>
+<span class="add">+        results = [(x := i) for i in data if self.assertEqual(x, i)]</span>
+         print(&#39;results:&#39;, results)
+         print(&#39;final x:&#39;, x)
+ Test().test()
+</pre>
+<h2>Observed</h2><pre>stderr before: AttributeError: &#39;Test&#39; object has no attribute &#39;assertEquals&#39;. Did you mean: &#39;assertEqual&#39;?
+stderr after: UnboundLocalError: cannot access local variable &#39;x&#39; where it is not associated with a value</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14808">astral-sh/ruff/issues/14808</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/997">astral-sh/ruff/issues/997</a> · <a href="reports/r1-p001.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p004"><b>r1-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The program defines a custom `assertEquals` method that is intentionally called by the test. The fix rewrites the call to `assertEqual`, which bypasses the custom implementation and changes the observable behavior (the custom method is no longer invoked, and the test would likely fail or behave differently). This is a plausible real-world pattern where a subclass overrides a deprecated alias, and the fix should not be applied automatically.">judge: real · high</span> Custom subclass shadowing deprecated alias intentionally<p class="mut">The program defines a custom `assertEquals` method that is intentionally called by the test. The fix rewrites the call to `assertEqual`, which bypasses the custom implementation and changes the observable behavior (the custom method is no longer invoked, and the test would likely fail or behave differently). This is a plausible real-world pattern where a subclass overrides a deprecated alias, and the fix should not be applied automatically.</p>
+<h2>Minimized program (10→8 lines)</h2><pre>import unittest
+class CustomTestCase(unittest.TestCase):
+    def assertEquals(self, a, b):
+        print(&#39;Custom assertEquals called with&#39;, a, b)
+class Test(CustomTestCase):
+    def test(self):
+        self.assertEquals(1, 1)
+Test().test()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:11:33.054212171 -0400
++++ fixed.py	2026-10-17 17:11:33.289214581 -0400
+@@ -5,6 +5,6 @@
+         return super().assertEqual(a, b)
+ class Test(CustomTestCase):
+     def test(self):
+<span class="del">-        self.assertEquals(1, 1)</span>
+<span class="add">+        self.assertEqual(1, 1)</span>
+         self.assertEqual(2, 2)
+ Test().test()
+</pre>
+<h2>Observed</h2><pre>stdout before:
+Custom assertEquals called with 1 1
+stdout after:
+</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r1-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The original program fails with AttributeError because assertAlmostEquals does not exist on TestCase; the fix correctly renames it to assertAlmostEqual, after which the test runs but fails with NameError because &#39;val&#39; is undefined. The behavior change is caused by the pre-existing bug (undefined variable), not by the fix itself.">judge: program-bug · low</span> Float division and rounding in assertion arguments<p class="mut">The original program fails with AttributeError because assertAlmostEquals does not exist on TestCase; the fix correctly renames it to assertAlmostEqual, after which the test runs but fails with NameError because &#39;val&#39; is undefined. The behavior change is caused by the pre-existing bug (undefined variable), not by the fix itself.</p>
+<h2>Minimized program (12→8 lines)</h2><pre>import unittest
+class Test(unittest.TestCase):
+    def test(self):
+        try:
+            self.assertAlmostEquals(val, 0.333, places=5)
+        except AssertionError as e:
+            print(&#39;AssertionError:&#39;, type(e).__name__, str(e))
+Test().test()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:11:33.814219965 -0400
++++ fixed.py	2026-10-17 17:11:34.214224066 -0400
+@@ -3,7 +3,7 @@
+     def test(self):
+         val = 1.0 / 3.0
+         try:
+<span class="del">-            self.assertAlmostEquals(val, 0.333, places=5)</span>
+<span class="add">+            self.assertAlmostEqual(val, 0.333, places=5)</span>
+             print(&#39;assertAlmostEquals passed&#39;)
+         except AssertionError as e:
+             print(&#39;AssertionError:&#39;, type(e).__name__, str(e))
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+AssertionError: AssertionError 0.3333333333333333 != 0.333 within 5 places (0.0003333333333332966 difference)
+stderr before: AttributeError: &#39;Test&#39; object has no attribute &#39;assertAlmostEquals&#39;. Did you mean: &#39;assertAlmostEqual&#39;?
+stderr after: AssertionError: 0.3333333333333333 != 0.333 within 5 places (0.0003333333333332966 difference)</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule UP005 explicitly replaces deprecated unittest aliases like assertEquals with their modern counterparts (assertEqual). The original code fails with AttributeError because assertEquals was removed in Python 3.12, while the fixed code runs successfully. This is exactly the behavior change the rule documents and intends.">judge: intended-change · high</span> Comments attached to deprecated method line<p class="mut">The rule UP005 explicitly replaces deprecated unittest aliases like assertEquals with their modern counterparts (assertEqual). The original code fails with AttributeError because assertEquals was removed in Python 3.12, while the fixed code runs successfully. This is exactly the behavior change the rule documents and intends.</p>
+<h2>Minimized program (7→5 lines)</h2><pre>import unittest
+class Test(unittest.TestCase):
+    def test(self):
+        self.assertEquals(&#39;hello&#39;, &#39;hello&#39;)  # inline: critical
+Test().test()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:11:34.442226404 -0400
++++ fixed.py	2026-10-17 17:11:34.851230597 -0400
+@@ -2,6 +2,6 @@
+ class Test(unittest.TestCase):
+     def test(self):
+         # This check validates user input equivalence
+<span class="del">-        self.assertEquals(&#39;hello&#39;, &#39;hello&#39;)  # inline: critical</span>
+<span class="add">+        self.assertEqual(&#39;hello&#39;, &#39;hello&#39;)  # inline: critical</span>
+         print(&#39;Comment preserved and check passed&#39;)
+ Test().test()
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+Comment preserved and check passed
+exit 1 → 0
+stderr before: AttributeError: &#39;Test&#39; object has no attribute &#39;assertEquals&#39;. Did you mean: &#39;assertEqual&#39;?
+stderr after: (none)</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Walrus and comprehension scoping interaction</td><td class="mut">UP005 replacement inside list comprehension with walrus operator alters variable scope cap</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Runtime-evaluated type annotation with forward reference</td><td class="mut">UP005 rewrites assertEquals in a string annotation evaluated at runtime via typing.get_typ</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dynamic getattr with string name not updated by fix</td><td class="mut">UP005 does not rewrite the string argument in getattr(self, &#39;assertEquals&#39;), so after fix,</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Custom subclass shadowing deprecated alias intentionally</td><td class="mut">UP005 rewrites self.assertEquals to self.assertEqual, bypassing a deliberate override in a</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>functools.partial with deprecated method name as string</td><td class="mut">UP005 does not update the string in functools.partial(self, &#39;assertEquals&#39;), so partial fa</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Float division and rounding in assertion arguments</td><td class="mut">UP005 rewrite occurs in assertAlmostEquals with float division arguments; precision-sensit</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Comments attached to deprecated method line</td><td class="mut">UP005 removal of self.assertAlsoEqually (typo) leaves orphan comment; but we use correct s</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>IPython-like reload simulation: module state delay</td><td class="mut">Simulates delayed unittest state: after rewriting assertEquals to assertEqual, if unittest</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Walrus and comprehension scoping interaction</summary><pre>import unittest
+class Test(unittest.TestCase):
+    def test(self):
+        data = [1, 2, 3]
+        results = [(x := i) for i in data if self.assertEquals(x, i)]
+        print(&#39;results:&#39;, results)
+        print(&#39;final x:&#39;, x)
+Test().test()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:11:31.333194520 -0400
++++ fixed.py	2026-10-17 17:11:31.786199166 -0400
+@@ -2,7 +2,7 @@
+ class Test(unittest.TestCase):
+     def test(self):
+         data = [1, 2, 3]
+<span class="del">-        results = [(x := i) for i in data if self.assertEquals(x, i)]</span>
+<span class="add">+        results = [(x := i) for i in data if self.assertEqual(x, i)]</span>
+         print(&#39;results:&#39;, results)
+         print(&#39;final x:&#39;, x)
+ Test().test()
+</pre></details><details id="r1-p002"><summary>r1-p002 — Runtime-evaluated type annotation with forward reference</summary><pre>import unittest
+from typing import get_type_hints
+class Test(unittest.TestCase):
+    def method(self) -&gt; &#39;assertEquals(1, 1)&#39;:
+        pass
+class TestSub(Test):
+    def test(self):
+        hints = get_type_hints(self.method, include_extras=True)
+        print(&#39;hints:&#39;, hints)
+        try:
+            self.assertEquals(1, 1)
+        except AttributeError as e:
+            print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+TestSub().test()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:11:32.014201505 -0400
++++ fixed.py	2026-10-17 17:11:32.443205905 -0400
+@@ -8,7 +8,7 @@
+         hints = get_type_hints(self.method, include_extras=True)
+         print(&#39;hints:&#39;, hints)
+         try:
+<span class="del">-            self.assertEquals(1, 1)</span>
+<span class="add">+            self.assertEqual(1, 1)</span>
+         except AttributeError as e:
+             print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+ TestSub().test()
+</pre></details><details id="r1-p003"><summary>r1-p003 — Dynamic getattr with string name not updated by fix</summary><pre>import unittest
+class Test(unittest.TestCase):
+    def test(self):
+        method_name = &#39;assertEquals&#39;
+        method = getattr(self, method_name)
+        try:
+            method(1, 1)
+            print(&#39;Success&#39;)
+        except AttributeError as e:
+            print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+Test().test()
+</pre></details><details id="r1-p004"><summary>r1-p004 — Custom subclass shadowing deprecated alias intentionally</summary><pre>import unittest
+class CustomTestCase(unittest.TestCase):
+    def assertEquals(self, a, b):
+        print(&#39;Custom assertEquals called with&#39;, a, b)
+        return super().assertEqual(a, b)
+class Test(CustomTestCase):
+    def test(self):
+        self.assertEquals(1, 1)
+        self.assertEqual(2, 2)
+Test().test()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:11:33.054212171 -0400
++++ fixed.py	2026-10-17 17:11:33.289214581 -0400
+@@ -5,6 +5,6 @@
+         return super().assertEqual(a, b)
+ class Test(CustomTestCase):
+     def test(self):
+<span class="del">-        self.assertEquals(1, 1)</span>
+<span class="add">+        self.assertEqual(1, 1)</span>
+         self.assertEqual(2, 2)
+ Test().test()
+</pre></details><details id="r1-p005"><summary>r1-p005 — functools.partial with deprecated method name as string</summary><pre>import unittest
+import functools
+class Test(unittest.TestCase):
+    def test(self):
+        func = functools.partial(getattr(self, &#39;assertEquals&#39;), 1)
+        try:
+            func(1)
+            print(&#39;Success&#39;)
+        except AttributeError as e:
+            print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+Test().test()
+</pre></details><details id="r1-p006"><summary>r1-p006 — Float division and rounding in assertion arguments</summary><pre>import unittest
+class Test(unittest.TestCase):
+    def test(self):
+        val = 1.0 / 3.0
+        try:
+            self.assertAlmostEquals(val, 0.333, places=5)
+            print(&#39;assertAlmostEquals passed&#39;)
+        except AssertionError as e:
+            print(&#39;AssertionError:&#39;, type(e).__name__, str(e))
+        self.assertAlmostEqual(val, 0.333, places=5)
+        print(&#39;assertEqual passed&#39;)
+Test().test()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:11:33.814219965 -0400
++++ fixed.py	2026-10-17 17:11:34.214224066 -0400
+@@ -3,7 +3,7 @@
+     def test(self):
+         val = 1.0 / 3.0
+         try:
+<span class="del">-            self.assertAlmostEquals(val, 0.333, places=5)</span>
+<span class="add">+            self.assertAlmostEqual(val, 0.333, places=5)</span>
+             print(&#39;assertAlmostEquals passed&#39;)
+         except AssertionError as e:
+             print(&#39;AssertionError:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Comments attached to deprecated method line</summary><pre>import unittest
+class Test(unittest.TestCase):
+    def test(self):
+        # This check validates user input equivalence
+        self.assertEquals(&#39;hello&#39;, &#39;hello&#39;)  # inline: critical
+        print(&#39;Comment preserved and check passed&#39;)
+Test().test()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:11:34.442226404 -0400
++++ fixed.py	2026-10-17 17:11:34.851230597 -0400
+@@ -2,6 +2,6 @@
+ class Test(unittest.TestCase):
+     def test(self):
+         # This check validates user input equivalence
+<span class="del">-        self.assertEquals(&#39;hello&#39;, &#39;hello&#39;)  # inline: critical</span>
+<span class="add">+        self.assertEqual(&#39;hello&#39;, &#39;hello&#39;)  # inline: critical</span>
+         print(&#39;Comment preserved and check passed&#39;)
+ Test().test()
+</pre></details><details id="r1-p008"><summary>r1-p008 — IPython-like reload simulation: module state delay</summary><pre>import unittest
+import sys
+# Simulate IPython reload: restore deprecated alias after import
+if &#39;unittest&#39; in sys.modules:
+    unittest.TestCase.assertEquals = lambda self, a, b: self.assertEqual(a, b)
+class Test(unittest.TestCase):
+    def test(self):
+        try:
+            self.assertEquals(1, 1)
+            print(&#39;Success via restored alias&#39;)
+        except AttributeError as e:
+            print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+Test().test()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:11:34.995232074 -0400
++++ fixed.py	2026-10-17 17:11:35.246234647 -0400
+@@ -6,7 +6,7 @@
+ class Test(unittest.TestCase):
+     def test(self):
+         try:
+<span class="del">-            self.assertEquals(1, 1)</span>
+<span class="add">+            self.assertEqual(1, 1)</span>
+             print(&#39;Success via restored alias&#39;)
+         except AttributeError as e:
+             print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+</pre></details></body></html>

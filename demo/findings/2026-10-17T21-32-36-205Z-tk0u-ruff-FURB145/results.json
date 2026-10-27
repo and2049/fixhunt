@@ -1,0 +1,351 @@
+{
+  "runId": "2026-10-17T21-32-36-205Z-tk0u-ruff-FURB145",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB145",
+    "fixKind": "unknown",
+    "docs": "# slice-copy (FURB145)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for unbounded slice expressions to copy a list.\n\n## Why is this bad?\nThe `list.copy` method is more readable and consistent with copying other\ntypes.\n\n## Known problems\nThis rule is prone to false negatives due to type inference limitations,\nas it will only detect lists that are instantiated as literals or annotated\nwith a type annotation.\n\n## Example\n```python\na = [1, 2, 3]\nb = a[:]\n```\n\nUse instead:\n```python\na = [1, 2, 3]\nb = a.copy()\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the slice expression contains comments.\n\n## References\n- [Python documentation: Mutable Sequence Types](https://docs.python.org/3/library/stdtypes.html#mutable-sequence-types)\n"
+  },
+  "analysis": {
+    "summary": "Flags unbounded slice expressions (`seq[:]`) used to copy a sequence when the target is known to be a list.",
+    "firingShapes": [
+      "b = a[:]",
+      "x = y[:]",
+      "result = data[:]",
+      "lst[:] = src[:]",
+      "return items[:]",
+      "self.buffer = raw[:]",
+      "[func() for _ in range(n)] = vals[:]",
+      "d[\"key\"] = source[:]"
+    ],
+    "silentShapes": [
+      "b = a[1:]",
+      "c = d[:3]",
+      "e = f[::2]",
+      "g = h[i:j]",
+      "k = l[:] if cond else m"
+    ],
+    "fixDescription": "Replaces the unbounded slice expression `seq[:]` with the method call `seq.copy()` while preserving the surrounding assignment or expression context.",
+    "hazards": [
+      "Rewriting `seq[:]` where `seq` is not a list (e.g., a string or tuple) changes the return type from the original sequence type to a list, breaking type expectations.",
+      "If `seq` is a subclass of list that overrides `__getitem__` but not `copy`, the slice may return a different type than `copy()` produces.",
+      "When the slice appears in a context relying on the exact object identity of a new list (e.g., `is` checks), `copy()` may produce a different object than slicing in some implementations (though CPython guarantees a new object, this is not language-spec guaranteed).",
+      "If `seq` is a variable that is deleted or reassigned between the evaluation of the slice and its use in the original code (impossible in a simple expression, but relevant in larger refactorings), the fix does not capture this timing—however, since the fix is applied locally to an expression, this hazard is mitigated; still noted for completeness in complex macro-like scenarios.",
+      "If the slice expression contains an inline comment (e.g., `a[: # copy]`), the fix may drop or misplace the comment during rewrite, altering source code readability.",
+      "In code where `seq` is a property with a side-effecting `__getitem__` (highly unconventional but possible), accessing `seq[:]` triggers `__getitem__` once with a slice object, whereas `seq.copy()` may not invoke `__getitem__` at all, changing side-effect timing.",
+      "If `seq` is a mutable object and the slice is used in a conditional expression where the object might be mutated between evaluation points (not applicable here as the expression is atomic), but note that the fix does not alter evaluation order—it replaces the expression in place.",
+      "When the slice is part of a larger subscript (e.g., `a[:][0]`), the fix only applies to the unbounded slice if isolated; however, the rule does not fire on bounded or chained slices, so this shape is silent—no hazard from misapplication.",
+      "If `seq` is annotated as a list but inferred as a subtype (e.g., `UserList`), and `copy()` is not overridden, the returned object may lack expected subclass behavior, though `list.copy()` on a subclass returns a plain list, whereas slicing may preserve subclass type—this is a behavioral change.",
+      "In code that depends on the slice returning exactly the same type as the input (e.g., for duck typing with custom sequences), replacing with `copy()` narrows the type to `list`, breaking polymorphism.",
+      "If the slice appears in a lambda or comprehension where the variable is rebound later (e.g., `[f() for x in data][:]` vs `[f() for x in data.copy()]`), the fix does not change behavior because the slice is evaluated immediately—but note: the rule does not fire on `data[:]` inside a comprehension index; it fires on standalone unbounded slices."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0055655999999999995,
+  "summary": {
+    "programs": 10,
+    "invalid": 1,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 7
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Subclass override mismatch",
+      "hazard": "If seq is a subclass of list that overrides __getitem__ but not copy, the slice may return a different type than copy() produces.",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "slice type: list values: [1, 2, 3, 1, 2, 3]\nmethod type: list values: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Polymorphism narrowing",
+      "hazard": "In code that depends on the slice returning exactly the same type as the input (e.g., for duck typing with custom sequences), replacing with copy() narrows the type to list, breaking polymorphism.",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "copy error: AttributeError no copy\nslice result: list\ncopy result: None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mutable default and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first call: [] [99]\nsecond call: [] [99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Parameter kinds and defaults",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "out: (1, [2, 3], [4, 2])\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Dict ordering and overrides",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "dict len: 1 slice len: 1\n1 second\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Async interaction",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB145",
+            "severity": "warning",
+            "message": "Prefer `copy` method over slicing",
+            "span": [
+              6,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "slice: [1, 2, 3] type: list\ncopy: [1, 2, 3] type: list\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "slice: [1, 2, 3] type: list\ncopy: [1, 2, 3] type: list\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:32:47.514914824 -0400\n+++ fixed.py\t2026-10-17 17:32:47.811910782 -0400\n@@ -3,7 +3,7 @@\n         yield i\n async def main():\n     g = [x async for x in gen()]  # materialize async gen\n-    slice_part = g[:]\n+    slice_part = g.copy()\n     method_part = g.copy()\n     print('slice:', slice_part, 'type:', type(slice_part).__name__)\n     print('copy:', method_part, 'type:', type(method_part).__name__)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "File write truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exceptions and finally",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "slice succeeded: [1, 2, 3]\ncopy succeeded: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Conditional expression mutation timing",
+      "hazard": "Conditional expression mutation timing - fix doesn't alter eval order but we verify sequencing by interleaving state reads/writes around the ternary op.",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p002",
+      "title": "Identity check reliance",
+      "hazard": "Object identity reliance: user expects distinct objects via [:], .copy() also gives distinct but future impl could differ; we detect identity via 'is'.",
+      "rule": "FURB145",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB145",
+            "severity": "warning",
+            "message": "Prefer `copy` method over slicing",
+            "span": [
+              2,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "distinct? True\nok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "distinct? True\nok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:33:01.807722136 -0400\n+++ fixed.py\t2026-10-17 17:33:01.970719959 -0400\n@@ -1,5 +1,5 @@\n src = [1, 2]\n-candidate = src[:]\n+candidate = src.copy()\n is_same_obj = candidate is src\n print('distinct?', not is_same_obj)\n # rule triggers on candidate = src[:]\n"
+      }
+    }
+  ]
+}

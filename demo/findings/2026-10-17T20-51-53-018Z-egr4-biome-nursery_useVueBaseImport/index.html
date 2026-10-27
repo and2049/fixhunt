@@ -1,0 +1,359 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome nursery/useVueBaseImport — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome nursery/useVueBaseImport <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-51-53-018Z-egr4-biome-nursery_useVueBaseImport · fix labelled <b>safe</b> · 15 programs, 9 fired, 9 fixed, 9 oracle-backed finding(s) · model cost $0.1359</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags imports from internal Vue subpackages like @vue/reactivity or @vue/runtime-dom, recommending they be replaced with imports from the main &#39;vue&#39; package.</p><p class="mut">Fix: The autofix replaces the import source from the internal Vue package (e.g., &#39;@vue/reactivity&#39;) to the main &#39;vue&#39; package while preserving the imported bindings (names, namespace, or star). For example, &#39;import { ref } from &quot;@vue/reactivity&quot;&#39; becomes &#39;import { ref } from &quot;vue&quot;&#39;.</p><details><summary>12 hazards</summary><ul><li>Named imports: If the imported name (e.g., &#39;ref&#39;) is not actually exported from the main &#39;vue&#39; package, the rewrite causes a runtime error due to missing export.</li><li>Namespace imports: Rewriting &#39;import * as VueReactivity from &quot;@vue/reactivity&quot;&#39; to &#39;import * as VueReactivity from &quot;vue&quot;&#39; may include unintended exports from &#39;vue&#39;, potentially causing naming conflicts or exposing internal APIs.</li><li>Star exports: Rewriting &#39;export * from &quot;@vue/runtime-dom&quot;&#39; to &#39;export * from &quot;vue&quot;&#39; may re-export unintended bindings from &#39;vue&#39;, altering the module&#39;s public interface.</li><li>Side-effect imports: If the internal package has side effects (e.g., patches global state) not present in the main &#39;vue&#39; package, removing the import drops those side effects.</li><li>Type-only imports: In TypeScript, &#39;import type { Ref } from &quot;@vue/reactivity&quot;&#39; rewritten to &#39;import type { Ref } from &quot;vue&quot;&#39; may fail if &#39;Ref&#39; is not available as a type in the main package&#39;s type exports.</li><li>Conditional/external mapping: If the project uses module aliases or conditional exports (e.g., via package.json &#39;exports&#39; field) that map &#39;vue&#39; to a different build than the internal packages, the rewrite may resolve to an unintended module version.</li><li>Internal-only flag usage: The rule allows certain internal-only imports (e.g., dev-only flags); rewriting those would violate the rule&#39;s intent and possibly break builds targeting production.</li><li>Comment attachment: If comments are attached to the import line (e.g., // TODO: migrate), the autofix may discard them during replacement, losing developer intent.</li><li>Evaluation order: If multiple imports from the same internal package exist across files, deduplication via the rewrite may change load order if side effects were relied upon.</li><li>Path resolution: In environments with custom module resolution (e.g., webpack aliases), replacing &#39;@vue/reactivity&#39; with &#39;vue&#39; may bypass intended redirects or fallbacks.</li><li>Build-time transforms: If the internal package is processed by a transform (e.g., treeshading) that assumes its presence, removing it may prevent dead code elimination or cause bundle bloat.</li><li>Version skew: If the project uses different versions of &#39;vue&#39; and its internal packages (unsupported but possible), the rewrite may import from a mismatched version, causing API mismatches.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p001"><b>r1-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The test program defines a dummy `require` function and lacks both `vue` and `@vue/reactivity` packages, so both the original and fixed code fail with module-not-found errors before any Vue code runs. The observed behavior change is only the package name in the error message, which is a direct consequence of the import rewrite, not a semantic difference in a working program.">judge: program-bug · low</span> Path Resolution Hazard<p class="mut">The test program defines a dummy `require` function and lacks both `vue` and `@vue/reactivity` packages, so both the original and fixed code fail with module-not-found errors before any Vue code runs. The observed behavior change is only the package name in the error message, which is a direct consequence of the import rewrite, not a semantic difference in a working program.</p>
+<h2>Minimized program (10→3 lines)</h2><pre>function require(id) {
+}
+import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:38.881042082 -0400
++++ fixed.js	2026-10-17 16:52:39.190047354 -0400
+@@ -5,6 +5,6 @@
+   return originalRequire(id);
+ }
+ // --- Rule target ---
+<span class="del">-import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true</span>
+<span class="add">+import { ref } from &#39;vue&#39;; // expect_trigger=true</span>
+ // --------------------
+ console.log(ref().value);
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/reactivity&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2473">biomejs/biome/issues/2473</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/9848">biomejs/biome/issues/9848</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/4539">biomejs/biome/issues/4539</a> · <a href="reports/r1-p001.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p003"><b>r1-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The test program imports from &#39;@vue/reactivity&#39; and &#39;vue&#39;, but neither package is installed in the environment, so both the original and fixed code fail with module-not-found errors before any Vue code can run. The observed behavior change is solely due to the missing dependencies, not the import rewrite itself.">judge: program-bug · low</span> Conditional/External Mapping Hazard<p class="mut">The test program imports from &#39;@vue/reactivity&#39; and &#39;vue&#39;, but neither package is installed in the environment, so both the original and fixed code fail with module-not-found errors before any Vue code can run. The observed behavior change is solely due to the missing dependencies, not the import rewrite itself.</p>
+<h2>Minimized program (10→1 lines)</h2><pre>import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:39.360050253 -0400
++++ fixed.js	2026-10-17 16:52:39.641055046 -0400
+@@ -5,6 +5,6 @@
+ };
+ function require(id) { return modules[id]; }
+ // --- Rule target ---
+<span class="del">-import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true</span>
+<span class="add">+import { ref } from &#39;vue&#39;; // expect_trigger=true</span>
+ // --------------------
+ console.log(ref().value);
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/reactivity&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> · <a href="reports/r1-p003.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p004"><b>r1-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="Both the original and fixed programs fail with module-not-found errors because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; is installed in the test environment; the fix correctly rewrites the import path as the rule intends, but the observed behavior change is solely due to the missing dependencies, not a semantic difference in the code.">judge: program-bug · low</span> Comment Attachment Hazard<p class="mut">Both the original and fixed programs fail with module-not-found errors because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; is installed in the test environment; the fix correctly rewrites the import path as the rule intends, but the observed behavior change is solely due to the missing dependencies, not a semantic difference in the code.</p>
+<h2>Minimized program (7→1 lines)</h2><pre>import { ref } from &#39;@vue/reactivity&#39;; // keep this comment
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:39.817058047 -0400
++++ fixed.js	2026-10-17 16:52:40.083062582 -0400
+@@ -1,6 +1,6 @@
+ // TODO: migrate to main vue when ready
+ // --- Rule target ---
+<span class="del">-import { ref } from &#39;@vue/reactivity&#39;; // keep this comment</span>
+<span class="add">+import { ref } from &#39;vue&#39;; // keep this comment</span>
+ // --------------------
+ const r = ref();
+ r.value = 42;
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/reactivity&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11453">biomejs/biome/issues/11453</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6859">biomejs/biome/issues/6859</a> · <a href="reports/r1-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p008"><b>r1-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="Both the original and fixed programs fail with ERR_MODULE_NOT_FOUND because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; packages are installed in the test environment. The behavior change is caused by the missing dependencies, not by the import rewrite itself.">judge: program-bug · low</span> Numeric/String Coercion Hazard<p class="mut">Both the original and fixed programs fail with ERR_MODULE_NOT_FOUND because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; packages are installed in the test environment. The behavior change is caused by the missing dependencies, not by the import rewrite itself.</p>
+<h2>Minimized program (10→1 lines)</h2><pre>import { reactive } from &#39;@vue/reactivity&#39;; // expect_trigger=true
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:40.569070864 -0400
++++ fixed.js	2026-10-17 16:52:40.833075362 -0400
+@@ -1,7 +1,7 @@
+ // Internal Vue reactivity returns objects with custom valueOf used in reactive calculations
+ let reactiveValue;
+ // --- Rule target ---
+<span class="del">-import { reactive } from &#39;@vue/reactivity&#39;; // expect_trigger=true</span>
+<span class="add">+import { reactive } from &#39;vue&#39;; // expect_trigger=true</span>
+ // --------------------
+ reactiveValue = reactive({ value: 5 });
+ // Object with custom valueOf that returns a BigInt
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/reactivity&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> · <a href="reports/r1-p008.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="Both the original and fixed programs fail with ERR_MODULE_NOT_FOUND because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; packages are installed in the test environment. The behavior change is caused by the missing dependencies, not by the fix itself, making the comparison meaningless.">judge: program-bug · low</span> Comments attached to removed or moved code<p class="mut">Both the original and fixed programs fail with ERR_MODULE_NOT_FOUND because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; packages are installed in the test environment. The behavior change is caused by the missing dependencies, not by the fix itself, making the comparison meaningless.</p>
+<h2>Minimized program (3→1 lines)</h2><pre>import { ref } /* inline */ from &quot;@vue/reactivity&quot;; // trailing
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:51.990264505 -0400
++++ fixed.js	2026-10-17 16:52:52.336270340 -0400
+@@ -1,3 +1,3 @@
+ // This comment should stay
+<span class="del">-import { ref } /* inline */ from &quot;@vue/reactivity&quot;; // trailing</span>
+<span class="add">+import { ref } /* inline */ from &quot;vue&quot;; // trailing</span>
+ console.log(typeof ref === &quot;function&quot; ? &quot;ok&quot; : &quot;missing&quot;);
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/reactivity&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6305">biomejs/biome/issues/6305</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/9848">biomejs/biome/issues/9848</a> · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p002"><b>r2-p002</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The program fails to run both before and after the fix because neither &#39;@vue/runtime-core&#39; nor &#39;vue&#39; is installed in the test environment. The observed behavior change is solely due to the missing dependencies, not the import rewrite itself.">judge: program-bug · low</span> Strict vs sloppy mode semantics<p class="mut">The program fails to run both before and after the fix because neither &#39;@vue/runtime-core&#39; nor &#39;vue&#39; is installed in the test environment. The observed behavior change is solely due to the missing dependencies, not the import rewrite itself.</p>
+<h2>Minimized program (7→4 lines)</h2><pre>import { reactive } from &quot;@vue/runtime-core&quot;;
+try {
+} catch (e) {
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:52.511273291 -0400
++++ fixed.js	2026-10-17 16:52:52.793278046 -0400
+@@ -1,5 +1,5 @@
+ &quot;use strict&quot;;
+<span class="del">-import { reactive } from &quot;@vue/runtime-core&quot;;</span>
+<span class="add">+import { reactive } from &quot;vue&quot;;</span>
+ try {
+   reactive(null);
+ } catch (e) {
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/runtime-core&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> · <a href="reports/r2-p002.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p004"><b>r2-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The program fails to run both before and after the fix because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; packages are installed in the test environment. The observed behavior change is solely due to the missing dependencies, not the import rewrite itself.">judge: program-bug · low</span> Async/await ordering, generators and yield position<p class="mut">The program fails to run both before and after the fix because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; packages are installed in the test environment. The observed behavior change is solely due to the missing dependencies, not the import rewrite itself.</p>
+<h2>Minimized program (6→3 lines)</h2><pre>import { watch } from &quot;@vue/reactivity&quot;;
+async function test() {
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:53.189284721 -0400
++++ fixed.js	2026-10-17 16:52:53.444289018 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-import { watch } from &quot;@vue/reactivity&quot;;</span>
+<span class="add">+import { watch } from &quot;vue&quot;;</span>
+ async function test() {
+   await Promise.resolve();
+   return watch(() =&gt; 1, () =&gt; {});
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/reactivity&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> · <a href="reports/r2-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p005"><b>r2-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="Both the original and fixed programs fail with ERR_MODULE_NOT_FOUND because neither &#39;@vue/shared&#39; nor &#39;vue&#39; is installed in the test environment; the observed behavior change is solely due to the missing dependency, not the rewrite itself.">judge: program-bug · low</span> Getters, setters and Object.defineProperty side effects<p class="mut">Both the original and fixed programs fail with ERR_MODULE_NOT_FOUND because neither &#39;@vue/shared&#39; nor &#39;vue&#39; is installed in the test environment; the observed behavior change is solely due to the missing dependency, not the rewrite itself.</p>
+<h2>Minimized program (6→3 lines)</h2><pre>import { isRef } from &quot;@vue/shared&quot;;
+Object.defineProperty(obj, &quot;value&quot;, {
+});
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:53.613291865 -0400
++++ fixed.js	2026-10-17 16:52:53.891296549 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-import { isRef } from &quot;@vue/shared&quot;;</span>
+<span class="add">+import { isRef } from &quot;vue&quot;;</span>
+ const obj = {};
+ Object.defineProperty(obj, &quot;value&quot;, {
+   get: () =&gt; isRef({}) ? 1 : 0
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/shared&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> · <a href="reports/r2-p005.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p008"><b>r2-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The program fails to run both before and after the fix because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; is installed in the test environment; the observed module-not-found errors are unrelated to the rewrite itself.">judge: program-bug · low</span> Sparse arrays, holes, Array(n) vs [n], array-likes<p class="mut">The program fails to run both before and after the fix because neither &#39;@vue/reactivity&#39; nor &#39;vue&#39; is installed in the test environment; the observed module-not-found errors are unrelated to the rewrite itself.</p>
+<h2>Minimized program (5→1 lines)</h2><pre>import { ref } from &quot;@vue/reactivity&quot;;
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:52:54.142300776 -0400
++++ fixed.js	2026-10-17 16:52:54.424305524 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-import { ref } from &quot;@vue/reactivity&quot;;</span>
+<span class="add">+import { ref } from &quot;vue&quot;;</span>
+ const arr = new Array(3);
+ arr[0] = ref(0);
+ arr[2] = ref(2);
+</pre>
+<h2>Observed</h2><pre>stderr before: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;@vue/reactivity&#39; imported from &lt;wd&gt;/prog
+stderr after: Error [ERR_MODULE_NOT_FOUND]: Cannot find package &#39;vue&#39; imported from &lt;wd&gt;/prog</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/7597">biomejs/biome/pull/7597</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/3274">biomejs/biome/pull/3274</a> · <a href="reports/r2-p008.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Path Resolution Hazard</td><td class="mut">In environments with custom module resolution (e.g., webpack aliases), replacing &#39;@vue/rea</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Conditional/External Mapping Hazard</td><td class="mut">If the project uses module aliases or conditional exports (e.g., via package.json &#39;exports</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Comment Attachment Hazard</td><td class="mut">If comments are attached to the import line (e.g., // TODO: migrate), the autofix may disc</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Namespace Imports Hazard</td><td class="mut">Rewriting &#39;import * as VueReactivity from &quot;@vue/reactivity&quot;&#39; to &#39;import * as VueReactivity</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Regular Expressions Hazard</td><td class="mut">regular expressions: escapes, unicode flag, lastIndex with the g flag</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>Type-only Imports Hazard</td><td class="mut">In TypeScript, &#39;import type { Ref } from &quot;@vue/reactivity&quot;&#39; rewritten to &#39;import type { Re</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Numeric/String Coercion Hazard</td><td class="mut">numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, Big</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Comments attached to removed or moved code</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Strict vs sloppy mode semantics</td><td class="mut">strict vs sloppy mode semantics</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>Internal-only flag usage</td><td class="mut">Internal-only flag usage: The rule allows certain internal-only imports (e.g., dev-only fl</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Async/await ordering, generators and yield position</td><td class="mut">async/await ordering, generators and yield position</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Getters, setters and Object.defineProperty side effects</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">invalid</span></td><td>Name collisions across scopes after a move (shadowing)</td><td class="mut">name collisions across scopes after a move (shadowing)</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>Type-only imports: In TypeScript, &#39;import type { Ref } from &quot;@vue/reactivity&quot;&#39; rewritten to &#39;import type { Ref } from &quot;v</td><td class="mut">Type-only imports: In TypeScript, &#39;import type { Ref } from &quot;@vue/reactivity&quot;&#39; rewritten t</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Sparse arrays, holes, Array(n) vs [n], array-likes</td><td class="mut">sparse arrays, holes, Array(n) vs [n], array-likes</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Path Resolution Hazard</summary><pre>// Simulate webpack alias: @vue/reactivity -&gt; ./local-reactivity
+const originalRequire = require;
+function require(id) {
+  if (id === &#39;@vue/reactivity&#39;) return { ref: () =&gt; ({ value: &#39;patched&#39; }) };
+  return originalRequire(id);
+}
+// --- Rule target ---
+import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true
+// --------------------
+console.log(ref().value);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:38.881042082 -0400
++++ fixed.js	2026-10-17 16:52:39.190047354 -0400
+@@ -5,6 +5,6 @@
+   return originalRequire(id);
+ }
+ // --- Rule target ---
+<span class="del">-import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true</span>
+<span class="add">+import { ref } from &#39;vue&#39;; // expect_trigger=true</span>
+ // --------------------
+ console.log(ref().value);
+</pre></details><details id="r1-p003"><summary>r1-p003 — Conditional/External Mapping Hazard</summary><pre>// Simulate conditional exports: &#39;vue&#39; -&gt; esm, &#39;@vue/*&#39; -&gt; cjs
+const modules = {
+  vue: { ref: () =&gt; ({ value: &#39;esm-ref&#39; }) },
+  &#39;@vue/reactivity&#39;: { ref: () =&gt; ({ value: &#39;cjs-ref&#39; }) }
+};
+function require(id) { return modules[id]; }
+// --- Rule target ---
+import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true
+// --------------------
+console.log(ref().value);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:39.360050253 -0400
++++ fixed.js	2026-10-17 16:52:39.641055046 -0400
+@@ -5,6 +5,6 @@
+ };
+ function require(id) { return modules[id]; }
+ // --- Rule target ---
+<span class="del">-import { ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true</span>
+<span class="add">+import { ref } from &#39;vue&#39;; // expect_trigger=true</span>
+ // --------------------
+ console.log(ref().value);
+</pre></details><details id="r1-p004"><summary>r1-p004 — Comment Attachment Hazard</summary><pre>// TODO: migrate to main vue when ready
+// --- Rule target ---
+import { ref } from &#39;@vue/reactivity&#39;; // keep this comment
+// --------------------
+const r = ref();
+r.value = 42;
+console.log(r.value);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:39.817058047 -0400
++++ fixed.js	2026-10-17 16:52:40.083062582 -0400
+@@ -1,6 +1,6 @@
+ // TODO: migrate to main vue when ready
+ // --- Rule target ---
+<span class="del">-import { ref } from &#39;@vue/reactivity&#39;; // keep this comment</span>
+<span class="add">+import { ref } from &#39;vue&#39;; // keep this comment</span>
+ // --------------------
+ const r = ref();
+ r.value = 42;
+</pre></details><details id="r1-p005"><summary>r1-p005 — Namespace Imports Hazard</summary><pre>// Internal Vue reactivity only exposes ref, reactive
+// Main vue also exposes defineComponent (which we don&#39;t want here)
+let VueReactivity;
+// --- Rule target ---
+import * as VueReactivity from &#39;@vue/reactivity&#39;; // expect_trigger=true
+// --------------------
+if (&#39;defineComponent&#39; in VueReactivity) {
+  console.log(&#39;ERROR: defineComponent leaked into reactivity namespace&#39;);
+} else {
+  console.log(&#39;OK: only reactivity exports present&#39;);
+}
+</pre></details><details id="r1-p006"><summary>r1-p006 — Regular Expressions Hazard</summary><pre>// Internal Vue shared exports a regex utility used for template parsing
+let TemplateRegex;
+// --- Rule target ---
+import { compileTemplate } from &#39;@vue/shared&#39;; // expect_trigger=true
+// --------------------
+TemplateRegex = /&lt;\s*([a-zA-Z]+)/gu;
+TemplateRegex.lastIndex = 0;
+const match = TemplateRegex.exec(&#39;&lt;div&gt;hello&lt;/div&gt;&#39;);
+console.log(match ? match[1] : null);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Type-only Imports Hazard</summary><pre>// Simulate TS type-only import behavior at runtime via structural check
+let RefType;
+// --- Rule target ---
+import type { Ref } from &#39;@vue/reactivity&#39;; // expect_trigger=true (simulated)
+// --------------------
+// In real TS, this would be erased; here we simulate by checking if Ref is a type-like object
+// We assume @vue/reactivity exports Ref as a type, but main &#39;vue&#39; does not in this scenario
+if (typeof Ref === &#39;undefined&#39;) {
+  console.log(&#39;Ref type not available in main vue - simulation of TS error&#39;);
+} else {
+  console.log(&#39;Ref type available&#39;);
+}
+</pre></details><details id="r1-p008"><summary>r1-p008 — Numeric/String Coercion Hazard</summary><pre>// Internal Vue reactivity returns objects with custom valueOf used in reactive calculations
+let reactiveValue;
+// --- Rule target ---
+import { reactive } from &#39;@vue/reactivity&#39;; // expect_trigger=true
+// --------------------
+reactiveValue = reactive({ value: 5 });
+// Object with custom valueOf that returns a BigInt
+const obj = { valueOf: () =&gt; 3n };
+console.log(String(reactiveValue.value + obj)); // Should be &#39;8&#39; if reactive unwraps correctly
+console.log(`${reactiveValue.value}${obj}`);   // Template literal: relies on String() coercion
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:40.569070864 -0400
++++ fixed.js	2026-10-17 16:52:40.833075362 -0400
+@@ -1,7 +1,7 @@
+ // Internal Vue reactivity returns objects with custom valueOf used in reactive calculations
+ let reactiveValue;
+ // --- Rule target ---
+<span class="del">-import { reactive } from &#39;@vue/reactivity&#39;; // expect_trigger=true</span>
+<span class="add">+import { reactive } from &#39;vue&#39;; // expect_trigger=true</span>
+ // --------------------
+ reactiveValue = reactive({ value: 5 });
+ // Object with custom valueOf that returns a BigInt
+</pre></details><details id="r2-p001"><summary>r2-p001 — Comments attached to removed or moved code</summary><pre>// This comment should stay
+import { ref } /* inline */ from &quot;@vue/reactivity&quot;; // trailing
+console.log(typeof ref === &quot;function&quot; ? &quot;ok&quot; : &quot;missing&quot;);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:51.990264505 -0400
++++ fixed.js	2026-10-17 16:52:52.336270340 -0400
+@@ -1,3 +1,3 @@
+ // This comment should stay
+<span class="del">-import { ref } /* inline */ from &quot;@vue/reactivity&quot;; // trailing</span>
+<span class="add">+import { ref } /* inline */ from &quot;vue&quot;; // trailing</span>
+ console.log(typeof ref === &quot;function&quot; ? &quot;ok&quot; : &quot;missing&quot;);
+</pre></details><details id="r2-p002"><summary>r2-p002 — Strict vs sloppy mode semantics</summary><pre>&quot;use strict&quot;;
+import { reactive } from &quot;@vue/runtime-core&quot;;
+try {
+  reactive(null);
+} catch (e) {
+  console.log(e.constructor.name);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:52.511273291 -0400
++++ fixed.js	2026-10-17 16:52:52.793278046 -0400
+@@ -1,5 +1,5 @@
+ &quot;use strict&quot;;
+<span class="del">-import { reactive } from &quot;@vue/runtime-core&quot;;</span>
+<span class="add">+import { reactive } from &quot;vue&quot;;</span>
+ try {
+   reactive(null);
+ } catch (e) {
+</pre></details><details id="r2-p003"><summary>r2-p003 — Internal-only flag usage</summary><pre>console.log(&quot;Skipping internal-only import as rule should not fire&quot;);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Async/await ordering, generators and yield position</summary><pre>import { watch } from &quot;@vue/reactivity&quot;;
+async function test() {
+  await Promise.resolve();
+  return watch(() =&gt; 1, () =&gt; {});
+}
+test().then(r =&gt; console.log(typeof r === &quot;function&quot; ? &quot;stop&quot; : &quot;bad&quot;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:53.189284721 -0400
++++ fixed.js	2026-10-17 16:52:53.444289018 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-import { watch } from &quot;@vue/reactivity&quot;;</span>
+<span class="add">+import { watch } from &quot;vue&quot;;</span>
+ async function test() {
+   await Promise.resolve();
+   return watch(() =&gt; 1, () =&gt; {});
+</pre></details><details id="r2-p005"><summary>r2-p005 — Getters, setters and Object.defineProperty side effects</summary><pre>import { isRef } from &quot;@vue/shared&quot;;
+const obj = {};
+Object.defineProperty(obj, &quot;value&quot;, {
+  get: () =&gt; isRef({}) ? 1 : 0
+});
+console.log(obj.value);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:53.613291865 -0400
++++ fixed.js	2026-10-17 16:52:53.891296549 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-import { isRef } from &quot;@vue/shared&quot;;</span>
+<span class="add">+import { isRef } from &quot;vue&quot;;</span>
+ const obj = {};
+ Object.defineProperty(obj, &quot;value&quot;, {
+   get: () =&gt; isRef({}) ? 1 : 0
+</pre></details><details id="r2-p006"><summary>r2-p006 — Name collisions across scopes after a move (shadowing)</summary><pre>let nextTick = &quot;outer&quot;;
+{
+  import { nextTick } from &quot;@vue/runtime-dom&quot;;
+  console.log(nextTick === &quot;outer&quot; ? &quot;shadowed&quot; : typeof nextTick);
+}
+</pre></details><details id="r2-p007"><summary>r2-p007 — Type-only imports: In TypeScript, &#39;import type { Ref } from &quot;@vue/reactivity&quot;&#39; rewritten to &#39;import type { Ref } from &quot;v</summary><pre>// @ts-ignore
+import type { Ref } from &quot;@vue/reactivity&quot;;
+/** @type {any} */ let x;
+console.log(&quot;type-only import parsed&quot;);
+</pre></details><details id="r2-p008"><summary>r2-p008 — Sparse arrays, holes, Array(n) vs [n], array-likes</summary><pre>import { ref } from &quot;@vue/reactivity&quot;;
+const arr = new Array(3);
+arr[0] = ref(0);
+arr[2] = ref(2);
+console.log(arr.map((v, i) =&gt; v ? `has${i}` : `hole`));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:52:54.142300776 -0400
++++ fixed.js	2026-10-17 16:52:54.424305524 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-import { ref } from &quot;@vue/reactivity&quot;;</span>
+<span class="add">+import { ref } from &quot;vue&quot;;</span>
+ const arr = new Array(3);
+ arr[0] = ref(0);
+ arr[2] = ref(2);
+</pre></details></body></html>

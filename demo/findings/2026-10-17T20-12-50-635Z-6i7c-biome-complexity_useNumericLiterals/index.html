@@ -1,0 +1,89 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/useNumericLiterals — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/useNumericLiterals <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-12-50-635Z-6i7c-biome-complexity_useNumericLiterals · fix labelled <b>safe</b> · 8 programs, 2 fired, 2 fixed, 0 oracle-backed finding(s) · model cost $0.0021</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags calls to parseInt() or Number.parseInt() where the first argument is a string literal representing a number in base 2, 8, or 16, suggesting replacement with numeric literals.</p><p class="mut">Fix: Replace parseInt(str, radix) or Number.parseInt(str, radix) with the equivalent numeric literal: 0b... for radix 2, 0o... for radix 8, 0x... for radix 16, preserving the string content and applying the minus sign if present.</p><details><summary>11 hazards</summary><ul><li>Rewriting parseInt(&quot;01&quot;, 2) to 0b01 changes behavior because &quot;01&quot; in base 2 is invalid and parseInt returns 0, while 0b01 is 1, altering the value.</li><li>If the string contains whitespace like &quot; 101 &quot;, parseInt trims it and returns 5, but 0b 101 is a syntax error, breaking compilation.</li><li>When the string has invalid digits for the radix (e.g., &quot;2&quot; in base 2), parseInt returns the value parsed up to the first invalid digit (or 0), but the literal form would be a syntax error, causing a crash.</li><li>For strings like &quot;0x12&quot; passed to parseInt with radix 16, parseInt ignores the &quot;0x&quot; prefix and parses &quot;0x12&quot; as 0x12 = 18, but rewriting to 0x0x12 is invalid syntax.</li><li>If the string is empty &quot;&quot;, parseInt returns NaN, but there is no numeric literal equivalent for NaN, so the rewrite would be incorrect or absent, changing behavior.</li><li>In non-strict mode, if a variable named parseInt is in scope (e.g., var parseInt = 5;), the call parseInt(&quot;10&quot;,2) becomes 5(&quot;10&quot;,2), which throws, but the fix would incorrectly replace it with 0b10, altering behavior and possibly hiding the error.</li><li>When Number.parseInt is used and Number has been reassigned (e.g., Number = {};), the call is already broken, but the fix would still apply and produce a literal, masking the original error and changing program flow.</li><li>Comments attached to the call expression (e.g., parseInt/*comment*/(&quot;101&quot;,2)) would be lost during rewriting, as the fix replaces the entire expression.</li><li>If the string is a string object (e.g., new String(&quot;101&quot;)), the rule does not fire, but if it did by mistake, the fix would ignore the object nature and produce a primitive literal, potentially altering behavior in edge cases involving [[PrimitiveValue]].</li><li>In eval contexts or with dynamic imports, replacing a function call with a literal could change timing or side effects if the call was part of a larger expression relying on its evaluation point.</li><li>Automatic semicolon insertion may be affected if the fix removes a trailing semicolon or alters token boundaries in a way that conflicts with ASI rules, though unlikely, it remains a theoretical hazard.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>ASI interaction with missing semicolon</td><td class="mut">Automatic semicolon insertion may be affected if the fix removes a trailing semicolon or a</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Sparse array element access</td><td class="mut">sparse arrays, holes, Array(n) vs [n], array-likes</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>String with 0x prefix misinterpreted</td><td class="mut">For strings like &quot;0x12&quot; passed to parseInt with radix 16, parseInt ignores the &quot;0x&quot; prefix</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>This binding in extracted method</td><td class="mut">this binding: arrow vs function, methods extracted from objects, call/apply/bind</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Null vs undefined with optional chaining</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exception inside rewritten expression</td><td class="mut">exceptions thrown inside the code the fix removes or rewrites</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Proto key interaction via assignment</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Getter side effect dependency</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr></table>
+<h2>Sources</h2><details id="r2-p001"><summary>r2-p001 — ASI interaction with missing semicolon</summary><pre>let x
+parseInt(&#39;11&#39;, 2)
+[&#39;a&#39;,&#39;b&#39;].forEach(v =&gt; console.log(v + x))
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:13.532340913 -0400
++++ fixed.js	2026-10-17 16:13:13.792335653 -0400
+@@ -1,3 +1,3 @@
+ let x
+<span class="del">-parseInt(&#39;11&#39;, 2)</span>
+<span class="add">+0b11</span>
+ [&#39;a&#39;,&#39;b&#39;].forEach(v =&gt; console.log(v + x))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Sparse array element access</summary><pre>const arr = Array(3)
+advanced: {
+  arr[0] = parseInt(&#39;10&#39;, 2)
+  arr[2] = parseInt(&#39;10&#39;, 8)
+  console.log(arr.map((v, i) =&gt; v !== undefined ? v : &#39;hole&#39;))
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:13:13.952332416 -0400
++++ fixed.js	2026-10-17 16:13:14.224326924 -0400
+@@ -1,6 +1,6 @@
+ const arr = Array(3)
+ advanced: {
+<span class="del">-  arr[0] = parseInt(&#39;10&#39;, 2)</span>
+<span class="del">-  arr[2] = parseInt(&#39;10&#39;, 8)</span>
+<span class="add">+  arr[0] = 0b10</span>
+<span class="add">+  arr[2] = 0o10</span>
+   console.log(arr.map((v, i) =&gt; v !== undefined ? v : &#39;hole&#39;))
+ }
+</pre></details><details id="r2-p003"><summary>r2-p003 — String with 0x prefix misinterpreted</summary><pre>try {
+  const val = parseInt(&#39;0x12&#39;, 16)
+  console.log(val === 0x0x12 ? &#39;rewritten&#39; : val)
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message)
+}
+</pre></details><details id="r2-p004"><summary>r2-p004 — This binding in extracted method</summary><pre>const obj = {
+  base: 2,
+  convert(s) { return parseInt(s, this.base) }
+}
+const fn = obj.convert
+console.log(fn.call(obj, &#39;11&#39;))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Null vs undefined with optional chaining</summary><pre>let input = null
+let radix = undefined
+try {
+  console.log(parseInt(input?.trim(), radix ?? 10))
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message)
+}
+input = &#39;11&#39;
+radix = 2
+console.log(parseInt(input?.trim(), radix ?? 10))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Exception inside rewritten expression</summary><pre>function badString() { throw new TypeError(&#39;invalid&#39;) }
+try {
+  console.log(parseInt(badString(), 2))
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message)
+}
+</pre></details><details id="r2-p007"><summary>r2-p007 — Proto key interaction via assignment</summary><pre>const map = {}
+Object.defineProperty(map, &#39;__proto__&#39;, {
+  set(v) { console.log(&#39;proto set to:&#39;, v) }
+})
+map.__proto__ = { parseInt: (s, r) =&gt; parseInt(s, r) + 100 }
+console.log(map.parseInt(&#39;10&#39;, 2))
+</pre></details><details id="r2-p008"><summary>r2-p008 — Getter side effect dependency</summary><pre>let callCount = 0
+const obj = {
+  get value() {
+    callCount++
+    return &#39;101&#39;
+  }
+}
+console.log(parseInt(obj.value, 2), callCount)
+console.log(parseInt(obj.value, 2), callCount)
+</pre></details></body></html>

@@ -1,0 +1,34 @@
+{
+  "summary": "Flags assignments where a function defined earlier in the same class body is reassigned via `staticmethod(func)` as a method replacement.",
+  "firingShapes": [
+    "class C:\n    def f(x): return x\n    f = staticmethod(f)",
+    "class C:\n    @property\n    def g(): pass\n    g = staticmethod(g)",
+    "class C:\n    def h():\n        print('hi')\n    h = staticmethod(h)\n    i = 1",
+    "class C:\n    def j(a, b):\n        return a + b\n    tmp = j\n    j = staticmethod(tmp)",
+    "class C:\n    def k():\n        return 42\n    k = staticmethod(k)\n    del k",
+    "class C:\n    def l():\n        return []\n    l = staticmethod(l)\n    l2 = l",
+    "class D:\n    def m(self):\n        return self\n    m = staticmethod(m)",
+    "class E:\n    def n():\n        raise ValueError\n    n = staticmethod(n)"
+  ],
+  "silentShapes": [
+    "class C:\n    @staticmethod\n    def f(): pass",
+    "class C:\n    def f():\n        return staticmethod(lambda: 42)",
+    "class C:\n    f = staticmethod(lambda x: x)",
+    "class C:\n    def f():\n        pass\n    g = staticmethod(f)",
+    "class C:\n    def f():\n        pass\n    f = classmethod(f)"
+  ],
+  "fixDescription": "Replace the assignment `name = staticmethod(name)` with the decorator `@staticmethod` placed directly above the function definition of `name`, preserving the function's name, parameters, body, and decorators, and removing the reassignment line.",
+  "hazards": [
+    "If the function name is used in an annotation within its own body (e.g., `def f(x: f) -> int:`), moving the decorator above may cause a NameError because `f` is not yet defined at annotation evaluation time.",
+    "If the function defines a nested function that references the outer function's name via closure (e.g., `def f(): def g(): return f`), the rewrite breaks the closure because the original function object is replaced by a staticmethod wrapper before the nested function is defined.",
+    "If the function is referenced in a default argument of a later-defined function in the same class body (e.g., `def f(): pass\ndef g(x=f): pass`), the rewrite changes when the staticmethod wrapper is applied, potentially altering the value captured in the default if the wrapper has side effects (though it doesn't, the timing of binding changes relative to other class body statements).",
+    "If the assignment line carries a comment (e.g., `f = staticmethod(f)  # workaround`), the rewrite drops that comment entirely, as the fix only preserves comments attached to the function definition.",
+    "If the function is decorated with other decorators (e.g., `@property\n def f(): pass\n f = staticmethod(f)`), the rewrite incorrectly places `@staticmethod` above `@property`, reversing decorator order and changing semantics (property vs staticmethod).",
+    "If the function name is deleted after the assignment (e.g., `f = staticmethod(f); del f`), the rewrite leaves the function accessible via its original name, whereas the original code intended to remove it after wrapping.",
+    "If the function is aliased before reassignment (e.g., `orig = f; f = staticmethod(f)`), the rewrite does not update the alias `orig`, which remains bound to the unwrapped function, diverging from the original behavior where `orig` and `f` both pointed to the same unwrapped function before reassignment.",
+    "If the function definition contains a `yield` expression and is used in a generator expression within its own defaults (e.g., `def f(x=(yield 42)): pass; f = staticmethod(f)`), the rewrite changes the timing of when the staticmethod wrapper is applied relative to the first invocation, affecting generator state initialization.",
+    "If the class is defined inside a function or loop and the staticmethod assignment relies on the enclosing scope for nonlocal variables accessed in the function body, the rewrite is safe but may interact poorly with tools that expect the decorator form for static analysis.",
+    "If the function name is the same as a class variable or imported name in the class scope (e.g., `f = 1\n def f(): pass\n f = staticmethod(f)`), the rewrite may confuse linters or readers about which `f` is being decorated, though runtime behavior is preserved.",
+    "If the assignment uses a qualified name like `C.f = staticmethod(f)` inside the class body (invalid syntax but sometimes seen in generated code), the fix does not apply and the rule may not fire, but if it did, the rewrite would be incorrect."
+  ]
+}

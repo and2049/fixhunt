@@ -1,0 +1,698 @@
+{
+  "runId": "2026-10-17T21-18-37-674Z-2vyh-ruff-UP024",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP024",
+    "fixKind": "unknown",
+    "docs": "# os-error-alias (UP024)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of exceptions that alias `OSError`.\n\n## Why is this bad?\n`OSError` is the builtin error type used for exceptions that relate to the\noperating system.\n\nIn Python 3.3, a variety of other exceptions, like `WindowsError` were\naliased to `OSError`. These aliases remain in place for compatibility with\nolder versions of Python, but may be removed in future versions.\n\nPrefer using `OSError` directly, as it is more idiomatic and future-proof.\n\n## Example\n```python\nraise IOError\n```\n\nUse instead:\n```python\nraise OSError\n```\n\n## References\n- [Python documentation: `OSError`](https://docs.python.org/3/library/exceptions.html#OSError)\n"
+  },
+  "analysis": {
+    "summary": "Flags usage of exception classes that are aliases of OSError (e.g., IOError, EnvironmentError, WindowsError) and recommends replacing them with OSError.",
+    "firingShapes": [
+      "raise IOError",
+      "except EnvironmentError:",
+      "catch WindowsError as e:",
+      "isinstance(err, IOError)",
+      "issubclass(ErrorType, EnvironmentError)",
+      "except (IOError, OSError):",
+      "raise WindowsError from None",
+      "except Exception as e: if isinstance(e, EnvironmentError)"
+    ],
+    "silentShapes": [
+      "raise OSError",
+      "except OSError:",
+      "raise ValueError",
+      "except (ValueError, TypeError):",
+      "class MyError(OSError): pass"
+    ],
+    "fixDescription": "Replaces any occurrence of an OSError-alias exception name (such as IOError, EnvironmentError, WindowsError) with OSError in raise statements, except clauses, isinstance/issubclass checks, and similar contexts, preserving all surrounding syntax and structure.",
+    "hazards": [
+      "Rewriting `except IOError:` to `except OSError:` changes the set of caught exceptions if other OSError subclasses (like FileNotFoundError) were previously excluded by a broader except clause above, altering control flow.",
+      "In `except (IOError, ValueError):`, replacing IOError with OSError may cause ValueError to be unreachable if OSError is checked first, due to exception matching order changing subclass precedence.",
+      "If `IOError` is imported via `from errno import IOError` (though incorrect, hypothetically), rewriting to `OSError` would break the name resolution since `OSError` is not defined in that module's namespace.",
+      "In a context like `except IOError as e:`, if the variable `e` is later used to access attributes specific to the IOError alias (none exist, but hypothetically), the rewrite assumes identical interface, which while true now, relies on the alias preserving all behavior.",
+      "When `WindowsError` is used in `raise WindowsError`, rewriting to `raise OSError` loses the platform-specific signal that the error originated from Windows, though the exception instance behaves identically.",
+      "In `issubclass(SomeErr, EnvironmentError)`, replacing EnvironmentError with OSError may return False if SomeErr is a subclass of a removed alias that no longer inherits from OSError in a future Python version, making the fix forward-incompatible if the alias is deleted.",
+      "If a comment like `# Prefer IOError for clarity` appears after `raise IOError`, the autofix may preserve the comment but it becomes misleading post-rewrite, constituting a documentation hazard.",
+      "In `try: ... except IOError: ... finally:`, the rewrite to `OSError` does not affect finally execution, but if the except block was relying on IOError being a distinct type for logging or metrics, the semantics of error categorization change.",
+      "When `EnvironmentError` is used in a tuple like `except (EnvironmentError, KeyboardInterrupt):`, replacing it with `OSError` risks catching KeyboardInterrupt less likely if OSError is checked before KeyboardInterrupt in the tuple, though tuple order is preserved so this only matters if the interpreter reorders—which it doesn't, but the hazard is perceived reordering risk.",
+      "If `IOError` is dynamically looked up via `getattr(exceptions_module, 'IOError')` and the rewrite incorrectly modifies the string literal, it would break runtime attribute access, though the rule does not target string literals—this hazard applies only if the autofix erroneously extends beyond identifiers.",
+      "In a class definition like `class CustomIOError(IOError):`, rewriting the base to `OSError` is correct and safe, but if the class relied on IOError being a distinct type for `__instancecheck__` overrides, the change could break custom behavior, though no such override exists in standard aliases."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.005163600000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 10,
+    "fixed": 10,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Comments attached to rewritten code",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              3,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "OSError: legacy error",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "OSError: legacy error",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:18:53.256973814 -0400\n+++ fixed.py\t2026-10-17 17:18:53.645953769 -0400\n@@ -1,3 +1,3 @@\n # This comment explains why we handle IOError\n # Specifically for legacy file operations\n-raise IOError(\"legacy error\")  # Keep this message\n+raise OSError(\"legacy error\")  # Keep this message\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Custom subclass inheriting from alias",
+      "hazard": "In a class definition like `class CustomIOError(IOError):`, rewriting the base to `OSError` is correct and safe, but if the class relied on IOError being a distinct type for `__instancecheck__` overri",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: CustomIOError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Tuple order in except clause with KeyboardInterrupt",
+      "hazard": "When `EnvironmentError` is used in a tuple like `except (EnvironmentError, KeyboardInterrupt):`, replacing it with `OSError` risks catching KeyboardInterrupt less likely if OSError is checked before K",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Caught: KeyboardInterrupt: user abort\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: KeyboardInterrupt: user abort\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:18:53.989936042 -0400\n+++ fixed.py\t2026-10-17 17:18:54.144928068 -0400\n@@ -1,5 +1,5 @@\n import sys\n try:\n     raise KeyboardInterrupt(\"user abort\")\n-except (EnvironmentError, KeyboardInterrupt) as e:  # RULE REWRITES EnvironmentError -> OSError\n+except (OSError, KeyboardInterrupt) as e:  # RULE REWRITES EnvironmentError -> OSError\n     print(f\"Caught: {type(e).__name__}: {e}\")\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Unreachable except clause due to subclass precedence",
+      "hazard": "In `except (IOError, ValueError):`, replacing IOError with OSError may cause ValueError to be unreachable if OSError is checked first, due to exception matching order changing subclass precedence.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Caught: ValueError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: ValueError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:18:54.246922821 -0400\n+++ fixed.py\t2026-10-17 17:18:54.409914436 -0400\n@@ -1,4 +1,4 @@\n try:\n     raise ValueError(\"value issue\")\n-except (IOError, ValueError) as e:  # RULE REWRITES IOError -> OSError; OSError is broader, but ValueError not subclass -> still caught\n+except (OSError, ValueError) as e:  # RULE REWRITES IOError -> OSError; OSError is broader, but ValueError not subclass -> still caught\n     print(f\"Caught: {type(e).__name__}\")\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Exception chaining in finally/else clauses",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              2,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "finally executed\n",
+          "stderr1": "OSError: original",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally executed\n",
+          "stderr1": "OSError: original",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:18:54.513909086 -0400\n+++ fixed.py\t2026-10-17 17:18:54.919888202 -0400\n@@ -1,5 +1,5 @@\n try:\n-    raise IOError(\"original\")  # RULE REWRITES IOError -> OSError\n+    raise OSError(\"original\")  # RULE REWRITES IOError -> OSError\n except OSError as e:\n     try:\n         raise ValueError(\"chained\") from e\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "pathlib vs os.path behavior on relative paths",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "pathlib: FileNotFoundError\nopen: FileNotFoundError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Broader except above narrowing control flow",
+      "hazard": "Rewriting `except IOError:` to `except OSError:` changes the set of caught exceptions if other OSError subclasses (like FileNotFoundError) were previously excluded by a broader except clause above, al",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught by OSError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Evaluation order and side effects in expressions",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "side effect\nCaught after side effect: OSError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Dynamic lookup via getattr",
+      "hazard": "If autofix erroneously rewrites string literals like 'IOError' during dynamic attribute access, it breaks getattr-based lookups.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: OSError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p002",
+      "title": "Async function with await ordering",
+      "hazard": "Rewriting exception types in async contexts should not interfere with await execution order or generator state.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              9,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught IOError: disk error\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught IOError: disk error\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:19:01.371558476 -0400\n+++ fixed.py\t2026-10-17 17:19:01.683542626 -0400\n@@ -1,11 +1,11 @@\n async def foo():\n     try:\n         await bar()\n-    except IOError as e:\n+    except OSError as e:\n         print('caught IOError:', e)\n     except OSError as e:\n         print('caught OSError:', e)\n async def bar():\n-    raise IOError('disk error')\n+    raise OSError('disk error')\n import asyncio\n asyncio.run(foo())\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Finally block reliance on exception type for logging",
+      "hazard": "Changing except IOError to except OSError alters which exceptions are caught, affecting whether finally runs after a handled exception vs propagating.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              6,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "log: ['IOError-handled', 'finally']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "log: ['IOError-handled', 'finally']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:19:01.855533888 -0400\n+++ fixed.py\t2026-10-17 17:19:02.017525661 -0400\n@@ -3,7 +3,7 @@\n     logged.append(t)\n try:\n     raise FileNotFoundError('missing')\n-except IOError:\n+except OSError:\n     log_exc('IOError-handled')\n except OSError as e:\n     log_exc('OSError-handled:', e.__class__.__name__)\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Class attribute descriptor with side effects on access",
+      "hazard": "If the rewritten exception type is used in a descriptor's __get__ with side effects, changing it could alter when/ how many times the descriptor fires.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              9,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ExcSelector accessed\ncaught: fail\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ExcSelector accessed\ncaught: fail\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:19:02.121520387 -0400\n+++ fixed.py\t2026-10-17 17:19:02.281512273 -0400\n@@ -6,7 +6,7 @@\n     exc = ExcSelector()\n try:\n     raise Test.exc('fail')\n-except IOError as e:\n+except OSError as e:\n     print('caught:', e)\n except OSError as e:\n     print('caught OS:', e)\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Keyword-only args with default evaluation once",
+      "hazard": "Default values for keyword-only args are evaluated once at def-time; if the rewritten expression is in a default, it could capture stale state.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "handled OSError\nhandled OSError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Generator vs list consumption laziness",
+      "hazard": "If the rewritten expression appears in a generator condition, changing it could alter when the generator yields vs returns, affecting iteration timing.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              4,
+              19
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              10,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "yielded: 0\ngen IOError: at 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "yielded: 0\ngen IOError: at 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:19:02.521500103 -0400\n+++ fixed.py\t2026-10-17 17:19:02.682491939 -0400\n@@ -1,13 +1,13 @@\n def gen():\n     for i in range(3):\n         if i == 1:\n-            raise IOError('at 1')\n+            raise OSError('at 1')\n         yield i\n g = gen()\n try:\n     for x in g:\n         print('yielded:', x)\n-except IOError as e:\n+except OSError as e:\n     print('gen IOError:', e)\n except OSError as e:\n     print('gen OSError:', e)\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Broad except above narrowing control flow with subclass precedence",
+      "hazard": "Rewriting except IOError to except OSError in a narrow handler above a broad OSError handler can cause the broad handler to catch exceptions intended for the narrow one, reversing control flow.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "narrow IOError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "narrow IOError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:19:02.786486665 -0400\n+++ fixed.py\t2026-10-17 17:19:02.948478450 -0400\n@@ -1,6 +1,6 @@\n try:\n     raise FileNotFoundError('no such file')\n-except IOError:\n+except OSError:\n     print('narrow IOError')\n except OSError:\n     print('broad OSError')\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "String formatting edge cases with % and .format",
+      "hazard": "If the autofix touches string literals near exception handlers (e.g., in log messages), it could corrupt formatting directives or nested braces.",
+      "rule": "UP024",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              2,
+              11
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              8,
+              11
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP024",
+            "severity": "warning",
+            "message": "Replace aliased errors with `OSError`",
+            "span": [
+              9,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "msg: error 42\nfmt: {0}!\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "msg: error 42\nfmt: {0}!\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:19:03.048473384 -0400\n+++ fixed.py\t2026-10-17 17:19:03.219464728 -0400\n@@ -1,12 +1,12 @@\n try:\n-    raise IOError('error %d' % 42)\n-except IOError as e:\n+    raise OSError('error %d' % 42)\n+except OSError as e:\n     print('msg:', e)\n except OSError as e:\n     print('OSError msg:', str(e))\n try:\n-    raise EnvironmentError('{0}!')\n-except EnvironmentError as e:\n+    raise OSError('{0}!')\n+except OSError as e:\n     print('fmt:', e.format() if hasattr(e, 'format') else str(e))\n except OSError as e:\n     print('OSError fmt:', str(e))\n"
+      }
+    }
+  ]
+}

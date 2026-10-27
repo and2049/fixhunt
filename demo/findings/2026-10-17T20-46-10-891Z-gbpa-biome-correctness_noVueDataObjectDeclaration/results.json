@@ -1,0 +1,469 @@
+{
+  "runId": "2026-10-17T20-46-10-891Z-gbpa-biome-correctness_noVueDataObjectDeclaration",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "correctness/noVueDataObjectDeclaration",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noVueDataObjectDeclaration\n- Fix: safe\n- Default severity: error\n- Available from version: 2.1.4\n- Diagnostic category: lint/correctness/noVueDataObjectDeclaration\n\nDomains\n\n- Name: vue\n- The rule is recommended for this domain\n- The rule is enabled when one of these dependencies are detected:\n  - vue@>=3.0.0\n\n\nDescription\n\n Enforce that Vue component `data` options are declared as functions.\n\n In Vue 3+, defining `data` as an object is deprecated because it leads to shared mutable state across component instances.\n This rule flags usages of `data: { \u2026 }` and offers an automatic fix to convert it into a function returning that object.\n\n See also:\n \u2013 Vue Migration Guide \u2013 Data Option: https://v3-migration.vuejs.org/breaking-changes/data-option.html :contentReference[oaicite:0]{index=0}\n \u2013 ESLint Plugin Vue: `no-deprecated-data-object-declaration`: https://eslint.vuejs.org/rules/no-deprecated-data-object-declaration :contentReference[oaicite:1]{index=1}\n\nExamples\n\nInvalid\n\n ```js\n // component-local data via function\n export default {\n   /* \u2717 BAD */\n   data: { foo: null },\n };\n ```\n\n ```js\n // Composition API helper also deprecated\n defineComponent({\n   /* \u2717 BAD */\n   data: { message: 'hi' }\n });\n ```\n\n ```js\n // Vue 3 entrypoint via createApp\n createApp({\n   /* \u2717 BAD */\n   data: { active: true }\n }).mount('#app');\n ```\n\nValid\n\n ```js\n // component-local data via function\n export default {\n   /* \u2713 GOOD */\n   data() {\n     return { foo: null };\n   }\n };\n ```\n\n ```js\n // global registration with function syntax\n Vue.component('my-comp', {\n   /* \u2713 GOOD */\n   data: function () {\n     return { count: 0 };\n   }\n });\n ```\n\n ```js\n // Composition API and createApp entrypoints\n defineComponent({\n   /* \u2713 GOOD */\n   data() {\n     return { message: 'hi' };\n   }\n });\n\n createApp({\n   /* \u2713 GOOD */\n   data: function() {\n     return { active: true };\n   }\n }).mount('#app');\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags Vue component `data` options defined as plain objects instead of functions.",
+    "firingShapes": [
+      "export default { data: { foo: null } };",
+      "defineComponent({ data: { message: 'hi' } });",
+      "createApp({ data: { active: true } }).mount('#app');",
+      "Vue.component('comp', { data: { value: 42 } });",
+      "{ data: { nested: { obj: true } } }",
+      "const opts = { data: { x: 1 } }; export default opts;",
+      "export default { data: { get y() { return 1; } } };",
+      "export default { data: ['array'] };"
+    ],
+    "silentShapes": [
+      "export default { data() { return { foo: null }; } };",
+      "defineComponent({ data: function() { return { msg: 'hi' }; } });",
+      "createApp({ data: function() { return { a: 1 }; } }).mount('#app');",
+      "export default { data: undefined };",
+      "export default {};"
+    ],
+    "fixDescription": "Replaces `data: { ... }` with `data() { return { ... }; }`, preserving the original object literal exactly as the return value.",
+    "hazards": [
+      "If the object contains getter properties, moving them into a function return may change evaluation timing from definition-time to call-time, altering behavior if getters have side effects.",
+      "If the object uses `this` references (e.g., `{ x: this.y }`), those will now be evaluated in the context of the data function call, which may differ from the original object literal evaluation context if `this` was bound differently.",
+      "If the object literal appears in a larger expression where its evaluation order matters (e.g., passed to another function), extracting it into a delayed return changes when side effects occur.",
+      "If the object contains `console.log` or other side-effecting expressions, delaying their execution until the data function is called could affect logging order or timing-dependent tests.",
+      "If the object is shared or referenced elsewhere (e.g., assigned to a variable before use), the fix breaks that sharing by creating a new object each time the function is called.",
+      "If the object uses class fields or private symbols accessed via `this`, those references may become invalid or refer to the wrong `this` after being moved into a function return.",
+      "If the object literal is part of a destructuring or spread operation in a larger object, isolating it into a data function return may alter how it merges with other properties.",
+      "If the code relies on the object being frozen or sealed at definition time, the returned object from the function may not inherit those properties unless explicitly applied.",
+      "If the object contains computed property names that depend on variables in scope, moving them into a function body does not change their evaluation but may affect readability or debugging.",
+      "If the object is defined in a non-extendable context (e.g., inside `Object.preventExtensions`), the fix does not preserve that constraint on the returned object.",
+      "If the data object is used in a mixin or extended component where the original object reference is expected for identity checks, replacing it with a function return breaks reference equality.",
+      "If the object contains `undefined` or `null` values that are relied upon for type checking, the fix preserves them but delays their availability until the data function is invoked."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0030797999999999997,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 14
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Order of evaluation duplication",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Side effect delay via console.log",
+      "hazard": "If the object contains `console.log` or other side-effecting expressions, delaying their execution until the data function is called could affect logging order or timing-dependent tests.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "ASI with leading parenthesis",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: {(intermediate value)} is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "This binding in extracted method",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'y')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Getter side effect",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Var hoisting conflict",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "This reference in data",
+      "hazard": "If the object uses `this` references (e.g., `{ x: this.y }`), those will now be evaluated in the context of the data function call, which may differ from the original object literal evaluation context",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'y')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Function declaration in block",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: helper is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "null/undefined distinction",
+      "hazard": "Testing null vs undefined handling in data object - reveals difference between direct object property assignment and function-returned object creation.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Evaluation order side effects",
+      "hazard": "Side effects in object literal evaluate immediately when defined, but delayed when wrapped in function - changes timing of console.log calls relative to other code.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1,2,3,4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Sparse arrays and holes",
+      "hazard": "Array literals with holes behave differently when accessed directly vs through function return - sparse array preservation vs dense conversion.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Reference identity in mixins",
+      "hazard": "When data object is reused across components/mixins, direct object sharing vs function returning new instances breaks identity checks used for optimization or state tracking.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-46-10-891Z-gbpa-biome-correctness_noVueDataObjectDeclaration/r2-p004/orig.js:5\nexport default {\n\nSyntaxError: Identifier '.default' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p005",
+      "title": "Getter evaluation timing",
+      "hazard": "Getters in data object evaluate at definition time when object is literal, but at call time when returned from function - changes when side effects occur relative to component lifecycle.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Object spread interaction",
+      "hazard": "When data object is part of spread operation, extracting it to function return changes timing of property merge - later properties may overwrite earlier ones depending on evaluation order.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Frozen object semantics",
+      "hazard": "Direct object literal can be frozen at definition time, but function-returned object is not frozen unless explicitly frozen - breaks assumptions about immutability.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Control flow interaction",
+      "hazard": "Labels and break statements in object literal initialization interact poorly with early returns - breaking expected control flow when object creation is delayed.",
+      "rule": "correctness/noVueDataObjectDeclaration",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-46-10-891Z-gbpa-biome-correctness_noVueDataObjectDeclaration/r2-p008/orig.js:3\n  export default {\n  ^^^^^^\n\nSyntaxError: Unexpected token 'export'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    }
+  ]
+}

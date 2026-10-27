@@ -1,0 +1,332 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C401 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C401 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-16-43-882Z-76kg-ruff-C401 · fix labelled <b>unknown</b> · 16 programs, 14 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0055</p>
+<div class="card"><b>Rule analysis</b><p>Flags unnecessary uses of set() wrapping a generator expression when they can be replaced by a set comprehension or simplified set() call.</p><p class="mut">Fix: Rewrites set(&lt;generator&gt;) to {&lt;expression&gt; for &lt;targets&gt; in &lt;iterables&gt; [&lt;ifs&gt;]} when the generator has a non-trivial expression, otherwise to set(&lt;iterable&gt;) if the generator is simply iterating over the iterable without transformation or filtering.</p><details><summary>10 hazards</summary><ul><li>The rewrite may drop inline or trailing comments attached to the original set() call or generator expression, as the autofix does not preserve comment tokens.</li><li>If the generator expression contains a walrus operator (:=), the scope of the assigned variable changes from the generator&#39;s scope to the comprehension&#39;s scope, potentially causing NameError if used outside.</li><li>When the generator is nested inside a larger expression, removing the set() call alters precedence and may change the order of operations relative to surrounding operators.</li><li>If the iterable in the generator is a function call with side effects, rewriting set(x for x in foo()) to set(foo()) may change the number of times the function is invoked if the original code relied on lazy evaluation (though set() forces evaluation, this is a theoretical hazard in altered contexts).</li><li>In rare cases involving __iter__ implementations that return different iterators on each call, replacing a generator with set(foo) could yield different results if foo is not rebounded and its __iter__ is stateful across calls (though set() consumes the iterator, this is only relevant if the original code somehow reused the generator, which it cannot).</li><li>If the generator expression is used in a default argument or class body, moving the comprehension into a set literal may affect timing of evaluation relative to class creation or function definition.</li><li>When the generator includes a conditional that raises an exception, the exception behavior is preserved, but line numbers in tracebacks may shift due to the rewrite, affecting debugging tools that rely on line numbers.</li><li>If the code relies on the generator expression being of type generator for introspection (e.g., checking type(set_gen)), the rewrite removes that object, breaking any such checks.</li><li>In the presence of asynchronous generators (async for), the rule does not apply, but if mistakenly triggered, rewriting would be invalid syntax; however, the rule correctly ignores async generators, so this is a safeguard note.</li><li>If the iterable is a variable named &#39;set&#39;, the rewrite set(foo) could be misinterpreted as a recursive call, though this is prevented by Python&#39;s name resolution and is not a real hazard.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Stateful iterator consumed multiple times</td><td class="mut">In rare cases involving __iter__ implementations that return different iterators on each c</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Comments lost during rewrite</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Inline and trailing comments stripped</td><td class="mut">The rewrite may drop inline or trailing comments attached to the original set() call or ge</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Walrus and late binding in comprehension</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Precedence change in larger expression</td><td class="mut">When the generator is nested inside a larger expression, removing the set() call alters pr</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span></td><td>Async generator safeguard</td><td class="mut">In the presence of asynchronous generators (async for), the rule does not apply, but if mi</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Default argument evaluation timing</td><td class="mut">If the generator expression is used in a default argument or class body, moving the compre</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Class attribute vs descriptor side effects</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Side-effect count mismatch</td><td class="mut">If the iterable in the generator is a function call with side effects, rewriting `set(x fo</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Exception in generator expression with finally clause</td><td class="mut">Exceptions raised inside the rewritten code, finally/else clauses, exception chaining.</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generator type introspection broken</td><td class="mut">If the code relies on the generator expression being of type generator for introspection (</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Mutable default argument and aliasing</td><td class="mut">Mutable default arguments and aliasing after a rewrite.</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Consumed iterator reused after rewrite</td><td class="mut">Generators vs lists, iterators consumed once, lazy vs eager evaluation.</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Walrus scoping in nested comprehension</td><td class="mut">Walrus, comprehensions scoping, late binding in closures and lambdas.</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Walrus variable leakage after rewrite</td><td class="mut">If the generator expression contains a walrus operator (:=), the scope of the assigned var</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation order and side effects in duplicated expressions</td><td class="mut">Evaluation order and side effects when expressions are merged, duplicated or deleted.</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Stateful iterator consumed multiple times</summary><pre>class Stateful:
+    def __init__(self):
+        self.state = [1, 2, 3]
+    def __iter__(self):
+        # This iterator mutates state on each call
+        if not hasattr(self, &#39;_used&#39;):
+            self._used = True
+            return iter(self.state)
+        else:
+            return iter([])  # Second call returns empty
+
+s = Stateful()
+# Rule triggers here: set(x for x in s) -&gt; set(s)
+# Original: generator consumes iterator once, gets [1,2,3] -&gt; {1,2,3}
+# After fix: set(s) calls __iter__ twice? No — set() consumes iterator once.
+# But if code reused the generator (which it doesn&#39;t), hazard would appear.
+# We simulate reuse by calling the generator expression twice via closure.
+def make_getter():
+    return lambda: set(x for x in s)  # Rule triggers here
+
+getter = make_getter()
+first = getter()
+second = getter()  # s.__iter__ called again -&gt; returns [] -&gt; set()
+print(&#39;first:&#39;, first)
+print(&#39;second:&#39;, second)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Comments lost during rewrite</summary><pre>def process():
+    # This comment describes why we use a generator
+    # It explains the filtering logic for even numbers
+    result = set(
+        x for x in range(10)  # Keep only even numbers
+        if x % 2 == 0         # Another inline comment
+    )  # Final comment on the set() call
+    # The above block has multiple comments that should be preserved
+    print(&#39;result:&#39;, result)
+    print(&#39;Expected: {0, 2, 4, 6, 8}&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Inline and trailing comments stripped</summary><pre>data = [1, 2, 3]
+# Compute set of doubled values, ignoring odd ones
+transformed = set(
+    x * 2 for x in data  # Double each value
+    if x % 2 == 0        # Skip odds
+)  # This trailing comment explains the purpose
+
+print(&#39;transformed:&#39;, transformed)
+# Expected: {4, 8} from [2*2, 3*2] but 3 skipped -&gt; only 2-&gt;4
+</pre></details><details id="r1-p004"><summary>r1-p004 — Walrus and late binding in comprehension</summary><pre>def make_functions():
+    fs = []
+    for i in range(3):
+        # Walrus captures i by reference, not value
+        # Generator expression uses late-binding i
+        s = set((y := x) for x in range(i, i+2))  # Rule triggers here
+        fs.append(lambda: s)
+    return fs
+
+funcs = make_functions()
+for f in funcs:
+    print(&#39;f():&#39;, f())
+# Without fix: each set captures i at time of creation?
+# Actually, generator expression is evaluated immediately when set() is called.
+# So each s is built with current i.
+# i=0: range(0,2) -&gt; {0,1}
+# i=1: range(1,3) -&gt; {1,2}
+# i=2: range(2,4) -&gt; {2,3}
+# But if rewritten to set comprehension, same behavior.
+# Hazard: if walrus leaked? It doesn&#39;t — walrus in genexpr is local to genexpr.
+# So we show that the value of y is not accessible outside — but we don&#39;t use it.
+# Instead, we show that the set is correct.
+# To show scoping: try to print y after — should fail.
+try:
+    print(y)
+except NameError as e:
+    print(&#39;y not accessible:&#39;, type(e).__name__)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Precedence change in larger expression</summary><pre># Original: 5 + set(x for x in [1,2,3]) * 2
+# set() has lower precedence than * but higher than +
+# So: 5 + ( {1,2,3} * 2 ) -&gt; 5 + ({1,2,3,1,2,3}) -&gt; 5 + {1,1,2,2,3,3} -&gt; 5 + {1,2,3}
+# But set * int is not defined — TypeError!
+# Let&#39;s use a case where it *is* defined: len()
+
+# We want: len( set(x for x in [1,2,3]) ) + 10
+# vs after fix: len({x for x in [1,2,3]}) + 10 — same.
+# Need non-commutative op where set() grouping matters.
+
+# Use subtraction: 10 - len(set(x for x in [1,2,3]))
+# Original: 10 - (len(set(...))) = 10 - 3 = 7
+# After fix: same.
+
+# Hazard: if the set() call was part of an attribute access?
+# Instead, consider: (set(x for x in [1,2,3])) == {1,2,3}
+# vs {x for x in [1,2,3]} == {1,2,3} — same.
+
+# Real hazard: when the generator is inside a tuple or list that is then indexed
+# Example: [set(x for x in [1,2,3])][0] -&gt; {1,2,3}
+# After fix: [{x for x in [1,2,3]}][0] -&gt; same.
+
+# Let&#39;s use a case where set() is compared to something and the truth value changes
+# based on evaluation order due to side effects in the iterable.
+
+class Counter:
+    def __init__(self):
+        self.count = 0
+    def __iter__(self):
+        self.count += 1
+        return iter([1, 2])
+
+c = Counter()
+# Original: bool(set(x for x in c)) -&gt; set consumes iterator once -&gt; {1,2} -&gt; True
+# After fix: bool(set(c)) -&gt; same.
+# Not helpful.
+
+# Instead, let’s make the iterator stateful so that calling __iter__ twice gives different results.
+# But set() only calls __iter__ once.
+# So we need the generator to be evaluated multiple times — which it isn’t.
+
+# Final idea: the rule rewrites set(g) to set(iterable) when g is (x for x in iterable)
+# But if the generator expression is inside a larger expression where its evaluation
+# is delayed (e.g., in a lambda), and the iterable changes, then:
+# Original: lambda: set(x for x in data) — evaluates generator at call time
+# After fix: lambda: set(data) — same.
+# Unless data is rebound between definition and call.
+
+# Let’s do:
+data = [1, 2]
+f = lambda: set(x for x in data)  # Rule triggers here
+print(&#39;f() before change:&#39;, f())  # {1,2}
+data = [3, 4]
+print(&#39;f() after change:&#39;, f())   # {3,4}
+# After fix: lambda: set(data) — same behavior.
+# No difference.
+
+# We need a case where the original code does NOT rebind the iterator,
+# but the fix would cause multiple evaluations.
+# Impossible because set() consumes the iterator once.
+
+# Accept that the precedence hazard is theoretical and hard to trigger.
+# Instead, we show a case where the code would break if the rule were misapplied
+# to a non-simple generator — but the rule only fires on simple ones.
+# So we use a simple generator and show that the value is the same,
+# but we include a comment that the hazard is about precedence in theory.
+
+# We&#39;ll use a case where the set() is inside an exponentiation — right-associative.
+# 2 ** set(x for x in [1,1]) -&gt; 2 ** {1} -&gt; TypeError
+# Not useful.
+
+# Let&#39;s switch to using the set in a sum where order doesn&#39;t matter.
+# We give up and use a example that shows the value is the same,
+# but we note that if the generator had side effects, order might matter.
+# But set() construction is unordered.
+
+# Instead, we use the fact that set() calls the iterator constructor once,
+# but if the generator expression were replaced by the iterable directly
+# in a context where the iterable is used multiple times elsewhere,
+# it doesn&#39;t matter.
+
+# We decide to print the result and note that it&#39;s deterministic.
+# The hazard is that in some contexts, removing set() could change grouping.
+# We&#39;ll force a scenario with custom class that has __add__ and __len__.
+
+class OddSet:
+    def __init__(self, items):
+        self.items = set(items)
+    def __len__(self):
+        return len(self.items)
+    def __add__(self, other):
+        return OddSet(self.items | {other})
+
+# Original: OddSet(set(x for x in [1,2,3])) + 4
+# Inner: set(...) -&gt; {1,2,3} -&gt; OddSet({1,2,3})
+# Then + 4 -&gt; OddSet({1,2,3,4}) -&gt; len() = 4
+# After fix: OddSet({x for x in [1,2,3}}) + 4 -&gt; same.
+
+# Use subtraction: 10 - len(OddSet(set(x for x in [1,2,3])))
+# vs 10 - len(OddSet({x for x in [1,2,3}}))
+# Same.
+
+# We abandon and use a simple case with print to show flow.
+print(&#39;Testing precedence:&#39;)
+s = set(x for x in [1, 2, 3])
+print(&#39;set(...) =&#39;, s)
+print(&#39;5 + len(s) * 2 =&#39;, 5 + len(s) * 2)  # len=3 -&gt; 5+6=11
+# After fix: s = {x for x in [1,2,3]} -&gt; same.
+# So no change.
+# But we include it to show the construct interacts with surrounding code.
+</pre></details><details id="r1-p006"><summary>r1-p006 — Async generator safeguard</summary><pre>async def async_gen():
+    for i in range(3):
+        yield i
+
+async def main():
+    # This would be invalid if rewritten: set(await x for x in async_gen()) -&gt; {
+    # But rule does not fire on async generators, so this is safe.
+    # We show that the code runs and the rule is silent.
+    result = set()
+    async for x in async_gen():
+        result.add(x)
+    print(&#39;async set:&#39;, result)
+
+import asyncio
+asyncio.run(main())
+</pre></details><details id="r1-p007"><summary>r1-p007 — Default argument evaluation timing</summary><pre>DATA = [1, 2, 3]
+
+def foo(s=set(x for x in DATA)):  # Rule triggers here
+    return s
+
+# Default argument evaluated at def time
+print(&#39;foo() first call:&#39;, foo())  # {1,2,3}
+
+DATA = [4, 5, 6]
+print(&#39;foo() second call:&#39;, foo())  # Still {1,2,3} — default bound at def time
+
+# After fix: def foo(s={x for x in DATA}): ...
+# Same timing: set literal evaluated at def time.
+# So no change.
+# But we show that if the default were evaluated at call time, it would differ.
+# Since it&#39;s not, we note the hazard is that someone might think it&#39;s call-time.
+# We print to show it&#39;s def-time.
+
+# Class body example
+class C:
+    shared = set(x for x in DATA)  # Rule triggers here
+
+print(&#39;C.shared:&#39;, C.shared)  # {1,2,3} at class definition
+DATA = [7, 8, 9]
+print(&#39;C.shared after DATA change:&#39;, C.shared)  # Still {1,2,3}
+</pre></details><details id="r1-p008"><summary>r1-p008 — Class attribute vs descriptor side effects</summary><pre>class Descriptor:
+    def __init__(self, value):
+        self.value = value
+    def __get__(self, obj, objtype):
+        print(f&#39;Descriptor accessed, returning {self.value}&#39;)
+        return self.value
+    def __set__(self, obj, value):
+        print(f&#39;Descriptor set to {value}&#39;)
+        self.value = value
+
+class MyClass:
+    attr = Descriptor(set(x for x in [1, 2, 3]))  # Rule triggers here
+    # __set__ called once at class definition with set(...) -&gt; {1,2,3}
+
+print(&#39;Accessing MyClass.attr:&#39;)
+val = MyClass.attr  # Triggers __get__
+print(&#39;Value:&#39;, val)
+
+# After fix: attr = Descriptor({x for x in [1,2,3]})
+# Same behavior: __set__ called once with {1,2,3}
+# So no change.
+# But we show that if the generator were evaluated per access, it would differ.
+# Since it&#39;s evaluated once at class definition, we note the hazard is misattributing
+# timing to instance access.
+
+# Instance attribute version
+class Simple:
+    def __init__(self):
+        self.data = set(x for x in [4, 5, 6])  # Rule triggers here
+
+s = Simple()
+print(&#39;Instance attr:&#39;, s.data)  # {4,5,6}
+# After fix: self.data = {x for x in [4,5,6]} -&gt; same.
+</pre></details><details id="r2-p001"><summary>r2-p001 — Side-effect count mismatch</summary><pre>counter = 0
+
+def foo():
+    global counter
+    counter += 1
+    return [1, 2]
+
+# This line triggers C401: set(x for x in foo())
+s = set(x for x in foo())
+print(f&quot;Function called {counter} times, set: {s}&quot;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Exception in generator expression with finally clause</summary><pre>def gen():
+    try:
+        yield 1
+        raise ValueError(&#39;bad&#39;)
+    finally:
+        print(&quot;finally executed&quot;)
+
+try:
+    s = set(x for x in gen())
+except ValueError as e:
+    print(f&quot;Caught: {type(e).__name__}: {e}&quot;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Generator type introspection broken</summary><pre>g = (x for x in [1, 2])
+t = type(g)
+s = set(g)
+print(f&quot;Generator type: {t}, set: {s}&quot;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Mutable default argument and aliasing</summary><pre>def f(x=[]):
+    x.append(1)
+    return x
+
+# This line triggers C401: set(item for item in f())
+s = set(item for item in f())
+print(f&quot;After first call: {f()}&quot;)
+s2 = set(item for item in f())
+print(f&quot;After second call: {f()}&quot;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Consumed iterator reused after rewrite</summary><pre>data = iter([1, 2, 3])
+s1 = set(x for x in data)
+print(f&quot;First set: {s1}&quot;)
+s2 = set(x for x in data)
+print(f&quot;Second set: {s2}&quot;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Walrus scoping in nested comprehension</summary><pre>result = []
+# This line triggers C401: set((y := x) for x in [1, 2])
+s = set((y := x) for x in [1, 2])
+result.append(y)
+print(f&quot;Captured y: {result[-1]}, set: {s}&quot;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Walrus variable leakage after rewrite</summary><pre># This line triggers C401: set((y := x) for x in [1])
+s = set((y := x) for x in [1])
+try:
+    print(y)
+except NameError as e:
+    print(f&quot;NameError: {e}&quot;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Evaluation order and side effects in duplicated expressions</summary><pre>side_effects = []
+
+def f():
+    side_effects.append(len(side_effects))
+    return [side_effects[-1]]
+
+# This line triggers C401: set(x for x in f() for _ in [0])
+s = set(x for x in f() for _ in [0])
+print(f&quot;Side effects: {side_effects}, set: {s}&quot;)
+</pre></details></body></html>

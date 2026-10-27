@@ -1,0 +1,33 @@
+{
+  "summary": "Flags redundant list() constructor calls wrapping list or tuple literals.",
+  "firingShapes": [
+    "list([1, 2])",
+    "list((1, 2))",
+    "list([])",
+    "list(())",
+    "list([x for x in range(5)])",
+    "list((a, b, c))",
+    "list([\"a\", \"b\"])",
+    "list(tuple([1, 2]))"
+  ],
+  "silentShapes": [
+    "list(iterable)",
+    "list(map(int, ['1', '2']))",
+    "list(generator_expression)",
+    "list(set([1, 2]))",
+    "list(f()) where f returns a list"
+  ],
+  "fixDescription": "Rewrites list(literal) to the literal itself if it's a list literal, or to a list literal with the same elements if it's a tuple literal.",
+  "hazards": [
+    "If the literal contains a comment inside (e.g., list([1, # comment\n2])), the autofix may drop the comment when converting to [1, 2].",
+    "If the literal is part of a larger expression where the list() call affects operator precedence (e.g., list([1, 2]) + [3]), removing list() could change evaluation order due to binding differences.",
+    "If the literal is used in a context where the list() call is relied upon to create a new list (e.g., for mutation safety), replacing list((1,2)) with [1,2] still creates a new list, so no semantic change, but if the literal is a variable referencing a mutable list, the fix does not apply—this hazard is not applicable as the rule only triggers on literals.",
+    "If the code relies on the list() constructor for debugging or side effects (e.g., list(print([1,2]) or [])), the rule does not fire because the argument is not a literal, so no fix is attempted—this hazard is not applicable.",
+    "If the literal contains nested expressions with side effects (e.g., list([f(), g()])), the rule does not fire because the argument is not a literal (it's a list containing calls), so no fix is attempted—this hazard is not applicable.",
+    "If the literal is a tuple containing a starred expression (e.g., list((*range(3),))), the rule does not fire because starred expressions are not allowed in tuple literals in this context—invalid syntax, so rule does not fire.",
+    "If the code is in a string or comment (e.g., '# list([1,2])'), the linter does not parse it as code, so no fix is attempted—this hazard is not applicable.",
+    "If the literal is a list literal that is empty and the surrounding code depends on the identity of the list (e.g., is(list([])) is not list([])), removing list() changes identity because [] is a singleton in some contexts? Actually, [] is not a singleton; each [] creates a new list, so list([]) and [] are both new lists—no identity difference. However, in CPython, small tuples may be interned, but lists are not. So no hazard.",
+    "If the literal is a tuple and the code uses the fact that list(tuple) raises TypeError on non-tuple (but the argument is a literal tuple, so safe), no issue.",
+    "If the literal is a tuple and the rewrite to list literal fails due to being in a context that expects a tuple (e.g., as a key in a dict: {list((1,2)): 3} becomes {[1,2]: 3}), which is invalid because lists are unhashable—this changes behavior from valid to TypeError."
+  ]
+}

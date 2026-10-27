@@ -1,0 +1,311 @@
+{
+  "runId": "2026-10-17T20-37-16-466Z-rek3-ruff-SIM222",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM222",
+    "fixKind": "unknown",
+    "docs": "# expr-or-true (SIM222)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for `or` expressions that contain truthy values.\n\n## Why is this bad?\nIf the expression is used as a condition, it can be replaced in-full with\n`True`.\n\nIn other cases, the expression can be short-circuited to the first truthy\nvalue.\n\nBy using `True` (or the first truthy value), the code is more concise\nand easier to understand, since it no longer contains redundant conditions.\n\n## Example\n```python\nif x or [1] or y:\n    pass\n\na = x or [1] or y\n```\n\nUse instead:\n```python\nif True:\n    pass\n\na = x or [1]\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags 'or' expressions containing at least one truthy literal where the entire expression can be simplified to True (in boolean context) or shortened by removing trailing falsy-or-truthy terms after the first truthy term.",
+    "firingShapes": [
+      "if x or [1] or y:\n    pass",
+      "while a or [] or b:\n    continue",
+      "return x or True or z",
+      "result = foo() or [None] or bar()",
+      "flag = '' or {} or 0 or val",
+      "cond = func() or () or other()",
+      "if not (x or [1]):\n    pass",
+      "value = something or [] or []"
+    ],
+    "silentShapes": [
+      "if x or y:\n    pass",
+      "result = a or b or c",
+      "flag = [] or {} or ()",
+      "value = None or func()",
+      "test = False or 0 or None"
+    ],
+    "fixDescription": "Replace the entire 'or' expression with True when used in a boolean context (if/while/assert/etc.), otherwise replace it with the first truthy operand (short-circuiting the rest).",
+    "hazards": [
+      "The rewrite removes side effects from evaluating operands after the first truthy term, changing behavior if those operands have side effects (e.g., function calls, assignments).",
+      "In non-boolean contexts, replacing 'x or [1] or y' with 'x or [1]' alters the result when x is falsy but [1] is truthy and y is used elsewhere via aliasing or mutation.",
+      "If the first truthy term is a mutable literal like [1], replacing the expression with just that literal may cause unintended sharing if the result is stored and mutated later.",
+      "Removing trailing operands can break code that relies on those operands for their type or value in subsequent expressions (e.g., unpacking, indexing).",
+      "The fix may incorrectly remove parentheses that were grouping the 'or' expression with other operators, altering precedence.",
+      "Comments attached to removed operands (e.g., 'x or [1]  # important') would be lost.",
+      "In boolean contexts, replacing with True is safe only if the original expression was guaranteed truthy; however, if the context expects a falsy value (e.g., in 'not (x or [1])'), the logic flips incorrectly unless the whole negated expression is handled.",
+      "If the 'or' expression appears in a default argument or lambda, early termination changes when default values are evaluated.",
+      "Replacing part of a larger expression (e.g., 'z = (x or [1]) + 5') with a subexpression may break if the original relied on the full expression's value for arithmetic or concatenation.",
+      "When the first truthy term is not a literal but a variable (e.g., 'x or flag or y'), the fix should not apply per rule intent, but if misapplied, it would incorrectly shorten the expression."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0031116,
+  "summary": {
+    "programs": 10,
+    "invalid": 3,
+    "fired": 1,
+    "fixed": 0,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding",
+      "hazard": "Rule SIM222 may rewrite `x or [1]` as `[1]` in a function call argument position, breaking intent when the original expression was meant to provide a fallback via short-circuiting, especially when def",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Mutable literal sharing after rewrite",
+      "hazard": "If SIM222 replaces `x or [1]` with `[1]` and the result is stored and mutated, all references share the same list object, causing unintended cross-talk.",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mutable default arguments and aliasing",
+      "hazard": "Rewriting `x or []` in a default argument to `[]` causes the mutable default to be shared across calls, whereas the original expression would create a new list each time `x` is falsy.",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'int' object has no attribute 'append'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "First truthy term is a variable (near-miss)",
+      "hazard": "Rule SIM222 should not trigger on `x or flag or y` because the first term `x` is not a literal; however, if misapplied, it would incorrectly shorten to `x`, breaking fallback logic when `x` is falsy.",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: [1, 2]\nincorrect rewrite: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "Class vs instance attributes, descriptors, properties",
+      "hazard": "Rewriting a class attribute access in an `or` expression (e.g., `self.x or [1]`) may lose descriptor invocation (like `__get__` or `@property`) if replaced with a literal, breaking lazy initialization",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first access: [0]\nsecond access: [0]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comments attached to removed operands",
+      "hazard": "When SIM222 removes trailing terms in an `or` expression (e.g., `x or [1]  # important`), any inline comment on the removed operand is lost, potentially removing meaningful documentation.",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "value: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Incorrect parentheses removal altering precedence",
+      "hazard": "The fix may strip parentheses around an `or` expression that is part of a larger expression (e.g., in `not (x or [1])`), breaking grouping and changing operator precedence.",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM222",
+            "severity": "warning",
+            "message": "Use `True` instead of `... or True`",
+            "span": [
+              4,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "not (x or [1]): False\nnot x or [1] (precedence broken): True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not (x or [1]): False\nnot x or [1] (precedence broken): True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Walrus, comprehensions, late binding in closures",
+      "hazard": "In a comprehension or lambda, rewriting `x or [1]` to `[1]` may break late-binding behavior where the variable `x` is expected to be re-evaluated per iteration, but the literal `[1]` is constant.",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "walrus results: [[1], [1], [1]]\nfinal flag: 0\nlambda results: [[1], [1], [1]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Variable truthy term prevents shortening",
+      "hazard": "When the first truthy term is not a literal but a variable (e.g., 'x or flag or y'), the fix should not apply per rule intent, but if misapplied, it would incorrectly shorten the expression.",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: {}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p002",
+      "title": "pathlib vs os.path symlink resolution",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "SIM222",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    }
+  ]
+}

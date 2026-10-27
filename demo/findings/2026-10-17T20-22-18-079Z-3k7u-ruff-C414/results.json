@@ -1,0 +1,767 @@
+{
+  "runId": "2026-10-17T20-22-18-079Z-3k7u-ruff-C414",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C414",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-double-cast-or-process (C414)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary `list()`, `reversed()`, `set()`, `sorted()`, and\n`tuple()` call within `list()`, `set()`, `sorted()`, and `tuple()` calls.\n\n## Why is this bad?\nIt's unnecessary to double-cast or double-process iterables by wrapping\nthe listed functions within an additional `list()`, `set()`, `sorted()`, or\n`tuple()` call. Doing so is redundant and can be confusing for readers.\n\n## Example\n```python\nlist(tuple(iterable))\n```\n\nUse instead:\n```python\nlist(iterable)\n```\n\nThis rule applies to a variety of functions, including `list()`, `reversed()`,\n`set()`, `sorted()`, and `tuple()`. For example:\n\n- Instead of `list(list(iterable))`, use `list(iterable)`.\n- Instead of `list(tuple(iterable))`, use `list(iterable)`.\n- Instead of `tuple(list(iterable))`, use `tuple(iterable)`.\n- Instead of `tuple(tuple(iterable))`, use `tuple(iterable)`.\n- Instead of `set(set(iterable))`, use `set(iterable)`.\n- Instead of `set(list(iterable))`, use `set(iterable)`.\n- Instead of `set(tuple(iterable))`, use `set(iterable)`.\n- Instead of `set(sorted(iterable))`, use `set(iterable)`.\n- Instead of `set(reversed(iterable))`, use `set(iterable)`.\n- Instead of `sorted(list(iterable))`, use `sorted(iterable)`.\n- Instead of `sorted(tuple(iterable))`, use `sorted(iterable)`.\n- Instead of `sorted(sorted(iterable))`, use `sorted(iterable)`.\n- Instead of `sorted(reversed(iterable))`, use `sorted(iterable)`.\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it may occasionally drop comments\nwhen rewriting the call. In most cases, though, comments will be preserved.\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary nested constructor calls like list(tuple(...)) where the inner cast/type conversion is redundant.",
+    "firingShapes": [
+      "list(tuple(x))",
+      "list(list(y))",
+      "tuple(set(z))",
+      "sorted(tuple(w))"
+    ],
+    "silentShapes": [
+      "list(map(int, x))",
+      "tuple(filter(None, y))",
+      "sorted(set(z))",
+      "list([1, 2, 3])",
+      "tuple((4, 5, 6))"
+    ],
+    "fixDescription": "Replaces outer constructor call with direct application to the inner iterable argument, e.g., list(tuple(iterable)) becomes list(iterable).",
+    "hazards": [
+      "If the inner call has side effects (e.g., tuple(print(x) or [])), removing it eliminates those effects.",
+      "If the inner call returns a non-iterable (e.g., tuple(5)), the outer call would raise TypeError while the fix may not, changing error behavior.",
+      "If the inner call is a generator expression with side effects, removing it alters when/whether those effects occur.",
+      "If the inner call defines a variable via walrus (e.g., tuple((y := [1,2]))), the fix drops that assignment, breaking later uses of y.",
+      "If the inner call is a lambda returning an iterable (e.g., tuple(lambda: [1,2])()), the fix changes the call semantics entirely.",
+      "If the inner call is a class constructor with __iter__ defined conditionally, removing it may skip __init__ side effects.",
+      "If the inner call appears in a larger expression where its value is used elsewhere (e.g., a = tuple(x); list(a)), the fix breaks that aliasing.",
+      "If the inner call is wrapped in a comment-dependent line continuation or formatting, the fix may drop or misplace comments.",
+      "If the inner call is part of a ternary or conditional expression, removing it may alter grouping or evaluation order.",
+      "If the inner call is a built-in like tuple that shadows a global, removing the outer call may change which tuple is invoked in edge cases involving nested scopes."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.010404900000000002,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "String Formatting Edge Cases",
+      "hazard": "Unnecessary nested constructors used within complex string formatting operations involving % operator, .format(), f-strings, and quote nesting can cause incorrect output after rewrite due to changed o",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "List result: ['a', 'b']\nPercent: ['a', 'b']\nFormat: ['a', 'b']\n\"['a,b']\"\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Walrus Variable Capture",
+      "hazard": "When the inner constructor expression uses the walrus operator to assign a variable, the rewrite removes that assignment, causing subsequent uses of the variable to fail.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "y: [1, 2, 3], t: (1, 2, 3)\n(1, 2, 3)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Star Imports and Module Side Effects",
+      "hazard": "Nested constructor calls inside module-level expressions with star imports or __all__ definitions can alter which names are exported or when side effects occur if the rewrite changes evaluation timing",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              4,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "make_list called\nALL_ITEMS: [1, 2]\n__all__: ['ALL_ITEMS']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "make_list called\nALL_ITEMS: [1, 2]\n__all__: ['ALL_ITEMS']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Evaluation Order and Side Effects",
+      "hazard": "When the inner constructor has side effects (e.g., printing, mutation), the rewrite can change how many times those effects occur due to altered evaluation order or sharing.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              6,
+              17
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              7,
+              18
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First: [1, 2]\nSecond: [2, 4]\nCounter: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First: [1, 2]\nSecond: [2, 4]\nCounter: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Dict Ordering and Hash/Eq Overrides",
+      "hazard": "Rewriting nested constructors in dict key construction can change key identity when types differ (e.g., list vs tuple) and __hash__/__eq__ are overridden, affecting lookup and iteration order.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              10,
+              29
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'tuple' as a dict key (unhashable type: 'list')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'tuple' as a dict key (unhashable type: 'list')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Async Def and Await Ordering",
+      "hazard": "In async contexts, rewriting nested constructor calls can interfere with await ordering or async generator exhaustion if the inner call is awaited or involves async iteration.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              8,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Type Annotations and Runtime Evaluation",
+      "hazard": "When nested constructor calls appear in runtime-evaluated type annotations (e.g., in default args or decorators), the rewrite can change the actual value used, breaking type-dependent logic.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              1,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Default arg: [1, 2, 3]\nAfter reassignment: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Default arg: [1, 2, 3]\nAfter reassignment: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Lambda Returning Iterable",
+      "hazard": "If the inner constructor is a lambda that returns an iterable (e.g., tuple(lambda: [1,2])()), the rewrite incorrectly replaces it with list(lambda: [1,2]), changing semantics from calling the lambda t",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: [1, 2]\nTypeError: 'function' object is not iterable\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: [1, 2]\nTypeError: 'function' object is not iterable\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Walrus assignment dropped by fix breaks later use",
+      "hazard": "Walrus Variable Capture - When the inner constructor expression uses the walrus operator to assign a variable, the fix removes the inner call, dropping the assignment and breaking later references.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "After loop: [([0, 1], [0, 1]), ([1, 2], [1, 2])]\ny after: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After loop: [([0, 1], [0, 1]), ([1, 2], [1, 2])]\ny after: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "List comprehension scoping and late-binding lambda",
+      "hazard": "Comprehensions scoping, late binding in closures and lambdas - The inner tuple in list(tuple(...)) is evaluated in a comprehension's scope; fixing to list(...) may alter when closures capture variable",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              5,
+              21
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              19,
+              21
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[2, 3] [2, 3] [2, 3] \n[2, 3] [2, 3] [2, 3] \ny: [2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2, 3] [2, 3] [2, 3] \n[2, 3] [2, 3] [2, 3] \ny: [2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "F-string evaluation with side-effecting inner tuple",
+      "hazard": "String formatting edge cases: %, format, f-strings, repr vs str, nested quotes - The inner tuple(...) in f'{list(tuple(...))}' is evaluated during f-string formatting; fixing to list(...) may change e",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              7,
+              20
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              25,
+              19
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              38,
+              18
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              57,
+              24
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              82,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'side_effects' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'side_effects' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Lambda returning list passed to tuple in outer list constructor",
+      "hazard": "If the inner call is a lambda returning an iterable (e.g., tuple(lambda: [1,2])()), the fix changes the call semantics entirely - replacing tuple(lambda: [...]()) with lambda: [...] breaks the call.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              64,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              84,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              139,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              139,
+              37
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Triple step: [1, 2] tuple\nFused: [1, 2]\nOriginal: [1, 2]\nFixed: [1, 2]\nResults equal: True\nOriginal result: [1, 2] side effects: ['gen_list']\nFixed result: [1, 2] side effects: ['gen_list']\nOriginal: [1, 2] side effects: ['called', 'called']\nFixed: [1, 2] side effects: ['called', 'called']\nLambda section completed (results identical in this implementation)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Triple step: [1, 2] tuple\nFused: [1, 2]\nOriginal: [1, 2]\nFixed: [1, 2]\nResults equal: True\nOriginal result: [1, 2] side effects: ['gen_list']\nFixed result: [1, 2] side effects: ['gen_list']\nOriginal: [1, 2] side effects: ['called', 'called']\nFixed: [1, 2] side effects: ['called', 'called']\nLambda section completed (results identical in this implementation)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Shadowed builtin tuple in nested scope affects which constructor is called",
+      "hazard": "If the inner call is a built-in like tuple that shadows a global, removing the outer call may change which tuple is invoked in edge cases involving nested scopes.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Evaluation order and side effects when merging constructor calls",
+      "hazard": "Evaluation order and side effects when expressions are merged, duplicated or deleted - When fixing list(tuple(X)) to list(X), if X has side effects and is used multiple times in the surrounding contex",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              15,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "  side_effect_func called #1\nIteration 0:\n  Original: [1, 2] (side_effect_func called 1 times)\n  Fixed:    [1, 2] (side_effect_func called 1 times)\n  side_effect_func called #1\nIteration 1:\n  Original: [1, 2] (side_effect_func called 1 times)\n  Fixed:    [1, 2] (side_effect_func called 1 times)\n--- Evaluation order section completed ---\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "  side_effect_func called #1\nIteration 0:\n  Original: [1, 2] (side_effect_func called 1 times)\n  Fixed:    [1, 2] (side_effect_func called 1 times)\n  side_effect_func called #1\nIteration 1:\n  Original: [1, 2] (side_effect_func called 1 times)\n  Fixed:    [1, 2] (side_effect_func called 1 times)\n--- Evaluation order section completed ---\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Generator expression with side effects: inner tuple removal alters timing",
+      "hazard": "If the inner call is a generator expression with side effects, removing it alters when/whether those effects occur.",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C414",
+            "severity": "warning",
+            "message": "Unnecessary `tuple()` call within `list()`",
+            "span": [
+              81,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "tuple(gen_raises()) raised: ValueError boom\n  side effects so far: ['start', 'after_first']\nResult: [0, 10, 20]\nSide effects: ['gen_0', 'gen_1', 'gen_2']\nFixed would give: [0, 10, 20]\nSide effects: ['gen_0', 'gen_1', 'gen_2']\nEqual: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "tuple(gen_raises()) raised: ValueError boom\n  side effects so far: ['start', 'after_first']\nResult: [0, 10, 20]\nSide effects: ['gen_0', 'gen_1', 'gen_2']\nFixed would give: [0, 10, 20]\nSide effects: ['gen_0', 'gen_1', 'gen_2']\nEqual: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Shadowed builtin and later redefinition in module scope",
+      "hazard": "shadowed builtins and names redefined later in the module - If a builtin like tuple is shadowed early in the module, and later redefined, removing an outer constructor call may change which definition",
+      "rule": "C414",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "=== ORIGINAL CODE BEHAVIOR ===\nAfter redefinition: list(tuple([1,2])) = [1, 2, 99]\n\n=== FIXED CODE BEHAVIOR (simulated) ===\nAfter redefinition: list([1,2]) = [1, 2]\n\n=== COMPARISON ===\nOriginal after redefinition: [1, 2, 99]\nFixed after redefinition:    [1, 2]\nBehaviors differ: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

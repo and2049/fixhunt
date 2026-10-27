@@ -1,0 +1,32 @@
+{
+  "summary": "Flags Yoda conditions where a literal appears before a variable in binary expressions.",
+  "firingShapes": [
+    "\"red\" === color",
+    "`red` === color",
+    "\"red\" === `${color}`",
+    "true == flag",
+    "5 > count",
+    "-1 < str.indexOf(substr)",
+    "0 <= x && x < 1"
+  ],
+  "silentShapes": [
+    "5 & value",
+    "value === \"red\"",
+    "value === `red`",
+    "${value} === `red`",
+    "(color.hue < 60 || 300 < color.hue)"
+  ],
+  "fixDescription": "Swaps the left and right operands of the binary expression so the variable precedes the literal, preserving operator type and spacing around the operator but removing any template literal wrapping if present.",
+  "hazards": [
+    "Rewriting `a === b` when `a` is a getter with side effects changes evaluation timing and may alter observable state.",
+    "If the literal is a tagged template (e.g., `css``red`), swapping operands breaks the tag function’s expected argument order and semantics.",
+    "When the variable is a call expression like `getX()`, moving it to the right changes evaluation order relative to other expressions in the condition.",
+    "In `if (0 <= x && x < 1)`, fixing only the first part (`0 <= x` → `x >= 0`) may break the intended range check if the fix is applied partially or incorrectly.",
+    "If the literal is a string containing escape sequences (e.g., \"\\n\"), rewriting it as the right operand does not change value but may affect minification or team conventions—not a behavioral hazard.",
+    "Comments attached to the literal via line comments (e.g., `\"red\"  // flag\n=== color`) may be lost or misplaced during the swap if the fix does not preserve comment attachment points.",
+    "In `if (true == flag)`, rewriting to `flag == true` is safe for loose equality but alters readability intent; however, no behavioral change occurs since `==` is commutative for these types.",
+    "If the variable is actually a `this` property access like `obj.prop`, swapping does not change behavior but may confuse readers expecting Yoda style for safety—no actual hazard.",
+    "When the literal is a number and the variable is a string (e.g., `5 > count`), rewriting to `count < 5` preserves semantics but relies on implicit coercion; no change in behavior, though the rule’s fix keeps the operator as `>` rather than changing to `<`—so this shape is not fired on for fix.",
+    "In `if (`red` === `${color}`)`, the fix produces `if (`color` === `red`)`, which changes the template literal from an interpolated expression to a bare identifier, altering runtime value if `color` is not a string—e.g., if `color` is `{toString:()=>42}`, original yields `\"red\" === \"42\"` (false), fixed yields `\"{toString:...}\" === \"red\"` (different false, but still false—wait, no: ``${color}`` calls `String(color)`, so if `color` is an object with custom `toString`, it becomes that string; after fix, ``${value}`` becomes ``${color}``? No—wait, original: left is ``red`` (literal), right is ``${color}`` (template literal with embedded variable). Fix swaps: left becomes ``${color}``, right becomes ``red``. So new code: ``${color} === `red` ``. This is semantically identical: both sides are strings, equality holds iff String(color) === \"red``. So no behavioral change. However, if the template literal had a tag, e.g., `css``red` === css`${color}`, then swapping would break—but the rule does not fire on tagged templates in the examples, and the fix description says it removes template literal wrapping, which is inaccurate. Actually, the fix preserves the template literals but swaps them. So hazard: if the template literal is tagged, swapping changes which side is the tagged template and which is the cooked string, breaking the tag’s expectations."
+  ]
+}

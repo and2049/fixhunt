@@ -1,0 +1,666 @@
+{
+  "runId": "2026-10-17T20-28-39-953Z-ljpv-ruff-PIE794",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PIE794",
+    "fixKind": "unknown",
+    "docs": "# duplicate-class-field-definition (PIE794)\n\nDerived from the **flake8-pie** linter.\n\nFix is always available.\n\n## What it does\nChecks for duplicate field definitions in classes.\n\n## Why is this bad?\nDefining a field multiple times in a class body is redundant and likely a\nmistake.\n\n## Example\n```python\nclass Person:\n    name = Tom\n    ...\n    name = Ben\n```\n\nUse instead:\n```python\nclass Person:\n    name = Tom\n    ...\n```\n\n## Fix safety\nThis fix is always marked as unsafe since we cannot know\nfor certain which assignment was intended.\n"
+  },
+  "analysis": {
+    "summary": "The rule flags duplicate field assignments within a class body where the same attribute name is assigned more than once.",
+    "firingShapes": [
+      "class C:\n    x = 1\n    y = 2\n    x = 3",
+      "class D:\n    attr = func()\n    # comment\n    attr = 42",
+      "class E:\n    a = b = 5\n    a = 6",
+      "class F:\n    prop = [1, 2]\n    prop.append(3)\n    prop = [4]",
+      "class G:\n    val = None\n    if True:\n        pass\n    val = 'set'",
+      "class H:\n    data = {'key': 'value'}\n    data['new'] = 'item'\n    data = {}",
+      "class I:\n    number = 10\n    del number\n    number = 20",
+      "class J:\n    obj = SomeClass()\n    obj.method()\n    obj = AnotherClass()"
+    ],
+    "silentShapes": [
+      "class K:\n    x = 1\n    y = 2\n    z = 3",
+      "class L:\n    attr = 5\n    def method(self):\n        pass\n    attr = 10",
+      "class M:\n    a = 1\n    b = a\n    a = 2",
+      "class N:\n    value = expr\n    # inline comment\n    other = value + 1",
+      "class O:\n    field = lambda: None\n    field = lambda: 1"
+    ],
+    "fixDescription": "The autofix removes all but the first occurrence of the duplicated field assignment in the class body, preserving the first definition and deleting subsequent duplicate lines.",
+    "hazards": [
+      "Removing a duplicate assignment that had a side-effect (e.g., function call, I/O) changes program behavior by omitting that side-effect.",
+      "Deleting a duplicate assignment that mutated an object (e.g., list.append, dict.update) may leave the object in an unintended state if the mutation was meaningful.",
+      "Removing a duplicate assignment that relied on the prior value of the same variable (e.g., x = x + 1) alters the computation by using an outdated or undefined value.",
+      "Deleting a duplicate assignment that was intended to rebind a variable after a del statement may cause a NameError if the variable is used later.",
+      "Removing a duplicate assignment in a conditional block (if/while/for) may be incorrect if the indentation was misleading and the line was actually meant to be at class level.",
+      "Deleting a duplicate assignment that occurred after a comment may cause the comment to be orphaned or misattributed if the fix does not preserve comment placement.",
+      "Removing a duplicate assignment that was part of a chained assignment (e.g., a = b = expr) breaks the binding for the other target in the chain.",
+      "Deleting a duplicate assignment that was followed by a deletion (del) may cause the variable to be unbound when later code expects it to be defined.",
+      "Removing a duplicate assignment that was meant to override a parent class field may inadvertently preserve the parent's value, changing inheritance behavior.",
+      "Deleting a duplicate assignment that was syntactically valid but semantically dead (no further use) may still be hazardous if the line contained a macro-like side effect via import or decorator.",
+      "Removing a duplicate assignment that occurs before a try/except block may affect control flow if the assignment was guarding a variable used in the except clause.",
+      "Deleting a duplicate assignment that was the only source of a variable used in a nested function or lambda may cause a closure to capture an undefined variable."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.002892,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 11,
+    "fixed": 0,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Chained Assignment Broken",
+      "hazard": "Removing a duplicate assignment that was part of a chained assignment (e.g., a = b = expr) breaks the binding for the other target in the chain.",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a=6, b=5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Rebind After Del Causes NameError",
+      "hazard": "Deleting a duplicate assignment that was intended to rebind a variable after a del statement may cause a NameError if the variable is used later.",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `x` is defined multiple times",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Dict Mutation Lost",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `d` is defined multiple times",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Non-file Context Manager",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `cm` is defined multiple times",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "AttributeError: 'NoneType' object has no attribute '__exit__'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "AttributeError: 'NoneType' object has no attribute '__exit__'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "List Append Lost",
+      "hazard": "Deleting a duplicate assignment that mutated an object (e.g., list.append, dict.update) may leave the object in an unintended state if the mutation was meaningful.",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `lst` is defined multiple times",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Exception in Finally",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Comment Orphaned",
+      "hazard": "Deleting a duplicate assignment that occurred after a comment may cause the comment to be orphaned or misattributed if the fix does not preserve comment placement.",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `x` is defined multiple times",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Bytes vs Str Encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `data` is defined multiple times",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "<class 'str'> 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'str'> 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Hazard 1: Duplicate assignment relies on prior value",
+      "hazard": "Removing a duplicate assignment that relied on the prior value of the same variable (e.g., x = x + 1)",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Hazard 2: Misleading indentation suggests conditional block",
+      "hazard": "Removing a duplicate assignment in a conditional block if the indentation was misleading and the line was actually meant to be at class level",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `flag` is defined multiple times",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Hazard 3: Class vs instance attributes, descriptors",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `attr` is defined multiple times",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Hazard 4: Generators vs lists, iterators consumed once",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Hazard 5: Bytes vs str, encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'str'> 'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Hazard 6: Mutation via duplicate assignment",
+      "hazard": "Deleting a duplicate assignment that mutated an object (e.g., list.append, dict.update) may leave the object in an unintended state",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `lst` is defined multiple times",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Hazard 7: Assignment before try/except affecting except clause",
+      "hazard": "Removing a duplicate assignment that occurs before a try/except block may affect control flow if the assignment was guarding a variable used in the except clause",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `error` is defined multiple times",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "caught\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Hazard 8: Overriding parent class field",
+      "hazard": "Removing a duplicate assignment that was meant to override a parent class field may inadvertently preserve the parent's value",
+      "rule": "PIE794",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE794",
+            "severity": "warning",
+            "message": "Class field `attr` is defined multiple times",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

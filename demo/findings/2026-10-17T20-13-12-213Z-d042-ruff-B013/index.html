@@ -1,0 +1,355 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff B013 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff B013 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-13-12-213Z-d042-ruff-B013 · fix labelled <b>unknown</b> · 16 programs, 14 fired, 14 fixed, 0 oracle-backed finding(s) · model cost $0.0049</p>
+<div class="card"><b>Rule analysis</b><p>Flags single-element tuples in except clauses like &#39;except (ValueError,)&#39;.</p><p class="mut">Fix: Rewrites &#39;except (SingleException,):&#39; to &#39;except SingleException:&#39; by removing the parentheses and trailing comma while preserving any &#39;as&#39; alias, indentation, and following colon.</p><details><summary>8 hazards</summary><ul><li>Removing parentheses around a single exception type changes nothing semantically but may drop inline or end-of-line comments attached to the parentheses or comma, altering source code documentation.</li><li>If the except clause spans multiple lines due to formatting, the fix may collapse vertical whitespace, potentially affecting readability but not execution.</li><li>When the single element is a starred expression like &#39;(*args,)&#39;, the rule correctly does not fire, so no rewrite occurs; however, misidentifying a starred expression as a regular tuple would lead to incorrect removal of parentheses, breaking unpacking semantics.</li><li>In rare cases where the exception tuple is generated via a macro or code-generation tool that relies on the syntactic presence of a one-tuple for parsing, removing it could interfere with tooling (though this does not affect runtime behavior).</li><li>If the except clause is part of a larger compound statement where parentheses were mistakenly believed to be necessary for disambiguation (e.g., confused with tuple displays in other contexts), removal is still safe because Python grammar unambiguously binds the except clause.</li><li>The fix does not touch the &#39;as&#39; target, so aliasing remains intact; however, if comments are interleaved between the exception and the &#39;as&#39; keyword (e.g., &#39;except (ValueError, ) # note
+    as e:&#39;), the rewrite may disturb comment attachment though this is a formatting hazard, not semantic.</li><li>Should the single element be an expression with side effects (e.g., a function call), evaluating it once versus as a one-tuple makes no difference, so no semantic change occurs.</li><li>If the code is parsed by a tool that treats one-tuples distinctly in AST transformation (e.g., for refactoring), removing the tuple structure could alter the AST shape, potentially breaking downstream tools that expect a Tuple node with one element.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Macro/code-generation dependency on one-tuple syntax</td><td class="mut">Code generation tools may inspect source syntax for one-tuples in except clauses; removing</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>pathlib vs os.path behavior on relative paths, symlinks, missing files</td><td class="mut">Path resolution differences between pathlib and os.path when handling symlinks or missing </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Multiline except clause collapsing vertical whitespace</td><td class="mut">When the except clause is formatted across multiple lines, the fix removes newlines and in</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Star-imports, module-level side effects, __all__</td><td class="mut">Module-level side effects from star imports or __all__ manipulation interact with except f</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td><td class="mut">Default argument evaluation occurs at function definition; except logic may be involved in</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus, comprehensions scoping, late binding in closures and lambdas</td><td class="mut">Walrus in except or comprehension scoping interacts with lambda capture; rewriting may cha</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>AST transformation tools expecting Tuple node with one element</td><td class="mut">Tools that transform AST and rely on except clause being a Tuple node (even with one eleme</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Exceptions inside rewritten code, finally/else clauses, exception chaining</td><td class="mut">Interaction with else/finally clauses or exception chains (__cause__) where rewriting affe</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Compound statement ambiguity resolved correctly after fix</td><td class="mut">If the except clause is part of a larger compound statement where parentheses were mistake</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Descriptor interaction with instance attribute access in handler</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes vs str encoding in error context</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Keyword-only and positional-only argument forwarding in recovery</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Inline comment stripped during parentheses removal alters documentation</td><td class="mut">Removing parentheses around a single exception type changes nothing semantically but may d</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>File write mode and truncation behavior preserved after fix</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Function call with side effects in except clause evaluated once</td><td class="mut">Should the single element be an expression with side effects (e.g., a function call), eval</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Numeric coercion and rounding behavior unchanged after fix</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Macro/code-generation dependency on one-tuple syntax</summary><pre>import ast
+
+def check_except_tuple():
+    src = &#39;&#39;&#39;\
+try:
+    raise ValueError(&#39;x&#39;)
+except (ValueError,) as e:\
+    return str(e)
+&#39;&#39;&#39;
+    tree = ast.parse(src)
+    handlers = [n for n in ast.walk(tree) if isinstance(n, ast.ExceptHandler)]
+    if handlers:
+        t = handlers[0].type
+        print(&#39;AST type:&#39;, type(t).__name__)
+        if isinstance(t, ast.Tuple):
+            print(&#39;Tuple elts:&#39;, len(t.elts))
+        else:
+            print(&#39;Not a tuple&#39;)
+    try:
+        raise ValueError(&#39;test&#39;)
+except (ValueError,) as e:
+    print(&#39;Caught:&#39;, e)
+</pre></details><details id="r1-p002"><summary>r1-p002 — pathlib vs os.path behavior on relative paths, symlinks, missing files</summary><pre>import os
+from pathlib import Path
+
+Path(&#39;tmp&#39;).mkdir(exist_ok=True)
+os.symlink(&#39;target&#39;, &#39;tmp/link&#39;)
+
+try:
+    st = os.lstat(&#39;tmp/link&#39;)  # Follows symlink by default? No, lstat doesn&#39;t.
+except (FileNotFoundError,) as e:
+    print(&#39;os.lstat caught:&#39;, type(e).__name__)
+
+try:
+    p = Path(&#39;tmp/link&#39;)
+    p.stat()  # Follows symlink
+except (FileNotFoundError,) as e:
+    print(&#39;Path.stat caught:&#39;, type(e).__name__)
+
+# Cleanup
+os.unlink(&#39;tmp/link&#39;)
+os.rmdir(&#39;tmp&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:36.449889456 -0400
++++ fixed.py	2026-10-17 16:13:36.636885870 -0400
+@@ -6,13 +6,13 @@
+ 
+ try:
+     st = os.lstat(&#39;tmp/link&#39;)  # Follows symlink by default? No, lstat doesn&#39;t.
+<span class="del">-except (FileNotFoundError,) as e:</span>
+<span class="add">+except FileNotFoundError as e:</span>
+     print(&#39;os.lstat caught:&#39;, type(e).__name__)
+ 
+ try:
+     p = Path(&#39;tmp/link&#39;)
+     p.stat()  # Follows symlink
+<span class="del">-except (FileNotFoundError,) as e:</span>
+<span class="add">+except FileNotFoundError as e:</span>
+     print(&#39;Path.stat caught:&#39;, type(e).__name__)
+ 
+ # Cleanup
+</pre></details><details id="r1-p003"><summary>r1-p003 — Multiline except clause collapsing vertical whitespace</summary><pre>try:
+    raise RuntimeError(&#39;fail&#39;)
+except (
+    RuntimeError,
+) as e:
+    print(&#39;Caught:&#39;, e)
+    print(&#39;Type:&#39;, type(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:36.747883742 -0400
++++ fixed.py	2026-10-17 16:13:36.896880885 -0400
+@@ -1,7 +1,5 @@
+ try:
+     raise RuntimeError(&#39;fail&#39;)
+<span class="del">-except (</span>
+<span class="del">-    RuntimeError,</span>
+<span class="del">-) as e:</span>
+<span class="add">+except RuntimeError as e:</span>
+     print(&#39;Caught:&#39;, e)
+     print(&#39;Type:&#39;, type(e))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Star-imports, module-level side effects, __all__</summary><pre>__all__ = [&#39;CustomError&#39;]
+
+class CustomError(Exception):
+    pass
+
+def func():
+    try:
+        raise CustomError(&#39;module side effect&#39;)
+    except (CustomError,) as e:
+        print(&#39;Caught in func:&#39;, e)
+        return len(__all__)
+
+print(func())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:36.999878910 -0400
++++ fixed.py	2026-10-17 16:13:37.159875849 -0400
+@@ -6,7 +6,7 @@
+ def func():
+     try:
+         raise CustomError(&#39;module side effect&#39;)
+<span class="del">-    except (CustomError,) as e:</span>
+<span class="add">+    except CustomError as e:</span>
+         print(&#39;Caught in func:&#39;, e)
+         return len(__all__)
+ 
+</pre></details><details id="r1-p005"><summary>r1-p005 — Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</summary><pre>def f(x, y=[]):
+    try:
+        if not y:
+            raise ValueError(&#39;empty&#39;)
+    except (ValueError,) as e:
+        y.append(x)
+        return y
+    return y
+
+print(f(1))
+print(f(2))
+print(f(3))  # Default list accumulates across calls
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:37.257873974 -0400
++++ fixed.py	2026-10-17 16:13:37.419870875 -0400
+@@ -2,7 +2,7 @@
+     try:
+         if not y:
+             raise ValueError(&#39;empty&#39;)
+<span class="del">-    except (ValueError,) as e:</span>
+<span class="add">+    except ValueError as e:</span>
+         y.append(x)
+         return y
+     return y
+</pre></details><details id="r1-p006"><summary>r1-p006 — Walrus, comprehensions scoping, late binding in closures and lambdas</summary><pre>funs = []
+for i in range(3):
+    try:
+        if (val := i) == 1:
+            raise KeyError(&#39;one&#39;)
+    except (KeyError,) as e:
+        funs.append(lambda: val + i)  # Captures i and val
+
+for f in funs:
+    print(f())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:37.514869058 -0400
++++ fixed.py	2026-10-17 16:13:37.681865863 -0400
+@@ -3,7 +3,7 @@
+     try:
+         if (val := i) == 1:
+             raise KeyError(&#39;one&#39;)
+<span class="del">-    except (KeyError,) as e:</span>
+<span class="add">+    except KeyError as e:</span>
+         funs.append(lambda: val + i)  # Captures i and val
+ 
+ for f in funs:
+</pre></details><details id="r1-p007"><summary>r1-p007 — AST transformation tools expecting Tuple node with one element</summary><pre>import ast
+
+def transform(node):
+    for n in ast.walk(node):
+        if isinstance(n, ast.ExceptHandler) and isinstance(n.type, ast.Tuple):
+            print(f&#39;Found except tuple with {len(n.type.elts)} element(s)&#39;)
+            return
+    print(&#39;No tuple-type except handler found&#39;)
+
+src = &#39;&#39;&#39;
+try:
+    raise ValueError
+except (ValueError,) as e:
+    pass
+&#39;&#39;&#39;
+tree = ast.parse(src)
+transform(tree)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exceptions inside rewritten code, finally/else clauses, exception chaining</summary><pre>try:
+    try:
+        raise ValueError(&#39;first&#39;)
+    except (ValueError,) as e:
+        raise RuntimeError(&#39;second&#39;) from e
+except (RuntimeError,) as e:
+    print(&#39;Caught:&#39;, e)
+    print(&#39;Cause:&#39;, type(e.__cause__).__name__ if e.__cause__ else None)
+else:
+    print(&#39;No exception&#39;)
+finally:
+    print(&#39;Finally ran&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:37.933861043 -0400
++++ fixed.py	2026-10-17 16:13:38.095857948 -0400
+@@ -1,9 +1,9 @@
+ try:
+     try:
+         raise ValueError(&#39;first&#39;)
+<span class="del">-    except (ValueError,) as e:</span>
+<span class="add">+    except ValueError as e:</span>
+         raise RuntimeError(&#39;second&#39;) from e
+<span class="del">-except (RuntimeError,) as e:</span>
+<span class="add">+except RuntimeError as e:</span>
+     print(&#39;Caught:&#39;, e)
+     print(&#39;Cause:&#39;, type(e.__cause__).__name__ if e.__cause__ else None)
+ else:
+</pre></details><details id="r2-p001"><summary>r2-p001 — Compound statement ambiguity resolved correctly after fix</summary><pre>def f():
+    try:
+        raise ValueError
+    except (ValueError,):
+        return 42
+print(f())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:45.683714277 -0400
++++ fixed.py	2026-10-17 16:13:45.846711217 -0400
+@@ -1,6 +1,6 @@
+ def f():
+     try:
+         raise ValueError
+<span class="del">-    except (ValueError,):</span>
+<span class="add">+    except ValueError:</span>
+         return 42
+ print(f())
+</pre></details><details id="r2-p002"><summary>r2-p002 — Descriptor interaction with instance attribute access in handler</summary><pre>class D:
+    def __get__(self, obj, objtype=None):
+        return &#39;descriptor&#39;
+class C:
+    x = D()
+c = C()
+try:
+    c.x  # triggers descriptor
+    raise KeyError
+except (KeyError,):
+    print(c.x)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:45.946709339 -0400
++++ fixed.py	2026-10-17 16:13:46.110706266 -0400
+@@ -7,5 +7,5 @@
+ try:
+     c.x  # triggers descriptor
+     raise KeyError
+<span class="del">-except (KeyError,):</span>
+<span class="add">+except KeyError:</span>
+     print(c.x)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Bytes vs str encoding in error context</summary><pre>try:
+    b&#39;\xff&#39;.decode(&#39;utf-8&#39;)
+except (UnicodeDecodeError,) as e:
+    print(type(e).__name__, len(str(e)))
+try:
+    &#39;&#39;.encode(&#39;utf-8&#39;).decode(&#39;latin-1&#39;)
+except (UnicodeEncodeError,) as e:
+    print(type(e).__name__, len(str(e)))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:46.208704430 -0400
++++ fixed.py	2026-10-17 16:13:46.362701546 -0400
+@@ -1,8 +1,8 @@
+ try:
+     b&#39;\xff&#39;.decode(&#39;utf-8&#39;)
+<span class="del">-except (UnicodeDecodeError,) as e:</span>
+<span class="add">+except UnicodeDecodeError as e:</span>
+     print(type(e).__name__, len(str(e)))
+ try:
+     &#39;&#39;.encode(&#39;utf-8&#39;).decode(&#39;latin-1&#39;)
+<span class="del">-except (UnicodeEncodeError,) as e:</span>
+<span class="add">+except UnicodeEncodeError as e:</span>
+     print(type(e).__name__, len(str(e)))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Keyword-only and positional-only argument forwarding in recovery</summary><pre>def f(a, /, b, *, c=1):
+    return a + b + c
+try:
+    f(1, 2, c=3)  # works
+    raise TypeError
+except (TypeError,) as e:
+    print(f(4, 5, c=6))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:46.456699785 -0400
++++ fixed.py	2026-10-17 16:13:46.631696507 -0400
+@@ -3,5 +3,5 @@
+ try:
+     f(1, 2, c=3)  # works
+     raise TypeError
+<span class="del">-except (TypeError,) as e:</span>
+<span class="add">+except TypeError as e:</span>
+     print(f(4, 5, c=6))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Inline comment stripped during parentheses removal alters documentation</summary><pre>try:
+    1 / 0
+except (ZeroDivisionError,) as e:  # handle division by zero
+    print(&#39;caught:&#39;, type(e).__name__)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:46.726694728 -0400
++++ fixed.py	2026-10-17 16:13:46.881691824 -0400
+@@ -1,4 +1,4 @@
+ try:
+     1 / 0
+<span class="del">-except (ZeroDivisionError,) as e:  # handle division by zero</span>
+<span class="add">+except ZeroDivisionError as e:  # handle division by zero</span>
+     print(&#39;caught:&#39;, type(e).__name__)
+</pre></details><details id="r2-p006"><summary>r2-p006 — File write mode and truncation behavior preserved after fix</summary><pre>import os
+try:
+    with open(&#39;test.tmp&#39;, &#39;wb&#39;) as f:
+        f.write(b&#39;hello&#39;)
+        raise OSError
+except (OSError,) as e:
+    with open(&#39;test.tmp&#39;, &#39;rb&#39;) as f:
+        print(f.read())
+finally:
+    if os.path.exists(&#39;test.tmp&#39;):
+        os.remove(&#39;test.tmp&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:46.983689914 -0400
++++ fixed.py	2026-10-17 16:13:47.150686793 -0400
+@@ -3,7 +3,7 @@
+     with open(&#39;test.tmp&#39;, &#39;wb&#39;) as f:
+         f.write(b&#39;hello&#39;)
+         raise OSError
+<span class="del">-except (OSError,) as e:</span>
+<span class="add">+except OSError as e:</span>
+     with open(&#39;test.tmp&#39;, &#39;rb&#39;) as f:
+         print(f.read())
+ finally:
+</pre></details><details id="r2-p007"><summary>r2-p007 — Function call with side effects in except clause evaluated once</summary><pre>state = 0
+
+def get_exc():
+    global state
+    state += 1
+    return ValueError
+
+try:
+    raise get_exc()
+except (get_exc(),) as e:
+    print(&#39;state:&#39;, state, &#39;exc:&#39;, type(e).__name__)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:47.243685055 -0400
++++ fixed.py	2026-10-17 16:13:47.397682177 -0400
+@@ -7,5 +7,5 @@
+ 
+ try:
+     raise get_exc()
+<span class="del">-except (get_exc(),) as e:</span>
+<span class="add">+except get_exc() as e:</span>
+     print(&#39;state:&#39;, state, &#39;exc:&#39;, type(e).__name__)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Numeric coercion and rounding behavior unchanged after fix</summary><pre>from decimal import Decimal, getcontext
+getcontext().prec = 2
+try:
+    x = Decimal(&#39;1&#39;) / Decimal(&#39;3&#39;)
+    if x &gt; Decimal(&#39;0.33&#39;):
+        raise TypeError
+except (TypeError,) as e:
+    y = float(Decimal(&#39;2.5&#39;))
+    print(int(y), bool(y))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:13:47.496680327 -0400
++++ fixed.py	2026-10-17 16:13:47.684676815 -0400
+@@ -4,6 +4,6 @@
+     x = Decimal(&#39;1&#39;) / Decimal(&#39;3&#39;)
+     if x &gt; Decimal(&#39;0.33&#39;):
+         raise TypeError
+<span class="del">-except (TypeError,) as e:</span>
+<span class="add">+except TypeError as e:</span>
+     y = float(Decimal(&#39;2.5&#39;))
+     print(int(y), bool(y))
+</pre></details></body></html>

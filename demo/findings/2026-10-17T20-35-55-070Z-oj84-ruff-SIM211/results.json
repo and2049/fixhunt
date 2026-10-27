@@ -1,0 +1,786 @@
+{
+  "runId": "2026-10-17T20-35-55-070Z-oj84-ruff-SIM211",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM211",
+    "fixKind": "unknown",
+    "docs": "# if-expr-with-false-true (SIM211)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for `if` expressions that can be replaced by negating a given\ncondition.\n\n## Why is this bad?\n`if` expressions that evaluate to `False` for a truthy condition and `True`\nfor a falsey condition can be replaced with `not` operators, which are more\nconcise and readable.\n\n## Example\n```python\nFalse if a else True\n```\n\nUse instead:\n```python\nnot a\n```\n\n## References\n- [Python documentation: Truth Value Testing](https://docs.python.org/3/library/stdtypes.html#truth-value-testing)\n"
+  },
+  "analysis": {
+    "summary": "Flags conditional expressions where the true branch is False and the false branch is True.",
+    "firingShapes": [
+      "False if x else True",
+      "False if func() else True",
+      "False if obj.attr else True",
+      "False if lst[0] else True"
+    ],
+    "silentShapes": [
+      "True if x else False",
+      "x if y else z",
+      "False if x else y",
+      "x if True else False"
+    ],
+    "fixDescription": "Rewrites the expression as 'not <condition>' where <condition> is the original if-expression's test.",
+    "hazards": [
+      "The condition may have side effects; while evaluation order is preserved, the negation changes the truth value semantics but not execution timing.",
+      "If the condition is a variable named 'not', rewriting could create a syntax error due to keyword conflict (e.g., 'False if not else True' → 'not not' is valid but 'False if not else True' parses as condition='not').",
+      "If the condition uses a walrus operator (e.g., 'False if (x := y) else True'), the rewrite 'not (x := y)' remains valid but alters where the assignment expression is evaluated in larger contexts.",
+      "In a lambda default argument like 'lambda cond=False if x else True: ...', the rewrite to 'lambda cond=not x: ...' preserves behavior but may affect introspection or source display.",
+      "If the expression appears in a statement where the value is ignored (e.g., 'False if x else True; pass'), removing the conditional expression via rewrite does not drop the statement but replaces its value, which is safe since the value was unused.",
+      "If the condition is a comma-separated tuple (e.g., 'False if (a, b) else True'), the rewrite 'not (a, b)' is valid and equivalent since tuple truthiness is preserved under negation.",
+      "If the condition is a slice object (e.g., 'False if s[x:y] else True'), the rewrite 'not s[x:y]' is valid and equivalent because slice objects are always truthy, so both sides evaluate to False and True respectively — wait, no: slice objects are truthy, so 'False if slice else True' is False, and 'not slice' is False — actually equivalent. No hazard here.",
+      "If the condition is a NumPy array, 'not arr' raises ValueError due to ambiguity, whereas the conditional expression would have worked if the array was used in a boolean context only after explicit reduction — but in the original, 'False if arr else True' would already raise ValueError on the condition evaluation, so the rewrite fails at the same point.",
+      "If the condition is a custom object with __bool__ returning an integer subclass where negation behaves differently due to __inv__, but Python's 'not' always coerces to bool first, so it is equivalent.",
+      "If the expression is part of a larger expression and parentheses are omitted relying on operator precedence, the rewrite 'not cond' may bind differently than the original conditional expression (which has low precedence), e.g., in 'False if x else True or y' vs 'not x or y' — but the original parses as (False if x else (True or y))? No: conditional expressions have lower precedence than 'or', so 'False if x else True or y' is (False if x else True) or y, and 'not x or y' is (not x) or y — and since (False if x else True) equals (not x), they are equivalent. So no hazard."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0040236000000000004,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 16,
+    "fixed": 0,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Custom boolean-like object with overridden __neg__/__pos__",
+      "hazard": "If the condition is a custom object with __bool__ returning an integer subclass where negation behaves differently due to __inv__, but Python's 'not' always coerces to bool first, so it is equivalent.",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              12,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Original: False, Rewritten: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Original: False, Rewritten: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Conditional in larger expression relying on precedence",
+      "hazard": "If the expression is part of a larger expression and parentheses are omitted relying on operator precedence, the rewrite 'not cond' may bind differently than the original conditional expression (which",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              3,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Original grouped: False, Rewritten: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Original grouped: False, Rewritten: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Condition with side effects (function call)",
+      "hazard": "The condition may have side effects; while evaluation order is preserved, the negation changes the truth value semantics but not execution timing.",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              9,
+              13
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              14,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "After first call: call_count=2, orig=False, rewritten=True\nAfter second call: call_count=4, orig=False, rewritten=True\n",
+          "stderr1": "AssertionError",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After first call: call_count=2, orig=False, rewritten=True\nAfter second call: call_count=4, orig=False, rewritten=True\n",
+          "stderr1": "AssertionError",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable default argument captured in closure",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              3,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "f1() orig: False, f2() orig: False\nList contents: [0, 1], bool: True, not: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f1() orig: False, f2() orig: False\nList contents: [0, 1], bool: True, not: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Walrus operator in condition",
+      "hazard": "If the condition uses a walrus operator (e.g., 'False if (x := y) else True'), the rewrite 'not (x := y)' remains valid but alters where the assignment expression is evaluated in larger contexts.",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              4,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "After original: x=5, result=False\nAfter rewritten: x=5, result=False\nx value in both cases: 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After original: x=5, result=False\nAfter rewritten: x=5, result=False\nx value in both cases: 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Exception in condition with finally clause",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              10,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "finally executed\nCaught: ValueError: bad\nNow testing rewritten form:\nfinally executed\nCaught: ValueError: bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally executed\nCaught: ValueError: bad\nNow testing rewritten form:\nfinally executed\nCaught: ValueError: bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Slice object as condition (near-miss, no trigger expected)",
+      "hazard": "If the condition is a slice object (e.g., 'False if s[x:y] else True'), the rewrite 'not s[x:y]' is valid and equivalent because slice objects are always truthy...",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              4,
+              8
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              12,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Slice: [2, 3], bool: True\nOriginal: False, Rewritten: False\nEmpty slice: [], orig: True, rewritten: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Slice: [2, 3], bool: True\nOriginal: False, Rewritten: False\nEmpty slice: [], orig: True, rewritten: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Numeric coercion edge case: numpy-like scalar (but using int/float/Decimal)",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              7,
+              12
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              15,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Value: 0 (int), orig: True, rewritten: True\nValue: 0.0 (float), orig: True, rewritten: True\nValue: Decimal('0') (Decimal), orig: True, rewritten: True\nValue: 1 (int), orig: False, rewritten: False\nValue: 1.0 (float), orig: False, rewritten: False\nValue: Decimal('1') (Decimal), orig: False, rewritten: False\nValue: -0.0 (float), orig: True, rewritten: True\nNaN: orig=False, rewritten=False\nAll numeric cases equivalent\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Value: 0 (int), orig: True, rewritten: True\nValue: 0.0 (float), orig: True, rewritten: True\nValue: Decimal('0') (Decimal), orig: True, rewritten: True\nValue: 1 (int), orig: False, rewritten: False\nValue: 1.0 (float), orig: False, rewritten: False\nValue: Decimal('1') (Decimal), orig: False, rewritten: False\nValue: -0.0 (float), orig: True, rewritten: True\nNaN: orig=False, rewritten=False\nAll numeric cases equivalent\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Dict Ordering & Duplicate Keys",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              11,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "dict: [(1, False), (2, True)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "dict: [(1, False), (2, True)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Comments & Docstrings Attached",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "f(-1)= True\nf(1)= False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f(-1)= True\nf(1)= False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Lambda Default Argument Introspection",
+      "hazard": "In a lambda default argument like 'lambda cond=False if x else True: ...', the rewrite to 'lambda cond=not x: ...' preserves behavior but may affect introspection or source display.",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              2,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "lam(): False\nsource: lam = lambda cond=(False if x else True): cond\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "lam(): False\nsource: lam = lambda cond=(False if x else True): cond\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Type Annotations Evaluated at Runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "got 1\nT= False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "got 1\nT= False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Bytes vs Str Encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "file contains: b'yes'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "file contains: b'yes'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Shadowed Builtins",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "list var: [1, 2, 3]\ncond: False\nbuilt-in list available: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "list var: [1, 2, 3]\ncond: False\nbuilt-in list available: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Star-Imports & Module Side Effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "flag before import: False\nflag after simulated * import: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "flag before import: False\nflag after simulated * import: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Class Attributes & Descriptors",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "SIM211",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM211",
+            "severity": "warning",
+            "message": "Use `not ...` instead of `False if ... else True`",
+            "span": [
+              2,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "class x: False\nprop accessed\ninstance prop: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "class x: False\nprop accessed\ninstance prop: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

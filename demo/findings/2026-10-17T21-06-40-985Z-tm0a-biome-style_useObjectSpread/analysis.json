@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags uses of Object.assign() where the first argument is an empty object literal {}, suggesting replacement with object spread syntax.",
+  "firingShapes": [
+    "Object.assign({}, foo);",
+    "Object.assign({}, { foo: 'bar' });",
+    "Object.assign({ foo: 'bar' }, baz);",
+    "Object.assign({}, baz, { foo: 'bar' });",
+    "Object.assign({}, obj1, obj2);",
+    "Object.assign({}, getObj(), { x: 1 });",
+    "Object.assign({}, ...spreadArgs);",
+    "Object.assign({}, a, b, c);"
+  ],
+  "silentShapes": [
+    "Object.assign(foo, { bar: baz });",
+    "Object.assign(target, source);",
+    "Object.assign({}, foo.bar);",
+    "var x = Object.assign({}, foo);",
+    "Object.assign.call({}, foo);"
+  ],
+  "fixDescription": "Replace Object.assign({}, ...) with an object literal using spread properties: {...args} where args are all arguments after the first empty object.",
+  "hazards": [
+    "If the first argument is not a literal {} but a variable or expression that evaluates to an empty object, the fix incorrectly assumes it is a literal and removes it, altering behavior.",
+    "If Object.assign is called via a different reference (e.g., const assign = Object.assign; assign({}, foo)), the fix does not apply and may leave unsafe code unchanged, but if misapplied, it would break due to missing context.",
+    "If the first argument is {} but followed by non-object primitives (e.g., Object.assign({}, null, foo)), the spread fix may throw at runtime because spreading null/undefined is invalid, whereas Object.assign coerces them.",
+    "If the Object.assign call is inside a larger expression and the fix removes parentheses needed for grouping (e.g., return Object.assign({}, foo); → return {...foo}; is safe, but (Object.assign({}, foo)) → ({...foo}) may be needed in some contexts like JSX props), the fix might omit necessary parentheses.",
+    "If the code relies on the side effect of Object.assign defining properties on the first argument (even if it's {}), and that object is later used elsewhere, the fix changes when the object is created (in-place vs new), potentially causing aliasing issues.",
+    "If the first argument {} is actually a destructured or computed property in an object literal (e.g., {[k]: Object.assign({}, foo)}), the fix could produce invalid syntax or change evaluation order.",
+    "If the Object.assign call is in a loop or frequently executed path and the environment lacks spread support (e.g., IE without transpilation), the fix may introduce syntax errors in older environments.",
+    "If the arguments after the first include getters or have side effects, the evaluation order of spreading vs Object.assign is the same (left-to-right), so no issue, but if the fix were to reorder args (it doesn't), it would matter—however, Biome's fix preserves order.",
+    "If the code contains trailing comments on the Object.assign line, the fix might discard them if not properly preserved during replacement.",
+    "If the first argument {} is actually part of a larger object literal spread (e.g., {...other, ...Object.assign({}, foo)}), replacing the inner call could break nesting or change the resulting object structure due to duplicate key handling."
+  ]
+}

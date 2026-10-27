@@ -1,0 +1,526 @@
+{
+  "runId": "2026-10-17T20-37-01-750Z-5ai0-ruff-SIM221",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM221",
+    "fixKind": "unknown",
+    "docs": "# expr-or-not-expr (SIM221)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for `or` expressions that include both an expression and its\nnegation.\n\n## Why is this bad?\nAn `or` expression that includes both an expression and its negation will\nalways evaluate to `True`.\n\n## Example\n```python\nx or not x\n```\n\n## References\n- [Python documentation: Boolean operations](https://docs.python.org/3/reference/expressions.html#boolean-operations)\n"
+  },
+  "analysis": {
+    "summary": "Flags 'or' expressions where one operand is the logical negation of the other, such as 'x or not x', which always evaluates to True.",
+    "firingShapes": [
+      "a or not a",
+      "not b or b",
+      "func() or not func()",
+      "obj.attr or not obj.attr",
+      "lst[0] or not lst[0]",
+      "(x + y) or not (x + y)",
+      "some_var or not some_var",
+      "not (x == y) or (x == y)"
+    ],
+    "silentShapes": [
+      "a or not b",
+      "not a or b and c",
+      "x or (not x and y)",
+      "(a or b) or not (a or b)",
+      "True or not False"
+    ],
+    "fixDescription": "Rewrites the expression to the literal True, preserving any surrounding expression structure but replacing the entire 'or' expression with True.",
+    "hazards": [
+      "The rewrite removes any side effects from evaluating the left operand first, such as in a function call with mutable state changes.",
+      "If the left operand is a property accessor (__getattr__ or __getattribute__), its side effects are lost when replaced with True.",
+      "When the operand is an indexing operation like lst[i], any __getitem__ side effects or exceptions are eliminated by the rewrite.",
+      "In chained comparisons like (x < y) or not (x < y), the rewrite removes the evaluation of x and y entirely, altering behavior if they have side effects.",
+      "If the expression appears in a context relying on its specific truthy value for type narrowing (e.g., in an if condition), replacing with True may affect static analysis but not runtime behavior—yet this is still a semantic shift in expression value.",
+      "Comments attached to the operands or operator (e.g., x # comment\nor not # comment\n x) may be lost during the AST rewrite.",
+      "In rare cases where the expression is used via eval() or exec() with dynamically scoped names, the rewrite could alter name resolution if operands contain undefined variables that would have raised NameError.",
+      "If the operand is a short-circuiting expression itself (e.g., f() or g()), the rewrite prevents evaluation of the right-hand operand in the negation, removing potential side effects from g()."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0027930000000000003,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 3,
+    "fixed": 0,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Property Accessor Side Effects Lost",
+      "hazard": "If the left operand is a property accessor (__getattr__ or __getattribute__), its side effects are lost when replaced with True.",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\ncount: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Shadowed Builtins and Redefined Names",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Chained Comparison Side Effects Removed",
+      "hazard": "In chained comparisons like (x < y) or not (x < y), the rewrite removes the evaluation of x and y entirely, altering behavior if they have side effects.",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\ncounter: 11\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Exceptions Raised Inside Rewritten Code",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: bad\nRuntimeError: worse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Comments Lost During AST Rewrite",
+      "hazard": "Comments attached to the operands or operator (e.g., x # comment\nor not # comment\n x) may be lost during the AST rewrite.",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM221",
+            "severity": "warning",
+            "message": "Use `True` instead of `x or not x`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\nx after: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nx after: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Side Effects from Left Operand Evaluation Removed",
+      "hazard": "The rewrite removes any side effects from evaluating the left operand first, such as in a function call with mutable state changes.",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\nstate: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Star-Imports and Module-Level Side Effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM221",
+            "severity": "warning",
+            "message": "Use `True` instead of `flag or not flag`",
+            "span": [
+              5,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM221",
+            "severity": "warning",
+            "message": "Use `True` instead of `flag or not flag`",
+            "span": [
+              7,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Truthiness of Custom __bool__/__len__",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Left Operand Side Effects Removed",
+      "hazard": "The rewrite removes any side effects from evaluating the left operand first, such as in a function call with mutable state changes.",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "left: 1 middle: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Generator Consumption Hazard",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first: 1 rest: [2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Type Narrowing Context",
+      "hazard": "If the expression appears in a context relying on its specific truthy value for type narrowing (e.g., in an if condition), replacing with True may affect static analysis but not runtime behavior—yet t",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM221",
+            "severity": "warning",
+            "message": "Use `True` instead of `x or not x`",
+            "span": [
+              2,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "branch taken\nx: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "branch taken\nx: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Short-Circuiting Operand Hazard",
+      "hazard": "If the operand is a short-circuiting expression itself (e.g., f() or g()), the rewrite prevents evaluation of the right-hand operand in the negation, removing potential side effects from g().",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: 1 called: ['f', 'g']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Bytes vs Str Encoding Hazard",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "lines: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "Property Accessor Side Effects Lost",
+      "hazard": "If the left operand is a property accessor (__getattr__ or __getattribute__), its side effects are lost when replaced with True.",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "accessing value\ncounter: 1 x: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Mutable Default Arguments and Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a: 1 b: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Evaluation Order and Side Effects Merged",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "SIM221",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "log: [1] result: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

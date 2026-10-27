@@ -1,0 +1,1 @@
+def writer(data, *, sep='\n', _ignore=print('default')):\n    with open('tmp.txt', 'w', encoding='utf-8') as f:\n        f.write(str(data) + sep)\nwriter(42)\nwith open('tmp.txt') as f:\n    print(repr(f.read()))\nimport os\nos.remove('tmp.txt')

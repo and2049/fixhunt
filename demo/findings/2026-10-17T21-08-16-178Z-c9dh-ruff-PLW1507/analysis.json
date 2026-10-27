@@ -1,0 +1,35 @@
+{
+  "summary": "Flags shallow copying of os.environ using copy.copy() due to mutation risks.",
+  "firingShapes": [
+    "import copy; import os; env = copy.copy(os.environ)",
+    "from copy import copy; import os; env = copy(os.environ)",
+    "import os; from copy import copy; x = copy(copy.deepcopy(y), os.environ)",
+    "import os; import copy; a = copy.copy(b); c = copy.copy(os.environ)",
+    "import os; import copy; def f(): return copy.copy(os.environ)",
+    "import os; import copy; class C: m = copy.copy(os.environ)",
+    "import os; import copy; if True: env = copy.copy(os.environ)",
+    "import os; import copy; while False: pass; env = copy.copy(os.environ)"
+  ],
+  "silentShapes": [
+    "import os; env = dict(os.environ)",
+    "import os; env = {k: v for k, v in os.environ.items()}",
+    "import os; env = os.environ.copy()",
+    "import copy; import os; x = copy.copy([1, 2, 3])",
+    "import os; env = os.environ"
+  ],
+  "fixDescription": "Replaces 'copy.copy(os.environ)' with 'os.environ.copy()' while preserving imports and surrounding context.",
+  "hazards": [
+    "Rewriting inside a function call argument like f(copy.copy(os.environ)) changes evaluation timing if os.environ.copy() has side effects (though it doesn't, the form differs).",
+    "If 'copy' is locally rebound (e.g., 'copy = lambda x: x'), the fix incorrectly removes the call to the local 'copy'.",
+    "In a comprehension like [copy.copy(os.environ) for _ in range(1)], the fix alters iteration behavior if os.environ.copy() is expensive or has side effects (it doesn't, but structurally differs).",
+    "When the copy occurs in a lambda default argument like lambda x=copy.copy(os.environ): x, the fix changes when the copy is evaluated (at definition vs call time).",
+    "If the code relies on the type of the copy being exactly copy._wrap type (not dict), switching to dict breaks isinstance checks against copy.copy's result type.",
+    "In a try/except block where copy.copy might raise TypeError (if os.environ were not copyable, though it is), the fix removes the exception handling path.",
+    "If os.environ is shadowed by a local variable before the copy, the fix still uses the global os.environ, breaking intended behavior.",
+    "The fix may disrupt formatting-dependent tooling (e.g., linters that rely on line length) by replacing a longer expression with a shorter one.",
+    "If the original code had a comment between 'copy.' and 'copy(os.environ)', the fix removes it during AST rewrite.",
+    "In an augmented assignment like x += copy.copy(os.environ), the fix changes the right-hand side evaluation, potentially altering side effects if os.environ.copy() had them (it doesn't, but the form is different).",
+    "When used in a context manager like with lock: copy.copy(os.environ), the fix does not affect the lock but changes the expression value, possibly breaking downstream logic expecting a copy proxy.",
+    "If the module defines a class named 'environ' in os, the fix incorrectly attributes the copy to that instead of the real os.environ (though unlikely, depends on imports)."
+  ]
+}

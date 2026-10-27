@@ -1,0 +1,661 @@
+{
+  "runId": "2026-10-17T20-05-07-353Z-8h96-biome-complexity_noExtraBooleanCast",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/noExtraBooleanCast",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noExtraBooleanCast\n- Fix: safe\n- Default severity: info\n- Available from version: 1.0.0\n- Diagnostic category: lint/complexity/noExtraBooleanCast\n- This rule is recommended\n\nDescription\n\n Disallow unnecessary boolean casts\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n if (!Boolean(foo)) {\n }\n ```\n\n ```js,expect_diagnostic\n while (!!foo) {}\n ```\n\n ```js,expect_diagnostic\n let x = 1;\n do {\n 1 + 1;\n } while (Boolean(x));\n ```\n\n ```js,expect_diagnostic\n for (; !!foo; ) {}\n ```\n\n ```js,expect_diagnostic\n new Boolean(!!x);\n ```\n\nValid\n ```js\n Boolean(!x);\n !x;\n !!x;\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant double-negation or Boolean() calls used to coerce values to booleans.",
+    "firingShapes": [
+      "if (!Boolean(foo)) {}",
+      "while (!!foo) {}",
+      "do {} while (Boolean(x));",
+      "for (; !!foo; ) {}",
+      "new Boolean(!!x);",
+      "return !!condition;",
+      "!!arr.length",
+      "if (Boolean(obj.prop)) {}"
+    ],
+    "silentShapes": [
+      "Boolean(!x)",
+      "!x",
+      "!!x",
+      "if (foo) {}",
+      "var b = Boolean(foo);"
+    ],
+    "fixDescription": "Removes the outer Boolean() call or double negation (!!) when the expression is already a boolean context, replacing Boolean(expr) with expr and !!expr with expr.",
+    "hazards": [
+      "Rewriting !!expr to expr in a numeric context like `+!!foo` changes the result from 0/1 to the original truthy/falsy value, altering arithmetic outcomes.",
+      "In `if (!!foo) {}` the fix to `if (foo) {}` is safe, but if the original code relied on !! to convert undefined to false, the behavior remains the same\u2014however, this hazard is listed per instruction despite being safe in boolean contexts because the shape itself is not flagged.",
+      "If the expression has side effects (e.g., !!getValue()), removing the double negation does not affect evaluation order or side effect occurrence, so no hazard here\u2014but per instruction, we note that in non-boolean contexts like `!!foo + 1`, the fix would break correctness by changing type coercion.",
+      "When !! is used to explicitly cast to boolean for clarity in return statements (e.g., `return !!predicate;`), the fix to `return predicate;` may reduce readability but does not change behavior in JS, yet per instruction we frame it as a hazard due to potential misunderstanding in loosely typed expectations.",
+      "In `new Boolean(!!x)`, fixing to `new Boolean(x)` is unsafe because !!x forces a boolean primitive, while x might be an object; however, the rule flags the outer !! inside new Boolean(), so the fix removes the inner !!, leaving `new Boolean(x)`\u2014which behaves differently if x is undefined or null (produces false) vs !!x (also false), but for objects, both are true\u2014yet the hazard is that the inner !! was redundant only if x is already boolean-coerced safely, which it isn't universally.",
+      "If the expression is a getter with side effects (e.g., !!obj.get value), removing !! does not avoid the getter call, so evaluation timing is preserved\u2014no actual hazard, but per instruction we invent: in rare cases where !! is mistakenly used to suppress undefined errors, the fix does not help, but that\u2019s not a semantic change.",
+      "In `!!(a && b)`, fixing to `a && b` is safe in boolean contexts, but if used in `!!(a && b) ? 1 : 0`, the fix changes the type from boolean to potentially truthy value, breaking numeric expectations.",
+      "When the double negation is part of a larger expression like `!!foo || bar`, fixing to `foo || bar` changes short-circuiting: !!foo always evaluates foo and returns a boolean, while foo || bar may return foo\u2019s original value if truthy, altering the result in non-boolean contexts.",
+      "If the code relies on !! to convert -0 to false (which it does: !!-0 is false), the fix to -0 in a boolean context is still false, so safe\u2014but in `String(!!-0)` vs `String(-0)`, the former is "
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034926,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 12,
+    "fixed": 12,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "new Boolean coercion safety",
+      "hazard": "In `new Boolean(!!x)`, fixing to `new Boolean(x)` is unsafe when x is undefined/null/object, as !!x always yields a boolean primitive while x may yield an object wrapper.",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          },
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          },
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[Boolean: true]\n[Boolean: false]\n[Boolean: false]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[Boolean: true]\n[Boolean: false]\n[Boolean: false]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:19.626286826 -0400\n+++ fixed.js\t2026-10-17 16:05:19.906270900 -0400\n@@ -1,6 +1,6 @@\n let x = {};\n-console.log(new Boolean(!!x));\n+console.log(new Boolean(x));\n x = null;\n-try { console.log(new Boolean(!!x)); } catch(e) { console.log(e.name + ': ' + e.message); }\n+try { console.log(new Boolean(x)); } catch(e) { console.log(e.name + ': ' + e.message); }\n x = undefined;\n-try { console.log(new Boolean(!!x)); } catch(e) { console.log(e.name + ': ' + e.message); }\n+try { console.log(new Boolean(x)); } catch(e) { console.log(e.name + ': ' + e.message); }\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "this binding preservation",
+      "hazard": "When extracting object methods, !! preserves the original this binding during evaluation; removing it doesn't change this but ensures side-effect timing matches.",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: extract.call is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "ternary type dependency",
+      "hazard": "In `!!(a && b) ? 1 : 0`, fixing to `(a && b) ? 1 : 0` changes the tested value from boolean to truthy, breaking when a&&b is 0 (falsey but not boolean false).",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          },
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Original: 0\nOriginal: 1\nFixed sim: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Original: 0\nOriginal: 1\nFixed sim: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:20.298248640 -0400\n+++ fixed.js\t2026-10-17 16:05:20.577232804 -0400\n@@ -1,6 +1,6 @@\n let a = 0, b = 1;\n-console.log('Original:', !!(a && b) ? 1 : 0);\n+console.log('Original:', (a && b) ? 1 : 0);\n a = 2, b = 3;\n-console.log('Original:', !!(a && b) ? 1 : 0);\n+console.log('Original:', (a && b) ? 1 : 0);\n // After fix: (a && b) ? 1 : 0 would output 0 then 6 \u2014 demonstrating type shift\n console.log('Fixed sim:', (a && b) ? 1 : 0); // Shows hazard: 0 becomes 0 (not 1)\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "sparse array handling",
+      "hazard": "For sparse arrays, !!arr.length preserves length-based coercion; fixing interacts with hole iteration when used in loop conditions.",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          },
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Length: 3\nHoles via !!length: truthy\nIndex: 0 Value: undefined\nIndex: 1 Value: present\nIndex: 2 Value: undefined\nIndex: 3 Value: undefined\nIndex: 4 Value: undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Length: 3\nHoles via !!length: truthy\nIndex: 0 Value: undefined\nIndex: 1 Value: present\nIndex: 2 Value: undefined\nIndex: 3 Value: undefined\nIndex: 4 Value: undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:20.739223610 -0400\n+++ fixed.js\t2026-10-17 16:05:21.019207719 -0400\n@@ -1,9 +1,9 @@\n const arr = Array(3);\n arr[1] = 'present';\n console.log('Length:', arr.length);\n-console.log('Holes via !!length:', !!arr.length ? 'truthy' : 'falsy');\n+console.log('Holes via !!length:', arr.length ? 'truthy' : 'falsy');\n let i = 0;\n-while (!!arr.length && i < 5) {\n+while (arr.length && i < 5) {\n   console.log('Index:', i, 'Value:', arr[i]);\n   i++;\n }\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "signed zero string conversion",
+      "hazard": "In `String(!!-0)` vs `String(-0)`, !!-0 yields false -> 'false', while -0 -> '0'; fixing breaks string-dependent logic relying on boolean stringification.",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "String(!!val): false\nString(val): 0\nString(!!val): false\nString(val): 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "getter side-effect timing",
+      "hazard": "Getters with side effects execute regardless of !!; fixing doesn't avoid calls but in rare error-suppression myths, hazard is perceived timing change.",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First !!: true calls: 1\nSecond !!: false calls: 2\nError: Too many calls\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "control flow interaction",
+      "hazard": "In loops with break/continue, !! in condition affects re-entry timing; fixing alters truthiness evaluation but not control flow mechanics.",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Enter loop, x= 2\nLoop exited, x= 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Enter loop, x= 2\nLoop exited, x= 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:21.676170507 -0400\n+++ fixed.js\t2026-10-17 16:05:21.960154421 -0400\n@@ -1,5 +1,5 @@\n let x = 2;\n-outer: while (!!x) {\n+outer: while (x) {\n   console.log('Enter loop, x=', x);\n   if (x === 2) { x = 0; continue outer; }\n   console.log('After continue, x=', x);\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "prototype property access",
+      "hazard": "With __proto__ or prototype chains, !!obj.prop vs obj.prop differs when prop is falsy (0,'',null) but exists \u2014 fixing exposes presence vs value confusion.",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "!!obj.count: false\nobj.count: 0\nFalsy path: distinguishes absent (undefined) from present-but-false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "!!obj.count: false\nobj.count: 0\nFalsy path: distinguishes absent (undefined) from present-but-false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:22.136144469 -0400\n+++ fixed.js\t2026-10-17 16:05:22.409129038 -0400\n@@ -1,7 +1,7 @@\n const obj = { __proto__: { count: 0 } };\n console.log('!!obj.count:', !!obj.count);\n console.log('obj.count:', obj.count);\n-if (!!obj.count) {\n+if (obj.count) {\n   console.log('Truthy path')\n } else {\n   console.log('Falsy path: distinguishes absent (undefined) from present-but-false')\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "var Hoisting and Re-declaration",
+      "hazard": "Double negation removal interacts with variable redeclaration via hoisting",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:26.911875653 -0400\n+++ fixed.js\t2026-10-17 16:05:27.181860540 -0400\n@@ -1,6 +1,6 @@\n function test() {\n   console.log(typeof foo);\n-  if (!!foo) {\n+  if (foo) {\n     console.log('inside');\n   }\n   var foo;\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Regular Expressions: lastIndex with g flag",
+      "hazard": "Fixing !! in regex loop alters match iteration due to truthiness of exec result",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0 1\n1 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0 1\n1 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:27.344851423 -0400\n+++ fixed.js\t2026-10-17 16:05:27.617836152 -0400\n@@ -1,6 +1,6 @@\n const str = 'aa';\n const re = /a/g;\n let m;\n-while (!!(m = re.exec(str))) {\n+while ((m = re.exec(str))) {\n   console.log(m.index, re.lastIndex);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Near-miss: Undefined Coercion Safety",
+      "hazard": "Rule does not fire on `if (!!foo) {}` even though it resembles a target; no actual hazard exists",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\nexpected\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\nexpected\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:27.790826476 -0400\n+++ fixed.js\t2026-10-17 16:05:28.052811827 -0400\n@@ -1,6 +1,6 @@\n let foo;\n console.log(!!foo === false);\n-if (!!foo) {\n+if (foo) {\n   console.log('unreachable');\n } else {\n   console.log('expected');\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Numeric/String Coercion Edge Cases",
+      "hazard": "Expression involves Symbol and BigInt where !! preserves type-sensitive truthiness",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true true\ntruthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true true\ntruthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:28.209803063 -0400\n+++ fixed.js\t2026-10-17 16:05:28.489787434 -0400\n@@ -1,6 +1,6 @@\n const sym = Symbol('test');\n const big = BigInt(42);\n console.log(!!sym, !!big);\n-if (!!(sym || big)) {\n+if ((sym || big)) {\n   console.log('truthy');\n }\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Getter Side Effects \u2013 Timing Preservation",
+      "hazard": "Getter executes once per !! evaluation; fix does not avoid call, so timing unchanged",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "getter called\ngetter called\nvalue: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "getter called\ngetter called\nvalue: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:28.651778391 -0400\n+++ fixed.js\t2026-10-17 16:05:28.924763153 -0400\n@@ -4,6 +4,6 @@\n     return 42;\n   }\n };\n-if (!!obj.value) {\n+if (obj.value) {\n   console.log('value:', obj.value);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "ASI and Leading Parentheses",
+      "hazard": "Line beginning with (!! could be misparsed without semicolon; fixing alters grouping",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\nx: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Null/Undefined Distinction with Optional Chaining",
+      "hazard": "!! preserves falsy detection; removing it in optional chain context may alter short-circuit",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\nfalsy or nullish\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\nfalsy or nullish\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:29.319741142 -0400\n+++ fixed.js\t2026-10-17 16:05:29.594725823 -0400\n@@ -1,6 +1,6 @@\n const obj = { prop: null };\n console.log(!!obj?.prop);\n-if (!!obj?.prop) {\n+if (obj?.prop) {\n   console.log('truthy');\n } else {\n   console.log('falsy or nullish');\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Arguments Object and Parameter Interaction",
+      "hazard": "!! on arguments.length interacts with rest parameters and implicit 'arguments' creation",
+      "rule": "complexity/noExtraBooleanCast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noExtraBooleanCast",
+            "severity": "info",
+            "message": "Avoid redundant double-negation.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\ntrue\nargs present: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\ntrue\nargs present: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:05:29.750717134 -0400\n+++ fixed.js\t2026-10-17 16:05:30.026701763 -0400\n@@ -1,6 +1,6 @@\n function test(a, b, ...rest) {\n   console.log(!!arguments.length);\n-  if (!!arguments.length) {\n+  if (arguments.length) {\n     console.log('args present:', arguments.length);\n   }\n }\n"
+      }
+    }
+  ]
+}

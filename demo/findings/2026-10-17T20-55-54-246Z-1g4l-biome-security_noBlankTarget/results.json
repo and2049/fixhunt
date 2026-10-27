@@ -1,0 +1,453 @@
+{
+  "runId": "2026-10-17T20-55-54-246Z-1g4l-biome-security_noBlankTarget",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "security/noBlankTarget",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noBlankTarget\n- Fix: safe\n- Default severity: error\n- Available from version: 1.0.0\n- Diagnostic category: lint/security/noBlankTarget\n- This rule is recommended\n\nDescription\n\n Disallow `target=\"_blank\"` attribute without `rel=\"noopener\"`.\n\n When creating an anchor `a` element, there are times when its link has\n to be opened in a new browser tab via the `target=\"_blank\"` attribute.\n This attribute has to be paired with `rel=\"noopener\"` or you may run\n into security issues.\n\n See to the [`noopener` documentation](https://html.spec.whatwg.org/multipage/links.html#link-type-noopener).\n\nExamples\n\nInvalid\n\n ```jsx,expect_diagnostic\n <a href='http://external.link' target='_blank'>child</a>\n ```\n\n ```jsx,expect_diagnostic\n <a href='http://external.link' target='_blank' rel='nofollow'>child</a>\n ```\n\n ```jsx,expect_diagnostic\n <a {...props} href='http://external.link' target='_blank' rel='nofollow'>child</a>\n ```\n\nValid\n\n ```jsx\n <a href='http://external.link' rel='noopener' target='_blank'>child</a>\n ```\n\n ```jsx\n <a href='http://external.link' rel='noreferrer' target='_blank'>child</a>\n ```\n\n ```jsx\n // The rule accepts elements with spread props, because the required\n // attribute may be injected dynamically:\n <a href='http://external.link' target='_blank' {...props}>child</a>\n ```\n\nOptions\n\n`allowNoReferrer`\n\n By default, `noBlankTarget` accepts both `rel=\"noopener\"` and\n `rel=\"noreferrer\"` with links that have `target=\"_blank\"`. This is\n because the latter _implies_ the former, so either one is sufficient to\n mitigate the security risk.\n\n However, allowing `rel=\"noreferrer\"` may still be undesirable, because\n it can break tracking, which may be an undesirable side-effect. As such,\n you can set `allowNoReferrer: false` to _only_ accept `rel=\"noopener\"`.\n\n See to the [`noreferrer` documentation](https://html.spec.whatwg.org/multipage/links.html#link-type-noreferrer).\n\n\n ```json,options\n {\n     \"options\": {\n         \"allowNoReferrer\": false\n     }\n }\n ```\n\n ```jsx,use_options,expect_diagnostic\n <a href='http://external.link' rel='noreferrer' target='_blank'>child</a>\n ```\n\n Default: `true`\n\n`allowDomains`\n\n The option `allowDomains` allows specific domains to use\n `target=\"_blank\"` without `rel=\"noopener\"`. In the following\n configuration, it's allowed to use the domains `https://example.com` and\n `example.org`:\n\n ```json,options\n {\n     \"options\": {\n         \"allowDomains\": [\"https://example.com\", \"example.org\"]\n     }\n }\n ```\n\n ```jsx,use_options\n <>\n   <a target='_blank' testme href='https://example.com'></a>\n   <a target='_blank' href='example.org'></a>\n </>\n ```\n\n The diagnostic is applied to all domains not in the allow list:\n\n ```json,options\n {\n     \"options\": {\n         \"allowDomains\": [\"https://example.com\"]\n     }\n }\n ```\n\n ```jsx,expect_diagnostic,use_options\n <>\n   <a target='_blank' testme href='https://example.com'></a>\n   <a target='_blank' href='example.org'></a>\n </>\n ```\n Biome doesn't check if the list contains valid URLs.\n\n"
+  },
+  "analysis": {
+    "summary": "Flags `<a>` tags using `target=\"_blank\"` without a mitigating `rel=\"noopener\"` or `rel=\"noreferrer\"` attribute.",
+    "firingShapes": [
+      "<a href=\"/url\" target=\"_blank\">text</a>",
+      "<a href=\"/url\" target=\"_blank\" rel=\"nofollow\">text</a>",
+      "<a {...props} href=\"/url\" target=\"_blank\" rel=\"nofollow\">text</a>",
+      "<a href=\"/url\" TARGET=\"_BLANK\">text</a>",
+      "<a data-testid=\"x\" href=\"/url\" target=\"_blank\">text</a>",
+      "<a className=\"btn\" href=\"/url\" target=\"_blank\">text</a>",
+      "<a id=\"link\" href=\"/url\" target=\"_blank\" rel=\"external\">text</a>",
+      "<a href='/url' target='_blank' rel='noreferrer noopener'>text</a>"
+    ],
+    "silentShapes": [
+      "<a href=\"/url\" target=\"_blank\" rel=\"noopener\">text</a>",
+      "<a href=\"/url\" target=\"_blank\" rel=\"noreferrer\">text</a>",
+      "<a href=\"/url\" target=\"_self\">text</a>",
+      "<button>click</button>",
+      "<img src=\"/pic.jpg\" alt=\"pic\">"
+    ],
+    "fixDescription": "Adds `rel=\"noopener\"` to the existing attributes; if any `rel` value already exists, appends `noopener` as a space-separated token while preserving other tokens and their original order.",
+    "hazards": [
+      "Adding `rel=\"noopener\"` after user-defined `rel` values could change the semantic meaning if downstream code relies on the exact ordering of space-separated tokens for parsing or matching.",
+      "If the original `rel` attribute contained a value like `noopener` already, the fix would duplicate it (`rel=\"noopener noreferrer noopener\"`), which is harmless but unnecessarily bloats the attribute.",
+      "When the anchor tag is generated via a template literal or JSX expression spread (`{...props}`), inserting `rel` statically might interfere with dynamic `rel` injection from props if those props also define `rel`, potentially causing conflicts or unexpected precedence.",
+      "The fix does not account for custom components that render an `<a>` internally; applying the fix to such a component would add `rel` to the component itself, which has no effect and may trigger prop-type warnings or errors.",
+      "If the JSX contains comments between `target=\"_blank\"` and the closing `>` (e.g., `<a target=\"_blank\" /* debug */ >`), the fixer might place the new `rel` attribute before or after the comment, altering comment positioning relative to attributes.",
+      "In server-side rendering contexts where the HTML string is later parsed by a browser, injecting `rel=\"noopener\"` could affect how certain browser extensions or security policies interpret the link, though this is generally benign.",
+      "If the anchor tag uses a namespace prefix (e.g., `<svg:a target=\"_blank\">`), the fixer might incorrectly treat it as an HTML anchor and add `rel`, which is invalid in SVG and could break the markup.",
+      "When the `href` attribute value is a JavaScript expression (e.g., `href={userInput}`), the fix does not validate the URL; adding `rel=\"noopener\"` remains safe but does not mitigate risks from unsafe URLs themselves.",
+      "If the element is not actually an anchor (e.g., a custom component that destructures and spreads `target` and `rel` onto a child `<a>`), the fix adds `rel` to the wrong element, leaving the actual anchor unprotected.",
+      "In rare cases where `rel` is used as an event handler name via JSX spreading (`{...{ rel: onClick }}`), the fixer\u2019s insertion of a static `rel` attribute could conflict with or override the dynamic handler, breaking event binding.",
+      "The fix preserves whitespace and formatting loosely; if the original JSX relied on precise formatting for prettier or linter compatibility, the insertion might shift indentation or line breaks in a way that triggers formatting complaints.",
+      "When `allowDomains` is configured, the fix may incorrectly add `rel=\"noopener\"` to links pointing to allowed domains, which under that configuration should remain unchanged, thus over-fixing and deviating from user intent."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0037401,
+  "summary": {
+    "programs": 16,
+    "invalid": 4,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Regex with escaped unicode flags and lastIndex mutation",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "match: [\n  'href',\n  index: 3,\n  input: '<a href=\"/url\" target=\"_blank\">click</a>',\n  groups: undefined\n]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Custom component renders <a> internally - fix applied to wrapper",
+      "hazard": "The fix does not account for custom components that render an `<a>` internally; applying the fix to such a component would add `rel` to the component itself, which has no effect and may trigger prop-t",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-55-54-246Z-1g4l-biome-security_noBlankTarget/r1-p002/orig.js:2\n  return <a href={href} target={target}>click</a>;\n         ^\n\nSyntaxError: Unexpected token '<'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p003",
+      "title": "SSR context where injected rel affects extension behavior",
+      "hazard": "In server-side rendering contexts where the HTML string is later parsed by a browser, injecting `rel=\"noopener\"` could affect how certain browser extensions or security policies interpret the link, th",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "SSR HTML: no rel\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "allowDomains config leads to over-fix on allowed domain",
+      "hazard": "When `allowDomains` is configured, the fix may incorrectly add `rel=\"noopener\"` to links pointing to allowed domains, which under that configuration should remain unchanged, thus over-fixing and devia",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Allowed domain, no fix needed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "ASI hazard: leading paren after semicolon-less statement",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ASI safe: <a href=\"/url\" target=\"_blank\">test</a>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Fix applied to wrapper, actual anchor unprotected due to spread",
+      "hazard": "If the element is not actually an anchor (e.g., a custom component that destructures and spreads `target` and `rel` onto a child `<a>`), the fix adds `rel` to the wrong element, leaving the actual anc",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-55-54-246Z-1g4l-biome-security_noBlankTarget/r1-p006/orig.js:2\n  return <a {...rest} target={target} rel={rel}>link</a>;\n         ^\n\nSyntaxError: Unexpected token '<'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p007",
+      "title": "Null/undefined distinction with optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "rel is: undefined\nWould add rel=noopener\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "this binding: arrow vs function method extraction",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'html')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Template literal with spread props interfering with static rel insertion",
+      "hazard": "When the anchor tag is generated via a template literal or JSX expression spread ({...props}), inserting rel statically might interfere with dynamic rel injection from props if those props also define",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<a href=\"/url\" target=\"_blank\" rel=\"nofollow\">text</a>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "SVG namespace prefix treated as HTML anchor",
+      "hazard": "If the anchor tag uses a namespace prefix (e.g., <svg:a target=\"_blank\">), the fixer might incorrectly treat it as an HTML anchor and add rel, which is invalid in SVG and could break the markup.",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<svg:a target=\"_blank\">link</svg:a>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p003",
+      "title": "Rel token order changed affecting downstream parsing",
+      "hazard": "Adding rel=\"noopener\" after user-defined rel values could change the semantic meaning if downstream code relies on the exact ordering of space-separated tokens for parsing or matching.",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: document is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Var hoisting and re-declaration in loop affecting rel handling",
+      "hazard": "Var hoisting and re-declaration inside loops or after use",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<a href=\"/url\" target=\"_blank\" rel=\"nofollow\">0</a>\n<a href=\"/url\" target=\"_blank\">1</a>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Duplicate noopener added when already present in rel",
+      "hazard": "If the original rel attribute contained a value like noopener already, the fix would duplicate it (rel=\"noopener noreferrer noopener\"), which is harmless but unnecessarily bloats the attribute.",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: document is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Getter/setter side effects on rel attribute",
+      "hazard": "Getters, setters and Object.defineProperty side effects",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "nofollow-set\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "JSX comment between target and closing bracket displaced by rel insertion",
+      "hazard": "If the JSX contains comments between target=\"_blank\" and the closing > (e.g., <a target=\"_blank\" /* debug */ >), the fixer might place the new rel attribute before or after the comment, altering comme",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-55-54-246Z-1g4l-biome-security_noBlankTarget/r2-p007/orig.js:1\nconst el = (<a href=\"/url\" target=\"_blank\" {/* debug */}>click</a>); console.log(el.props.children);\n            ^\n\nSyntaxError: Unexpected token '<'\n    at checkSyntax (node:internal/main/check_"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Whitespace/formatting shift triggering prettier complaints",
+      "hazard": "The fix preserves whitespace and formatting loosely; if the original JSX relied on precise formatting for prettier or linter compatibility, the insertion might shift indentation or line breaks in a wa",
+      "rule": "security/noBlankTarget",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-55-54-246Z-1g4l-biome-security_noBlankTarget/r2-p008/orig.js:2\n  <a\n  ^\n\nSyntaxError: Unexpected token '<'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    }
+  ]
+}

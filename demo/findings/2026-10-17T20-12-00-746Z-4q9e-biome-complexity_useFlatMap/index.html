@@ -1,0 +1,294 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/useFlatMap — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/useFlatMap <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-12-00-746Z-4q9e-biome-complexity_useFlatMap · fix labelled <b>safe</b> · 15 programs, 11 fired, 11 fixed, 1 oracle-backed finding(s) · model cost $0.0238</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags uses of .map() followed by .flat() where flat() has no argument or an explicit depth of 1, suggesting replacement with .flatMap() to avoid creating an intermediate array.</p><p class="mut">Fix: Replace the chained .map().flat() or .map().flat(1) call with a single .flatMap() call using the same mapping function, preserving all arguments and surrounding syntax.</p><details><summary>8 hazards</summary><ul><li>If the map callback contains side effects that depend on intermediate array indices, removing the intermediate array may alter behavior if those indices are used elsewhere.</li><li>If the flat depth is omitted but the map returns nested arrays deeper than one level, flatMap only flattens one level, potentially leaving extra nesting compared to the original.</li><li>If the map function returns holes (empty slots), .flat() removes them while .flatMap() preserves them, changing array length and indices.</li><li>If the map function uses &#39;this&#39; and the context is bound via .map(callback, thisArg), the fix must preserve the thisArg or it will be lost.</li><li>If the chain includes .map().flat() after a non-array method like .filter(), the fix only applies to the map-flat pair and must not disturb surrounding chain links.</li><li>If the map callback throws an exception, the timing of when that exception occurs relative to subsequent operations is unchanged, but any reliance on the intermediate array&#39;s existence for debugging or inspection is removed.</li><li>If the code relies on the intermediate array being a distinct object in memory (e.g., for identity checks via ===), replacing it with flatMap&#39;s internal optimization breaks such checks.</li><li>If the map function returns undefined, .flat() skips it while .flatMap() also skips it, so no change, but if it returns null, both treat it as a single element, so still safe—however, if the map returns a non-array scalar, both behave identically in flattening one level.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The program uses `arguments.map` and `arguments.flatMap`, but `arguments` is an array-like object without these methods in standard JavaScript, so both the original and fixed code throw TypeError for the same reason; the fix does not introduce a new behavioral difference.">judge: program-bug · low</span> Arguments Object and Parameters<p class="mut">The program uses `arguments.map` and `arguments.flatMap`, but `arguments` is an array-like object without these methods in standard JavaScript, so both the original and fixed code throw TypeError for the same reason; the fix does not introduce a new behavioral difference.</p>
+<h2>Minimized program (5→4 lines)</h2><pre>function process(a, b = [], ...rest) {
+  return arguments.map(x =&gt; [x]).flat();
+}
+const res = process(1, 2, 3);
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:12:13.830635639 -0400
++++ fixed.js	2026-10-17 16:12:14.086629700 -0400
+@@ -1,5 +1,5 @@
+ function process(a, b = [], ...rest) {
+<span class="del">-  return arguments.map(x =&gt; [x]).flat();</span>
+<span class="add">+  return arguments.flatMap(x =&gt; [x]);</span>
+ }
+ const res = process(1, 2, 3);
+ console.log(res.length, res.join(&#39;,&#39;));
+</pre>
+<h2>Observed</h2><pre>stderr before: TypeError: arguments.map is not a function
+stderr after: TypeError: arguments.flatMap is not a function</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1768">biomejs/biome/issues/1768</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2817">biomejs/biome/issues/2817</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1744">biomejs/biome/issues/1744</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome-vscode/issues/241">biomejs/biome-vscode/issues/241</a> · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Var Hoisting and Re-declaration</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Holes Preservation Difference</td><td class="mut">If the map function returns holes (empty slots), .flat() removes them while .flatMap() pre</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Chain with Filter Before Map-Flat</td><td class="mut">If the chain includes .map().flat() after a non-array method like .filter(), the fix only </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Intermediate Array Identity Check</td><td class="mut">If the code relies on the intermediate array being a distinct object in memory (e.g., for </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Getter/Setter Side Effects</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Arguments Object and Parameters</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Class Fields and Super Calls</td><td class="mut">class fields, static blocks, private names, super calls</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Strict vs Sloppy Mode Semantics</td><td class="mut">strict vs sloppy mode semantics</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Hole preservation difference</td><td class="mut">If the map function returns holes (empty slots), .flat() removes them while .flatMap() pre</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Class fields and super calls</td><td class="mut">class fields, static blocks, private names, super calls</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>ThisArg binding in map</td><td class="mut">If the map function uses &#39;this&#39; and the context is bound via .map(callback, thisArg), the </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Numeric/string coercion edge cases</td><td class="mut">numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, Big</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span></td><td>Async/await ordering and generator interaction</td><td class="mut">async/await ordering, generators and yield position</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Arguments object and parameter nuances</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Block-scoped function declarations</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Var Hoisting and Re-declaration</summary><pre>for (var i = 0; i &lt; 2; i++) {
+  var data = [[i], [i+1]];
+  var result = data.map(x =&gt; x).flat();
+  console.log(result.length);
+}
+console.log(typeof data);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:12.090676088 -0400
++++ fixed.js	2026-10-17 16:12:12.359669828 -0400
+@@ -1,6 +1,6 @@
+ for (var i = 0; i &lt; 2; i++) {
+   var data = [[i], [i+1]];
+<span class="del">-  var result = data.map(x =&gt; x).flat();</span>
+<span class="add">+  var result = data.flatMap(x =&gt; x);</span>
+   console.log(result.length);
+ }
+ console.log(typeof data);
+</pre></details><details id="r1-p002"><summary>r1-p002 — Holes Preservation Difference</summary><pre>const arr = [1, , 3];
+const mapped = arr.map((x, i) =&gt; i === 1 ? undefined : [x]);
+const flattened = mapped.flat();
+console.log(flattened.length, flattened.join(&#39;,&#39;));
+try {
+  const flatMapped = arr.flatMap((x, i) =&gt; i === 1 ? undefined : [x]);
+  console.log(flatMapped.length, flatMapped.join(&#39;,&#39;));
+} catch (e) { console.log(e.name + &#39;: &#39; + e.message); }
+</pre></details><details id="r1-p003"><summary>r1-p003 — Chain with Filter Before Map-Flat</summary><pre>const nums = [1, 2, 3, 4];
+const result = nums.filter(n =&gt; n % 2 === 0).map(n =&gt; [n, n*10]).flat();
+console.log(result.join(&#39;-&#39;));
+// After fix: .flatMap should preserve filter behavior
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:12.755660612 -0400
++++ fixed.js	2026-10-17 16:12:13.014654585 -0400
+@@ -1,4 +1,4 @@
+ const nums = [1, 2, 3, 4];
+<span class="del">-const result = nums.filter(n =&gt; n % 2 === 0).map(n =&gt; [n, n*10]).flat();</span>
+<span class="add">+const result = nums.filter(n =&gt; n % 2 === 0).flatMap(n =&gt; [n, n*10]);</span>
+ console.log(result.join(&#39;-&#39;));
+ // After fix: .flatMap should preserve filter behavior
+</pre></details><details id="r1-p004"><summary>r1-p004 — Intermediate Array Identity Check</summary><pre>const src = [[1], [2]];
+const mapped = src.map(x =&gt; x);
+const flattened = mapped.flat();
+console.log(mapped === src, mapped === flattened);
+// After fix, no intermediate array -&gt; mapped would be undefined
+</pre></details><details id="r1-p005"><summary>r1-p005 — Getter/Setter Side Effects</summary><pre>let count = 0;
+const obj = { get arr() { count++; return [[1], [2]]; } };
+const result = obj.arr.map(x =&gt; x).flat();
+console.log(count, result.length);
+// After fix, getter called once instead of twice if map and flat were separate?
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:13.401645600 -0400
++++ fixed.js	2026-10-17 16:12:13.658639632 -0400
+@@ -1,5 +1,5 @@
+ let count = 0;
+ const obj = { get arr() { count++; return [[1], [2]]; } };
+<span class="del">-const result = obj.arr.map(x =&gt; x).flat();</span>
+<span class="add">+const result = obj.arr.flatMap(x =&gt; x);</span>
+ console.log(count, result.length);
+ // After fix, getter called once instead of twice if map and flat were separate?
+</pre></details><details id="r1-p006"><summary>r1-p006 — Arguments Object and Parameters</summary><pre>function process(a, b = [], ...rest) {
+  return arguments.map(x =&gt; [x]).flat();
+}
+const res = process(1, 2, 3);
+console.log(res.length, res.join(&#39;,&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:13.830635639 -0400
++++ fixed.js	2026-10-17 16:12:14.086629700 -0400
+@@ -1,5 +1,5 @@
+ function process(a, b = [], ...rest) {
+<span class="del">-  return arguments.map(x =&gt; [x]).flat();</span>
+<span class="add">+  return arguments.flatMap(x =&gt; [x]);</span>
+ }
+ const res = process(1, 2, 3);
+ console.log(res.length, res.join(&#39;,&#39;));
+</pre></details><details id="r1-p007"><summary>r1-p007 — Class Fields and Super Calls</summary><pre>class Base {
+  static items = [[1], [2]];
+  getData() { return Base.items.map(x =&gt; x).flat(); }
+}
+class Der extends Base {
+  getData() { return super.getData().length; }
+}
+console.log(new Der().getData());
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:14.245626016 -0400
++++ fixed.js	2026-10-17 16:12:14.506619970 -0400
+@@ -1,6 +1,6 @@
+ class Base {
+   static items = [[1], [2]];
+<span class="del">-  getData() { return Base.items.map(x =&gt; x).flat(); }</span>
+<span class="add">+  getData() { return Base.items.flatMap(x =&gt; x); }</span>
+ }
+ class Der extends Base {
+   getData() { return super.getData().length; }
+</pre></details><details id="r1-p008"><summary>r1-p008 — Strict vs Sloppy Mode Semantics</summary><pre>&#39;use strict&#39;;
+(function() {
+  var data = [[1], [2], [3]];
+  try {
+    delete data[0];
+    const result = data.map(x =&gt; x).flat();
+    console.log(result.length);
+  } catch (e) { console.log(e.name); }
+})();
+
+(function() {
+  &#39;use sloppy&#39;;
+  var data2 = [[1], [2], [3]];
+  delete data2[0];
+  const result = data2.map(x =&gt; x).flat();
+  console.log(result.length);
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:14.671616148 -0400
++++ fixed.js	2026-10-17 16:12:14.931610125 -0400
+@@ -3,7 +3,7 @@
+   var data = [[1], [2], [3]];
+   try {
+     delete data[0];
+<span class="del">-    const result = data.map(x =&gt; x).flat();</span>
+<span class="add">+    const result = data.flatMap(x =&gt; x);</span>
+     console.log(result.length);
+   } catch (e) { console.log(e.name); }
+ })();
+@@ -12,6 +12,6 @@
+   &#39;use sloppy&#39;;
+   var data2 = [[1], [2], [3]];
+   delete data2[0];
+<span class="del">-  const result = data2.map(x =&gt; x).flat();</span>
+<span class="add">+  const result = data2.flatMap(x =&gt; x);</span>
+   console.log(result.length);
+ })();
+</pre></details><details id="r2-p001"><summary>r2-p001 — Hole preservation difference</summary><pre>const a = [1, , 3];
+const mapped = a.map(x =&gt; x === 2 ? [] : [x]);
+console.log(&#39;mapped:&#39;, mapped);
+const flatResult = mapped.flat();
+console.log(&#39;flat():&#39;, flatResult, &#39;length:&#39;, flatResult.length);
+a.map(x =&gt; x === 2 ? [] : [x]).flat(); // expect_trigger
+const flatMapResult = a.map(x =&gt; x === 2 ? [] : [x]).flatMap(x =&gt; x);
+console.log(&#39;flatMap():&#39;, flatMapResult, &#39;length:&#39;, flatMapResult.length);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:25.971357806 -0400
++++ fixed.js	2026-10-17 16:12:26.250351516 -0400
+@@ -3,6 +3,6 @@
+ console.log(&#39;mapped:&#39;, mapped);
+ const flatResult = mapped.flat();
+ console.log(&#39;flat():&#39;, flatResult, &#39;length:&#39;, flatResult.length);
+<span class="del">-a.map(x =&gt; x === 2 ? [] : [x]).flat(); // expect_trigger</span>
+<span class="add">+a.flatMap(x =&gt; x === 2 ? [] : [x]); // expect_trigger</span>
+ const flatMapResult = a.map(x =&gt; x === 2 ? [] : [x]).flatMap(x =&gt; x);
+ console.log(&#39;flatMap():&#39;, flatMapResult, &#39;length:&#39;, flatMapResult.length);
+</pre></details><details id="r2-p002"><summary>r2-p002 — Class fields and super calls</summary><pre>class Base { constructor() { this.x = 1; } static y = 2; }
+class Derived extends Base { #z = 3; static { console.log(&#39;static block&#39;); }
+  getZ() { return this.#z + super.x; }
+  process() { return [this].map(i =&gt; [i.getZ()]).flat(); }
+}
+const d = new Derived();
+console.log(&#39;process result:&#39;, d.process());
+d.process(); // expect_trigger
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:26.411347887 -0400
++++ fixed.js	2026-10-17 16:12:26.672342004 -0400
+@@ -1,7 +1,7 @@
+ class Base { constructor() { this.x = 1; } static y = 2; }
+ class Derived extends Base { #z = 3; static { console.log(&#39;static block&#39;); }
+   getZ() { return this.#z + super.x; }
+<span class="del">-  process() { return [this].map(i =&gt; [i.getZ()]).flat(); }</span>
+<span class="add">+  process() { return [this].flatMap(i =&gt; [i.getZ()]); }</span>
+ }
+ const d = new Derived();
+ console.log(&#39;process result:&#39;, d.process());
+</pre></details><details id="r2-p003"><summary>r2-p003 — ThisArg binding in map</summary><pre>const obj = { multiplier: 2 };
+function mapper(x) { return [x * this.multiplier]; }
+const arr = [1, 2, 3];
+const resultWithThis = arr.map(mapper, obj).flat();
+console.log(&#39;with thisArg:&#39;, resultWithThis);
+arr.map(mapper, obj).flat(); // expect_trigger
+const broken = arr.map(mapper).flatMap(x =&gt; x);
+console.log(&#39;without thisArg:&#39;, broken);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Numeric/string coercion edge cases</summary><pre>const weird = {
+  valueOf() { return 42; },
+  toString() { return &#39;hello&#39;; }
+};
+const sym = Symbol(&#39;test&#39;);
+const big = BigInt(123);
+const arr = [weird, sym, big];
+const mapped = arr.map(x =&gt; [x, String(x)]);
+console.log(&#39;mapped:&#39;, mapped);
+const flattened = mapped.flat();
+console.log(&#39;flat result:&#39;, flattened);
+arr.map(x =&gt; [x, String(x)]).flat(); // expect_trigger
+const flatMapped = arr.map(x =&gt; [x, String(x)]).flatMap(x =&gt; x);
+console.log(&#39;flatMap result:&#39;, flatMapped);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:27.071333013 -0400
++++ fixed.js	2026-10-17 16:12:27.346326828 -0400
+@@ -9,6 +9,6 @@
+ console.log(&#39;mapped:&#39;, mapped);
+ const flattened = mapped.flat();
+ console.log(&#39;flat result:&#39;, flattened);
+<span class="del">-arr.map(x =&gt; [x, String(x)]).flat(); // expect_trigger</span>
+<span class="add">+arr.flatMap(x =&gt; [x, String(x)]); // expect_trigger</span>
+ const flatMapped = arr.map(x =&gt; [x, String(x)]).flatMap(x =&gt; x);
+ console.log(&#39;flatMap result:&#39;, flatMapped);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Async/await ordering and generator interaction</summary><pre>async function* gen() { yield 1; yield* [2, 3]; }
+(async () =&gt; {
+  const arr = [];
+  for await (const x of gen()) arr.push(x);
+  console.log(&#39;collected:&#39;, arr);
+  const mapped = arr.map(x =&gt; [x, x * 2]);
+  console.log(&#39;mapped:&#39;, mapped);
+  const result = mapped.flat();
+  console.log(&#39;flat:&#39;, result);
+})();
+</pre></details><details id="r2-p006"><summary>r2-p006 — Arguments object and parameter nuances</summary><pre>function mapper(a, b = 10, ...rest) {
+  console.log(&#39;args.length:&#39;, arguments.length, &#39;b:&#39;, b, &#39;rest:&#39;, rest);
+  return [a + b];
+}
+const arr = [5];
+console.log(&#39;calling map:&#39;);
+const result = arr.map(mapper).flat();
+console.log(&#39;flat result:&#39;, result);
+arr.map(mapper).flat(); // expect_trigger
+const flatMapResult = arr.map(mapper).flatMap(x =&gt; x);
+console.log(&#39;flatMap result:&#39;, flatMapResult);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:27.761317495 -0400
++++ fixed.js	2026-10-17 16:12:28.039311245 -0400
+@@ -4,8 +4,8 @@
+ }
+ const arr = [5];
+ console.log(&#39;calling map:&#39;);
+<span class="del">-const result = arr.map(mapper).flat();</span>
+<span class="add">+const result = arr.flatMap(mapper);</span>
+ console.log(&#39;flat result:&#39;, result);
+<span class="del">-arr.map(mapper).flat(); // expect_trigger</span>
+<span class="add">+arr.flatMap(mapper); // expect_trigger</span>
+ const flatMapResult = arr.map(mapper).flatMap(x =&gt; x);
+ console.log(&#39;flatMap result:&#39;, flatMapResult);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Block-scoped function declarations</summary><pre>function test() {
+  if (true) {
+    function mapFn(x) { return [x, 0]; }
+    const arr = [1, 2];
+    console.log(&#39;mapped:&#39;, arr.map(mapFn));
+    const flat = arr.map(mapFn).flat();
+    console.log(&#39;flat:&#39;, flat);
+    arr.map(mapFn).flat(); // expect_trigger
+  }
+  switch (1) {
+    case 1:
+      function caseFn(x) { return [x * 2]; }
+      break;
+  }
+}
+test();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:12:28.211307386 -0400
++++ fixed.js	2026-10-17 16:12:28.487301193 -0400
+@@ -3,9 +3,9 @@
+     function mapFn(x) { return [x, 0]; }
+     const arr = [1, 2];
+     console.log(&#39;mapped:&#39;, arr.map(mapFn));
+<span class="del">-    const flat = arr.map(mapFn).flat();</span>
+<span class="add">+    const flat = arr.flatMap(mapFn);</span>
+     console.log(&#39;flat:&#39;, flat);
+<span class="del">-    arr.map(mapFn).flat(); // expect_trigger</span>
+<span class="add">+    arr.flatMap(mapFn); // expect_trigger</span>
+   }
+   switch (1) {
+     case 1:
+</pre></details></body></html>

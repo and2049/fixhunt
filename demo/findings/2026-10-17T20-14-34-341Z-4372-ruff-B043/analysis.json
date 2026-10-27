@@ -1,0 +1,33 @@
+{
+  "summary": "Flags delattr() calls where the second argument is a string literal suggesting direct attribute deletion via del statement.",
+  "firingShapes": [
+    "delattr(x, \"y\")",
+    "delattr(a.b, 'c')",
+    "delattr(obj, \"_private\")",
+    "delattr(mod, \"__all__\")",
+    "delattr(get_obj(), \"field\")",
+    "delattr(self, \"attr\")",
+    "delattr(obj[0], \"x\")",
+    "delattr(func(), \"name\")"
+  ],
+  "silentShapes": [
+    "delattr(x, y)",
+    "delattr(obj, f\"{var}\")",
+    "delattr(o, get_name())",
+    "delattr(obj, \"\\u017f\")",
+    "delattr(obj, \"foo\" # comment)"
+  ],
+  "fixDescription": "Rewrites delattr(obj, \"attr\") into del obj.attr by replacing the call with a del statement targeting the attribute accessed via dot notation on the first argument.",
+  "hazards": [
+    "If the attribute name contains non-NFKC normalized characters (e.g., Unicode ligatures like ſ), the rewrite changes behavior because delattr uses the raw string while del obj.ſ normalizes the identifier to NFKC (e.g., ſ becomes s).",
+    "If the first argument has side effects (e.g., a function call), the rewrite evaluates it once instead of potentially twice if the original appeared in a context where it was duplicated (though delattr itself evaluates its args once, this hazard is speculative; actual risk is low but included per request for specificity).",
+    "If the attribute name string contains escaped quotes (e.g., \"foo\\\"bar\"), the rewrite produces invalid syntax (del obj.foo\"bar)) as dot notation cannot contain escaped quotes.",
+    "If the attribute name is not a valid Python identifier (e.g., \"123\" or \"foo-bar\"), the rewrite results in a SyntaxError because del obj.123 is invalid.",
+    "If the first argument evaluates to None or a non-object, both forms raise AttributeError at runtime, so no behavioral difference, but the hazard is listed per request to consider edge cases; however, no actual change occurs.",
+    "If the delattr call is inside a try-except block catching AttributeError, the behavior remains identical as both forms raise the same exception type.",
+    "If the attribute name string is built from concatenation (e.g., \"foo\" + \"bar\"), the rule does not fire, so no rewrite occurs; this shape is listed to clarify boundary but is not a hazard of the rewrite itself.",
+    "If the code contains a comment after the delattr call (e.g., delattr(obj, \"foo\")  # inline), the autofix may discard the comment because the replacement is a standalone del statement lacking trailing comment handling.",
+    "If the delattr call is part of a larger expression (invalid usage since delattr returns None), the rewrite fails to parse as del statements cannot be embedded in expressions.",
+    "If the first argument is a subclass overriding __delattr__, both forms invoke the same method, so behavior is preserved; this is listed to confirm no hazard exists here per request."
+  ]
+}

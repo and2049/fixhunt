@@ -1,0 +1,170 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff TC007 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff TC007 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-43-14-710Z-f4v4-ruff-TC007 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0047</p>
+<div class="card"><b>Rule analysis</b><p>Flags PEP 613 explicit type aliases that reference symbols unavailable at runtime due to being imported only within TYPE_CHECKING blocks.</p><p class="mut">Fix: Wraps the right-hand side of the TypeAlias assignment in double quotes to create a forward reference string, preserving all whitespace and formatting except adding quotes around the expression.</p><details><summary>12 hazards</summary><ul><li>Changes runtime evaluation: quoted string is not evaluated as an expression, breaking code that inspects the alias via __annotations__ or typing.get_type_hints().</li><li>Alters repr and str output: the alias now shows as a string literal instead of the evaluated type expression.</li><li>Breaks isinstance or issubclass checks if the alias is used at runtime, as strings are not types.</li><li>May cause misinterpretation by static tools expecting evaluated types, leading to false positives/negatives in type checking.</li><li>If the RHS contains a comment, the fix may place quotes incorrectly relative to the comment, altering comment association.</li><li>If the RHS is spread across multiple lines, quoting the entire expression may invalidate syntax if newlines are not handled correctly in string literals.</li><li>If the alias is used in a generic base class like class C(A), quoting breaks class creation as string is not a type.</li><li>If the RHS uses the | operator (Python 3.10+), quoting prevents union type formation at runtime, affecting structural pattern matching.</li><li>If the RHS includes a forward reference already quoted, double-quoting may produce malformed nested quotes or escape issues.</li><li>If the TYPE_CHECKING block is conditionally defined (e.g., inside a function), quoting may mismatch scope of the referenced symbol.</li><li>If the module is executed with typing.TYPE_CHECKING=True at runtime (non-standard), the quoted alias will not resolve to the intended type.</li><li>If the RHS contains a formatted string literal (f-string) or other expression relying on runtime values, quoting prevents its evaluation.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>keyword-only args + TYPE_CHECKING alias</td><td class="mut">Forward referencing via quoted alias changes evaluation timing/position of default express</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>generic base class with quoted alias breaking type creation</td><td class="mut">Quoting the RHS of a TypeAlias used as a base class turns it into a string, causing `class</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>alias RHS with trailing comment misaligned by quote insertion</td><td class="mut">When the RHS contains a comment, wrapping it in quotes may place the quote after the comme</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>context manager alias used in &#39;with&#39; statement</td><td class="mut">If the aliased context manager is quoted, using it in a `with` statement fails because str</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>descriptor relying on unquoted alias for __get__ type resolution</td><td class="mut">Quoting a TypeAlias used in a descriptor&#39;s `__get__` annotation prevents proper type resol</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>docstring lost due to alias rewrite near commented block</td><td class="mut">When a TypeAlias is near a comment or docstring, the fix&#39;s whitespace preservation may inc</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>repr of quoted alias shows string instead of type</td><td class="mut">The quoted alias appears as a string literal in `repr()` or `str()` output, breaking tools</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>shadowed built-in &#39;str&#39; redefined after TYPE_CHECKING alias</td><td class="mut">If a name like `str` is imported under TYPE_CHECKING and aliased, then later redefined in </td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Multi-line RHS newline handling</td><td class="mut">If the RHS is spread across multiple lines, quoting the entire expression may invalidate s</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>isinstance check broken by string alias</td><td class="mut">Breaks isinstance or issubclass checks if the alias is used at runtime, as strings are not</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Static tool misinterpretation of quoted alias</td><td class="mut">May cause misinterpretation by static tools expecting evaluated types, leading to false po</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Interaction with set/dict hashing and equality</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Conditional TYPE_CHECKING scope mismatch</td><td class="mut">If the TYPE_CHECKING block is conditionally defined (e.g., inside a function), quoting may</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exception handling interference</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Context manager with non-file write()-like object</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>F-string RHS evaluation prevented by quoting</td><td class="mut">If the RHS contains a formatted string literal (f-string) or other expression relying on r</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — keyword-only args + TYPE_CHECKING alias</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+import sys
+if TYPE_CHECKING:
+    from collections import UserList
+class UserList(UserList):
+    pass
+DEFAULT_VAL: TypeAlias = UserList
+@no_type_check
+def func(a, *, b=DEFAULT_VAL()):
+    return len(b)
+try:
+    print(func(1))
+except Exception as e:
+    print(type(e).__name__, e)
+func.__defaults__ = (None,)  # reset for second call
+print(func(2))
+</pre></details><details id="r1-p002"><summary>r1-p002 — generic base class with quoted alias breaking type creation</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    class Base:
+        pass
+A: TypeAlias = Base
+try:
+    class C(A):  # This line triggers TC007
+        pass
+    print(&#39;Success:&#39;, C.__bases__)
+except Exception as e:
+    print(type(e).__name__, e)
+</pre></details><details id="r1-p003"><summary>r1-p003 — alias RHS with trailing comment misaligned by quote insertion</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    X = 42
+Y: TypeAlias = X  # value from TYPE_CHECKING
+print(&#39;Y equals:&#39;, Y)
+# After fix: Y: TypeAlias = &quot;X  # value from TYPE_CHECKING&quot; becomes invalid or misparsed
+</pre></details><details id="r1-p004"><summary>r1-p004 — context manager alias used in &#39;with&#39; statement</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+import io
+if TYPE_CHECKING:
+    StringWriter = io.StringIO
+Log: TypeAlias = StringWriter
+try:
+    with Log() as f:
+        f.write(&#39;test&#39;)
+        print(&#39;written:&#39;, f.getvalue())
+except Exception as e:
+    print(type(e).__name__, e)
+</pre></details><details id="r1-p005"><summary>r1-p005 — descriptor relying on unquoted alias for __get__ type resolution</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    IntVal = int
+Stored: TypeAlias = IntVal
+class IntDescriptor:
+    def __init__(self, value: Stored) -&gt; None:
+        self.value = value
+    def __get__(self, instance, owner):
+        return self.value if instance is None else instance._val
+class A:
+    x = IntDescriptor(5)
+print(&#39;Descriptor value:&#39;, A().x)
+</pre></details><details id="r1-p006"><summary>r1-p006 — docstring lost due to alias rewrite near commented block</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+&quot;&quot;&quot;Module docstring.&quot;&quot;&quot;
+if TYPE_CHECKING:
+    from math import pi
+    TWO_PI: TypeAlias = 2 * pi  # constant
+print(&#39;Constant value:&#39;, TWO_PI)
+# After fix: the inline comment may be wrapped inside quotes, becoming part of the string
+</pre></details><details id="r1-p007"><summary>r1-p007 — repr of quoted alias shows string instead of type</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    MyInt = int
+Number: TypeAlias = MyInt
+print(&#39;Alias repr:&#39;, repr(Number))
+print(&#39;Alias str:&#39;, str(Number))
+# Expected: &lt;class &#39;int&#39;&gt; or similar; after fix: &quot;MyInt&quot;
+</pre></details><details id="r1-p008"><summary>r1-p008 — shadowed built-in &#39;str&#39; redefined after TYPE_CHECKING alias</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    from builtins import str as _str
+StrAlias: TypeAlias = _str
+str = lambda x: f&#39;[{x}]&#39;  # shadow built-in
+print(&#39;StrAlias(&quot;hi&quot;):&#39;, StrAlias(&#39;hi&#39;))
+# After fix: StrAlias becomes &quot;_str&quot;, which is not callable
+</pre></details><details id="r2-p001"><summary>r2-p001 — Multi-line RHS newline handling</summary><pre>import sys
+from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    from collections import deque
+MyAlias: TypeAlias = \
+    deque[int]
+def main():
+    try:
+        x = MyAlias()  # This will fail after fix because MyAlias becomes string
+        print(&#39;success:&#39;, len(x))
+    except Exception as e:
+        print(type(e).__name__, &#39;:&#39;, e)
+main()
+</pre></details><details id="r2-p002"><summary>r2-p002 — isinstance check broken by string alias</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    class A: ...
+MyType: TypeAlias = A
+obj = object()
+print(isinstance(obj, MyType))  # Before: False, After: TypeError (str vs type)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Static tool misinterpretation of quoted alias</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    from typing import List
+AliasIntList: TypeAlias = List[int]
+x: AliasIntList = [1, 2]
+print(len(x))  # Should print 2; if misinterpreted, type checker may complain
+</pre></details><details id="r2-p004"><summary>r2-p004 — Interaction with set/dict hashing and equality</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    class HashableObj:
+        def __init__(self, val): self.val = val
+        def __hash__(self): return hash(self.val)
+        def __eq__(self, other): return isinstance(other, HashableObj) and self.val == other.val
+MySetType: TypeAlias = HashableObj
+s = {MySetType(1), MySetType(1)}  # Should have size 1
+print(len(s))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Conditional TYPE_CHECKING scope mismatch</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+def outer():
+    if TYPE_CHECKING:
+        class Inner: ...
+    LocalAlias: TypeAlias = Inner  # Rule should fire here
+    try:
+        x = LocalAlias()  # Fails after fix: LocalAlias is string
+        print(&#39;created&#39;)
+    except Exception as e:
+        print(type(e).__name__, &#39;:&#39;, e)
+outer()
+</pre></details><details id="r2-p006"><summary>r2-p006 — Exception handling interference</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    def factory() -&gt; int:
+        raise ValueError(&#39;bad&#39;)
+AliasFactory: TypeAlias = factory()
+try:
+    x = AliasFactory  # After fix: x is string &quot;factory()&quot;, no call → no exception
+    print(&#39;value:&#39;, x)
+except ValueError as e:
+    print(&#39;caught:&#39;, e)
+else:
+    print(&#39;no exception&#39;)
+finally:
+    print(&#39;finally&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Context manager with non-file write()-like object</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    class Logger:
+        def write(self, msg): print(f&#39;LOG: {msg}&#39;)
+LoggerType: TypeAlias = Logger
+logger = LoggerType()  # After fix: logger is string → AttributeError
+try:
+    logger.write(&#39;test&#39;)
+except AttributeError as e:
+    print(type(e).__name__, &#39;:&#39;, e)
+</pre></details><details id="r2-p008"><summary>r2-p008 — F-string RHS evaluation prevented by quoting</summary><pre>from typing import TYPE_CHECKING, TypeAlias
+if TYPE_CHECKING:
+    val = 42
+AliasFString: TypeAlias = f&quot;value: {val}&quot;
+print(AliasFString)  # Before: &#39;value: 42&#39;, After: &#39;f&quot;value: {val}&quot;&#39; (literal string)
+</pre></details></body></html>

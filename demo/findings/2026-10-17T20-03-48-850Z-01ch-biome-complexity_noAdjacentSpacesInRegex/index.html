@@ -1,0 +1,265 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/noAdjacentSpacesInRegex — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/noAdjacentSpacesInRegex <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-03-48-850Z-01ch-biome-complexity_noAdjacentSpacesInRegex · fix labelled <b>safe</b> · 16 programs, 15 fired, 15 fixed, 2 oracle-backed finding(s) · model cost $0.0484</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags regex literals containing two or more adjacent literal space characters.</p><p class="mut">Fix: Replaces every maximal sequence of two or more consecutive literal space characters inside a regex literal with exactly one space character.</p><details><summary>10 hazards</summary><ul><li>Changes meaning when spaces are significant, e.g., in patterns like &#39;/a  b/&#39; where two spaces are required to match.</li><li>Breaks quantifier semantics if spaces are part of a quantified subpattern, e.g., &#39;/(x  ){2}/&#39; becomes &#39;/(x ){2}/&#39;, altering repetition count.</li><li>Alters behavior in free-spacing mode (/x flag) where literal spaces are ignored and the fix removes meaningful visual spacing.</li><li>Affects regexes relying on exact space counts for parsing, such as fixed-format text matchers like &#39;/\d{3}  \d{2}/&#39;.</li><li>Modifies patterns using spaces as delimiters in alternatives, e.g., &#39;/foo  |  bar/&#39; becomes &#39;/foo | bar/&#39;, changing token boundaries.</li><li>Impacts negated character classes containing spaces, e.g., &#39;/[^ ]  /&#39; becomes &#39;/[^ ] /&#39;, altering what characters are matched.</li><li>Disrupts tab-separated value parsers where literal spaces are significant, e.g., &#39;/\t  \t/&#39; becomes &#39;/\t \t/&#39;.</li><li>Removes intentional formatting in complex regexes where spaces improve readability without affecting semantics, but the fix still alters the literal.</li><li>May break code that generates regexes via string concatenation relying on exact space counts from literals, e.g., `new RegExp(&#39;/&#39; + pattern + &#39;/&#39;)`.</li><li>Interferes with source inspection or debugging where the original literal&#39;s space count is logged or compared.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p008"><b>r1-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites literal spaces into `{2}` quantifiers, which changes the regex&#39;s source text; the program inspects `re.source` and counts spaces, so its observable output changes from 4 to 2. This is a silent behavior change in plausible code that uses `RegExp.prototype.source` for introspection or serialization.">judge: real · high</span> Source Inspection or Debugging Interference<p class="mut">The fix rewrites literal spaces into `{2}` quantifiers, which changes the regex&#39;s source text; the program inspects `re.source` and counts spaces, so its observable output changes from 4 to 2. This is a silent behavior change in plausible code that uses `RegExp.prototype.source` for introspection or serialization.</p>
+<h2>Minimized program (2→2 lines)</h2><pre>const re = /a  b  c/;
+console.log(re.source.split(&#39; &#39;).length - 1);
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:03:58.947281645 -0400
++++ fixed.js	2026-10-17 16:03:59.213263777 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-const re = /a  b  c/;</span>
+<span class="add">+const re = /a {2}b {2}c/;</span>
+ console.log(re.source.split(&#39; &#39;).length - 1);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+4
+stdout after:
+2</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11419">biomejs/biome/issues/11419</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6670">biomejs/biome/issues/6670</a> · <a href="reports/r1-p008.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites the regex literal from `/hello  world/` (two literal spaces) to `/hello {2}world/` (quantifier meaning exactly two spaces), but the program uses `RegExp.prototype.source` to read the literal text and then tests the *original* regex against that source string. The original regex matches two spaces, so the test succeeds; after the fix the regex still matches two spaces but the source text now contains the characters `{2}`, so the test fails. This is a silent behavior change in plausible code that uses regex introspection.">judge: real · high</span> Getter/setter accessing modified regex source<p class="mut">The fix rewrites the regex literal from `/hello  world/` (two literal spaces) to `/hello {2}world/` (quantifier meaning exactly two spaces), but the program uses `RegExp.prototype.source` to read the literal text and then tests the *original* regex against that source string. The original regex matches two spaces, so the test succeeds; after the fix the regex still matches two spaces but the source text now contains the characters `{2}`, so the test fails. This is a silent behavior change in plausible code that uses regex introspection.</p>
+<h2>Minimized program (7→5 lines)</h2><pre>const obj = {};
+Object.defineProperty(obj, &#39;pattern&#39;, {
+  get() { return /hello  world/.source; },
+});
+console.log(&#39;Match:&#39;, /hello  world/.test(obj.pattern));
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:04:03.154000070 -0400
++++ fixed.js	2026-10-17 16:04:03.418982422 -0400
+@@ -1,7 +1,7 @@
+ const obj = {};
+ Object.defineProperty(obj, &#39;pattern&#39;, {
+<span class="del">-  get() { return /hello  world/.source; },</span>
+<span class="add">+  get() { return /hello {2}world/.source; },</span>
+   enumerable: true,
+   configurable: true
+ });
+<span class="del">-console.log(&#39;Match:&#39;, /hello  world/.test(obj.pattern));</span>
+<span class="add">+console.log(&#39;Match:&#39;, /hello {2}world/.test(obj.pattern));</span>
+</pre>
+<h2>Observed</h2><pre>stdout before:
+Match: true
+stdout after:
+Match: false</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11419">biomejs/biome/issues/11419</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1704">biomejs/biome/issues/1704</a> · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Null/Undefined Distinction</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Order of Evaluation Merged/Duplicated</td><td class="mut">order of evaluation when expressions are merged, duplicated or deleted (side effects run t</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Comments Attached to Removed Code</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Strict vs Sloppy Mode Semantics</td><td class="mut">strict vs sloppy mode semantics</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Free-Spacing Mode (/x Flag)</td><td class="mut">Alters behavior in free-spacing mode (/x flag) where literal spaces are ignored and the fi</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Intentional Formatting for Readability</td><td class="mut">Removes intentional formatting in complex regexes where spaces improve readability without</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Arguments Object and Function Length</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Source Inspection or Debugging Interference</td><td class="mut">Interferes with source inspection or debugging where the original literal&#39;s space count is</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Getter/setter accessing modified regex source</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Var hoisting captures altered regex before redeclaration</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Alternatives with delimiter spaces changed by fix</td><td class="mut">Modifies patterns using spaces as delimiters in alternatives, e.g., &#39;/foo  |  bar/&#39; become</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Block-scoped function declaration uses altered regex</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>ASI hazard: regex on next line interpreted as division</td><td class="mut">ASI and semicolon-less code, leading ( or [ on the next line</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Exception thrown during regex literal creation</td><td class="mut">exceptions thrown inside the code the fix removes or rewrites</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Tab-separated value parser broken by space collapse</td><td class="mut">Disrupts tab-separated value parsers where literal spaces are significant, e.g., &#39;/\t  \t/</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Unicode flag and lastIndex altered by fix</td><td class="mut">regular expressions: escapes, unicode flag, lastIndex with the g flag</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Null/Undefined Distinction</summary><pre>const input = &#39;a  bc&#39;;
+let result;
+if ((/(a)  (bc)/).test(input)) {
+  result = RegExp.$1 ?? &#39;no&#39;;
+} else {
+  result = undefined;
+}
+console.log(result);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:03:56.217465690 -0400
++++ fixed.js	2026-10-17 16:03:56.506446164 -0400
+@@ -1,6 +1,6 @@
+ const input = &#39;a  bc&#39;;
+ let result;
+<span class="del">-if ((/(a)  (bc)/).test(input)) {</span>
+<span class="add">+if ((/(a) {2}(bc)/).test(input)) {</span>
+   result = RegExp.$1 ?? &#39;no&#39;;
+ } else {
+   result = undefined;
+</pre></details><details id="r1-p002"><summary>r1-p002 — Order of Evaluation Merged/Duplicated</summary><pre>let calls = 0;
+function getStr() { return `str${++calls}`; }
+const str = getStr();
+const re = /foo  ${getStr()}bar/;
+console.log(calls, re.test(str));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:03:56.669435151 -0400
++++ fixed.js	2026-10-17 16:03:56.955415828 -0400
+@@ -1,5 +1,5 @@
+ let calls = 0;
+ function getStr() { return `str${++calls}`; }
+ const str = getStr();
+<span class="del">-const re = /foo  ${getStr()}bar/;</span>
+<span class="add">+const re = /foo {2}${getStr()}bar/;</span>
+ console.log(calls, re.test(str));
+</pre></details><details id="r1-p003"><summary>r1-p003 — Comments Attached to Removed Code</summary><pre>/** spaced */
+const re = /a  /* inner */b  /* end */c/;
+console.log(re.source);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:03:57.127404225 -0400
++++ fixed.js	2026-10-17 16:03:57.400385818 -0400
+@@ -1,3 +1,3 @@
+ /** spaced */
+<span class="del">-const re = /a  /* inner */b  /* end */c/;</span>
+<span class="add">+const re = /a {2}/* inner */b {2}/* end */c/;</span>
+ console.log(re.source);
+</pre></details><details id="r1-p004"><summary>r1-p004 — Strict vs Sloppy Mode Semantics</summary><pre>&quot;use strict&quot;;
+(() =&gt; {
+  const re = /\s  \s/;
+  try {
+    eval(&quot;re.test(&#39;  &#39;)&quot;);
+    console.log(&#39;ok&#39;);
+  } catch (e) {
+    console.log(e.name);
+  }
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:03:57.561374963 -0400
++++ fixed.js	2026-10-17 16:03:57.843355949 -0400
+@@ -1,6 +1,6 @@
+ &quot;use strict&quot;;
+ (() =&gt; {
+<span class="del">-  const re = /\s  \s/;</span>
+<span class="add">+  const re = /\s {2}\s/;</span>
+   try {
+     eval(&quot;re.test(&#39;  &#39;)&quot;);
+     console.log(&#39;ok&#39;);
+</pre></details><details id="r1-p005"><summary>r1-p005 — Free-Spacing Mode (/x Flag)</summary><pre>/** x-mode off */
+const re = /a  b/x;
+console.log(re.test(&#39;a  b&#39;), re.source);
+</pre></details><details id="r1-p006"><summary>r1-p006 — Intentional Formatting for Readability</summary><pre>const re = /^  (\d{3})  -  (\d{2})  -  (\d{4})$/;
+const m = &#39;123-45-6789&#39;.match(re);
+console.log(m ? m[1] + &#39;-&#39; + m[2] + &#39;-&#39; + m[3] : null);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:03:58.060341327 -0400
++++ fixed.js	2026-10-17 16:03:58.344322218 -0400
+@@ -1,3 +1,3 @@
+<span class="del">-const re = /^  (\d{3})  -  (\d{2})  -  (\d{4})$/;</span>
+<span class="add">+const re = /^ {2}(\d{3}) {2}- {2}(\d{2}) {2}- {2}(\d{4})$/;</span>
+ const m = &#39;123-45-6789&#39;.match(re);
+ console.log(m ? m[1] + &#39;-&#39; + m[2] + &#39;-&#39; + m[3] : null);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Arguments Object and Function Length</summary><pre>function fn(a, b = /x  y/.test(&#39;x  y&#39;)) {
+  console.log(arguments.length, b);
+}
+fn(1);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:03:58.516310645 -0400
++++ fixed.js	2026-10-17 16:03:58.774293285 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-function fn(a, b = /x  y/.test(&#39;x  y&#39;)) {</span>
+<span class="add">+function fn(a, b = /x {2}y/.test(&#39;x  y&#39;)) {</span>
+   console.log(arguments.length, b);
+ }
+ fn(1);
+</pre></details><details id="r1-p008"><summary>r1-p008 — Source Inspection or Debugging Interference</summary><pre>const re = /a  b  c/;
+console.log(re.source.split(&#39; &#39;).length - 1);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:03:58.947281645 -0400
++++ fixed.js	2026-10-17 16:03:59.213263777 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-const re = /a  b  c/;</span>
+<span class="add">+const re = /a {2}b {2}c/;</span>
+ console.log(re.source.split(&#39; &#39;).length - 1);
+</pre></details><details id="r2-p001"><summary>r2-p001 — Getter/setter accessing modified regex source</summary><pre>const obj = {};
+Object.defineProperty(obj, &#39;pattern&#39;, {
+  get() { return /hello  world/.source; },
+  enumerable: true,
+  configurable: true
+});
+console.log(&#39;Match:&#39;, /hello  world/.test(obj.pattern));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:03.154000070 -0400
++++ fixed.js	2026-10-17 16:04:03.418982422 -0400
+@@ -1,7 +1,7 @@
+ const obj = {};
+ Object.defineProperty(obj, &#39;pattern&#39;, {
+<span class="del">-  get() { return /hello  world/.source; },</span>
+<span class="add">+  get() { return /hello {2}world/.source; },</span>
+   enumerable: true,
+   configurable: true
+ });
+<span class="del">-console.log(&#39;Match:&#39;, /hello  world/.test(obj.pattern));</span>
+<span class="add">+console.log(&#39;Match:&#39;, /hello {2}world/.test(obj.pattern));</span>
+</pre></details><details id="r2-p002"><summary>r2-p002 — Var hoisting captures altered regex before redeclaration</summary><pre>function test() {
+  if (false) var r = /a  b/;
+  else var r = /c  d/;
+  console.log(r.test(&#39;a  b&#39;));
+}
+test();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:03.594970702 -0400
++++ fixed.js	2026-10-17 16:04:03.869952388 -0400
+@@ -1,6 +1,6 @@
+ function test() {
+<span class="del">-  if (false) var r = /a  b/;</span>
+<span class="del">-  else var r = /c  d/;</span>
+<span class="add">+  if (false) var r = /a {2}b/;</span>
+<span class="add">+  else var r = /c {2}d/;</span>
+   console.log(r.test(&#39;a  b&#39;));
+ }
+ test();
+</pre></details><details id="r2-p003"><summary>r2-p003 — Alternatives with delimiter spaces changed by fix</summary><pre>const re = /foo  |  bar/;
+console.log(re.test(&#39;foo&#39;));
+console.log(re.test(&#39;  bar&#39;));
+console.log(re.test(&#39;foobar&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:04.042940874 -0400
++++ fixed.js	2026-10-17 16:04:04.305923395 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-const re = /foo  |  bar/;</span>
+<span class="add">+const re = /foo {2}| {2}bar/;</span>
+ console.log(re.test(&#39;foo&#39;));
+ console.log(re.test(&#39;  bar&#39;));
+ console.log(re.test(&#39;foobar&#39;));
+</pre></details><details id="r2-p004"><summary>r2-p004 — Block-scoped function declaration uses altered regex</summary><pre>{
+  function check(s) { return /test  case/.test(s); }
+  console.log(check(&#39;test  case&#39;));
+  console.log(check(&#39;testcase&#39;));
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:04.481911699 -0400
++++ fixed.js	2026-10-17 16:04:04.752893690 -0400
+@@ -1,5 +1,5 @@
+ {
+<span class="del">-  function check(s) { return /test  case/.test(s); }</span>
+<span class="add">+  function check(s) { return /test {2}case/.test(s); }</span>
+   console.log(check(&#39;test  case&#39;));
+   console.log(check(&#39;testcase&#39;));
+ }
+</pre></details><details id="r2-p005"><summary>r2-p005 — ASI hazard: regex on next line interpreted as division</summary><pre>let x = 1
+(/space  /).test(&#39;space  &#39;) ? console.log(&#39;matched&#39;) : console.log(&#39;not&#39;)
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:04.928881994 -0400
++++ fixed.js	2026-10-17 16:04:05.208863414 -0400
+@@ -1,2 +1,2 @@
+ let x = 1
+<span class="del">-(/space  /).test(&#39;space  &#39;) ? console.log(&#39;matched&#39;) : console.log(&#39;not&#39;)</span>
+<span class="add">+(/space {2}/).test(&#39;space  &#39;) ? console.log(&#39;matched&#39;) : console.log(&#39;not&#39;)</span>
+</pre></details><details id="r2-p006"><summary>r2-p006 — Exception thrown during regex literal creation</summary><pre>try {
+  const re = /fail  here/;
+  throw new Error(&#39;deliberate&#39;);
+} catch (e) {
+  console.log(&#39;Caught:&#39;, e.constructor.name, e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:05.371852604 -0400
++++ fixed.js	2026-10-17 16:04:05.641834698 -0400
+@@ -1,5 +1,5 @@
+ try {
+<span class="del">-  const re = /fail  here/;</span>
+<span class="add">+  const re = /fail {2}here/;</span>
+   throw new Error(&#39;deliberate&#39;);
+ } catch (e) {
+   console.log(&#39;Caught:&#39;, e.constructor.name, e.message);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Tab-separated value parser broken by space collapse</summary><pre>const line = &#39;a\tb\tc&#39;;
+const re = /\t  \t/;
+console.log(&#39;TSV match:&#39;, re.test(line));
+console.log(&#39;Expected fields:&#39;, line.split(&#39;\t&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:05.805823822 -0400
++++ fixed.js	2026-10-17 16:04:06.068806389 -0400
+@@ -1,4 +1,4 @@
+ const line = &#39;a\tb\tc&#39;;
+<span class="del">-const re = /\t  \t/;</span>
+<span class="add">+const re = /\t {2}\t/;</span>
+ console.log(&#39;TSV match:&#39;, re.test(line));
+ console.log(&#39;Expected fields:&#39;, line.split(&#39;\t&#39;));
+</pre></details><details id="r2-p008"><summary>r2-p008 — Unicode flag and lastIndex altered by fix</summary><pre>const re = /💩  💩/gu;
+console.log(&#39;First:&#39;, re.test(&#39;💩  💩&#39;));
+console.log(&#39;lastIndex after:&#39;, re.lastIndex);
+re.lastIndex = 0;
+console.log(&#39;Second:&#39;, re.test(&#39;💩💩&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:04:06.229795734 -0400
++++ fixed.js	2026-10-17 16:04:06.504777534 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-const re = /💩  💩/gu;</span>
+<span class="add">+const re = /💩 {2}💩/gu;</span>
+ console.log(&#39;First:&#39;, re.test(&#39;💩  💩&#39;));
+ console.log(&#39;lastIndex after:&#39;, re.lastIndex);
+ re.lastIndex = 0;
+</pre></details></body></html>

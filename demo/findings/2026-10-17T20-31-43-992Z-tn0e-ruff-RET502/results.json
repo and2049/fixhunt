@@ -1,0 +1,687 @@
+{
+  "runId": "2026-10-17T20-31-43-992Z-tn0e-ruff-RET502",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RET502",
+    "fixKind": "unknown",
+    "docs": "# implicit-return-value (RET502)\n\nDerived from the **flake8-return** linter.\n\nFix is always available.\n\n## What it does\nChecks for the presence of a `return` statement with no explicit value,\nfor functions that return non-`None` values elsewhere.\n\n## Why is this bad?\nIncluding a `return` statement with no explicit value can cause confusion\nwhen other `return` statements in the function return non-`None` values.\nPython implicitly assumes return `None` if no other return value is present.\nAdding an explicit `return None` can make the code more readable by clarifying\nintent.\n\n## Example\n```python\ndef foo(bar):\n    if not bar:\n        return\n    return 1\n```\n\nUse instead:\n```python\ndef foo(bar):\n    if not bar:\n        return None\n    return 1\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags bare 'return' statements in functions where at least one other return returns a non-None value.",
+    "firingShapes": [
+      "def f():\\n    if x:\\n        return\\n    return 1",
+      "def g(a):\\n    while True:\\n        if a > 0:\\n            return\\n    return []",
+      "def h():\\n    try:\\n        pass\\n    except ValueError:\\n        return\\n    finally:\\n        print('done')\\n    return 'ok'",
+      "def i(y):\\n    for item in y:\\n        if item == 0:\\n            return\\n    return len(y)",
+      "def j(p, q):\\n    if p:\\n        if q:\\n            return\\n    return {'a': p, 'b': q}",
+      "def k():\\n    return\\n    return 42",
+      "def l(n):\\n    if n < 0:\\n        return\\n    elif n == 0:\\n        return 0\\n    else:\\n        return n * 2"
+    ],
+    "silentShapes": [
+      "def m():\\n    return\\n    return None",
+      "def n():\\n    if False:\\n        return\\n    return 'never'",
+      "def o():\\n    return 1\\n    return",
+      "def p():\\n    return None\\n    return",
+      "def q():\\n    if True:\\n        return 5\\n    else:\\n        return"
+    ],
+    "fixDescription": "Replace each bare 'return' statement with 'return None'.",
+    "hazards": [
+      "Rewriting 'return' inside a generator function changes it from yielding nothing to yielding None, altering iterator output.",
+      "In async functions, 'return' becomes 'return None', which may affect awaited values if callers expect no return value.",
+      "If the bare 'return' is inside a nested function that is used as a context manager, returning None instead of implicitly returning None has no behavioral difference but could confuse static analysis tools expecting generator-like behavior.",
+      "If the function's return annotation is '-> None', adding explicit 'return None' is redundant but harmless; however, if annotation is missing or incorrect, it may mask type checker warnings about inconsistent return types.",
+      "If the bare 'return' occurs after a side-effecting expression (e.g., 'print(x); return'), moving 'None' into the return statement does not change side effects, but if the rewrite were mistakenly placed before the side effect due to incorrect line wrapping, it would alter execution order.",
+      "If the code contains a trailing comment on the same line as 'return' (e.g., 'return  # early exit'), the rewrite may drop the comment if the tool does not preserve comments during token replacement.",
+      "If the bare 'return' is inside a lambda (though lambdas cannot contain bare returns), this shape cannot occur, but if mistakenly applied via macro-generated code, it would raise a SyntaxError.",
+      "In functions decorated with @property, @staticmethod, or @classmethod, the rewrite behaves identically since these decorators do not alter return value semantics.",
+      "If the function is overridden in a subclass and the bare 'return' is part of a contract expecting implicit None, making it explicit may improve clarity but does not change behavior.",
+      "If the code relies on the disassembly showing 'LOAD_CONST(None)' vs. implicit return, debugging or profiling tools that distinguish explicit vs. implicit returns may report different bytecode, though behavior is identical."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0044787,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 13,
+    "fixed": 13,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Lambda syntax error",
+      "hazard": "Bare return inside lambda raises SyntaxError; fixing it makes invalid code valid.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Context manager confusion",
+      "hazard": "Rewriting bare return to return None in __exit__ doesn't suppress exceptions but changes attribute visibility.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              5,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: oops",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: oops",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:31:58.308675715 -0400\n+++ fixed.py\t2026-10-17 16:31:58.685676138 -0400\n@@ -2,7 +2,7 @@\n     def __enter__(self): return self\n     def __exit__(self, exc_type, exc, tb):\n         if exc_type is ValueError:\n-            return\n+            return None\n         return False\n with CM() as cm:\n     raise ValueError('oops')\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Finally clause interaction",
+      "hazard": "Exception handling chain altered by explicit return vs implicit flow through finally.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: division by zero\nfinally\n-1\nfinally\nNone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: division by zero\nfinally\n-1\nfinally\nNone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:31:58.907676387 -0400\n+++ fixed.py\t2026-10-17 16:31:59.070676569 -0400\n@@ -2,7 +2,7 @@\n     try:\n         if x == 0:\n             return 1/x\n-        return\n+        return None\n     except ZeroDivisionError as e:\n         print('caught:', e)\n         return -1\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable default interference",
+      "hazard": "Rewrite affects when mutation occurs relative to early exit; list persistence changed.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:31:59.172676684 -0400\n+++ fixed.py\t2026-10-17 16:31:59.333676865 -0400\n@@ -1,7 +1,7 @@\n log = []\n def append_if_nonzero(n, log=log):\n     if n <= 0:\n-        return\n+        return None\n     log.append(n)\n     return log\n append_if_nonzero(0)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Shadowed built-in clash",
+      "hazard": "Local return override interacts with later global reassignment affecting closure capture.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Walrus and comprehension scope",
+      "hazard": "Early return in nested scope alters walrus variable persistence in enclosing comprehension.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              5,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:31:59.587677151 -0400\n+++ fixed.py\t2026-10-17 16:31:59.747677331 -0400\n@@ -2,7 +2,7 @@\n     vals = []\n     for i in range(3):\n         if (x := i) == 1:\n-            return\n+            return None\n         vals.append(x*2)\n     return vals\n print(gen_vals())\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Parameter forwarding complexity",
+      "hazard": "Explicit return None interferes with *args/**kwargs debugging introspection vs implicit.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "5 10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5 10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:31:59.847677444 -0400\n+++ fixed.py\t2026-10-17 16:32:00.017677635 -0400\n@@ -1,6 +1,6 @@\n def wrapper(*args, **kwargs):\n     if not args:\n-        return\n+        return None\n     return inner(*args, **kwargs)\n def inner(a, b=10):\n     print(a, b)\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Subclass override clarity",
+      "hazard": "Explicit return None in base class method makes override intent clearer without behavior change.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              4,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:00.116677747 -0400\n+++ fixed.py\t2026-10-17 16:32:00.285677938 -0400\n@@ -1,7 +1,7 @@\n class Base:\n     def process(self):\n         if not self.enabled:\n-            return\n+            return None\n         return 'work'\n class Derived(Base):\n     def __init__(self):\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Property decorator - return rewrite under @property",
+      "hazard": "In functions decorated with @property, @staticmethod, or @classmethod, the rewrite behaves identically since these decorators do not alter return value semantics.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              5,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "None\n-1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "None\n-1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:05.449683840 -0400\n+++ fixed.py\t2026-10-17 16:32:05.620684037 -0400\n@@ -2,7 +2,7 @@\n     @property\n     def val(self):\n         if self._x > 0:\n-            return\n+            return None\n         return self._x\n \n     def __init__(self, x):\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Runtime type annotations with typing imports",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "None\n[3, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "None\n[3, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:05.722684155 -0400\n+++ fixed.py\t2026-10-17 16:32:05.902684363 -0400\n@@ -2,7 +2,7 @@\n \n def f(x: Optional[int]) -> List[int]:\n     if x is None:\n-        return\n+        return None\n     return [x] * 2\n \n print(f(None))\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Async function - return None affects awaited value",
+      "hazard": "In async functions, 'return' becomes 'return None', which may affect awaited values if callers expect no return value.",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "result: None\nresult2: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: None\nresult2: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:06.012684491 -0400\n+++ fixed.py\t2026-10-17 16:32:06.299684824 -0400\n@@ -1,6 +1,6 @@\n async def fetch(flag):\n     if not flag:\n-        return\n+        return None\n     return 42\n \n async def main():\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Star-imports and module-level side effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "None\nloaded\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "None\nloaded\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:06.462685013 -0400\n+++ fixed.py\t2026-10-17 16:32:06.633685212 -0400\n@@ -2,7 +2,7 @@\n \n def helper():\n     if config.get('skip'):\n-        return\n+        return None\n     return 'loaded'\n \n config = {'skip': True}\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Custom __bool__ and None vs falsy comparison",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              9,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:06.735685331 -0400\n+++ fixed.py\t2026-10-17 16:32:06.894685515 -0400\n@@ -6,7 +6,7 @@\n \n def check(val):\n     if val:\n-        return\n+        return None\n     return val is None\n \n obj = FalsyObj()\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Nested function used as context manager",
+      "hazard": "If the bare 'return' is inside a nested function that is used as a context manager, returning None instead of implicitly returning None has no behavioral difference but could confuse static analysis t",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'str' object does not support the context manager protocol (missed __exit__ method)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'str' object does not support the context manager protocol (missed __exit__ method)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:06.999685637 -0400\n+++ fixed.py\t2026-10-17 16:32:07.366686065 -0400\n@@ -3,7 +3,7 @@\n     def ctx():\n         entered.append(True)\n         if not entered[0]:\n-            return\n+            return None\n         return 'ok'\n     return ctx\n \n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Comments and docstrings on rewritten return",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET502",
+            "severity": "warning",
+            "message": "Do not implicitly `return None` in function able to return non-`None` value",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "None\nHELLO\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "None\nHELLO\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:32:07.582686317 -0400\n+++ fixed.py\t2026-10-17 16:32:07.739686500 -0400\n@@ -1,7 +1,7 @@\n def process(data):\n     \"\"\"Process data, early exit if invalid.\"\"\"\n     if not data:  # skip empty\n-        return  # nothing to do\n+        return None  # nothing to do\n     return data.upper()\n \n print(process(''))\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "File write with non-str data and truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "RET502",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "critical\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

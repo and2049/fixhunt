@@ -1,0 +1,12 @@
+class Counter:
+    def __init__(self):
+        self.count = 0
+    @property
+    def value(self):
+        self.count += 1
+        return self.count
+c = Counter()
+if c.value < 2 and c.value < 3:
+    print(c.count)
+else:
+    print(0)

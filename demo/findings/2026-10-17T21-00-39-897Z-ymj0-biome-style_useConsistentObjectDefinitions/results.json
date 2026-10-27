@@ -1,0 +1,610 @@
+{
+  "runId": "2026-10-17T21-00-39-897Z-ymj0-biome-style_useConsistentObjectDefinitions",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useConsistentObjectDefinitions",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useConsistentObjectDefinitions\n- Fix: safe\n- Default severity: warn\n- Available from version: 2.0.0\n- Diagnostic category: lint/style/useConsistentObjectDefinitions\n\n\nDescription\n\n Require the consistent declaration of object literals.\n\n ECMAScript 6 provides two ways to define an object literal: `{foo: foo}` and `{foo}`.\n The two styles are functionally equivalent.\n Using the same style consistently across your codebase makes it easier to quickly read and understand object definitions.\n\nExample\n\nInvalid\n\n ```json,options\n {\n     \"options\": {\n         \"syntax\": \"shorthand\"\n     }\n }\n ```\n\n ```js,expect_diagnostic,use_options\n let foo = 1;\n let invalid = {\n     foo: foo\n };\n ```\n\n ```js,expect_diagnostic,use_options\n let invalid = {\n     bar: function() { return \"bar\"; },\n };\n ```\n\nValid\n\n ```js,use_options\n let foo = 1;\n let valid = {\n     foo,\n     bar() { return \"bar\"; },\n };\n ```\n\nInvalid\n\n ```json,options\n {\n     \"options\": {\n         \"syntax\": \"explicit\"\n     }\n }\n ```\n\n ```js,expect_diagnostic,use_options\n let foo = 1;\n let invalid = {\n     foo\n };\n ```\n\n ```js,expect_diagnostic,use_options\n let invalid = {\n     bar() { return \"bar\"; },\n };\n ```\n\nValid\n\n ```js,use_options\n let foo = 1;\n let valid = {\n     foo: foo,\n     bar: function() { return \"bar\"; },\n };\n ```\n\nOptions\n\n Use the options to specify the syntax of object literals to enforce.\n\n ```json,options\n {\n     \"options\": {\n         \"syntax\": \"explicit\"\n     }\n }\n ```\n\nsyntax\n\n The syntax to use:\n - `shorthand`: enforces the use of shorthand object property syntax when possible.\n - `explicit`: enforces the use of explicit object property syntax in every case.\n\n **Default:** `shorthand`\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags inconsistent usage of object literal property syntax by requiring either all properties to be written explicitly (`key: value`) or using shorthand notation (`key`) when the variable name matches the property key.",
+    "firingShapes": [
+      "let x = 1; const obj = {x: x};",
+      "const y = 2; const obj = {y: y, z: function() {}};",
+      "function f(a){return{a:a};}",
+      "let b = {}; const c = {b: b};",
+      "const d = e => ({d: d});",
+      "try{throw{e:e};}catch(e){}",
+      "for(let i=0;i<1;i++){let o={i:i};}",
+      "with({j:j}){}"
+    ],
+    "silentShapes": [
+      "let x = 1; const obj = {x};",
+      "const y = 2; const obj = {y, z() {}};",
+      "function f(a){return{a};}",
+      "const d = e => ({d});",
+      "let obj = {a: 1, b: 'two'};"
+    ],
+    "fixDescription": "When the option 'syntax' is 'explicit', the autofix replaces shorthand property notation (e.g., `foo`) with its explicit equivalent (`foo: foo`) by duplicating the identifier as both the property key and value. When the option is 'shorthand', it replaces explicit notation where the key and value are identical identifiers (e.g., `foo: foo`) with the shorthand form (`foo`).",
+    "hazards": [
+      "Rewriting `foo: foo` to `foo` in a `with` statement changes the object used for property lookup, potentially altering which properties are resolved due to differing object identity.",
+      "In `try/catch`, converting `{e: e}` to `{e}` may cause the catch clause's parameter `e` to shadow the property value incorrectly if the rewrite occurs inside the catch block, changing which variable is referenced.",
+      "Within a `for` loop's init or update clause, replacing `{i: i}` with `{i}` could affect timing if `i` has side effects (though unlikely for identifiers), but more critically, if `i` is declared with `var` in an outer scope, the shorthand may capture a different binding due to hoisting differences in evaluation context.",
+      "If the property value is a getter or setter (e.g., `get foo() {}`), rewriting to shorthand `foo` is invalid syntax and will cause a parse error, as shorthand does not support accessor properties.",
+      "When the object literal is used as the right-hand side of a comma operator (e.g., `let x = (y, {z: z});`), rewriting `{z: z}` to `{z}` does not change the value but may interfere with formatting tools that rely on explicit syntax for consistency, though semantically it remains equivalent.",
+      "In class fields, transforming `{method: method}` to `{method}` may break if `method` is not defined in the enclosing scope due to lexical scoping differences, though this is rare as class fields evaluate in the class scope.",
+      "If the identifier used in shorthand is later reassigned (e.g., `let f = 1; const o = {f}; f = 2;`), the object property retains the original value at the time of creation, which is preserved in the rewrite, so no hazard here\u2014this is included to show that reassignment after object creation does not affect the equivalence.",
+      "Comments attached to the colon in explicit syntax (e.g., `foo: /* comment */ bar`) will be lost when rewriting to shorthand `foo`, as the autofix removes the colon and any surrounding whitespace/comments.",
+      "When the property key is an identifier but the value is a complex expression (e.g., `foo: bar + baz`), the rule does not fire, so no rewrite occurs\u2014but if misapplied, rewriting such a case to shorthand would be a syntax error, highlighting that the fix only applies when key and value are the same identifier.",
+      "In non-strict mode, using `with` or `eval`, the rewritten shorthand may interact differently with scope chains if the object is used in a context where property resolution depends on the object's internal structure, though this is highly esoteric and unlikely."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0037173,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 11,
+    "fixed": 11,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Catch clause parameter shadowing",
+      "hazard": "In try/catch, converting {e: e} to {e} may cause the catch clause's parameter e to shadow the property value incorrectly if the rewrite occurs inside the catch block, changing which variable is refere",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Error: test\n    at outer (<wd>/prog)\n    at <wd>/prog\n    at ModuleJob.run (node:internal/modules/esm/module_job:569:25)\n    at async node:internal/modules/esm/loader:650:26\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\nouter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Error: test\n    at outer (<wd>/prog)\n    at <wd>/prog\n    at ModuleJob.run (node:internal/modules/esm/module_job:569:25)\n    at async node:internal/modules/esm/loader:650:26\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\nouter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:54.196133769 -0400\n+++ fixed.js\t2026-10-17 17:00:54.465137084 -0400\n@@ -4,7 +4,7 @@\n     throw new Error('test');\n   } catch (e) {\n     // Biome would rewrite {e: e} -> {e}\n-    const obj = {e: e};\n+    const obj = {e};\n     console.log(obj.e);\n   }\n   return e;\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "With statement object identity",
+      "hazard": "Rewriting foo: foo to foo in a with statement changes the object used for property lookup, potentially altering which properties are resolved due to differing object identity.",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-00-39-897Z-ymj0-biome-style_useConsistentObjectDefinitions/r1-p002/orig.js:4\nwith (objA) {\n^^^^\n\nSyntaxError: Strict mode code may not include a with statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Null/undefined distinction with optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "nullish\ntrue\nnullish\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "nullish\ntrue\nnullish\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:54.675139671 -0400\n+++ fixed.js\t2026-10-17 17:00:54.937142900 -0400\n@@ -1,5 +1,5 @@\n let value = null;\n-const obj = {value: value};\n+const obj = {value};\n // After fix: {value}\n console.log(obj.value ?? 'nullish');\n console.log((obj.value ?? 'nullish') === 'nullish');\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Order of evaluation with side effects",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "4\n4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Class field lexical scoping",
+      "hazard": "In class fields, transforming {method: method} to {method} may break if method is not defined in the enclosing scope due to lexical scoping differences, though this is rare as class fields evaluate in",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: C.field.other is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comments on colon lost in rewrite",
+      "hazard": "Comments attached to the colon in explicit syntax (e.g., foo: /* comment */ bar) will be lost when rewriting to shorthand foo, as the autofix removes the colon and any surrounding whitespace/comments.",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:55.545150389 -0400\n+++ fixed.js\t2026-10-17 17:00:55.817153739 -0400\n@@ -1,5 +1,5 @@\n let foo = 42;\n // Comment before\n-const obj = {foo: /* important */ foo};\n+const obj = {foo};\n // After fix: {foo} \u2014 comment lost\n console.log(obj.foo);\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Comments attached to removed/moved code",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:55.985155809 -0400\n+++ fixed.js\t2026-10-17 17:00:56.252159096 -0400\n@@ -1,6 +1,6 @@\n let a = 1;\n // This comment is on the line with the shorthand candidate\n-const obj = {/* keep me */ a: a, b: 2};\n+const obj = {/* keep me */ a, b: 2};\n // After fix: {/* keep me */ a, b: 2} \u2014 comment preserved? Autofix may keep it.\n // But if it deletes the whole prop, comment goes.\n // We test by having comment on the prop being removed.\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Arguments object and function length",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          },
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "10, 20\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "10, 20\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:56.419161152 -0400\n+++ fixed.js\t2026-10-17 17:00:56.691164501 -0400\n@@ -1,6 +1,6 @@\n function f(a, b) {\n   // Biome would rewrite {a: a, b: b} -> {a, b}\n-  const obj = {a: a, b: b};\n+  const obj = {a, b};\n   console.log(obj.a + ', ' + obj.b);\n   console.log(arguments.length);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "var hoisting and re-declaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:03.008242154 -0400\n+++ fixed.js\t2026-10-17 17:01:03.285245553 -0400\n@@ -1,5 +1,5 @@\n for (var i = 0; i < 2; i++) {\n   var j = i;\n-  var k = {j: j};\n+  var k = {j};\n }\n console.log(typeof k === 'object' && k !== null ? k.j : 'null');\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "comma operator RHS",
+      "hazard": "When the object literal is used as the right-hand side of a comma operator (e.g., `let x = (y, {z: z});`), rewriting `{z: z}` to `{z}` does not change the value but may interfere with formatting tools",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:03.456247652 -0400\n+++ fixed.js\t2026-10-17 17:01:03.734251064 -0400\n@@ -1,4 +1,4 @@\n let y = 0;\n-let x = (y++, {z: z});\n+let x = (y++, {z});\n function z() { return 42; }\n console.log(typeof x === 'object' && x !== null && typeof x.z === 'function' ? x.z() : -1);\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "complex value expression",
+      "hazard": "When the property key is an identifier but the value is a complex expression (e.g., `foo: bar + baz`), the rule does not fire, so no rewrite occurs\u2014but if misapplied, rewriting such a case to shorthan",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "with statement interaction",
+      "hazard": "In non-strict mode, using `with` or `eval`, the rewritten shorthand may interact differently with scope chains if the object is used in a context where property resolution depends on the object's inte",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-00-39-897Z-ymj0-biome-style_useConsistentObjectDefinitions/r2-p004/orig.js:5\n  with (obj) {\n  ^^^^\n\nSyntaxError: Strict mode code may not include a with statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p005",
+      "title": "strict vs sloppy mode semantics",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          },
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:04.181256548 -0400\n+++ fixed.js\t2026-10-17 17:01:04.461259983 -0400\n@@ -1,8 +1,8 @@\n 'use strict';\n let a = 1;\n-let obj = {a: a};\n+let obj = {a};\n console.log(obj.a);\n 'use sloppy';\n let b = 2;\n-let obj2 = {b: b};\n+let obj2 = {b};\n console.log(obj2.b);\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "reassignment after creation",
+      "hazard": "If the identifier used in shorthand is later reassigned (e.g., `let f = 1; const o = {f}; f = 2;`), the object property retains the original value at the time of creation, which is preserved in the re",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:04.629262044 -0400\n+++ fixed.js\t2026-10-17 17:01:04.903265405 -0400\n@@ -1,4 +1,4 @@\n let f = 1;\n-const o = {f: f};\n+const o = {f};\n f = 2;\n console.log(o.f);\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "null/undefined distinction with optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "default\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "default\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:05.086267649 -0400\n+++ fixed.js\t2026-10-17 17:01:05.353270923 -0400\n@@ -1,5 +1,5 @@\n let maybe = undefined;\n-let obj = {maybe: maybe};\n+let obj = {maybe};\n console.log(obj.maybe ?? 'default');\n try {\n   console.log(obj.nonexistent?.prop);\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "sparse arrays and array-likes",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "style/useConsistentObjectDefinitions",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentObjectDefinitions",
+            "severity": "warning",
+            "message": "Do not use explicit object property syntax when shorthand syntax is possible.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "length: 3\n0 in obj.arr: false\n1 in obj.arr: true\n2 in obj.arr: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "length: 3\n0 in obj.arr: false\n1 in obj.arr: true\n2 in obj.arr: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:05.517272933 -0400\n+++ fixed.js\t2026-10-17 17:01:05.782276183 -0400\n@@ -1,6 +1,6 @@\n let arr = new Array(3);\n arr[1] = 'present';\n-let obj = {arr: arr};\n+let obj = {arr};\n console.log('length:', obj.arr.length);\n console.log('0 in obj.arr:', 0 in obj.arr);\n console.log('1 in obj.arr:', 1 in obj.arr);\n"
+      }
+    }
+  ]
+}

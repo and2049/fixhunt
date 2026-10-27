@@ -1,0 +1,32 @@
+{
+  "summary": "Flags 'and' expressions containing at least one constant falsey literal (like [], {}, '', set(), etc.) where replacing the whole expression with either False (in boolean contexts) or truncating after the last truthy operand before the first falsey improves clarity.",
+  "firingShapes": [
+    "x and []",
+    "[] and y",
+    "'' and z",
+    "{ } and w",
+    "set() and v",
+    "True and False and x",
+    "a and b and [] and c",
+    "x and {} and y"
+  ],
+  "silentShapes": [
+    "x and y",
+    "0 and y",
+    "None and y",
+    "x and [] or y",
+    "if []: pass"
+  ],
+  "fixDescription": "Replaces the entire 'and' expression with False when used in a boolean context (e.g., directly as an if/test condition), otherwise truncates the expression to include only operands up to (but not including) the first falsey literal, preserving the original evaluation order and short-circuit behavior for the remaining truthy prefix.",
+  "hazards": [
+    "Rewriting 'x and []' to 'x and []' (no change) when the falsey literal is not at a truncation point does not alter behavior but may miss optimization opportunities; however, the rule only triggers when a falsey literal is present and replacement is valid.",
+    "In 'if x and [] and y:', replacing with 'if False:' changes behavior if 'x' has side effects (e.g., function call) because the original evaluates 'x' before short-circuiting, while the fix does not evaluate 'x' at all.",
+    "In 'a = x and [] and y', replacing with 'a = x and []' preserves short-circuiting: if 'x' is falsey, 'x' is evaluated and assigned; if 'x' is truthy, '[]' is evaluated and assigned (due to truncation after 'x'), matching the original which would assign '[]' after evaluating 'x' and then short-circuit on '[]'.",
+    "If the expression appears in a context where its type matters (e.g., passed to a function expecting a list), replacing 'x and []' with 'x and []' (no change) is safe, but replacing with 'False' in a non-boolean context would cause a type error; however, the fix only uses 'False' in boolean contexts, so this hazard is mitigated by context detection.",
+    "The fix does not remove or move comments attached to the operands; if a comment is placed after a truncated operand (e.g., 'x and []  # comment'), the comment may be lost if the rewrite deletes the falsey literal and surrounding whitespace without preserving trailing comments.",
+    "In nested expressions like 'f(x and [] and y)', replacing the inner 'and' with 'x and []' alters the argument passed to f: originally, if x is truthy, f([]) is called; after fix, if x is truthy, f([]) is still called — equivalent. If x is falsey, f(x) is called in both cases. So no hazard here — but this illustrates that pure functional contexts are safe.",
+    "If the falsey literal is a mutable default or shared object (e.g., 'x and [] and y' where [] is a literal), replacing with 'x and []' still creates a new empty list each time — no identity issue since list literals are distinct objects.",
+    "In 'x and [] and y', if 'x' is an expression with side effects (e.g., 'print(1)'), the original evaluates 'x', then '[]', then short-circuits; the fix 'x and []' evaluates 'x', then '[]', then assigns — same side effects. No change in evaluation order or side effects for the kept prefix.",
+    "When the 'and' chain starts with a falsey literal (e.g., '[] and x'), the fix truncates to nothing? Actually, the rule replaces with the first falsey value in non-boolean contexts — but documentation shows 'a = x and [] and y' -> 'a = x and []', implying it keeps up to the falsey. For '[] and x', the first falsey is at start, so it should become just '[]'? But the fix description says 'truncates to include only operands up to (but not including) the first falsey' — which would be empty. However, in practice, the rule likely keeps the first falsey as the result when it's the first element. Clarification needed: the silent shape '0 and y' suggests that non-literal falsey values are not flagged, so only literal falseys trigger. For '[] and x', the fix would replace with '[]' (the first falsey literal). This is equivalent: original short-circuits on first operand [], result is []; fix is []. Same."
+  ]
+}

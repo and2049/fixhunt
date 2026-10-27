@@ -1,0 +1,484 @@
+{
+  "runId": "2026-10-17T20-06-16-162Z-ziws-biome-complexity_noUselessEscapeInRegex",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/noUselessEscapeInRegex",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessEscapeInRegex\n- Fix: safe\n- Default severity: info\n- Available from version: 1.9.0\n- Diagnostic category: lint/complexity/noUselessEscapeInRegex\n- This rule is recommended\n\nDescription\n\n Disallow unnecessary escape sequence in regular expression literals.\n\n Escaping non-special characters in regular expression literals doesn't have any effect.\n Hence, they may confuse a reader.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n /\\a/;\n ```\n\n ```js,expect_diagnostic\n /[\\-]/;\n ```\n\nValid\n\n ```js\n /\\^\\d\\b/\n ```\n\n ```js\n /[\\b]/\n ```\n\n ```js\n /[\\&]/v\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags unnecessary backslash escapes inside regular expression literals where escaping has no semantic effect.",
+    "firingShapes": [
+      "/\\a/",
+      "/[\\-]/",
+      "/\\./g",
+      "/[abc\\\\def]/u",
+      "/\\n/y",
+      "/[^\\s]/",
+      "/\\\\w+/",
+      "/[\\t\\n\\r]/"
+    ],
+    "silentShapes": [
+      "/\\^/",
+      "/[\\]]/",
+      "/\\\\d+/",
+      "/[\\b]/",
+      "/[\\&]/v"
+    ],
+    "fixDescription": "Remove the redundant backslash before a character that does not require escaping in a regex literal, preserving all other characters and flags unchanged.",
+    "hazards": [
+      "Removing '\\' before ']' in a character class like '/[\\]]/' changes it to '/[]/', which is an empty character class and causes a SyntaxError.",
+      "Removing '\\' before '^' at start of a character class like '/[\\^abc]/' changes it to '/[^abc]/', inverting the meaning of the class.",
+      "Removing '\\' before '-' inside a character class like '/[a\\-z]/' changes it to '/[a-z]/', altering the range from literal 'a', '-', 'z' to the range 'a' through 'z'.",
+      "Removing '\\' before '[' in a pattern like '/[\\[\\]]/' changes it to '/[[]]/', which matches a literal '[' instead of '[' or ']'.",
+      "Removing '\\' before a flagged delimiter like in '/\\//' (if misparsed) could break the regex if confused with comment syntax, though rare in JS.",
+      "Removing '\\' before whitespace like '\\s' in '/[\\\\s]/' changes it to '/[\\s]/', which now matches any whitespace instead of literal backslash and 's'.",
+      "Removing '\\' before a Unicode escape like '/\\u{1F600}/' breaks it into '/u{1F600}/', which is invalid syntax and throws.",
+      "Removing '\\' before a digit like '/\\1/' in a regex changes it to '/1/', losing the backreference and matching literal '1' instead.",
+      "Removing '\\' before a literal '}' in a quantifier like '/a\\{3}/' changes it to '/a{3}/', which is valid but now means 'aaa' instead of literal 'a{3}'.",
+      "Removing '\\' before a literal '(' like '/\\(foo\\)/' changes it to '/(foo)/', turning a literal match into a capturing group, altering group count and behavior."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032249999999999996,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hazard 1: Character class dash escape removal alters range",
+      "hazard": "Removing '\\' before '-' inside a character class like '/[a\\-z]/' changes it to '/[a-z]/', altering the range from literal 'a', '-', 'z' to the range 'a' through 'z'.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "az-\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Hazard 2: Arguments object interaction with regex",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessEscapeInRegex",
+            "severity": "info",
+            "message": "The character doesn't need to be escaped.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "3 undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3 undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:06:26.313747208 -0400\n+++ fixed.js\t2026-10-17 16:06:26.579734060 -0400\n@@ -1,4 +1,4 @@\n-function f(a, b = /[\\-]/, ...rest) {\n+function f(a, b = /[-]/, ...rest) {\n   console.log(arguments.length, b.source);\n }\n f(1, 2, 3); // Before fix: b=/[\\-]/ \u2192 source='[\\-]' \u2192 matches literal '-'\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Hazard 3: Null/undefined distinction with optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Hazard 4: Flagged delimiter confusion with comment syntax",
+      "hazard": "Removing '\\' before a flagged delimiter like in '/\\//' (if misparsed) could break the regex if confused with comment syntax, though rare in JS.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "Hazard 5: Getter/setter side effects with regex",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "null\nnull\n[ ' ', index: 0, input: ' x', groups: undefined ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Hazard 6: Whitespace escape removal in char class changes meaning",
+      "hazard": "Removing '\\' before whitespace like '\\s' in '/[\\\\s]/' changes it to '/[\\s]/', which now matches any whitespace instead of literal backslash and 's'.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ntrue\nfalse\nAfter fix simulation: true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Hazard 7: Async/await ordering with regex side effect",
+      "hazard": "async/await ordering, generators and yield position",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "matched backslash\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Hazard 8: Parenthesis escape removal creates capturing group",
+      "hazard": "Removing '\\' before a literal 'like '/\\(foo\\)/' changes it to '/(foo)/', turning a literal match into a capturing group, altering group count and behavior.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "^ negation inversion",
+      "hazard": "Removing '\\' before '^' at start of a character class like '/[\\^abc]/' changes it to '/[^abc]/', inverting the meaning of the class.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1111\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Backreference loss",
+      "hazard": "Removing '\\' before a digit like '/\\1/' in a regex changes it to '/1/', losing the backreference and matching literal '1' instead.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Bracket literal loss",
+      "hazard": "Removing '\\' before '[' in a pattern like '/[\\[\\]]/' changes it to '/[[]]/', which matches a literal '[' instead of '[' or ']'.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessEscapeInRegex",
+            "severity": "info",
+            "message": "The character doesn't need to be escaped.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true,true,false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true,true,false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:06:32.265454724 -0400\n+++ fixed.js\t2026-10-17 16:06:32.541441253 -0400\n@@ -1,2 +1,2 @@\n-const re = /[\\[\\]]/;\n+const re = /[[\\]]/;\n console.log(re.test('[') + ',' + re.test(']') + ',' + re.test('a'));\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Whitespace class meaning shift",
+      "hazard": "Removing '\\' before whitespace like '\\s' in '/[\\\\s]/' changes it to '/[\\s]/', which now matches any whitespace instead of literal backslash and 's'.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true,true,false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "__proto__ vs spread",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false,false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "Block function scoping",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p007",
+      "title": "Parenthesis to capturing group",
+      "hazard": "Removing '\\' before a literal '(' like '/\\(foo\\)/' changes it to '/(foo)/', turning a literal match into a capturing group, altering group count and behavior.",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Arguments object interaction",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "complexity/noUselessEscapeInRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0,1,0,false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

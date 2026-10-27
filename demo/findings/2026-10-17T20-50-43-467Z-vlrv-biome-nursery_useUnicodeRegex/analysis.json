@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags any RegExp literal or constructor call missing the 'u' or 'v' flag.",
+  "firingShapes": [
+    "/abc/",
+    "/def/gi",
+    "new RegExp(\"xyz\")",
+    "new RegExp(\"pqr\", \"im\")",
+    "/[a-z]/",
+    "/\\\\d+/g",
+    "new RegExp(\"\\\\w+\")",
+    "new RegExp(\"\", \"y\")"
+  ],
+  "silentShapes": [
+    "/test/u",
+    "/match/v",
+    "new RegExp(\"pat\", \"u\")",
+    "new RegExp(\"pat\", \"giv\")",
+    "new RegExp(\"pat\", flags)"
+  ],
+  "fixDescription": "Adds the 'u' flag to RegExp literals lacking any flag, appends 'u' to existing flags in literals, and adds 'u' as the second argument to RegExp constructor calls missing it or having insufficient flags.",
+  "hazards": [
+    "Adding 'u' to a RegExp literal containing an invalid Unicode escape like \\\\x{1} changes it from a syntax error to valid code, altering program behavior where the error was intentional.",
+    "Appending 'u' to flags in a literal like /[a-z&&[^m-z]]/ may break execution in environments without Unicode Sets support, as the 'v' flag would be required but only 'u' is added.",
+    "For RegExp('pattern', 'uw'), the fix produces 'uwu' which includes duplicate 'u' flags; while harmless, it is non-standard and could confuse tools expecting canonical flag order.",
+    "If the pattern string in new RegExp contains a backreference like \\\\1, adding 'u' changes its meaning from octal escape to backreference, potentially altering matches.",
+    "In code relying on legacy octal escape interpretation (e.g., new RegExp('\\\\256')), adding 'u' forbids octal escapes, causing the pattern to fail to compile where it previously matched extended ASCII.",
+    "When the RegExp constructor is called with a non-string pattern (e.g., another RegExp), adding 'u' as a second argument is ignored per spec, but if the first argument is a RegExp and flags are provided, the fix may incorrectly add 'u' when flags should replace rather than append.",
+    "If the regex is used in a context where the 'u' flag changes the interpretation of ^ and $ to match line terminators in Unicode-sensitive ways, adding 'u' could alter multiline matching behavior unexpectedly.",
+    "Comments attached to the RegExp token (e.g., /foo/* comment */) may be lost or misplaced during the rewrite if the tool does not preserve trailing or inner comments.",
+    "In a sequence like /foo/+bar, inserting 'u' to make /foo/u/+bar could be misparsed due to precedence if whitespace is not managed, though unlikely, it risks altering expression structure.",
+    "For dynamically constructed regexes via new RegExp(userInput, 'g'), the fix adds 'u' making it 'gu', but if userInput contains unpaired surrogates, the 'u' flag may cause a SyntaxError where the code previously relied on loose matching."
+  ]
+}

@@ -1,0 +1,369 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLR1733 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLR1733 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-02-04-500Z-1p30-ruff-PLR1733 · fix labelled <b>unknown</b> · 16 programs, 8 fired, 8 fixed, 4 oracle-backed finding(s) · model cost $0.0463</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags dictionary index lookups using the loop variable when iterating over .items() where the corresponding value is already available.</p><p class="mut">Fix: Replace the dictionary index lookup d[key] with the already available loop variable value that corresponds to the value in the iteration.</p><details><summary>10 hazards</summary><ul><li>Rewriting d[k] to v changes behavior if the loop variable v is reassigned later in the loop body, as the original code would re-read the current dictionary value while the fix uses the stale local variable.</li><li>If the dictionary d is mutated during iteration (e.g., keys added/removed), the original d[k] may raise KeyError or reflect updates, whereas the fixed v refers to the value at iteration start and avoids such errors or misses them.</li><li>When d is not a standard dict but a custom mapping with __getitem__ side effects (e.g., logging, state changes), replacing d[k] with v omits those effects.</li><li>If k or v is used elsewhere in an outer scope and the rewrite alters which variable is referenced due to name collision or shadowing, the fix may incorrectly bind or use the wrong variable.</li><li>The fix may remove a necessary del or reassignment to d[k] if the lookup was part of a larger expression involving assignment or deletion, altering mutability intent.</li><li>If the dictionary value accessed via d[k] is a mutable object and the code relies on retrieving the latest reference (e.g., after in-place mutation elsewhere), using v may refer to an outdated object if the dictionary was updated and the loop variable not refreshed.</li><li>Comments attached to the d[k] expression may be lost if the autofix replaces the entire expression without preserving inline or trailing comments.</li><li>In nested loops where inner loop variables reuse k or v names, the fix may incorrectly resolve to an inner loop variable instead of the intended outer one, altering semantics.</li><li>If the dictionary access d[k] occurs in a context where its type is used for overload resolution or generic specialization (e.g., in templating or generic functions), replacing it with v may alter inferred types and break type checking.</li><li>When d[k] is used in a default argument or lambda capture within the loop, the timing of evaluation shifts from lookup-time to loop-entry-time, potentially capturing different values if the dictionary mutates.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p004"><b>r1-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix incorrectly assumes the loop variable `k` refers to the outer dictionary&#39;s key, but due to variable shadowing in the nested loop, `k` actually holds the inner dictionary&#39;s key. Replacing `outer[k]` with `v` changes a KeyError into a silent wrong value (20 instead of 10), which is a semantic change in plausible code with shadowed loop variables.">judge: real · high</span> Nested Loops Variable Capture<p class="mut">The fix incorrectly assumes the loop variable `k` refers to the outer dictionary&#39;s key, but due to variable shadowing in the nested loop, `k` actually holds the inner dictionary&#39;s key. Replacing `outer[k]` with `v` changes a KeyError into a silent wrong value (20 instead of 10), which is a semantic change in plausible code with shadowed loop variables.</p>
+<h2>Minimized program (11→5 lines)</h2><pre>outer = {&#39;x&#39;: 10}
+middle = {&#39;y&#39;: 20}
+for k, v in outer.items():          # outer k=&#39;x&#39;, v=10
+    for k, v in middle.items():       # inner k=&#39;y&#39;, v=20 (shadows outer)
+            x = outer[k]              # triggers PLR1733: outer[&#39;y&#39;]?? -&gt; KeyError
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:02:18.733156437 -0400
++++ fixed.py	2026-10-17 17:02:19.118161012 -0400
+@@ -6,6 +6,6 @@
+     for k, v in middle.items():       # inner k=&#39;y&#39;, v=20 (shadows outer)
+         for _ in inner:
+             trace.append((k, v))      # k,y v,20 from middle
+<span class="del">-            x = outer[k]              # triggers PLR1733: outer[&#39;y&#39;]?? -&gt; KeyError</span>
+<span class="add">+            x = v              # triggers PLR1733: outer[&#39;y&#39;]?? -&gt; KeyError</span>
+             trace.append((&#39;got&#39;, x))
+ print(&#39;trace:&#39;, trace)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+trace: [(&#39;y&#39;, 20), (&#39;got&#39;, 20), (&#39;y&#39;, 20), (&#39;got&#39;, 20)]
+exit 1 → 0
+stderr before: KeyError: &#39;y&#39;
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25182">astral-sh/ruff/issues/25182</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/29422">astral-sh/ruff/issues/29422</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25150">astral-sh/ruff/issues/25150</a> · <a href="reports/r1-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The program uses a dict subclass that overrides __getitem__ to produce a side effect (logging). The fix replaces d[k] with the already-bound variable v, which eliminates the __getitem__ call and thus changes the observable output by removing the log line. This is a plausible pattern (e.g., logging, metrics, or lazy computation in __getitem__) and the fix silently alters behavior.">judge: real · medium</span> Custom Mapping __getitem__ Side Effects<p class="mut">The program uses a dict subclass that overrides __getitem__ to produce a side effect (logging). The fix replaces d[k] with the already-bound variable v, which eliminates the __getitem__ call and thus changes the observable output by removing the log line. This is a plausible pattern (e.g., logging, metrics, or lazy computation in __getitem__) and the fix silently alters behavior.</p>
+<h2>Minimized program (10→6 lines)</h2><pre>class LogDict(dict):
+    def __getitem__(self, key):
+        print(f&#39;GET {key}&#39;)
+d = LogDict({&#39;a&#39;: 1})
+for k, v in d.items():
+    _ = d[k]  # triggers PLR1733: logs again; fix would omit log
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:02:19.488165407 -0400
++++ fixed.py	2026-10-17 17:02:19.650167331 -0400
+@@ -6,5 +6,5 @@
+ trace = []
+ for k, v in d.items():
+     trace.append(v)
+<span class="del">-    _ = d[k]  # triggers PLR1733: logs again; fix would omit log</span>
+<span class="add">+    _ = v  # triggers PLR1733: logs again; fix would omit log</span>
+ print(&#39;trace:&#39;, trace)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+GET a
+trace: [1]
+stdout after:
+trace: [1]</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25182">astral-sh/ruff/issues/25182</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/29422">astral-sh/ruff/issues/29422</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25150">astral-sh/ruff/issues/25150</a> · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix replaces `await d[k]` with `await v`, but `d.__getitem__` returns an awaitable while the value `v` from `items()` is a plain int. This changes the program from working correctly to raising a TypeError, a silent wrong-result class bug in plausible async code that overrides `__getitem__`.">judge: real · high</span> Async Def/Await Ordering<p class="mut">The fix replaces `await d[k]` with `await v`, but `d.__getitem__` returns an awaitable while the value `v` from `items()` is a plain int. This changes the program from working correctly to raising a TypeError, a silent wrong-result class bug in plausible async code that overrides `__getitem__`.</p>
+<h2>Minimized program (17→11 lines)</h2><pre>async def get_val(k):
+    return k
+class AwaitableDict(dict):
+    def __getitem__(self, key):
+        return get_val(key)
+async def main():
+    d = AwaitableDict({&#39;x&#39;: 1})
+    for k, v in d.items():
+        x = await d[k]  # triggers PLR1733: would become await v — but v is int, not awaitable
+import asyncio
+result = asyncio.run(main())
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:02:19.745168460 -0400
++++ fixed.py	2026-10-17 17:02:20.064172249 -0400
+@@ -9,7 +9,7 @@
+     trace = []
+     for k, v in d.items():
+         trace.append(&#39;before&#39;)
+<span class="del">-        x = await d[k]  # triggers PLR1733: would become await v — but v is int, not awaitable</span>
+<span class="add">+        x = await v  # triggers PLR1733: would become await v — but v is int, not awaitable</span>
+         trace.append((&#39;after&#39;, x))
+     return trace
+ import asyncio
+</pre>
+<h2>Observed</h2><pre>stdout before:
+result: [&#39;before&#39;, (&#39;after&#39;, &#39;x&#39;)]
+stdout after:
+
+exit 0 → 1
+stderr before: (none)
+stderr after: TypeError: &#39;int&#39; object can&#39;t be awaited</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25182">astral-sh/ruff/issues/25182</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/29422">astral-sh/ruff/issues/29422</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25150">astral-sh/ruff/issues/25150</a> · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p003"><b>r2-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix replaces `m[k]` with `v`, but `m` is a custom `Mapping` class whose `__getitem__` has a side effect (logging the key). The original code triggers this side effect, while the fixed code does not, changing observable behavior. This construct is plausible in real code where dict-like objects override `__getitem__` for logging, validation, or other effects.">judge: real · high</span> Custom mapping with __getitem__ side effects<p class="mut">The fix replaces `m[k]` with `v`, but `m` is a custom `Mapping` class whose `__getitem__` has a side effect (logging the key). The original code triggers this side effect, while the fixed code does not, changing observable behavior. This construct is plausible in real code where dict-like objects override `__getitem__` for logging, validation, or other effects.</p>
+<h2>Minimized program (14→11 lines)</h2><pre>class Mapping:
+    def __init__(self):
+        self.data = {&#39;a&#39;: 1}
+        self.log = []
+    def __getitem__(self, k):
+        self.log.append(k)
+    def items(self):
+        return self.data.items()
+m = Mapping()
+for k, v in m.items():
+    print(m[k])  # triggers __getitem__, logs &#39;a&#39;
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:02:26.780251901 -0400
++++ fixed.py	2026-10-17 17:02:26.944253843 -0400
+@@ -10,5 +10,5 @@
+ 
+ m = Mapping()
+ for k, v in m.items():
+<span class="del">-    print(m[k])  # triggers __getitem__, logs &#39;a&#39;</span>
+<span class="add">+    print(v)  # triggers __getitem__, logs &#39;a&#39;</span>
+ print(&#39;log:&#39;, m.log)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+1
+log: [&#39;a&#39;]
+stdout after:
+1
+log: []</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25182">astral-sh/ruff/issues/25182</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/29422">astral-sh/ruff/issues/29422</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/25150">astral-sh/ruff/issues/25150</a> · <a href="reports/r2-p003.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation Order &amp; Side Effects</td><td class="mut">Replacing d[k] with v changes evaluation order and duplicates side-effectful expressions.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Name Collision/Outer Scope Shadowing</td><td class="mut">Rewrite uses loop variable &#39;v&#39; which shadows an outer variable named &#39;v&#39;, changing binding</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Del/Reassignment Mutability Intent</td><td class="mut">Rewrite removes d[k] from del d[k], breaking deletion intent.</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Nested Loops Variable Capture</td><td class="mut">Inner loop reuses k,v; fix incorrectly binds to inner loop var instead of outer dict looku</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Class Attributes/Properties/Descriptors</td><td class="mut">Replace d[k] with v omits descriptor __get__ side effects on class attribute access.</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Custom Mapping __getitem__ Side Effects</td><td class="mut">d[k] invokes logging __getitem__; replacing with v omits the side effect.</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Async Def/Await Ordering</td><td class="mut">In async context, replacing d[k] with v alters await timing if d[k] is awaitable.</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Pathlib vs Os.Path Behavior</td><td class="mut">d[k] path lookup may trigger filesystem side effects (stat, symlink resolve); v does not.</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Loop variable reassignment after use</td><td class="mut">Rewriting d[k] to v changes behavior if the loop variable v is reassigned later in the loo</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Lambda capture in default argument</td><td class="mut">When d[k] is used in a default argument or lambda capture within the loop, the timing of e</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Custom mapping with __getitem__ side effects</td><td class="mut">When d is not a standard dict but a custom mapping with __getitem__ side effects (e.g., lo</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default arguments and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Inline comment on d[k] expression</td><td class="mut">Comments attached to the d[k] expression may be lost if the autofix replaces the entire ex</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generator expression inside loop</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String formatting with % and .format()</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Star-import and module-level interaction</td><td class="mut">star-imports, module-level side effects, __all__</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Evaluation Order &amp; Side Effects</summary><pre>d = {}
+class Counter:
+    def __init__(self):
+        self.n = 0
+    def __hash__(self):
+        self.n += 1
+        return id(self)
+    def __eq__(self, other):
+        return self is other
+c1 = Counter()
+c2 = Counter()
+d[c1] = &#39;first&#39;
+d[c2] = &#39;second&#39;
+trace = []
+for k, v in d.items():
+    trace.append((k.n, v))
+    _ = d[k]  # triggers PLR1733: d[k] re-evaluates __hash__ again
+print(&#39;trace:&#39;, trace)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:17.837145789 -0400
++++ fixed.py	2026-10-17 17:02:18.007147810 -0400
+@@ -14,5 +14,5 @@
+ trace = []
+ for k, v in d.items():
+     trace.append((k.n, v))
+<span class="del">-    _ = d[k]  # triggers PLR1733: d[k] re-evaluates __hash__ again</span>
+<span class="add">+    _ = v  # triggers PLR1733: d[k] re-evaluates __hash__ again</span>
+ print(&#39;trace:&#39;, trace)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Name Collision/Outer Scope Shadowing</summary><pre>v = 99  # outer scope
+def f(d):
+    trace = []
+    for k, v in d.items():  # inner v shadows outer v
+        trace.append(v)     # refers to inner v (dict value)
+        x = d[k]            # triggers PLR1733: would become x = v (still inner)
+        trace.append(x)
+    return trace
+print(f({&#39;a&#39;: 1, &#39;b&#39;: 2}))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:18.108149010 -0400
++++ fixed.py	2026-10-17 17:02:18.275150994 -0400
+@@ -3,7 +3,7 @@
+     trace = []
+     for k, v in d.items():  # inner v shadows outer v
+         trace.append(v)     # refers to inner v (dict value)
+<span class="del">-        x = d[k]            # triggers PLR1733: would become x = v (still inner)</span>
+<span class="add">+        x = v            # triggers PLR1733: would become x = v (still inner)</span>
+         trace.append(x)
+     return trace
+ print(f({&#39;a&#39;: 1, &#39;b&#39;: 2}))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Del/Reassignment Mutability Intent</summary><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+trace = []
+for k, v in d.items():
+    trace.append(len(d))
+    del d[k]  # triggers PLR1733: incorrectly would become del v (SyntaxError)
+    trace.append(len(d))
+try:
+    for k, v in d.items():
+        del d[k]
+except Exception as e:
+    trace.append((&#39;error&#39;, type(e).__name__, str(e)))
+print(&#39;trace:&#39;, trace)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Nested Loops Variable Capture</summary><pre>outer = {&#39;x&#39;: 10}
+middle = {&#39;y&#39;: 20}
+inner = [1, 2]
+trace = []
+for k, v in outer.items():          # outer k=&#39;x&#39;, v=10
+    for k, v in middle.items():       # inner k=&#39;y&#39;, v=20 (shadows outer)
+        for _ in inner:
+            trace.append((k, v))      # k,y v,20 from middle
+            x = outer[k]              # triggers PLR1733: outer[&#39;y&#39;]?? -&gt; KeyError
+            trace.append((&#39;got&#39;, x))
+print(&#39;trace:&#39;, trace)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:18.733156437 -0400
++++ fixed.py	2026-10-17 17:02:19.118161012 -0400
+@@ -6,6 +6,6 @@
+     for k, v in middle.items():       # inner k=&#39;y&#39;, v=20 (shadows outer)
+         for _ in inner:
+             trace.append((k, v))      # k,y v,20 from middle
+<span class="del">-            x = outer[k]              # triggers PLR1733: outer[&#39;y&#39;]?? -&gt; KeyError</span>
+<span class="add">+            x = v              # triggers PLR1733: outer[&#39;y&#39;]?? -&gt; KeyError</span>
+             trace.append((&#39;got&#39;, x))
+ print(&#39;trace:&#39;, trace)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Class Attributes/Properties/Descriptors</summary><pre>class Desc:
+    def __get__(self, obj, objtype):
+        print(&#39;Desc.__get__&#39;)
+        return 42
+class C:
+    attr = Desc()
+d = {&#39;key&#39;: C()}
+trace = []
+for k, v in d.items():
+    trace.append(&#39;start&#39;)
+    x = d[k].attr  # triggers PLR1733: would become v.attr — skips __get__ on d[k]
+    trace.append(x)
+print(&#39;trace:&#39;, trace)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:19.216162176 -0400
++++ fixed.py	2026-10-17 17:02:19.384164171 -0400
+@@ -8,6 +8,6 @@
+ trace = []
+ for k, v in d.items():
+     trace.append(&#39;start&#39;)
+<span class="del">-    x = d[k].attr  # triggers PLR1733: would become v.attr — skips __get__ on d[k]</span>
+<span class="add">+    x = v.attr  # triggers PLR1733: would become v.attr — skips __get__ on d[k]</span>
+     trace.append(x)
+ print(&#39;trace:&#39;, trace)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Custom Mapping __getitem__ Side Effects</summary><pre>class LogDict(dict):
+    def __getitem__(self, key):
+        print(f&#39;GET {key}&#39;)
+        return super().__getitem__(key)
+d = LogDict({&#39;a&#39;: 1})
+trace = []
+for k, v in d.items():
+    trace.append(v)
+    _ = d[k]  # triggers PLR1733: logs again; fix would omit log
+print(&#39;trace:&#39;, trace)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:19.488165407 -0400
++++ fixed.py	2026-10-17 17:02:19.650167331 -0400
+@@ -6,5 +6,5 @@
+ trace = []
+ for k, v in d.items():
+     trace.append(v)
+<span class="del">-    _ = d[k]  # triggers PLR1733: logs again; fix would omit log</span>
+<span class="add">+    _ = v  # triggers PLR1733: logs again; fix would omit log</span>
+ print(&#39;trace:&#39;, trace)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Async Def/Await Ordering</summary><pre>async def get_val(k):
+    await asyncio.sleep(0.001)
+    return k
+class AwaitableDict(dict):
+    def __getitem__(self, key):
+        return get_val(key)
+async def main():
+    d = AwaitableDict({&#39;x&#39;: 1})
+    trace = []
+    for k, v in d.items():
+        trace.append(&#39;before&#39;)
+        x = await d[k]  # triggers PLR1733: would become await v — but v is int, not awaitable
+        trace.append((&#39;after&#39;, x))
+    return trace
+import asyncio
+result = asyncio.run(main())
+print(&#39;result:&#39;, result)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:19.745168460 -0400
++++ fixed.py	2026-10-17 17:02:20.064172249 -0400
+@@ -9,7 +9,7 @@
+     trace = []
+     for k, v in d.items():
+         trace.append(&#39;before&#39;)
+<span class="del">-        x = await d[k]  # triggers PLR1733: would become await v — but v is int, not awaitable</span>
+<span class="add">+        x = await v  # triggers PLR1733: would become await v — but v is int, not awaitable</span>
+         trace.append((&#39;after&#39;, x))
+     return trace
+ import asyncio
+</pre></details><details id="r1-p008"><summary>r1-p008 — Pathlib vs Os.Path Behavior</summary><pre>import os
+os.mkdir(&#39;tmpdir&#39;)
+os.symlink(&#39;tmpdir&#39;, &#39;link_to_tmpdir&#39;)
+d = {&#39;link&#39;: &#39;link_to_tmpdir&#39;}
+trace = []
+for k, v in d.items():
+    trace.append(&#39;start&#39;)
+    p = os.path.realpath(d[k])  # triggers PLR1733: follows symlink via d[k]; fix would use v (string)
+    trace.append(p)
+    try:
+        os.stat(d[k])           # also triggers PLR1733 in same loop
+    except FileNotFoundError as e:
+        trace.append((&#39;stat error&#39;, e))
+print(&#39;trace:&#39;, trace)
+os.unlink(&#39;link_to_tmpdir&#39;)
+os.rmdir(&#39;tmpdir&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:20.313175205 -0400
++++ fixed.py	2026-10-17 17:02:20.481177200 -0400
+@@ -5,10 +5,10 @@
+ trace = []
+ for k, v in d.items():
+     trace.append(&#39;start&#39;)
+<span class="del">-    p = os.path.realpath(d[k])  # triggers PLR1733: follows symlink via d[k]; fix would use v (string)</span>
+<span class="add">+    p = os.path.realpath(v)  # triggers PLR1733: follows symlink via d[k]; fix would use v (string)</span>
+     trace.append(p)
+     try:
+<span class="del">-        os.stat(d[k])           # also triggers PLR1733 in same loop</span>
+<span class="add">+        os.stat(v)           # also triggers PLR1733 in same loop</span>
+     except FileNotFoundError as e:
+         trace.append((&#39;stat error&#39;, e))
+ print(&#39;trace:&#39;, trace)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Loop variable reassignment after use</summary><pre>d = {&#39;a&#39;: 1}
+for k, v in d.items():
+    v = 99  # reassign loop var
+    print(v)  # prints 99 (stale)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Lambda capture in default argument</summary><pre>d = {&#39;a&#39;: 1}
+for k, v in d.items():
+    def f(x=v):  # captures v at loop entry
+        return x
+    d[&#39;a&#39;] = 2
+    print(f())  # prints 1 (captured old v), not 2
+</pre></details><details id="r2-p003"><summary>r2-p003 — Custom mapping with __getitem__ side effects</summary><pre>class Mapping:
+    def __init__(self):
+        self.data = {&#39;a&#39;: 1}
+        self.log = []
+    def __getitem__(self, k):
+        self.log.append(k)
+        return self.data[k]
+    def items(self):
+        return self.data.items()
+
+m = Mapping()
+for k, v in m.items():
+    print(m[k])  # triggers __getitem__, logs &#39;a&#39;
+print(&#39;log:&#39;, m.log)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:02:26.780251901 -0400
++++ fixed.py	2026-10-17 17:02:26.944253843 -0400
+@@ -10,5 +10,5 @@
+ 
+ m = Mapping()
+ for k, v in m.items():
+<span class="del">-    print(m[k])  # triggers __getitem__, logs &#39;a&#39;</span>
+<span class="add">+    print(v)  # triggers __getitem__, logs &#39;a&#39;</span>
+ print(&#39;log:&#39;, m.log)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Mutable default arguments and aliasing</summary><pre>d = {&#39;a&#39;: []}
+for k, v in d.items():
+    def g(x=v):  # default arg captures v (the list)
+        x.append(1)
+        return x
+    g()
+    print(len(v))  # prints 1: v is the list, mutated by g
+</pre></details><details id="r2-p005"><summary>r2-p005 — Inline comment on d[k] expression</summary><pre>d = {&#39;a&#39;: 1}
+for k, v in d.items():
+    print(v)  # this is the value
+</pre></details><details id="r2-p006"><summary>r2-p006 — Generator expression inside loop</summary><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+for k, v in d.items():
+    gen = (x for x in [v] if x &gt; 0)  # gen uses v
+    print(list(gen))
+</pre></details><details id="r2-p007"><summary>r2-p007 — String formatting with % and .format()</summary><pre>d = {&#39;a&#39;: 42}
+for k, v in d.items():
+    s = &#39;%d&#39; % v  # uses v directly
+    print(s)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Star-import and module-level interaction</summary><pre>import sys
+sys.__dict__[&#39;PLUGIN_VALUE&#39;] = 100
+for k, v in sys.__dict__.items():
+    if k == &#39;PLUGIN_VALUE&#39;:
+        print(v)  # prints 100
+</pre></details></body></html>

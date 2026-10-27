@@ -1,0 +1,141 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C405 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C405 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-19-51-372Z-u23e-ruff-C405 · fix labelled <b>unknown</b> · 16 programs, 1 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0032</p>
+<div class="card"><b>Rule analysis</b><p>Flags set() constructor called with a single list or tuple literal argument.</p><p class="mut">Fix: Rewrites set(L) where L is a list or tuple literal to {*L} if non-empty, otherwise set().</p><details><summary>8 hazards</summary><ul><li>The rewrite drops inline or trailing comments attached to the set() call or its argument, as the autofix may not preserve comment nodes during AST transformation.</li><li>If the list or tuple literal contains mutable elements that are later modified, the resulting set may capture different object identities due to reconstruction via set literal, though values remain equal.</li><li>In rare cases involving custom __eq__ or __hash__ implementations, the order of element insertion during set literal construction could theoretically affect hash collision resolution, though final set equality is preserved.</li><li>If the argument is a tuple literal used elsewhere in the code (e.g., assigned to a variable), rewriting to a set literal severs that shared reference, potentially breaking aliasing expectations.</li><li>The autofix may incorrectly apply to set() calls generated via macros or code-generation tools where the list/tuple appears literal but is semantically dynamic, leading to incorrect static rewrites.</li><li>If the set() call is part of a larger expression where the original call&#39;s formatting or line breaks are significant (e.g., for diff tools or readability), the rewrite may alter whitespace in a way that breaks team formatting rules.</li><li>When the list or tuple literal contains duplicate elements, the set literal rewrite behaves identically, but intermediate steps in evaluation (like list creation) are skipped, which could matter in tracing or debugging contexts.</li><li>If the code relies on the set() constructor for its type (e.g., isinstance(x, set) after assignment), the rewrite still produces a set, so no behavioral change occurs—this hazard is included to emphasize that type preservation holds, unlike in unsafe cases.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable Default Arguments Aliasing</td><td class="mut">Rewriting `set([])` to `set()` removes explicit empty list creation, causing shared state </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Custom __eq__ and Hash Collision Resolution</td><td class="mut">Set literal `{*L}` may insert elements in different order than `set(L)`, affecting interna</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span></td><td>Macro-Generated Code Misinterpretation</td><td class="mut">Code generation tools may produce `set([x for x in ...])` where the list comprehension loo</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Duplicate Elements and Intermediate Evaluation Skipped</td><td class="mut">Rewriting `set([1,1,2])` skips list creation, removing a potential breakpoint or trace poi</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span></td><td>Generators Consumed Once</td><td class="mut">Rewriting `set(generator)` is not attempted by the rule (correctly), but if mistakenly app</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Bytes vs Str Encoding and Newlines</td><td class="mut">Rewriting `set([b&#39;a&#39;, b&#39;b&#39;])` to `{*[b&#39;a&#39;, b&#39;b&#39;]}` is safe for bytes, but if the list were</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type Annotations Evaluated at Runtime</td><td class="mut">If a list literal in a set() call is used in a forward reference resolved at runtime via `</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Non-File Context Managers with write()</td><td class="mut">Rewriting `set([log_stream])` where `log_stream` is a context manager with `write()` but n</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable List Literal Elements Modified After Set Construction</td><td class="mut">If the list or tuple literal contains mutable elements that are later modified, the result</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type Annotation Evaluated at Runtime Using Forward Reference</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Tuple Literal Shared Reference Severed by Rewrite</td><td class="mut">If the argument is a tuple literal used elsewhere in the code (e.g., assigned to a variabl</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dict Ordering and Duplicate Keys in Set Construction via List</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Async Generator Consumption Affected by Set Literal Rewrite</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Custom __eq__/__hash__ and Insertion Order in Set Literal</td><td class="mut">In rare cases involving custom __eq__ or __hash__ implementations, the order of element in</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>Bytes vs Str Encoding and Newline Handling in Set Literal</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation Order and Side Effects in Set Argument Expression</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Mutable Default Arguments Aliasing</summary><pre>def f(x=None):
+    if x is None:
+        x = []
+    s = set(x)
+    s.add(len(s))
+    return s
+print(f(), f())
+</pre></details><details id="r1-p002"><summary>r1-p002 — Custom __eq__ and Hash Collision Resolution</summary><pre>class A:
+    def __init__(self, v): self.v = v
+    def __hash__(self): return hash(self.v)
+    def __eq__(self, other): return isinstance(other, A) and self.v == other.v
+    def __repr__(self): return f&#39;A({self.v})&#39;
+a1, a2 = A(1), A(2)
+s = set([a1, a2])
+print(repr(s))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Macro-Generated Code Misinterpretation</summary><pre>try:
+    exec(&quot;s = {[x for x in [1,2]]}&quot;)
+    print(&#39;no error&#39;)
+except SyntaxError as e:
+    print(type(e).__name__, str(e))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Duplicate Elements and Intermediate Evaluation Skipped</summary><pre>trace = []
+def make_list():
+    trace.append(&#39;list made&#39;)
+    return [1,1,2]
+s = set(make_list())
+print(&#39;&#39;.join(trace), len(s))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Generators Consumed Once</summary><pre>def gen():
+    yield 1
+    yield 2
+s = set(gen())
+print(&#39;&#39;.join(str(x) for x in s))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Bytes vs Str Encoding and Newlines</summary><pre>data = [b&#39;hello\n&#39;, b&#39;world\n&#39;]
+trace = []
+class TrackedBytes(bytes):
+    def __new__(cls, b): trace.append(b); return super().__new__(cls, b)
+s = set(TrackedBytes(b) for b in data)
+print(&#39;&#39;.join(trace), sorted(s))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Type Annotations Evaluated at Runtime</summary><pre>import typing
+T = list[int]
+def f() -&gt; T:
+    return [1,2]
+s = set(f())
+print(type(s), s)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Non-File Context Managers with write()</summary><pre>class LogStream:
+    def __init__(self): self.buf = []
+    def write(self, s): self.buf.append(s)
+    def __enter__(self): return self
+    def __exit__(self, *_:): pass
+with LogStream() as ls:
+    ls.write(&#39;x&#39;)
+    s = set([ls])
+    print(id(s), len(s))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Mutable List Literal Elements Modified After Set Construction</summary><pre>outer_list = []
+for i in range(2):
+    lst = [i]
+    outer_list.append(lst)
+    s = set(lst)
+    lst[0] = 99
+    print(f&#39;i={i}, set={s}, lst={lst}&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Type Annotation Evaluated at Runtime Using Forward Reference</summary><pre>from __future__ import annotations
+def f() -&gt; &#39;List[int]&#39;:
+    return [1, 2]
+s = set(f())
+print(f&#39;set from annotation-resolved list: {s}&#39;)
+if hasattr(f.__annotations__[&#39;return&#39;], &#39;__class__&#39;):
+    print(&#39;Annotation type:&#39;, f.__annotations__[&#39;return&#39;].__class__)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Tuple Literal Shared Reference Severed by Rewrite</summary><pre>t = (1, 2)
+s = set(t)
+t = (3, 4)  # reassign t
+print(f&#39;set from original t: {s}&#39;)
+print(f&#39;t after reassignment: {t}&#39;)
+# s should still reflect (1,2), not (3,4)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Dict Ordering and Duplicate Keys in Set Construction via List</summary><pre>class BadDict:
+    def __init__(self, v):
+        self.v = v
+    def __hash__(self):
+        return hash(self.v)
+    def __eq__(self, other):
+        return isinstance(other, BadDict) and self.v == other.v
+l = [BadDict(1), BadDict(1)]
+s = set(l)
+print(f&#39;Set size from duplicate BadDict: {len(s)}&#39;)
+print(f&#39;Elements: {[x.v for x in s]}&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Async Generator Consumption Affected by Set Literal Rewrite</summary><pre>async def gen():
+    yield 1
+    yield 2
+async def main():
+    g = gen()
+    lst = [x async for x in g]
+    s = set(lst)
+    print(f&#39;Set from async gen: {s}&#39;)
+import asyncio
+asyncio.run(main())
+</pre></details><details id="r2-p006"><summary>r2-p006 — Custom __eq__/__hash__ and Insertion Order in Set Literal</summary><pre>class OrderSensitive:
+    def __init__(self, val, name):
+        self.val = val
+        self.name = name
+    def __hash__(self):
+        return hash(self.val)
+    def __eq__(self, other):
+        return isinstance(other, OrderSensitive) and self.val == other.val
+    def __repr__(self):
+        return f&#39;OS({self.val},{self.name})&#39;
+l = [OrderSensitive(1, &#39;a&#39;), OrderSensitive(1, &#39;b&#39;)]
+s = set(l)
+print(f&#39;Set contents: {s}&#39;)
+print(f&#39;Length: {len(s)}&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Bytes vs Str Encoding and Newline Handling in Set Literal</summary><pre>l = [b&#39;hello
+&#39;, b&#39;world\r
+&#39;]
+s = set(l)
+print(f&#39;Set of byte strings: {s}&#39;)
+for b in s:
+    print(f&#39;Bytes: {b!r}, Decoded: {b.decode()}&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Evaluation Order and Side Effects in Set Argument Expression</summary><pre>side_effects = []
+def f():
+    side_effects.append(len(side_effects))
+    return [side_effects[-1]]
+s = set(f())
+print(f&#39;Side effects log: {side_effects}&#39;)
+print(f&#39;Set from f(): {s}&#39;)
+# If f() called twice due to rewrite, log would be [0,1]
+</pre></details></body></html>

@@ -1,0 +1,256 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP009 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP009 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-13-56-323Z-xzoc-ruff-UP009 · fix labelled <b>unknown</b> · 16 programs, 13 fired, 13 fixed, 1 oracle-backed finding(s) · model cost $0.0128</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant UTF-8 encoding declarations at the top of Python files.</p><p class="mut">Fix: Removes the UTF-8 encoding declaration line if it is the first or second line (after a shebang) and matches the pattern for UTF-8 (case-insensitive, with or without underscores, and optional spacing).</p><details><summary>8 hazards</summary><ul><li>Removing a UTF-8 declaration in a file that actually contains non-UTF-8 encoded bytes would cause a SyntaxError when the file is parsed, as Python would default to UTF-8 decoding.</li><li>If the file relies on the encoding declaration to specify UTF-8 but is saved in a different encoding (e.g., Latin-1), removing the declaration changes how non-ASCII literals are interpreted, potentially altering string values.</li><li>The rewrite may remove a comment that is functionally part of a multi-line comment block if the encoding line is mistaken for comment content, though this is unlikely given its specific form.</li><li>In tools or environments that scan for encoding declarations beyond the first two lines (non-standard), removing it could break those tools even if Python 3+ ignores it.</li><li>If the encoding line is indented or has leading whitespace (invalid per PEP 263 but sometimes tolerated), the autofix might not trigger, but if it did, removing it could leave meaningless whitespace or affect line-number-sensitive debugging.</li><li>If the file uses a shebang and the encoding line is the second line, removing it shifts the shebang to line 1 and content to line 2, which is semantically identical but may affect tools that expect the encoding line at a fixed position.</li><li>In a concatenated script built from multiple files, removing the encoding declaration from a fragment could cause misinterpretation if the fragment is evaluated in isolation before concatenation.</li><li>If the encoding declaration is duplicated or malformed (e.g., &#39;# coding: utf-8;;&#39;), the autofix may not fire or may partially remove it, leaving syntax errors or strange remnants.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p006"><b>r2-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the UTF-8 encoding declaration comment, which shifts all subsequent line numbers up by one. The program uses `inspect.currentframe().f_lineno` to capture and print the current line number, so the observed output changes from &#39;line 5&#39; to &#39;line 4&#39;. This is a real behavioral change in a plausible debugging/logging construct that relies on exact line numbers.">judge: real · low</span> Non-file context manager relying on line numbers for ID<p class="mut">The fix removes the UTF-8 encoding declaration comment, which shifts all subsequent line numbers up by one. The program uses `inspect.currentframe().f_lineno` to capture and print the current line number, so the observed output changes from &#39;line 5&#39; to &#39;line 4&#39;. This is a real behavioral change in a plausible debugging/logging construct that relies on exact line numbers.</p>
+<h2>Minimized program (12→12 lines)</h2><pre># -*- coding: utf-8 -*-
+class DebugCM:
+    def __enter__(self):
+        import inspect
+        self.line = inspect.currentframe().f_lineno
+        return self
+    def __exit__(self, *args):
+        pass
+    def write(self, s):
+        print(s)
+with DebugCM() as cm:
+    cm.write(f&#39;line {cm.line}&#39;)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:14:13.288784170 -0400
++++ fixed.py	2026-10-17 17:14:13.502765787 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ class DebugCM:
+     def __enter__(self):
+         import inspect
+</pre>
+<h2>Observed</h2><pre>stdout before:
+line 5
+stdout after:
+line 4</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14704">astral-sh/ruff/issues/14704</a> · <a href="reports/r2-p006.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Class Attributes vs Instance Properties with Side Effects</td><td class="mut">Removing encoding line may shift line numbers affecting decorators like @property that rel</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Async Generator and Await Ordering Hazard</td><td class="mut">Line shift from encoding removal may confuse debuggers or tools mapping async generator st</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable Default Argument Aliasing After Rewrite</td><td class="mut">If encoding line removal shifts line numbers, and the function is recreated via exec or ev</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Indented Encoding Line Whitespace Hazard</td><td class="mut">If tool incorrectly removes indented encoding line, it leaves trailing whitespace or alter</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Runtime Type Annotation Evaluation with Typing-Only Imports</td><td class="mut">Line number shift from encoding removal may break inspect.getsource() used by typing exten</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Non-Standard Tool Scanning Beyond First Two Lines</td><td class="mut">Some linters or editors look for encoding declarations past line 2; removing it breaks the</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Context Manager with Write But No Close</td><td class="mut">If encoding line is removed and a custom context manager uses line numbers for logging or </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Dict Ordering, Duplicate Keys, and Hash/Eq Interactions</td><td class="mut">Line number shift may affect __eq__ or __hash__ implementations that use frame inspection </td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Latin-1 file saved as UTF-8 but declared Latin-1</td><td class="mut">If the file relies on the encoding declaration to specify UTF-8 but is saved in a differen</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Non-standard scanner expecting encoding beyond line 2</td><td class="mut">In tools or environments that scan for encoding declarations beyond the first two lines (n</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>Encoding line inside multi-line comment block</td><td class="mut">The rewrite may remove a comment that is functionally part of a multi-line comment block i</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Async generator line-number sensitivity in debug info</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus in comprehension late-binding hazard after line shift</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Non-file context manager relying on line numbers for ID</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Binary write truncation hazard after line-number shift</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Dict ordering and hash sensitivity to line-number-based frozenset</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Class Attributes vs Instance Properties with Side Effects</summary><pre># -*- coding: utf-8 -*-
+class A:
+    x = 1
+    @property
+    def y(self):
+        return self.__class__.x + 1
+try:
+    print(A().y)
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:04.815518111 -0400
++++ fixed.py	2026-10-17 17:14:04.995502389 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ class A:
+     x = 1
+     @property
+</pre></details><details id="r1-p002"><summary>r1-p002 — Async Generator and Await Ordering Hazard</summary><pre># -*- coding: utf-8 -*-
+async def gen():
+    yield 1
+    await asyncio.sleep(0)
+async def main():
+    g = gen()
+    print(await g.__anext__())
+import asyncio
+asyncio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:05.101493146 -0400
++++ fixed.py	2026-10-17 17:14:05.403466817 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ async def gen():
+     yield 1
+     await asyncio.sleep(0)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Mutable Default Argument Aliasing After Rewrite</summary><pre># -*- coding: utf-8 -*-
+def f(a=[]):
+    a.append(1)
+    return a
+print(f())
+print(f())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:05.582451211 -0400
++++ fixed.py	2026-10-17 17:14:05.757435954 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ def f(a=[]):
+     a.append(1)
+     return a
+</pre></details><details id="r1-p004"><summary>r1-p004 — Indented Encoding Line Whitespace Hazard</summary><pre>    # coding: utf-8
+x = 1
+print(x)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:05.867426364 -0400
++++ fixed.py	2026-10-17 17:14:06.040411288 -0400
+@@ -1,3 +1,2 @@
+<span class="del">-    # coding: utf-8</span>
+ x = 1
+ print(x)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Runtime Type Annotation Evaluation with Typing-Only Imports</summary><pre># -*- coding: utf-8 -*-
+from typing import List
+class C:
+    x: List[int] = []
+    def __init__(self):
+        self.x.append(len(self.x))
+print(C().x)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:06.144402237 -0400
++++ fixed.py	2026-10-17 17:14:06.337385442 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ from typing import List
+ class C:
+     x: List[int] = []
+</pre></details><details id="r1-p006"><summary>r1-p006 — Non-Standard Tool Scanning Beyond First Two Lines</summary><pre># coding: utf-8
+&quot;&quot;&quot;
+This is a module docstring.
+It spans multiple lines.
+&quot;&quot;&quot;
+print(&#39;encoding declared&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:06.456375087 -0400
++++ fixed.py	2026-10-17 17:14:06.627360206 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# coding: utf-8</span>
+ &quot;&quot;&quot;
+ This is a module docstring.
+ It spans multiple lines.
+</pre></details><details id="r1-p007"><summary>r1-p007 — Context Manager with Write But No Close</summary><pre># -*- coding: utf-8 -*-
+class LogWriter:
+    def __enter__(self):
+        print(&#39;enter&#39;)
+        return self
+    def write(self, msg):
+        print(f&#39;log: {msg}&#39;)
+    def __exit__(self, *exc):
+        print(&#39;exit&#39;)
+with LogWriter() as w:
+    w.write(&#39;test&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:06.725351678 -0400
++++ fixed.py	2026-10-17 17:14:06.900336449 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ class LogWriter:
+     def __enter__(self):
+         print(&#39;enter&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Dict Ordering, Duplicate Keys, and Hash/Eq Interactions</summary><pre># -*- coding: utf-8 -*-
+class Key:
+    def __init__(self, v):
+        self.v = v
+    def __eq__(self, other):
+        return isinstance(other, Key) and self.v == other.v
+    def __hash__(self):
+        return hash(self.v)
+d = {Key(1): &#39;a&#39;, Key(1): &#39;b&#39;}
+print(len(d))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:07.006327225 -0400
++++ fixed.py	2026-10-17 17:14:07.175312546 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ class Key:
+     def __init__(self, v):
+         self.v = v
+</pre></details><details id="r2-p001"><summary>r2-p001 — Latin-1 file saved as UTF-8 but declared Latin-1</summary><pre># -*- coding: latin-1 -*-
+print(repr(&#39;\xe9&#39;))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Non-standard scanner expecting encoding beyond line 2</summary><pre>&quot;&quot;&quot;Module docstring
+Second line.&quot;&quot;&quot;
+# coding: utf-8
+print(b&#39;\xc3\xa9&#39;.decode(&#39;utf-8&#39;))
+</pre></details><details id="r2-p003"><summary>r2-p003 — Encoding line inside multi-line comment block</summary><pre>&#39;&#39;&#39;
+This is a multi-line comment.
+# -*- coding: utf-8 -*-
+Still in comment.
+&#39;&#39;&#39;
+print(&#39;safe&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Async generator line-number sensitivity in debug info</summary><pre># -*- coding: utf-8 -*-
+async def gen():
+    yield 1
+    await asyncio.sleep(0)
+async def main():
+    async for v in gen():
+        print(v)
+asyncio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:12.395860974 -0400
++++ fixed.py	2026-10-17 17:14:12.787827239 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ async def gen():
+     yield 1
+     await asyncio.sleep(0)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Walrus in comprehension late-binding hazard after line shift</summary><pre># coding: utf-8
+ls = []
+for i in range(2):
+    ls.append(lambda: (j := i))
+print([f() for f in ls])
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:13.023806933 -0400
++++ fixed.py	2026-10-17 17:14:13.185793017 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# coding: utf-8</span>
+ ls = []
+ for i in range(2):
+     ls.append(lambda: (j := i))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Non-file context manager relying on line numbers for ID</summary><pre># -*- coding: utf-8 -*-
+class DebugCM:
+    def __enter__(self):
+        import inspect
+        self.line = inspect.currentframe().f_lineno
+        return self
+    def __exit__(self, *args):
+        pass
+    def write(self, s):
+        print(s)
+with DebugCM() as cm:
+    cm.write(f&#39;line {cm.line}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:13.288784170 -0400
++++ fixed.py	2026-10-17 17:14:13.502765787 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ class DebugCM:
+     def __enter__(self):
+         import inspect
+</pre></details><details id="r2-p007"><summary>r2-p007 — Binary write truncation hazard after line-number shift</summary><pre># coding: utf-8
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    f.write(b&#39;hazard&#39;)
+    f.truncate(5)
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;test.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:13.622755480 -0400
++++ fixed.py	2026-10-17 17:14:13.788741221 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# coding: utf-8</span>
+ with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+     f.write(b&#39;hazard&#39;)
+     f.truncate(5)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Dict ordering and hash sensitivity to line-number-based frozenset</summary><pre># -*- coding: utf-8 -*-
+class LineKey:
+    def __init__(self):
+        import inspect
+        self.line = inspect.currentframe().f_lineno
+    def __hash__(self):
+        return hash(self.line)
+    def __eq__(self, other):
+        return isinstance(other, LineKey) and self.line == other.line
+k1 = LineKey()
+k2 = LineKey()
+d = {k1: &#39;first&#39;, k2: &#39;second&#39;}
+print(len(d))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:14:13.894732115 -0400
++++ fixed.py	2026-10-17 17:14:14.114713236 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-# -*- coding: utf-8 -*-</span>
+ class LineKey:
+     def __init__(self):
+         import inspect
+</pre></details></body></html>

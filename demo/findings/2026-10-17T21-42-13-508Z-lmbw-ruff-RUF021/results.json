@@ -1,0 +1,703 @@
+{
+  "runId": "2026-10-17T21-42-13-508Z-lmbw-ruff-RUF021",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF021",
+    "fixKind": "unknown",
+    "docs": "# parenthesize-chained-operators (RUF021)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks for chained operators where adding parentheses could improve the\nclarity of the code.\n\n## Why is this bad?\n`and` always binds more tightly than `or` when chaining the two together,\nbut this can be hard to remember (and sometimes surprising).\nAdding parentheses in these situations can greatly improve code readability,\nwith no change to semantics or performance.\n\nFor example:\n```python\na, b, c = 1, 0, 2\nx = a or b and c\n\nd, e, f = 0, 1, 2\ny = d and e or f\n```\n\nUse instead:\n```python\na, b, c = 1, 0, 2\nx = a or (b and c)\n\nd, e, f = 0, 1, 2\ny = (d and e) or f\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags chains of 'and'/'or' without explicit precedence via parentheses.",
+    "firingShapes": [
+      "x = a or b and c",
+      "y = d and e or f",
+      "z = p or q and r or s",
+      "w = x and y or z and t",
+      "if a or b and c:",
+      "while d and e or f:",
+      "return g or h and i",
+      "lambda j: k and l or m"
+    ],
+    "silentShapes": [
+      "x = (a or b) and c",
+      "y = a and (b or c)",
+      "z = a or b or c",
+      "w = a and b and c",
+      "x = a or (b and c) or d"
+    ],
+    "fixDescription": "Inserts parentheses around subexpressions to enforce 'and' before 'or' precedence, e.g., rewriting 'a or b and c' as 'a or (b and c)' and 'd and e or f' as '(d and e) or f'.",
+    "hazards": [
+      "Rewriting 'a or b and c' as 'a or (b and c)' changes evaluation if 'a' has side effects and is truthy, as 'b and c' would no longer be evaluated.",
+      "Rewriting 'd and e or f' as '(d and e) or f' changes evaluation if 'd' is falsey and 'e' has side effects, as 'e' would now be evaluated in the original but not in the fix due to short-circuiting.",
+      "If 'b' or 'e' is a property with a getter that raises an exception, moving its evaluation inside parentheses may cause the exception to be raised in different contexts.",
+      "In lambdas, adding parentheses may alter binding precedence if the lambda body is part of a larger expression, though rare.",
+      "Comments placed between operators (e.g., 'a # comment\\n or b # comment\\n and c') may be lost or misplaced during rewrite if the tool does not preserve comment attachment.",
+      "If the expression is part of a tuple or list unpacking, adding parentheses could be interpreted as a tuple literal, altering structure (e.g., 'x, y = a or b and c' vs 'x, y = a or (b and c)' — same here, but risky in nested contexts).",
+      "In default argument values, rewriting could affect when side effects occur due to early binding, though the fix doesn't change timing relative to function definition.",
+      "If 'a', 'b', or 'c' are overloaded operators (e.g., __or__, __and__) in a custom class, adding parentheses does not change semantics as these are still method calls, but evaluation order of operands is preserved — low risk, but noted for completeness.",
+      "In async contexts, if 'b' or 'e' is an awaitable, rewriting does not change await behavior as the fix doesn't introduce or remove awaits — but if mistakenly wrapped in a non-async context, could cause issues; however, the fix preserves expression structure so this is unlikely.",
+      "If the code uses a linter or formatter that expects specific spacing around operators, the autofix may produce formatting that conflicts with project style, requiring reformat.",
+      "In string annotations or forward references (rare for expressions), parentheses could be misinterpreted, though this applies only to annotations, not executable code."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034722,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 13,
+    "fixed": 13
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Short-circuit side effect",
+      "hazard": "Rewriting 'd and e or f' as '(d and e) or f' changes evaluation if 'd' is falsey and 'e' has side effects, as 'e' would now be evaluated in the original but not in the fix due to short-circuiting.",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "f\n0\nf\n0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f\n0\nf\n0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:22.656209768 -0400\n+++ fixed.py\t2026-10-17 17:42:22.825208522 -0400\n@@ -5,7 +5,7 @@\n def g():\n     side.append(1)\n     return True\n-x = f() and g() or True\n+x = (f() and g()) or True\n print(len(side))\n x = (f() and g()) or True\n print(len(side))\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Walrus in condition",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Lambda binding precedence",
+      "hazard": "In lambdas, adding parentheses may alter binding precedence if the lambda body is part of a larger expression, though rare.",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              1,
+              13
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              4,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "inner\nouter\ninner\nouter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "inner\nouter\ninner\nouter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:23.056206819 -0400\n+++ fixed.py\t2026-10-17 17:42:23.213205662 -0400\n@@ -1,4 +1,4 @@\n-f = lambda: True and False or True\n-result = f() and print('inner') or print('outer')\n f = lambda: (True and False) or True\n-result = f() and print('inner') or print('outer')\n+result = (f() and print('inner')) or print('outer')\n+f = lambda: (True and False) or True\n+result = (f() and print('inner')) or print('outer')\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Truthiness edge",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              9,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "A bool\nno\nA bool\nno\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "A bool\nno\nA bool\nno\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:23.313204925 -0400\n+++ fixed.py\t2026-10-17 17:42:23.468203783 -0400\n@@ -6,7 +6,7 @@\n         return 0\n a = A()\n b = []\n-if a or b and True:\n+if a or (b and True):\n     print('yes')\n else:\n     print('no')\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Bytes vs str",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'yes'\nb'yes'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'yes'\nb'yes'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:23.571203023 -0400\n+++ fixed.py\t2026-10-17 17:42:23.733201830 -0400\n@@ -1,6 +1,6 @@\n data = b'hello'\n empty = b''\n-if data or empty and b'world':\n+if data or (empty and b'world'):\n     res = b'yes'\n else:\n     res = b'no'\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Context manager write-only",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p007",
+      "title": "Pathlib vs os.path",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              7,
+              29
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:23.971200076 -0400\n+++ fixed.py\t2026-10-17 17:42:24.130198905 -0400\n@@ -4,7 +4,7 @@\n except FileNotFoundError:\n     pass\n p = 'test.txt'\n-if not os.path.exists(p) or open(p, 'w').close() and True:\n+if not os.path.exists(p) or (open(p, 'w').close() and True):\n     pass\n else:\n     print('fail')\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Default arg side effect",
+      "hazard": "In default argument values, rewriting could affect when side effects occur due to early binding, though the fix doesn't change timing relative to function definition.",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              5,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:24.221198235 -0400\n+++ fixed.py\t2026-10-17 17:42:24.392196976 -0400\n@@ -2,7 +2,7 @@\n def log():\n     side.append(1)\n     return 0\n-def f(a=log() or True and False):\n+def f(a=log() or (True and False)):\n     return len(side)\n print(f())\n side = []\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Side effects in chained boolean - evaluation order changed",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              10,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "f called\ng called\nh called\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f called\ng called\nh called\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:30.131154810 -0400\n+++ fixed.py\t2026-10-17 17:42:30.296153600 -0400\n@@ -7,5 +7,5 @@\n def h():\n     print('h called')\n     return True\n-x = f() or g() and h()\n+x = f() or (g() and h())\n print(x)\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Async function call inside boolean chain - await safety check",
+      "hazard": "In async contexts, if 'b' or 'e' is an awaitable, rewriting does not change await behavior as the fix doesn't introduce or remove awaits — but if mistakenly wrapped in a non-async context, could cause",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              9,
+              16
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a computed\nb computed\nc computed\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a computed\nb computed\nc computed\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:30.388152926 -0400\n+++ fixed.py\t2026-10-17 17:42:30.666150889 -0400\n@@ -6,6 +6,6 @@\n     a = await get_val('a', False)\n     b = await get_val('b', True)\n     c = await get_val('c', True)\n-    res = a or b and c\n+    res = a or (b and c)\n     print(res)\n asyncio.run(main())\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Comments stripped during boolean rewrite causing confusion",
+      "hazard": "Comments placed between operators (e.g., 'a # comment\\n or b # comment\\n and c') may be lost or misplaced during rewrite if the tool does not preserve comment attachment.",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              7,
+              15
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:30.840149613 -0400\n+++ fixed.py\t2026-10-17 17:42:31.006148397 -0400\n@@ -4,5 +4,5 @@\n eval_val = True  # middle\n # Last\n last_val = False  # right\n-result = a or eval_val and last_val\n+result = a or (eval_val and last_val)\n print(result)\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Attached docstring/comment lost during AST transformation",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              6,
+              24
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:31.102147694 -0400\n+++ fixed.py\t2026-10-17 17:42:31.262146523 -0400\n@@ -3,6 +3,6 @@\n     flag_a = False\n     flag_b = True\n     flag_c = False\n-    result = flag_a or flag_b and flag_c  # Critical path logic\n+    result = flag_a or (flag_b and flag_c)  # Critical path logic\n     return result\n print(compute())\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Truthy left operand skips right evaluation after fix",
+      "hazard": "Rewriting 'a or b and c' as 'a or (b and c)' changes evaluation if 'a' has side effects and is truthy, as 'b and c' would no longer be evaluated.",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              10,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "A evaluated\nResult: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "A evaluated\nResult: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:31.360145805 -0400\n+++ fixed.py\t2026-10-17 17:42:31.517144655 -0400\n@@ -7,5 +7,5 @@\n def get_c():\n     print('C evaluated')\n     return True\n-res = get_a() or get_b() and get_c()\n+res = get_a() or (get_b() and get_c())\n print('Result:', res)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Falsey left operand causes right evaluation in original but not after fix",
+      "hazard": "Rewriting 'd and e or f' as '(d and e) or f' changes evaluation if 'd' is falsey and 'e' has side effects, as 'e' would now be evaluated in the original but not in the fix due to short-circuiting.",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              10,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "D evaluated\nF evaluated\nResult: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "D evaluated\nF evaluated\nResult: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:31.612143959 -0400\n+++ fixed.py\t2026-10-17 17:42:31.769142810 -0400\n@@ -7,5 +7,5 @@\n def get_f():\n     print('F evaluated')\n     return False\n-res = get_d() and get_e() or get_f()\n+res = (get_d() and get_e()) or get_f()\n print('Result:', res)\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Property descriptor side effects altered by precedence change",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Iterator consumed prematurely due to changed evaluation order",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "RUF021",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF021",
+            "severity": "warning",
+            "message": "Parenthesize `a and b` expressions when chaining `and` and `or` together, to make the precedence clear",
+            "span": [
+              11,
+              28
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: 1\nExtra value: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: 1\nExtra value: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:42:31.949141492 -0400\n+++ fixed.py\t2026-10-17 17:42:32.110140313 -0400\n@@ -8,7 +8,7 @@\n         return next(it)\n     except StopIteration:\n         return 0\n-res = next_or_default() or next_or_default() and next_or_default()\n+res = next_or_default() or (next_or_default() and next_or_default())\n print('Result:', res)\n try:\n     next(it)\n"
+      }
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+let x = 0, y = 0;
+for (; (x++, y++, x < 3);) {
+  console.log(`x:${x},y:${y}`);
+}

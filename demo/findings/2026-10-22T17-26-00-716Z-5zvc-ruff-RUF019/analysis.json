@@ -1,0 +1,33 @@
+{
+  "summary": "Flags redundant 'in' membership tests before dict indexing when the subsequent truthiness check makes the guard unnecessary.",
+  "firingShapes": [
+    "if \"x\" in d and d[\"x\"]:",
+    "while \"y\" in mapping and mapping[\"y\"]:",
+    "if \"a\" in d and d[\"a\"] > 0:",
+    "if k in d and d[k]:",
+    "if \"key\" in obj and obj[\"key\"]:",
+    "if name in data and data[name] is not None:",
+    "if item in cache and cache[item]:",
+    "if val in d and d[val]:"
+  ],
+  "silentShapes": [
+    "if \"x\" in d:",
+    "if d.get(\"x\") is None:",
+    "if \"x\" in d and d[\"x\"] == 0:",
+    "if cond and \"x\" in d and d[\"x\"]:",
+    "if \"x\" in d or d[\"x\"]:"
+  ],
+  "fixDescription": "Replaces patterns like 'if key in d and d[key]:' with 'if d.get(key):', removing the redundant membership test while preserving the truthiness evaluation of the value.",
+  "hazards": [
+    "Rewriting 'if \"x\" in d and d[\"x\"]:' changes behavior when d[\"x\"] evaluates to False-y but non-None values like 0, '', [], or False, as d.get(\"x\") would return those same values making the condition false where the original was true due to the membership test passing.",
+    "If d[\"x\"] has side effects (e.g., a property getter that logs or modifies state), moving the access into d.get() alters timing and frequency of those effects compared to the guarded evaluation.",
+    "When d is not a local variable but an expression with side effects (e.g., f()[\"x\"]), evaluating d twice in the original vs once in the fix changes behavior if f() is not idempotent or has observable effects.",
+    "If the dictionary d is aliased elsewhere and mutated between the membership test and the indexing in the original code, the fix's single evaluation via get() may observe a different state than the two-step process.",
+    "The fix drops any comments attached to the 'in' operator or the bracketed access, as the AST replacement does not preserve comment nodes attached to those specific tokens.",
+    "In cases where d[\"x\"] raises a KeyError for missing keys (impossible for standard dicts but possible for custom mappings), the original code avoids the error via the guard while d.get(\"x\") would not, though this is irrelevant for built-in dict semantics.",
+    "If the value retrieved is used later in the branch (not just tested), the fix does not provide access to the retrieved value, requiring additional changes beyond the scope of this rule's autofix.",
+    "When the condition is part of a larger boolean expression involving short-circuiting operators, replacing the subexpression may alter evaluation order relative to other side effects in the full expression.",
+    "If the dictionary key lookup relies on __missing__ or other custom dictionary behavior that differs between explicit key checking and .get(), the semantics may diverge, though .get() on standard dicts respects __missing__.",
+    "The fix may incorrectly fire on code where the truthiness check is not immediate (e.g., separated by other operations), but the pattern is limited to direct adjacency per the rule's design."
+  ]
+}

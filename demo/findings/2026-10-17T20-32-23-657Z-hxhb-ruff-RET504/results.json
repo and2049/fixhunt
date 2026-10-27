@@ -1,0 +1,559 @@
+{
+  "runId": "2026-10-17T20-32-23-657Z-hxhb-ruff-RET504",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RET504",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-assign (RET504)\n\nDerived from the **flake8-return** linter.\n\nFix is always available.\n\n## What it does\nChecks for variable assignments that immediately precede a `return` of the\nassigned variable.\n\n## Why is this bad?\nThe variable assignment is not necessary, as the value can be returned\ndirectly.\n\n## Example\n```python\ndef foo():\n    bar = 1\n    return bar\n```\n\nUse instead:\n```python\ndef foo():\n    return 1\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant variable assignments where the assigned variable is returned immediately afterward.",
+    "firingShapes": [
+      "def f():\\n    x = expr; return x",
+      "def f():\\n    x = expr\\n    return x",
+      "def f():\\n    if True:\\n        x = expr; return x",
+      "def f():\\n    try:\\n        x = expr\\n    finally:\\n        pass\\n    return x",
+      "def f():\\n    while False:\\n        pass\\n    x = expr\\n    return x",
+      "def f():\\n    [x := expr]\\n    return x",
+      "class C:\\n    def m(self):\\n        x = expr\\n        return x",
+      "async def f():\\n    x = await g(); return x"
+    ],
+    "silentShapes": [
+      "def f():\\n    x = expr\\n    y = x + 1\\n    return y",
+      "def f():\\n    x = expr\\n    print(x)\\n    return x",
+      "def f():\\n    global x\\n    x = expr\\n    return x",
+      "def f():\\n    nonlocal x\\n    x = expr\\n    return x",
+      "def f():\\n    del x\\n    x = expr\\n    return x"
+    ],
+    "fixDescription": "Remove the assignment statement and replace the returned variable with the expression originally assigned to it.",
+    "hazards": [
+      "Assignment inside a conditional block may skip execution when condition is false, but moving expression to return would evaluate it unconditionally.",
+      "Assignment inside a loop body may execute zero or multiple times, but returning the expression directly evaluates it once before loop entry.",
+      "Assignment inside a try block where finally reassigns the variable would lose the finally's effect on the returned value.",
+      "Assignment to a variable that is also read in a lambda or nested function defined later in the same scope would break closure capture.",
+      "Assignment to a variable that has the same name as an imported symbol would shadow the import only locally; removing the assignment could cause the return to use the imported value instead.",
+      "Assignment with a walrus operator (:=) inside a list comprehension or other comprehension changes the iteration semantics if the variable is used elsewhere in the comprehension.",
+      "Assignment to a variable that is annotated with a type comment or type hint would drop the annotation if the assignment is removed, affecting static analysis.",
+      "Assignment that includes a delayed evaluation via a property setter would lose the setter invocation if the expression is returned directly.",
+      "Assignment that occurs after a side-effecting expression (e.g., function call) but before a return would still have executed the side effect; removing the assignment does not drop the side effect, but if the expression is moved into the return, the side effect remains—however, if the expression is duplicated due to common subexpression assumptions, it could be evaluated twice.",
+      "Assignment where the expression is a yield or yield-from expression would change the generator's behavior if the yield is moved into a return statement.",
+      "Assignment where the variable is deleted later in the same block (e.g., 'del x') would cause a NameError if the return uses the variable after deletion, but removing the assignment avoids the deletion error—however, the fix assumes no such deletion exists between assignment and return, so this hazard is mitigated by the rule's pattern but still relevant if the linter misses intervening code.",
+      "Assignment that is the only statement in a block that ends with a return, but the block is part of a multi-line statement (e.g., continuation lines), could break parsing if the fix removes indentation incorrectly."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0028182,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 5,
+    "fixed": 0,
+    "disputed": 10
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Conditional block skip",
+      "hazard": "Assignment inside a conditional block may skip execution when condition is false, but moving expression to return would evaluate it unconditionally.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ZeroDivisionError: division by zero",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Try/finally reassignment",
+      "hazard": "Assignment inside a try block where finally reassigns the variable would lose the finally's effect on the returned value.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Generator iterator consumption",
+      "hazard": "Generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET504",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `return` statement",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable default argument aliasing",
+      "hazard": "Mutable default arguments and aliasing after a rewrite",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Yield in expression changes generator behavior",
+      "hazard": "Assignment where the expression is a yield or yield-from expression would change the generator's behavior if the yield is moved into a return statement.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Float division and rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET504",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `return` statement",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1.0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1.0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Type hint annotation dropped",
+      "hazard": "Assignment to a variable that is annotated with a type comment or type hint would drop the annotation if the assignment is removed, affecting static analysis.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n{}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Multi-line statement indentation break",
+      "hazard": "Assignment that is the only statement in a block that ends with a return, but the block is part of a multi-line statement (e.g., continuation lines), could break parsing if the fix removes indentation",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Type annotation evaluated at runtime with typing import",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET504",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `return` statement",
+            "span": [
+              5,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Property setter invocation lost by direct return",
+      "hazard": "Assignment that includes a delayed evaluation via a property setter would lose the setter invocation if the expression is returned directly.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Keyword-only arg default eval once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Walrus in list comprehension alters iteration",
+      "hazard": "Assignment with a walrus operator (:=) inside a list comprehension or other comprehension changes the iteration semantics if the variable is used elsewhere in the comprehension.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET504",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `result` before `return` statement",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "UnboundLocalError: cannot access local variable 'x' where it is not associated with a value",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "UnboundLocalError: cannot access local variable 'x' where it is not associated with a value",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Lambda captures var before assignment overwrites it",
+      "hazard": "Assignment to a variable that is also read in a lambda or nested function defined later in the same scope would break closure capture.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "20\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Yield moved to return breaks generator",
+      "hazard": "Assignment where the expression is a yield or yield-from expression would change the generator's behavior if the yield is moved into a return statement.",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Exception in expression affects finally",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: division by zero\nre-raised: division by zero\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Shadowed built-in len redefined later",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "RET504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RET504",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `return` statement",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

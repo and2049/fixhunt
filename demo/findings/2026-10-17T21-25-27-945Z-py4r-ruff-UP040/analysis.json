@@ -1,0 +1,30 @@
+{
+  "summary": "Flags usage of typing.TypeAlias annotation and typing.TypeAliasType assignment for declaring type aliases.",
+  "firingShapes": [
+    "T: TypeAlias = int\n",
+    "U = TypeAliasType('U', str)\n",
+    "V: TypeAlias = list[str]\n",
+    "W = TypeAliasType('W', dict[str, int], type_params=(X,))\n",
+    "X: TypeAlias = tuple[Y, ...]\n",
+    "Z = TypeAliasType('Z', Optional[bytes])\n"
+  ],
+  "silentShapes": [
+    "type T = int\n",
+    "T = int  # plain assignment, no TypeAlias\n",
+    "from typing import TypeAlias\nT: TypeAlias = int  # if target-version < py312\n",
+    "class C: T: TypeAlias = int\n"
+  ],
+  "fixDescription": "Replaces 'Name: TypeAlias = expr' with 'type Name = expr' and 'Name = TypeAliasType(\"Name\", expr[, type_params=params])' with 'type Name = expr', stripping the type_params argument and importing Name if needed.",
+  "hazards": [
+    "Rewriting TypeAlias changes the declaration from a variable annotation to a type statement, which cannot be used as a runtime value (e.g., in isinstance() or issubclass()).",
+    "Rewriting TypeAliasType loses explicit variance (covariant/contravariant) from TypeVar definitions, replacing it with inferred variance which may differ.",
+    "The fix cannot resolve TypeVar definitions from other modules, so bounds, constraints, defaults, or kind are lost, producing unconstrained TypeVars in the generated type parameter list.",
+    "If the TypeAliasType's first argument (the name string) does not match the variable name, the resulting type statement may bind to a different name, breaking references.",
+    "Comments attached to the original TypeAlias or TypeAliasType line may be dropped during the rewrite.",
+    "If the aliased expression contains side effects (e.g., function calls), moving it into a type statement changes evaluation timing from runtime to definition time, potentially altering behavior.",
+    "In nested scopes (e.g., inside functions or classes), the rewritten type statement may not be accessible where the original alias was, due to differing scoping rules for type statements.",
+    "If the module defines a __getattr__ or __dir__ that relies on the TypeAlias or TypeAliasType being present as a runtime attribute, the rewrite will remove it, causing AttributeError.",
+    "The fix may produce invalid syntax if the target version is pre-3.12, as 'type' statements are not supported.",
+    "When multiple type aliases are defined in a single line via tuple unpacking, the fix may incorrectly split or fail to parse the construct."
+  ]
+}

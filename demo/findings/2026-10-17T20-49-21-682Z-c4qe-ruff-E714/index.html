@@ -1,0 +1,302 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff E714 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff E714 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-49-21-682Z-c4qe-ruff-E714 · fix labelled <b>unknown</b> · 16 programs, 13 fired, 13 fixed, 1 oracle-backed finding(s) · model cost $0.0226</p>
+<div class="card"><b>Rule analysis</b><p>Flags uses of &#39;not&#39; followed by an identity comparison (&#39;is&#39;) where PEP 8 recommends using the &#39;is not&#39; operator instead.</p><p class="mut">Fix: Rewrites &#39;not {left} is {right}&#39; to &#39;{left} is not {right}&#39; by moving the &#39;not&#39; keyword to between &#39;is&#39; and the right operand, preserving all other structure and whitespace.</p><details><summary>10 hazards</summary><ul><li>The rewrite fails when the &#39;is&#39; expression is parenthesized (e.g., &#39;not (x is y)&#39;), as removing &#39;not&#39; from before the parentheses breaks the grouping and changes meaning.</li><li>When &#39;not x is y&#39; appears in a compound condition like &#39;not x is y and z&#39;, the rewrite &#39;x is not y and z&#39; alters precedence, making it equivalent to &#39;(x is not y) and z&#39; instead of &#39;not (x is y and z)&#39;.</li><li>In &#39;not x is y or z&#39;, the rewrite becomes &#39;x is not y or z&#39;, which evaluates as &#39;(x is not y) or z&#39; rather than &#39;not (x is y or z)&#39;, changing logic due to operator precedence.</li><li>If the identity comparison is part of a larger expression where &#39;not&#39; applies to more than just the &#39;is&#39; (e.g., &#39;not f() is g()&#39;), the rewrite incorrectly scopes the negation only to the &#39;is&#39; operation, ignoring potential side effects in function calls.</li><li>The fix assumes &#39;is&#39; is always an identity operator; if overloaded via __eq__ or __ne__ in a custom class (though rare and discouraged), the semantics of &#39;is not&#39; vs &#39;not ... is&#39; could diverge, though &#39;is&#39; cannot be overloaded in Python.</li><li>Comments placed between &#39;not&#39; and the &#39;is&#39; keyword (e.g., &#39;not  # comment
+    x is y&#39;) would be lost or misplaced during the rewrite, as the tool may not preserve interleaved whitespace/comments.</li><li>In lambda expressions like &#39;lambda: not x is y&#39;, the rewrite to &#39;lambda: x is not y&#39; is safe, but if the lambda is used in a context where the original form relied on low precedence of &#39;not&#39;, the change could alter behavior when composed with other operators.</li><li>In comprehensions such as &#39;[expr for expr in items if not expr is skip]&#39;, moving &#39;not&#39; after &#39;is&#39; is safe locally, but if the comprehension is nested or part of a larger expression, the altered precedence might interact unexpectedly with surrounding logic.</li><li>The rewrite does not account for line continuation or backslash-joined lines; if &#39;not x is\n y&#39; is split across lines, the fix may incorrectly place &#39;is not&#39; or break the line continuation.</li><li>If the code contains a syntax error or invalid token near the &#39;not is&#39; pattern (e.g., due to a typo), the autofix might produce invalid syntax or crash during application.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule E714 explicitly rewrites `not X is Y` to `X is not Y` for readability per PEP8, which is exactly the transformation applied. The only observable difference is a SyntaxWarning changing from &#39;is&#39; to &#39;is not&#39; with a bytes literal, which is a direct consequence of the intended rewrite and does not alter program semantics.">judge: intended-change · low</span> Bytes vs str identity<p class="mut">The rule E714 explicitly rewrites `not X is Y` to `X is not Y` for readability per PEP8, which is exactly the transformation applied. The only observable difference is a SyntaxWarning changing from &#39;is&#39; to &#39;is not&#39; with a bytes literal, which is a direct consequence of the intended rewrite and does not alter program semantics.</p>
+<h2>Minimized program (5→2 lines)</h2><pre>b = b&#39;hello&#39;
+print(&#39;Bytes check:&#39;, not b is b&#39;hello&#39;)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:49:34.829615139 -0400
++++ fixed.py	2026-10-17 16:49:35.016618951 -0400
+@@ -1,5 +1,5 @@
+ b = b&#39;hello&#39;
+ s = &#39;hello&#39;
+<span class="del">-print(&#39;Bytes check:&#39;, not b is b&#39;hello&#39;)</span>
+<span class="del">-print(&#39;Str check:&#39;, not s is &#39;hello&#39;)</span>
+<span class="del">-print(&#39;Cross-type:&#39;, not b is s)</span>
+<span class="add">+print(&#39;Bytes check:&#39;, b is not b&#39;hello&#39;)</span>
+<span class="add">+print(&#39;Str check:&#39;, s is not &#39;hello&#39;)</span>
+<span class="add">+print(&#39;Cross-type:&#39;, b is not s)</span>
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: SyntaxWarning: &quot;is&quot; with &#39;bytes&#39; literal. Did you mean &quot;==&quot;?
+stderr after: &lt;wd&gt;/prog: SyntaxWarning: &quot;is not&quot; with &#39;bytes&#39; literal. Did you mean &quot;!=&quot;?</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/4082">astral-sh/ruff/issues/4082</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/1237">astral-sh/ruff/issues/1237</a> · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Precedence alteration in compound condition</td><td class="mut">When &#39;not x is y&#39; appears in a compound condition like &#39;not x is y and z&#39;, the rewrite &#39;x </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Type annotation context</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Exception handling interaction</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">invalid</span></td><td>Comment preservation between not and is</td><td class="mut">Comments placed between &#39;not&#39; and the &#39;is&#39; keyword (e.g., &#39;not  # comment\n    x is y&#39;) wo</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Generator consumption difference</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">invalid</span></td><td>Shadowed built-in interaction</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Bytes vs str identity</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation order with side effects</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Class attribute descriptor interference</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Mutable default argument aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Parenthesized is expression breaks grouping</td><td class="mut">The rewrite fails when the &#39;is&#39; expression is parenthesized (e.g., &#39;not (x is y)&#39;), as rem</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Line continuation with backslash</td><td class="mut">The rewrite does not account for line continuation or backslash-joined lines; if &#39;not x is</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>String formatting with percent and f-string</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Shadowed built-in redefined later</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Dict ordering with custom hash</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation order with side effects in arguments</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Precedence alteration in compound condition</summary><pre>def f():
+    x, y, z = [], [], True
+    r1 = not x is y and z
+    r2 = x is not y and z
+    print(&#39;Original:&#39;, r1)
+    print(&#39;Rewritten form evaluates to:&#39;, r2)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:33.431586635 -0400
++++ fixed.py	2026-10-17 16:49:33.599590063 -0400
+@@ -1,6 +1,6 @@
+ def f():
+     x, y, z = [], [], True
+<span class="del">-    r1 = not x is y and z</span>
+<span class="add">+    r1 = x is not y and z</span>
+     r2 = x is not y and z
+     print(&#39;Original:&#39;, r1)
+     print(&#39;Rewritten form evaluates to:&#39;, r2)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Type annotation context</summary><pre>from typing import List
+
+def foo(x: List[int]) -&gt; bool:
+    return not x is None
+
+print(foo([1]))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:33.703592185 -0400
++++ fixed.py	2026-10-17 16:49:33.889595979 -0400
+@@ -1,6 +1,6 @@
+ from typing import List
+ 
+ def foo(x: List[int]) -&gt; bool:
+<span class="del">-    return not x is None</span>
+<span class="add">+    return x is not None</span>
+ 
+ print(foo([1]))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Exception handling interaction</summary><pre>def get_x():
+    raise ValueError(&#39;bad&#39;)
+
+try:
+    if not get_x() is None:
+        pass
+except ValueError as e:
+    print(&#39;Caught:&#39;, type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:34.002598285 -0400
++++ fixed.py	2026-10-17 16:49:34.178601872 -0400
+@@ -2,7 +2,7 @@
+     raise ValueError(&#39;bad&#39;)
+ 
+ try:
+<span class="del">-    if not get_x() is None:</span>
+<span class="add">+    if get_x() is not None:</span>
+         pass
+ except ValueError as e:
+     print(&#39;Caught:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Comment preservation between not and is</summary><pre>x, y = 1, 2
+if not  # this comment should stay
+  x is y:
+    print(&#39;equal&#39;)
+else:
+    print(&#39;not equal&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Generator consumption difference</summary><pre>def gen():
+    yield 1
+    yield 2
+
+g = gen()
+print(&#39;First check:&#39;, not next(g) is None)
+print(&#39;Second check:&#39;, not next(g) is None)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:34.425606906 -0400
++++ fixed.py	2026-10-17 16:49:34.589610248 -0400
+@@ -3,5 +3,5 @@
+     yield 2
+ 
+ g = gen()
+<span class="del">-print(&#39;First check:&#39;, not next(g) is None)</span>
+<span class="del">-print(&#39;Second check:&#39;, not next(g) is None)</span>
+<span class="add">+print(&#39;First check:&#39;, next(g) is not None)</span>
+<span class="add">+print(&#39;Second check:&#39;, next(g) is not None)</span>
+</pre></details><details id="r1-p006"><summary>r1-p006 — Shadowed built-in interaction</summary><pre>is = lambda a, b: a == b  # shadow built-in &#39;is&#39;
+x, y = 1, 1
+result = not x is y
+print(&#39;Result with shadowed is:&#39;, result)
+del is  # restore built-in
+result2 = not x is y
+print(&#39;Result after restore:&#39;, result2)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Bytes vs str identity</summary><pre>b = b&#39;hello&#39;
+s = &#39;hello&#39;
+print(&#39;Bytes check:&#39;, not b is b&#39;hello&#39;)
+print(&#39;Str check:&#39;, not s is &#39;hello&#39;)
+print(&#39;Cross-type:&#39;, not b is s)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:34.829615139 -0400
++++ fixed.py	2026-10-17 16:49:35.016618951 -0400
+@@ -1,5 +1,5 @@
+ b = b&#39;hello&#39;
+ s = &#39;hello&#39;
+<span class="del">-print(&#39;Bytes check:&#39;, not b is b&#39;hello&#39;)</span>
+<span class="del">-print(&#39;Str check:&#39;, not s is &#39;hello&#39;)</span>
+<span class="del">-print(&#39;Cross-type:&#39;, not b is s)</span>
+<span class="add">+print(&#39;Bytes check:&#39;, b is not b&#39;hello&#39;)</span>
+<span class="add">+print(&#39;Str check:&#39;, s is not &#39;hello&#39;)</span>
+<span class="add">+print(&#39;Cross-type:&#39;, b is not s)</span>
+</pre></details><details id="r1-p008"><summary>r1-p008 — Evaluation order with side effects</summary><pre>def side():
+    print(&#39;side effect&#39;)
+    return []
+
+x = side()
+y = side()
+print(&#39;Step 1 done&#39;)
+result = not x is y
+print(&#39;Result:&#39;, result)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:35.133621332 -0400
++++ fixed.py	2026-10-17 16:49:35.298624692 -0400
+@@ -5,5 +5,5 @@
+ x = side()
+ y = side()
+ print(&#39;Step 1 done&#39;)
+<span class="del">-result = not x is y</span>
+<span class="add">+result = x is not y</span>
+ print(&#39;Result:&#39;, result)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Class attribute descriptor interference</summary><pre>class C:
+    def __get__(self, obj, owner):
+        print(&#39;get&#39;)
+        return 42
+    x = __get__()
+obj = C()
+if not obj.x is 42:
+    print(&#39;fail&#39;)
+else:
+    print(&#39;pass&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:42.170764127 -0400
++++ fixed.py	2026-10-17 16:49:42.560772009 -0400
+@@ -4,7 +4,7 @@
+         return 42
+     x = __get__()
+ obj = C()
+<span class="del">-if not obj.x is 42:</span>
+<span class="add">+if obj.x is not 42:</span>
+     print(&#39;fail&#39;)
+ else:
+     print(&#39;pass&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Mutable default argument aliasing</summary><pre>def f(a=[]):
+    a.append(1)
+    return a
+x = f()
+if not x is f():
+    print(&#39;different&#39;)
+else:
+    print(&#39;same&#39;)
+print(id(x), id(f()))
+</pre></details><details id="r2-p003"><summary>r2-p003 — Parenthesized is expression breaks grouping</summary><pre>x = 1
+y = 2
+z = 3
+if not (x is y) and z:
+    print(&#39;true&#39;)
+else:
+    print(&#39;false&#39;)
+print(z)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:42.910779083 -0400
++++ fixed.py	2026-10-17 16:49:43.074782396 -0400
+@@ -1,7 +1,7 @@
+ x = 1
+ y = 2
+ z = 3
+<span class="del">-if not (x is y) and z:</span>
+<span class="add">+if x is not y and z:</span>
+     print(&#39;true&#39;)
+ else:
+     print(&#39;false&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Line continuation with backslash</summary><pre>x = 1
+y = 2
+if not x is\
+ y:
+    print(&#39;equal&#39;)
+else:
+    print(&#39;not equal&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:43.173784395 -0400
++++ fixed.py	2026-10-17 16:49:43.337787706 -0400
+@@ -1,7 +1,6 @@
+ x = 1
+ y = 2
+<span class="del">-if not x is\</span>
+<span class="del">- y:</span>
+<span class="add">+if x is not y:</span>
+     print(&#39;equal&#39;)
+ else:
+     print(&#39;not equal&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — String formatting with percent and f-string</summary><pre>x = &#39;hello&#39;
+y = &#39;hello&#39;
+if not x is y:
+    print(&#39;%s != %s&#39; % (x, y))
+else:
+    print(f&#39;{x} is {y}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:43.432789624 -0400
++++ fixed.py	2026-10-17 16:49:43.597792955 -0400
+@@ -1,6 +1,6 @@
+ x = &#39;hello&#39;
+ y = &#39;hello&#39;
+<span class="del">-if not x is y:</span>
+<span class="add">+if x is not y:</span>
+     print(&#39;%s != %s&#39; % (x, y))
+ else:
+     print(f&#39;{x} is {y}&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Shadowed built-in redefined later</summary><pre>list = []
+list.append(1)
+x = list
+if not x is list:
+    print(&#39;aliased&#39;)
+else:
+    print(&#39;same&#39;)
+del list
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:43.696794953 -0400
++++ fixed.py	2026-10-17 16:49:43.858798224 -0400
+@@ -1,7 +1,7 @@
+ list = []
+ list.append(1)
+ x = list
+<span class="del">-if not x is list:</span>
+<span class="add">+if x is not list:</span>
+     print(&#39;aliased&#39;)
+ else:
+     print(&#39;same&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Dict ordering with custom hash</summary><pre>class A:
+    def __init__(self, v):
+        self.v = v
+    def __hash__(self):
+        return hash(self.v)
+    def __eq__(self, other):
+        return self.v == other.v
+a = A(1)
+b = A(1)
+d = {a: &#39;x&#39;}
+if not d.get(b) is None:
+    print(&#39;found:&#39;, d[b])
+else:
+    print(&#39;missing&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:43.964800364 -0400
++++ fixed.py	2026-10-17 16:49:44.132803754 -0400
+@@ -8,7 +8,7 @@
+ a = A(1)
+ b = A(1)
+ d = {a: &#39;x&#39;}
+<span class="del">-if not d.get(b) is None:</span>
+<span class="add">+if d.get(b) is not None:</span>
+     print(&#39;found:&#39;, d[b])
+ else:
+     print(&#39;missing&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Evaluation order with side effects in arguments</summary><pre>ref = []
+def f():
+    ref.append(1)
+    return ref
+x = f()
+if not x is f():
+    print(&#39;different call&#39;)
+else:
+    print(&#39;same call&#39;)
+print(&#39;ref:&#39;, ref)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:49:44.237805871 -0400
++++ fixed.py	2026-10-17 16:49:44.408809320 -0400
+@@ -3,7 +3,7 @@
+     ref.append(1)
+     return ref
+ x = f()
+<span class="del">-if not x is f():</span>
+<span class="add">+if x is not f():</span>
+     print(&#39;different call&#39;)
+ else:
+     print(&#39;same call&#39;)
+</pre></details></body></html>

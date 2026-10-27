@@ -1,0 +1,614 @@
+{
+  "runId": "2026-10-17T21-28-10-065Z-wj9b-ruff-FURB105",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB105",
+    "fixKind": "unknown",
+    "docs": "# print-empty-string (FURB105)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for `print` calls with unnecessary empty strings as positional\narguments and unnecessary `sep` keyword arguments.\n\n## Why is this bad?\nPrefer calling `print` without any positional arguments, which is\nequivalent and more concise.\n\nSimilarly, when printing one or fewer items, the `sep` keyword argument,\n(used to define the string that separates the `print` arguments) can be\nomitted, as it's redundant when there are no items to separate.\n\n## Example\n```python\nprint(\"\")\n```\n\nUse instead:\n```python\nprint()\n```\n\n## Fix safety\nThis fix is marked as unsafe if it removes comments or an unused `sep` keyword argument\nthat is not known to be a valid separator. Removing such arguments may change the\nprogram's behavior by skipping their evaluation or hiding a `TypeError`.\n\n## References\n- [Python documentation: `print`](https://docs.python.org/3/library/functions.html#print)\n"
+  },
+  "analysis": {
+    "summary": "Flags print() calls with empty string literals as positional arguments or redundant sep=keyword arguments.",
+    "firingShapes": [
+      "print(\"\")",
+      "print('', sep='')",
+      "print('a', '', sep='')",
+      "print('', 'b', sep=',')",
+      "print('', '', '')",
+      "print('', sep=' ', end='\\n')",
+      "print('', sep=sep_var)",
+      "print(*args, sep='')"
+    ],
+    "silentShapes": [
+      "print('hello')",
+      "print('', sep=sep, end=end)",
+      "print()",
+      "print('', sep=sep)",
+      "print('a', 'b', sep=',')"
+    ],
+    "fixDescription": "Removes all empty string literal positional arguments and the sep keyword argument when present, preserving other arguments and keyword arguments like end, file, flush.",
+    "hazards": [
+      "The sep argument might be a variable whose removal avoids evaluating it, changing behavior if it has side effects.",
+      "The sep argument might be a variable whose removal hides a TypeError if it is not a string or None.",
+      "An empty string argument might be intended to produce a specific output format (e.g., CSV with empty fields) and its removal alters output.",
+      "Multiple empty strings might be used for alignment or spacing in output, and removing them changes formatting.",
+      "If sep is a keyword argument passed via **kwargs, the autofix cannot safely remove it and may leave invalid syntax.",
+      "Comments attached to the empty string arguments or sep keyword may be lost during rewriting.",
+      "If the print statement is part of a larger expression (e.g., in a list comprehension), removing arguments could alter syntax validity.",
+      "The sep argument might be conditionally assigned and its removal could skip error checking in debugging contexts.",
+      "In code relying on exact argument count for introspection or decorators, removing args may break assumptions.",
+      "If sep is a built-in overridden locally, removing it may avoid using the local override and use the built-in instead."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0026838,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 9,
+    "fixed": 8,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Argument Count Introspection",
+      "hazard": "In code relying on exact argument count for introspection or decorators, removing args may break assumptions.",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'int' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Bytes vs Str Encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary separator passed to `print`",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError a bytes-like object is required, not 'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError a bytes-like object is required, not 'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:16.858393384 -0400\n+++ fixed.py\t2026-10-17 17:28:17.017390195 -0400\n@@ -1,7 +1,7 @@\n import io\n buf = io.BytesIO()\n try:\n-    print(b''.decode(), file=buf, sep='')\n+    print(b''.decode(), file=buf)\n except Exception as e:\n     print(type(e).__name__, str(e))\n else:\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Walrus and Comprehension Scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary separator passed to `print`",
+            "span": [
+              4,
+              30
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:17.138387771 -0400\n+++ fixed.py\t2026-10-17 17:28:17.302384486 -0400\n@@ -1,6 +1,6 @@\n funcs = []\n for i in range(2):\n     if (x := '') == '':\n-        funcs.append(lambda: print(x, sep=''))\n+        funcs.append(lambda: print(x))\n for f in funcs:\n     f()\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Sep via **kwargs",
+      "hazard": "If sep is a keyword argument passed via **kwargs, the autofix cannot safely remove it and may leave invalid syntax.",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ab\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "Print in List Comprehension",
+      "hazard": "If the print statement is part of a larger expression (e.g., in a list comprehension), removing arguments could alter syntax validity.",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary empty string and separator passed to `print`",
+            "span": [
+              1,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "\n\nresults: [1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "\n\nresults: [1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:17.528379959 -0400\n+++ fixed.py\t2026-10-17 17:28:17.689376734 -0400\n@@ -1,2 +1,2 @@\n-results = [print('', sep='') or 1 for _ in range(2)]\n+results = [print() or 1 for _ in range(2)]\n print('results:', results)\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Runtime Type Annotation Evaluation",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary empty string and separator passed to `print`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:17.795374611 -0400\n+++ fixed.py\t2026-10-17 17:28:17.956371386 -0400\n@@ -1,4 +1,4 @@\n T = str\n def foo(x: T) -> None:\n-    print(x, '', sep='')\n+    print(x)\n foo('test')\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Dict Ordering and Hash",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary empty string and separator passed to `print`",
+            "span": [
+              7,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:18.060369305 -0400\n+++ fixed.py\t2026-10-17 17:28:18.226365985 -0400\n@@ -4,4 +4,4 @@\n     def __eq__(self, other): return self.v == other.v\n d = {Key(''): 1, Key(''): 2}\n print(len(d))\n-print('', sep='')\n+print()\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Star Imports and Module Side Effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Dictionary Key Override Behavior",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n1:first 2:second ",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Mutable Default Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a=1, b=''\na=2, b=''\na=1, b=''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Shadowed Built-in Redefinition",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "restored: hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "File Truncation and Partial Write",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary empty string passed to `print`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "'world\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'world\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:23.093268966 -0400\n+++ fixed.py\t2026-10-17 17:28:23.265265552 -0400\n@@ -1,6 +1,6 @@\n with open('test.txt', 'w') as f:\n     f.write('hello')\n-    print('', file=f)\n+    print(file=f)\n     f.seek(0)\n     f.write('world')\n with open('test.txt') as f:\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Pathlib Relative Path Symlink",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary empty string and separator passed to `print`",
+            "span": [
+              8,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "FileNotFoundError [Errno 2] No such file or directory: 'link'\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "FileNotFoundError [Errno 2] No such file or directory: 'link'\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:23.370263468 -0400\n+++ fixed.py\t2026-10-17 17:28:23.531260272 -0400\n@@ -5,5 +5,5 @@\n         print('opened link')\n except Exception as e:\n     print(type(e).__name__, e)\n-print('', sep='')\n+print()\n os.unlink('link')\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Bytes vs Str Encoding Newline",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Local Sep Built-in Override",
+      "hazard": "If sep is a built-in overridden locally, removing it may avoid using the local override and use the built-in instead.",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary empty string and separator passed to `print`",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a|\nb\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a|\nb\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:28:23.793255072 -0400\n+++ fixed.py\t2026-10-17 17:28:23.954251877 -0400\n@@ -1,5 +1,5 @@\n def test():\n     sep = '|'  # local override\n     print('a', '', sep=sep)\n-    print('b', '', sep='')  # triggers FURB105\n+    print('b')  # triggers FURB105\n test()\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Evaluation Order Side Effects Merged",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "FURB105",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB105",
+            "severity": "warning",
+            "message": "Unnecessary empty string and separator passed to `print`",
+            "span": [
+              6,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sep must be None or a string, not int",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sep must be None or a string, not int",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

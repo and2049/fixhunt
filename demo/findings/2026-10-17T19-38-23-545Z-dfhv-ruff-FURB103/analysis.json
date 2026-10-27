@@ -1,0 +1,33 @@
+{
+  "summary": "Flags patterns where a file is opened, written to once within a with block, then closed—suggesting replacement with pathlib.Path.write_text/write_bytes.",
+  "firingShapes": [
+    "with open('file.txt', 'w') as f:\\n    f.write(data)",
+    "with open(path, 'wb') as f:\\n    f.write(b'data')",
+    "with open(filename, 'w', encoding='utf-8') as f:\\n    f.write(text)",
+    "with open(file, 'w') as f:\\n    f.write(s)",
+    "with open('out.log', 'a') as f:\\n    f.write(msg)\\n",
+    "with open(tmp, 'w') as f:\\n    f.write(result)\\n",
+    "with open(name, 'w') as fp:\\n    fp.write(val)",
+    "with open(dest, 'wb') as fout:\\n    fout.write(chunk)"
+  ],
+  "silentShapes": [
+    "with open('file.txt', 'r') as f:\\n    data = f.read()",
+    "with open('file.txt', 'w') as f:\\n    f.write(a)\\n    f.write(b)",
+    "with open('file.txt', 'w') as f:\\n    print(f.write(x))",
+    "with open('file.txt', 'w') as f:\\n    if cond:\\n        f.write(data)",
+    "with open('file.txt', 'w') as f:\\n    f.write(data); f.seek(0)"
+  ],
+  "fixDescription": "Replaces the with open(...) as f: f.write(...) block with Path(file_path).write_text(...) or Path(file_path).write_bytes(...) depending on mode, adding 'from pathlib import Path' if needed.",
+  "hazards": [
+    "Removes comments attached to the 'with' statement or 'open' call, as the fix discards syntactic structure.",
+    "If the file path variable is reassigned after the with block but before use, the fix may evaluate it too early.",
+    "If the write argument has side effects (e.g., a function call), moving it outside the with block changes evaluation timing relative to other statements in the block.",
+    "If the file object is used elsewhere via alias (e.g., g = f; g.write(...)), the fix breaks because the alias is no longer valid.",
+    "If the mode includes flags like '+' (e.g., 'w+'), the fix incorrectly assumes write-only semantics and drops reading capability.",
+    "If the encoding is specified in text mode, the fix must preserve it—but if omitted, defaults may differ across Python versions or platforms.",
+    "If the open call uses a custom opener via opener= parameter, the fix ignores it, potentially breaking filesystem virtualization.",
+    "If the with block contains multiple statements and only the last is a write, the fix still removes prior statements, altering behavior.",
+    "If the write call is guarded by a short-circuiting expression (e.g., cond and f.write(s)), the fix hoists it unconditionally.",
+    "If the file path is a complex expression (e.g., os.path.join(a, b)), the fix may duplicate its evaluation if not carefully hoisted."
+  ]
+}

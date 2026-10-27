@@ -1,0 +1,134 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C400 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C400 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-16-19-854Z-8jsy-ruff-C400 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0033</p>
+<div class="card"><b>Rule analysis</b><p>Flags unnecessary uses of list() wrapping generator expressions.</p><p class="mut">Fix: Rewrites list(&lt;generator expression&gt;) to [&lt;expression&gt; for &lt;iteration&gt;] when the generator has a transformation or filter; otherwise rewrites to list(&lt;iterable&gt;) by removing the redundant generator wrapper.</p><details><summary>11 hazards</summary><ul><li>If the generator expression contains a walrus operator (e.g., list((y := f(x)) for x in foo)), rewriting to a list comprehension may change scoping rules as the assignment expression&#39;s target becomes local to the comprehension, potentially leaking or hiding variables differently.</li><li>If the generator expression is inside a lambda or nested function and uses nonlocal or global variables, moving the logic into a list comprehension could alter closure capture timing or semantics due to differences in how comprehensions vs generator expressions handle name resolution.</li><li>If the iterable side-effectfully mutates during iteration (e.g., list(x for x in foo where foo.remove(x))), the rewrite to list(foo) or a list comprehension may iterate over a different sequence because the original generator evaluated foo at start but the fix might re-evaluate or assume stability.</li><li>If the generator expression contains a &#39;break&#39; or &#39;continue&#39; statement (though invalid in generator expressions, consider via trickery), the fix would be invalid as comprehensions don&#39;t support those statements, but the rule shouldn&#39;t fire on invalid syntax anyway—still, if somehow present, the fix would break.</li><li>If the generator expression is used in a context where its lazy evaluation is relied upon for early termination via an enclosing construct (e.g., any(list(f(x) for x in foo))), replacing it with a list comprehension forces full evaluation upfront, changing performance and possibly causing errors if evaluation has side effects that should be avoided after a truthy result.</li><li>If the generator expression includes a comment inside the parentheses (e.g., list(x # comment
+  for x in foo)), the autofix may drop the comment during rewrite because it only preserves tokens deemed essential, leading to loss of inline documentation.</li><li>If the generator expression is part of a larger expression where parentheses are significant for grouping (e.g., list((x for x in foo)) + 1), the fix might incorrectly simplify to list(foo) + 1, but if the inner parentheses were actually wrapping a tuple generator vs being redundant, the semantics of nesting could matter—though in practice the inner parens here are just around the generator, still, over-aggressive paren removal could theoretically affect parsing in edge cases involving complex expressions.</li><li>If the iterable is not actually a variable but a function call with side effects (e.g., list(x for x in get_foo())), rewriting to list(get_foo()) is safe, but if the fix mistakenly caches or reorders evaluation (which it shouldn&#39;t), it could call get_foo() multiple times vs once; however, the fix should preserve the single call, so this is more speculative—still, any refactoring tool must prove it doesn&#39;t introduce extra evaluations.</li><li>If the generator expression appears in a default argument or class body and relies on late binding, the fix timing of when the iterable is evaluated might shift relative to other definitions, though both generator expressions and comprehensions evaluate the iterable at the point of construction, so this is unlikely—but if the fix changed nesting depth, it could matter.</li><li>If the code contains a stray backslash for line continuation inside the generator expression (e.g., list(x\
+  for x in foo)), the autofix might mishandle the line joining during rewrite, breaking syntax or altering meaning.</li><li>If the generator expression is written with a trailing comma making it a tuple (e.g., list((x for x in foo),)), the rule likely wouldn&#39;t fire because it&#39;s not a plain generator call, but if misapplied, the fix would break structure.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>dict ordering, duplicate keys, __hash__/__eq__ overrides</td><td class="mut">Rewriting `list(...)` as `[...]` does not affect dictionary construction from key-value pa</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Iterable side-effectful mutation during iteration</td><td class="mut">When the source iterable mutates during iteration (e.g., list removes items), converting `</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Lazy evaluation for early termination via enclosing construct</td><td class="mut">Replacing `list(f(x) for x in foo)` with `[f(x) for x in foo]` inside `any()` forces full </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>async def/await ordering, async generators</td><td class="mut">The rule does not apply to async generators, but if mistakenly used, rewriting would break</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>comments and docstrings attached to the removed or moved code</td><td class="mut">When the rule removes the generator expression and rewraps the iterable, inline comments o</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>evaluation order and side effects when expressions are merged, duplicated or deleted</td><td class="mut">If the generator expression contains a function call with side effects in its iterable par</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td><td class="mut">If the generator expression raises an exception during iteration, the timing of when it is</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>bytes vs str, encoding and newline handling, text vs binary modes</td><td class="mut">When the generator expression produces bytes or strings involved in encoding/decoding, eag</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Generator consumption order matters</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Comment lost during rewrite</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Side effect in iterable function call</td><td class="mut">If the iterable is not actually a variable but a function call with side effects</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Inline comment stripped in comprehension</td><td class="mut">If the generator expression includes a comment inside the parentheses</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Mutable default argument capture</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>File write truncation behavior</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>Break-like trick invalidates comprehension</td><td class="mut">If the generator expression contains a &#39;break&#39; or &#39;continue&#39; statement</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Type annotation evaluated at runtime</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — dict ordering, duplicate keys, __hash__/__eq__ overrides</summary><pre>class Key:
+    def __init__(self, v):
+        self.v = v
+    def __hash__(self):
+        return hash(self.v)
+    def __eq__(self, other):
+        print(&#39;eq&#39;, self.v)
+        return isinstance(other, Key) and self.v == other.v
+items = [Key(1), Key(1)]
+gen = ((k, k.v) for k in items)
+d = dict(list(gen))
+print(len(d))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Iterable side-effectful mutation during iteration</summary><pre>foo = [1, 2, 3, 4]
+result = []
+def gen():
+    for x in foo[:]:
+        if x == 2:
+            foo.remove(3)
+        yield x
+for x in list(x for x in gen()):
+    result.append(x)
+print(result)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Lazy evaluation for early termination via enclosing construct</summary><pre>def f(x):
+    print(&#39;f&#39;, x)
+    if x == 2:
+        raise ValueError(&#39;bad&#39;)
+    return x &gt; 0
+try:
+    any(list(f(x) for x in [0, 1, 2, 3]))
+except ValueError as e:
+    print(&#39;ValueError:&#39;, e)
+</pre></details><details id="r1-p004"><summary>r1-p004 — async def/await ordering, async generators</summary><pre>async def agen():
+    for i in range(3):
+        yield i
+async def main():
+    result = [i async for i in agen()]
+    print(result)
+import asyncio
+asyncio.run(main())
+</pre></details><details id="r1-p005"><summary>r1-p005 — comments and docstrings attached to the removed or moved code</summary><pre>data = [1, 2, 3]
+# Process each item: transform and filter
+processed = list(x * 2 for x in data  # &lt;-- important: double values
+                 if x % 2 == 0)
+print(processed)
+</pre></details><details id="r1-p006"><summary>r1-p006 — evaluation order and side effects when expressions are merged, duplicated or deleted</summary><pre>side = []
+def get_data():
+    side.append(&#39;get_data&#39;)
+    return [1, 2]
+result = list(x + 1 for x in get_data())
+print(&#39;side:&#39;, side)
+print(&#39;result:&#39;, result)
+</pre></details><details id="r1-p007"><summary>r1-p007 — exceptions raised inside the rewritten code, finally/else clauses, exception chaining</summary><pre>try:
+    gen = (1 / x for x in [0, 1, 2])
+    result = list(gen)
+except ZeroDivisionError as e:
+    print(&#39;Caught:&#39;, type(e).__name__, e)
+finally:
+    print(&#39;finally&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — bytes vs str, encoding and newline handling, text vs binary modes</summary><pre>lines = [b&#39;hello\n&#39;, b&#39;world\n&#39;]
+try:
+    decoded = list(line.decode(&#39;utf-8&#39;).strip() for line in lines)
+except UnicodeDecodeError as e:
+    print(&#39;UnicodeDecodeError:&#39;, e)
+else:
+    print(&#39;decoded:&#39;, decoded)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Generator consumption order matters</summary><pre>def gen():
+    yield 1
+    yield 2
+
+g = gen()
+a = list(x for x in g)
+b = list(x for x in g)
+print(&#39;a:&#39;, a, &#39;b:&#39;, b)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Comment lost during rewrite</summary><pre># keep
+lst = list(
+    x  # important note
+    for x in [1, 2]
+)
+print(lst)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Side effect in iterable function call</summary><pre>counter = 0
+
+def get_foo():
+    global counter
+    counter += 1
+    return [10, 20]
+
+lst = list(x for x in get_foo())
+print(&#39;counter:&#39;, counter, &#39;lst:&#39;, lst)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Inline comment stripped in comprehension</summary><pre>data = [1, 2, 3]
+res = list(x  # keep this
+           for x in data if x &gt; 1)
+print(res)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Mutable default argument capture</summary><pre>def f(lst=None):
+    if lst is None:
+        lst = []
+    lst.extend(list(x for x in [1, 2]))
+    return lst
+
+print(f())
+print(f())
+</pre></details><details id="r2-p006"><summary>r2-p006 — File write truncation behavior</summary><pre>with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    for item in list(str(x) for x in [1, 2, 3]):
+        f.write(item)
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+</pre></details><details id="r2-p007"><summary>r2-p007 — Break-like trick invalidates comprehension</summary><pre>try:
+    # This syntax error is intentional for the hazard
+    list(x for x in [1, 2] if (break))
+except SyntaxError as e:
+    print(&#39;SyntaxError:&#39;, e)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Type annotation evaluated at runtime</summary><pre>T = int
+ansi = list(x for x in [1, 2, 3] if isinstance(x, T))
+print(ansi)
+</pre></details></body></html>

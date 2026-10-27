@@ -1,0 +1,374 @@
+{
+  "runId": "2026-10-17T20-04-46-802Z-m97y-biome-complexity_noDivRegex",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/noDivRegex",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noDivRegex\n- Fix: safe\n- Default severity: info\n- Available from version: 2.3.12\n- Diagnostic category: lint/complexity/noDivRegex\n\n\nDescription\n\n Disallow equal signs explicitly at the beginning of regular expressions.\n\n This rule forbids equal signs (`=`) after the slash (`/`) at the beginning of a regular expression literal,\n because the characters `/=` can be confused with a division assignment operator.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n function bar() {\n   return /=foo/;\n }\n ```\n\nValid\n\n ```js\n function bar() {\n   return /[=]foo/;\n }\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags regex literals starting with '/=' to avoid confusion with the division-assignment operator.",
+    "firingShapes": [
+      "/=abc/",
+      "/=/",
+      "/=\\n/",
+      "/=[\\s\\S]*?/",
+      "/=(?!)/",
+      "/=/.test(x)",
+      "y = /=/",
+      "return /=/;"
+    ],
+    "silentShapes": [
+      "[/=]/",
+      "/[=]/",
+      "new RegExp('=/')",
+      "/\\/=/",
+      "/=/"
+    ],
+    "fixDescription": "Rewrites the regex literal by wrapping the '=' in a character class, changing '/=.../' to '/[=].../'.",
+    "hazards": [
+      "In a regex like '/=ghi/', the fix yields '/[=]ghi/', which matches the same strings but may alter behavior if the regex is used in a context relying on specific backreference indices due to added capturing groups\u2014though character classes are non-capturing, so this hazard is actually invalid; however, considering potential future ECMAScript extensions where character class syntax might evolve, though none currently exist, this remains speculative.']} Wait, I need to provide 8-12 hazards, each one sentence, specific and realistic. Let me rethink: the fix is purely syntactic and semantic-equivalent for standard regex behavior, but hazards could arise from non-standard uses, parser quirks, or tooling assumptions. However, per the instruction, I must list ways the rewrite *could* change behavior, even if unlikely. After careful analysis: 1. If the regex is part of a larger expression where '/' is used as a division operator (e.g., in a comment-less minified context), but the fix doesn't affect that. Actually, the only real hazard is if the regex literal is immediately followed by '=' without whitespace, making '/=...' look like '/= ...' but after fix it's '/[=]...=', which if not handled could be misparsed\u2014but JS parsers distinguish regex literals from operators. Another idea: in eval() or Function constructor with string input, but the fix applies to source code, not runtime strings. Perhaps: if the regex is used in a split() method and the fix introduces a character class that accidentally matches where the original didn't\u2014but '/=' and '/[=]/' are identical in matching. I think the intended hazards are about edge cases like flags, comments, or nested slashes. Let me draft based on common pitfalls:"
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.001437,
+  "summary": {
+    "programs": 8,
+    "invalid": 0,
+    "fired": 8,
+    "fixed": 8
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Arrow vs function binding",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:53.563809832 -0400\n+++ fixed.js\t2026-10-17 16:04:53.827793981 -0400\n@@ -1,4 +1,4 @@\n-const obj = { method() { return /=/.test(this.value); }, value: 42 };\n+const obj = { method() { return /[=]/.test(this.value); }, value: 42 };\n console.log(obj.method());\n const fn = obj.method;\n console.log(fn());\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Getter setter side effects",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: obj is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: obj is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:53.991784135 -0400\n+++ fixed.js\t2026-10-17 16:04:54.257768196 -0400\n@@ -1,6 +1,6 @@\n let val = 0;\n Object.defineProperty(obj, 'prop', {\n-  get() { return /=/.test(String(val)); },\n+  get() { return /[=]/.test(String(val)); },\n   set(v) { val = v; }\n });\n obj.prop = 99;\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Async await generators",
+      "hazard": "async/await ordering, generators and yield position",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          },
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:54.426758071 -0400\n+++ fixed.js\t2026-10-17 16:04:54.690742253 -0400\n@@ -1,6 +1,6 @@\n async function* gen() {\n-  yield /=/.test('abc');\n+  yield /[=]/.test('abc');\n   await Promise.resolve();\n-  yield /=/.test('def');\n+  yield /[=]/.test('def');\n }\n gen().next().then(({value}) => console.log(value));\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Sparse arrays holes",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[ <1 empty item>, false, <1 empty item> ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ <1 empty item>, false, <1 empty item> ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:54.857732247 -0400\n+++ fixed.js\t2026-10-17 16:04:55.126716146 -0400\n@@ -1,3 +1,3 @@\n const arr = Array(3);\n-arr[1] = /=/.test('x');\n+arr[1] = /[=]/.test('x');\n console.log(arr.map((v, i) => v === undefined ? 'hole' : v));\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Var hoisting redeclaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\nfalse\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\nfalse\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:55.285706639 -0400\n+++ fixed.js\t2026-10-17 16:04:55.553690615 -0400\n@@ -1,5 +1,5 @@\n for (var i = 0; i < 2; i++) {\n-  var pattern = /=/\n+  var pattern = /[=]/\n   console.log(pattern.test(i));\n }\n console.log(typeof pattern);\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Coercion toString valueOf",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          },
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:55.718680750 -0400\n+++ fixed.js\t2026-10-17 16:04:55.982664965 -0400\n@@ -1,3 +1,3 @@\n const obj = { toString() { return '='; }, valueOf() { return 0; } };\n-console.log(/=/.test(obj));\n-console.log(/=/.test(String(obj)));\n+console.log(/[=]/.test(obj));\n+console.log(/[=]/.test(String(obj)));\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Comments attached",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:56.151654879 -0400\n+++ fixed.js\t2026-10-17 16:04:56.409639485 -0400\n@@ -1,4 +1,4 @@\n // before\n-const re = /=/\n+const re = /[=]/\n // after\n console.log(re.test('='));\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exceptions inside",
+      "hazard": "exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "complexity/noDivRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noDivRegex",
+            "severity": "info",
+            "message": "Avoid using an equal sign directly after the slash at the beginning of a regular expression literal.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:04:56.576629521 -0400\n+++ fixed.js\t2026-10-17 16:04:56.829614425 -0400\n@@ -1,5 +1,5 @@\n try {\n-  (/=/.test(null));\n+  (/[=]/.test(null));\n } catch (e) {\n   console.log(e.name + ': ' + e.message);\n }\n"
+      }
+    }
+  ]
+}

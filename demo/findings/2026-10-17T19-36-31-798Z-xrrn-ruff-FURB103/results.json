@@ -1,0 +1,128 @@
+{
+  "runId": "2026-10-17T19-36-31-798Z-xrrn-ruff-FURB103",
+  "tool": "ruff",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB103",
+    "fixKind": "unknown",
+    "docs": "# write-whole-file (FURB103)\n\nDerived from the **refurb** linter.\n\nFix is sometimes available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for uses of `open` and `write` that can be replaced by `pathlib`\nmethods, like `Path.write_text` and `Path.write_bytes`.\n\n## Why is this bad?\nWhen writing a single string to a file, it's simpler and more concise\nto use `pathlib` methods like `Path.write_text` and `Path.write_bytes`\ninstead of `open` and `write` calls via `with` statements.\n\n## Example\n```python\nwith open(\"file.txt\", \"w\") as f:\n    f.write(\"some text\")\n```\n\nUse instead:\n```python\nfrom pathlib import Path\n\nPath(\"file.txt\").write_text(\"some text\")\n```\n\n## Fix Safety\nThis rule's fix is marked as unsafe if the replacement would remove comments attached to the original expression.\n\n## References\n- [Python documentation: `Path.write_bytes`](https://docs.python.org/3/library/pathlib.html#pathlib.Path.write_bytes)\n- [Python documentation: `Path.write_text`](https://docs.python.org/3/library/pathlib.html#pathlib.Path.write_text)\n"
+  },
+  "analysis": {
+    "summary": "Flags manual file writes using 'open' + 'write' inside a 'with' block when they can be replaced with pathlib.Path.write_text/write_bytes.",
+    "firingShapes": [
+      "with open('file.txt', 'w') as f:\\n    f.write(data)",
+      "with open(path, 'wb') as f:\\n    f.write(b'data')",
+      "with open(filename, 'w', encoding='utf-8') as f:\\n    f.write(text)",
+      "with open(filepath, 'a') as f:\\n    f.write(line)\\n    f.write(more)",
+      "with open(name, 'wt') as f:\\n    f.write(s)",
+      "with open(p, 'w+b') as f:\\n    f.write(content)",
+      "with open('out.log', 'w') as log:\\n    log.write(msg)",
+      "with open(var, 'w') as f:\\n    f.write(val)"
+    ],
+    "silentShapes": [
+      "with open('r.txt') as f:\\n    data = f.read()",
+      "f = open('w.txt', 'w'); f.write('x'); f.close()",
+      "with open('a.txt', 'w') as f:\\n    print(f.write('hi'))",
+      "with open('b.txt', 'rb') as f:\\n    f.write(b'fail')",
+      "with open('c.txt', 'w') as f:\\n    other_obj.write(f)"
+    ],
+    "fixDescription": "Replaces the 'with open(...) as f: f.write(...)' block with 'Path(...).write_text(...)' or 'Path(...).write_bytes(...)' based on mode, adding 'from pathlib import Path' if needed.",
+    "hazards": [
+      "Removes comments attached to the 'as f' alias or within the with block, as the fix discards the original statement structure.",
+      "Changes behavior if the file mode includes '+' (e.g., 'w+') since write_text/write_bytes only open for writing, not reading.",
+      "Alters behavior when the write call is not the last statement in the block, as later statements in the original with block would be dropped.",
+      "Breaks code if the file variable 'f' is used after the write within the block (e.g., for seeking or telling), since the variable is eliminated.",
+      "May fail if the path expression has side effects (e.g., a function call) and is evaluated multiple times due to context manager entry/exit logic, though unlikely.",
+      "Incorrectly handles binary vs text modes if the mode string is dynamically constructed and not explicitly 'b' or absent, leading to wrong method choice.",
+      "Does not preserve custom encoding or errors parameters beyond UTF-8/default, as write_text uses defaults unless specified, risking encoding mismatches.",
+      "Removes the ability to write multiple times via the same handle in the block, as the fix performs a single write operation.",
+      "Changes timing of file closure: the original block exits cleanly via __exit__, while the fix relies on Path's internal handling, which may differ in error cases.",
+      "If the 'open' call is overridden or shadowed (e.g., local variable named 'open'), the fix incorrectly assumes builtin open and misbehaves."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.00102666,
+  "summary": {
+    "programs": 2,
+    "invalid": 0,
+    "fired": 1,
+    "fixed": 1,
+    "disputed": 1
+  },
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Post-write seeks",
+      "hazard": "1. Breaks code if the file variable 'f' is used after the write within the block (e.g., for seeking or telling), since the variable is eliminated.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "OK (old) Exception: ValueError: I/O operation on closed file.\nBUG (fix) AttributeError: 'PosixPath' object has no attribute 'seek'\nContent: abc\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Side Effect in Path",
+      "hazard": "May fail if the path expression has side effects and is evaluated multiple times due to context manager entry/exit logic.",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "warning",
+            "message": "`open` and `write` should be replaced by `Path(path_with_side_effect()).write_text('hello')`",
+            "span": [
+              8,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "path_calls=1, expected=2\nDONE\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "path_calls=1, expected=2\nDONE\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 15:36:39.351450212 -0400\n+++ fixed.py\t2026-10-17 15:36:39.504449541 -0400\n@@ -1,12 +1,12 @@\n import os\n+import pathlib\n # Hazard 1: path expression with side effect (incrementing counter)\n counter = [0]\n def path_with_side_effect():\n     counter[0] += 1\n     return f\"/tmp/hazard1_{counter[0]}.txt\"\n \n-with open(path_with_side_effect(), 'w') as f:\n-    f.write('hello')\n+pathlib.Path(path_with_side_effect()).write_text('hello')\n \n print(f\"path_calls={counter[0]}, expected=2\")\n \n"
+      }
+    }
+  ]
+}

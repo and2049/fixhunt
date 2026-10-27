@@ -1,0 +1,35 @@
+{
+  "summary": "Flags classes that inherit directly from built-in dict, list, or str due to inconsistent dunder method usage.",
+  "firingShapes": [
+    "class A(dict): pass",
+    "class B(list):\\n    def append(self, x): super().append(x)",
+    "class C(str):\\n    def __new__(cls, s): return super().__new__(cls, s.upper())",
+    "class D(UserDict, dict): pass",
+    "class E(tuple, list): pass",
+    "class F(collections.UserDict): pass",
+    "class G: def __init__(self): self.data = {}",
+    "class H(dict):\\n    __slots__ = ()"
+  ],
+  "silentShapes": [
+    "from collections import UserDict\\nclass A(UserDict): pass",
+    "class A(UserList):\\n    def __init__(self, iterable): super().__init__(iterable)",
+    "import collections\\nclass A(collections.UserString): pass",
+    "class A: pass",
+    "class A(int): pass"
+  ],
+  "fixDescription": "Replaces direct inheritance from dict, list, or str with the corresponding collections.UserDict, UserList, or UserString base class, preserving all other bases and class body content.",
+  "hazards": [
+    "The rewrite changes the MRO, potentially altering method resolution order in multiple inheritance scenarios involving the replaced base.",
+    "isinstance(obj, dict/list/str) checks will return False for instances after the rewrite, breaking type tests that rely on the original built-in type.",
+    "Code relying on the exact type (type(obj) is dict/list/str) will fail after the rewrite, as the type becomes the User* subclass.",
+    "If the class defines __slots__, the rewrite may conflict with User*'s __slots__ or cause layout incompatibilities, leading to attribute errors.",
+    "If the class overrides __new__ or __init__ and depends on the built-in's memory layout or initialization behavior, the User* alternative may not replicate it exactly.",
+    "If the class is used in C extensions or via CPython's internal APIs that expect the exact built-in type, the rewrite may cause segmentation faults or undefined behavior.",
+    "If the class relies on the built-in's hash implementation (e.g., for use in sets or as dict keys), the User* version may have different hashing behavior.",
+    "If the class is pickled/unpickled, the rewrite changes the serialized form and may break compatibility with existing pickles expecting the built-in type.",
+    "If the class is documented or inspected via __mro__, __bases__, or similar introspection, the output will differ after the rewrite.",
+    "Any decorators or metaclasses that inspect or modify the base classes at definition time may behave differently due to the changed base list.",
+    "If the code imports dict/list/str from elsewhere (e.g., via aliasing or shadowing), the fix may incorrectly replace the wrong base or fail to detect the inheritance.",
+    "Comments placed on the same line as the class declaration or within the parentheses of the base class list may be lost or misplaced during the rewrite."
+  ]
+}

@@ -1,0 +1,930 @@
+{
+  "runId": "2026-10-17T20-13-15-620Z-xspf-biome-complexity_useRegexLiterals",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/useRegexLiterals",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useRegexLiterals\n- Fix: safe\n- Default severity: warn\n- Available from version: 1.3.0\n- Diagnostic category: lint/complexity/useRegexLiterals\n- This rule is recommended\n\nDescription\n\n Enforce the use of the regular expression literals instead of the RegExp constructor if possible.\n\n There are two ways to create a regular expression:\n - Regular expression literals, e.g., `/abc/u`.\n - The RegExp constructor function, e.g., `new RegExp(\"abc\", \"u\")` .\n\n The constructor function is particularly useful when you want to dynamically generate the pattern,\n because it takes string arguments.\n\n Using regular expression literals avoids some escaping required in a string literal,\n and are easier to analyze statically.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n new RegExp(\"abc\", \"u\");\n ```\n\nValid\n\n ```js\n /abc/u;\n\n new RegExp(\"abc\", flags);\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags uses of the RegExp constructor where both arguments are static strings, recommending replacement with a regex literal.",
+    "firingShapes": [
+      "new RegExp(\"abc\", \"u\");",
+      "var re = new RegExp('\\\\d+', 'g');",
+      "function test() { return new RegExp(\"hello\", \"i\"); }",
+      "if (new RegExp(\"foo\", \"m\").test(str)) {}",
+      "const arr = [new RegExp(\"bar\", \"y\")];",
+      "new RegExp(\"\\\\s+\", \"\");",
+      "new RegExp(\"\", \"g\");",
+      "new RegExp(escapeMe(\"a\"), \"u\");"
+    ],
+    "silentShapes": [
+      "new RegExp(userInput, flags);",
+      "new RegExp(\"abc\", variableFlags);",
+      "const pattern = \"abc\"; new RegExp(pattern, \"u\");",
+      "/abc/u;",
+      "new Function(\"return new RegExp('a', 'b')\")();"
+    ],
+    "fixDescription": "Replaces `new RegExp(pattern, flags)` with `/pattern/flags` when both `pattern` and `flags` are string literals, preserving the exact literal values including escape sequences.",
+    "hazards": [
+      "If the pattern contains a forward slash (`/`), the regex literal may terminate early, causing a syntax error or incorrect pattern (e.g., `new RegExp(\"/abc/\", \"\")` becomes `///abc///`, which is invalid).",
+      "If the pattern contains unescaped regex metacharacters that were intended to be literal (e.g., `new RegExp(\"[abc]\", \"\")`), the literal behaves the same, but future maintainers might misinterpret intent—though behavior is preserved, this is noted as a readability hazard in some contexts.",
+      "If the flags string contains characters not valid in regex literals (e.g., `new RegExp(\"a\", \"xy\")`), the literal `/a/xy` is invalid and throws a SyntaxError, whereas the constructor would have thrown a runtime TypeError—changing error timing and type.",
+      "If the pattern is an empty string (`new RegExp(\"\", \"g\")`), the literal `//g` is invalid due to ambiguous comment start, causing a parse failure where the constructor succeeded.",
+      "If the flags string is empty (`new RegExp(\"abc\", \"\")`), the literal `/abc/` is valid and equivalent, so no hazard here—but included for completeness in edge-case analysis.",
+      "If the RegExp call is inside a larger expression (e.g., `x = new RegExp(\"a\", \"b\") + 1`), the rewrite changes the expression structure and may affect operator precedence or parsing if not properly parenthesized (though Biome’s fix assumes standalone or safe contexts).",
+      "If the code relies on the RegExp constructor creating a distinct object each time (e.g., for testing `instanceof`), the literal also creates a new object per evaluation, so behavior is preserved—no hazard in this case.",
+      "If the pattern or flags string literals contain line terminators (e.g., via template literals misidentified as literals—though rule only fires on string literals), the rewrite would fail, but the rule only triggers on actual string literals, so this is excluded by precondition.",
+      "If a comment is between `new` and `RegExp` (e.g., `new /* hint */ RegExp(\"a\", \"b\")`), Biome’s fixer may not trigger or may mishandle spacing, but the rule as documented flags the call shape regardless of whitespace—so assuming the fixer handles whitespace, no semantic hazard, but potential formatting loss.",
+      "If the code is in a context where `RegExp` has been shadowed (e.g., `let RegExp = String;`), the rule should not fire because it’s not the built-in, but if it does due to flawed detection, rewriting to a literal would break behavior by bypassing the shadow."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.030274699999999998,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 6,
+    "fixed": 6,
+    "disputed": 11,
+    "fix-breaks-syntax": 1
+  },
+  "reports": [
+    {
+      "programId": "r2-p001",
+      "kind": "fix-breaks-syntax",
+      "safeLabel": true,
+      "minimized": "try {\n  console.log(new RegExp('a', 'xy').test(''));\n} catch (e) {\n}\n",
+      "lines": {
+        "before": 5,
+        "after": 4
+      },
+      "reportPath": "runs/2026-10-17T20-13-15-620Z-xspf-biome-complexity_useRegexLiterals/reports/r2-p001.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/11939",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/1704",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/5693",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix rewrites `new RegExp('a', 'xy')` to the invalid regex literal `/a/xy`, which contains illegal flags 'x' and 'y'. The RegExp constructor accepts arbitrary flag strings at runtime (ignoring unknown flags), but regex literals only allow standard flags (g, i, m, s, u, y). This creates a syntax error where the original code ran successfully.",
+        "docsQuote": "Enforce the use of the regular expression literals instead of the RegExp constructor if possible",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useRegexLiterals fix",
+          "complexity useRegexLiterals regex literal syntax",
+          "biome rule new RegExp flag validation",
+          "invalid regex flags xy in literal conversion"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useRegexLiterals` safe fix double-escapes `\\\\/`, producing an invalid regex literal",
+            "url": "https://github.com/biomejs/biome/issues/11939",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:           npm\n  JS_RUNTIME_NAME:              node\n```\n\n</details>\n\n### Rule name\n\n`"
+          },
+          {
+            "source": "github",
+            "title": "💅 noDuplicateTestHooks: false positive on a local function named `before` called twice in a test",
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.15\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           windows\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUnnecessaryConditions: new RegExp(...).exec() is treated as non-nullable · Issue #11278 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11278",
+            "snippet": "More actions\n\n   This also reproduces on `@biomejs/biome` 2.5.14 (current npm release), and it gets worse:  \n    following the rule's own suggested fix breaks the typechecker, and the type-correct  \n    alternative to the fix gets a second, different false positive from the same rule.\n\n   Repro (`ma"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Astro: various things result in frontmatter `parse: Unterminated regex literal` · Issue #9187 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9187",
+            "snippet": "Happy to make these two separate tickets if that's better.\n\n### Expected result\n\nExpected these to not result in parse errors\n\n### Code of Conduct\n\n I agree to follow Biome's Code of Conduct\n\nReactions are currently unavailable\n\n## Activity\n\n1. jfrancos\n\n   added\n\n   S-Needs triageStatus: this issue"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Including smart-quote `‘` with escape `\\` confuses the JS lexer · Issue #1941 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1941",
+            "snippet": "src/js/test.js:1:28 parse ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✖ unterminated regex literal > 1 │ \"hello\".replace(/\\‘/, \"'\"); │ 2 │ ℹ ...but the line ends here > 1 │ \"hello\".replace(/\\‘/, \"'\"); │ 2 │ ℹ a regex literal starts there... > 1 │ \"hello\".replace(/\\‘/, "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Corrupted CLI safe fix for `useConsistentArrowReturn` · Issue #8347 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "snippet": "- #​11751 `d37f24b` Thanks @​ematipico! - Fixed #​8347: the fix from `useConsistentArrowReturn` now parenthesizes returned expressions that begin with object literals before removing the arrow function body braces, preventing invalid output for expressions such as object property access.\n   - #​1178"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 There is a false positive in the `useLiteralKeys` rule · Issue #3160 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3160",
+            "snippet": "S-Bug-confirmedStatus: report has been confirmed as a valid bugStatus: report has been confirmed as a valid bug\n\n   on Jun 10, 2024\n3. Sec-ant\n\n   self-assigned this\n\n   on Jun 14, 2024\n4. Sec-ant\n\n   closed this as completedin #3210on Jun 14, 2024\n\nSign up for free to join this conversation on GitH"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `useSortedClasses` unsafe fix does not apply to expressions in Astro template · Issue #9181 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9181",
+            "snippet": "L-JavaScriptLanguage: JavaScript and super languagesLanguage: JavaScript and super languages\n\n   S-Bug-confirmedStatus: report has been confirmed as a valid bugStatus: report has been confirmed as a valid bug\n\n   and removed\n\n   S-Needs triageStatus: this issue needs to be triagedStatus: this issue "
+          },
+          {
+            "source": "github",
+            "title": "💅 Bug when linting on save, when Biome is changing RegEx to literal",
+            "url": "https://github.com/biomejs/biome/issues/1704",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\r\n  Version:                      1.5.3\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             x86_64\r\n  OS:                           linux\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                     u"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Parser fails with \"Expected a compound selector\" due to @media query · Issue #3091 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3091",
+            "snippet": "nursery/noLabelWithoutControl a11y/useValidAnchor suspicious/noFallthroughSwitchClause complexity/useRegexLiterals suspicious/noImplicitAnyLet correctness/noSelfAssign nursery/useThrowNewError style/noUselessElse style/useShorthandFunctionType suspicious/noMisleadingCharacterClass nursery/noUnusedFu"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Using object literal shorthand syntax causes useErrorCause false positive · Issue #10664 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/10664",
+            "snippet": "and removed\n\n   S-Needs triageStatus: this issue needs to be triagedStatus: this issue needs to be triaged\n\n   on Jun 15, 2026\n5. Netail\n\n   self-assigned this\n\n   on Jun 15, 2026\n6. Netail\n\n   closed this as completedin #10667on Jun 15, 2026\n7. OIRNOIR\n\n   added 2 commits that reference this issue "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 False positive by lint/nursery/noUselessUndefined · Issue #6577 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6577",
+            "snippet": "More actions\n\n   guess we leave it as is and down to users to deal with it - e.g. turn off one or the other?\n\n   Alternatively we should introduce an option on either of the two rules?\n\n   @atheck what do you think please?\n9. ### atheckcommentedon Jun 27, 2025\n\n   @atheck\n\n   atheck\n\n   on Jun 27, 2"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 useShorthandArrayType fix produces invalid syntax in `class extends` clause · Issue #3247 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3247",
+            "snippet": "L-JavaScriptLanguage: JavaScript and super languagesLanguage: JavaScript and super languages\n\n   S-Bug-confirmedStatus: report has been confirmed as a valid bugStatus: report has been confirmed as a valid bug\n\n   on Jun 21, 2024\n2. ### Conacloscommentedon Jun 21, 2024\n\n   @Conaclos\n\n   Conaclos\n\n   "
+          },
+          {
+            "source": "tavily",
+            "title": "chore: add regex globals by arendjr · Pull Request #8166 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/8166",
+            "snippet": "output and snapshots. The pattern is applied uniformly across all variants.   crates/biome\\_js\\_type\\_info/tests/local\\_inference.rs (1) `37-46`: LGTM! Well-structured test for regex type inference.  The new test follows established patterns in the file and validates type inference for regex literal"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 useRegexLiterals incorrect autofix · Issue #5693 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/5693",
+            "snippet": "More actions\n\n   @dyc3  \n    I've grasped all the locations of the codes you explained to me😊  \n    We also confirmed that the test passes through `cargo test -p biome_js_analyze.`\n\n   What I want is to test the new RegExp(`a\\b`) shoud be transformed to /a\\b/ whether this value runs normally in thi"
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Port `prefer-regexp-test` · Issue #9377 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9377",
+            "snippet": "@Netail\n\nNetail\n\nopened on Mar 7, 2026\n\nIssue body actions\n\n### Description\n\n \n \n \n\nCan take a lot of inspiration from `useRegexpExec`. These 2 might be a little confusing, as if this one is more advanced, but the use-case between these is different. This rule is meant for when the output is used in"
+          },
+          {
+            "source": "tavily",
+            "title": "feat(noImpliedEval): flag `new Function(...)` by dyc3 · Pull Request #9811 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/9811",
+            "snippet": "| Walkthrough A Changeset is added to publish a patch for `@biomejs/biome`. The `NoImpliedEval` lint now analyses both `call` and `new` expressions, detects `Function` constructor usages in direct and indirect invocation patterns, records typed internal state for diagnostics (`NoImpliedEvalState`), "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/11939",
+            "relation": "related",
+            "why": "same rule but different construct: that report is about double-escaping forward slashes in the pattern, while this one is about preserving invalid flags like 'xy' when converting to a literal"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "relation": "unrelated",
+            "why": "different rule (noDuplicateTestHooks) and unrelated construct (local function named before)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and unrelated construct (CSS semicolon handling)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and unrelated construct (Sass variable reordering)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and unrelated construct (nested CSS rule reordering)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and unrelated construct (overloaded call with undefined default)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule (noSkippedTests) and unrelated construct (conditional skip fix suggestion)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "different rule (private method detection) and unrelated construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "different rule (React StrictMode export detection) and unrelated construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and unrelated construct (callback overload false positive)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11278",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and unrelated construct (RegExp.exec nullability)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9187",
+            "relation": "unrelated",
+            "why": "different rule (Astro frontmatter parsing) and unrelated construct (unterminated regex literal in template)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1941",
+            "relation": "unrelated",
+            "why": "different rule (JS lexer confusion with smart quotes) and unrelated construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "relation": "unrelated",
+            "why": "different rule (useConsistentArrowReturn) and unrelated construct (arrow function fix corruption)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3160",
+            "relation": "unrelated",
+            "why": "different rule (useLiteralKeys) and unrelated construct (object literal shorthand)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9181",
+            "relation": "unrelated",
+            "why": "different rule (useSortedClasses) and unrelated construct (Astro template expressions)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1704",
+            "relation": "related",
+            "why": "same rule (useRegexLiterals) and same defect class (autofix produces invalid syntax), but the original report lacks a snippet showing the exact construct (invalid flags)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3091",
+            "relation": "unrelated",
+            "why": "parser error mention includes useRegexLiterals but the defect is about @media query parsing, not regex literal conversion"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10664",
+            "relation": "unrelated",
+            "why": "different rule (useErrorCause) and unrelated construct (object literal shorthand false positive)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6577",
+            "relation": "unrelated",
+            "why": "different rule (noUselessUndefined) and unrelated construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3247",
+            "relation": "unrelated",
+            "why": "different rule (useShorthandArrayType) and unrelated construct (class extends clause)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/8166",
+            "relation": "unrelated",
+            "why": "pull request about regex globals feature, not a bug report about invalid autofix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/5693",
+            "relation": "related",
+            "why": "same rule (useRegexLiterals) and same defect class (incorrect autofix), but that report concerns backslash escaping in the pattern while this one concerns invalid flags preservation"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9377",
+            "relation": "unrelated",
+            "why": "different rule (prefer-regexp-test) and unrelated construct (new rule proposal)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/9811",
+            "relation": "unrelated",
+            "why": "pull request about noImpliedEval feature, not a bug report about regex literal conversion"
+          }
+        ],
+        "cost": 0.0074808
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:26:35.055125126 -0400\n+++ fixed.js\t2026-10-22 13:26:37.096158968 -0400\n@@ -1,4 +1,4 @@\n try {\n-  console.log(new RegExp('a', 'xy').test(''));\n+  console.log(/a/xy.test(''));\n } catch (e) {\n }\n",
+        "observed": "/home/sun/dev/diaghunt/runs/2026-10-17T20-13-15-620Z-xspf-biome-complexity_useRegexLiterals/r2-p001/min/r2-p001-reuse/fixed.js:2\n  console.log(/a/xy.test(''));\n              ^\n\nSyntaxError: Invalid regular expression flags\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "try {\n  console.log(/a/xy.test(''));\n} catch (e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=complexity/useRegexLiterals --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The regex literal `/a/xy` uses invalid flag `x`, which Node.js does not recognize; valid flags are only g, i, m, s, u, y, d. The original `new RegExp('a', 'xy')` throws a runtime error due to invalid flags, caught silently. The rewrite attempts to parse `/a/xy` as a literal, causing a syntax error during parsing—before execution—so the program fails earlier and differently, breaking syntax rather than throwing a catchable exception. This changes when and how the error occurs, altering program behavior.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Var hoisting and redeclaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useRegexLiterals",
+            "severity": "warning",
+            "message": "Use a regular expression literal instead of the RegExp constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\ntrue\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ntrue\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:13:28.891035700 -0400\n+++ fixed.js\t2026-10-17 16:13:29.198029711 -0400\n@@ -1,5 +1,5 @@\n for (var i = 0; i < 2; i++) {\n-  var re = new RegExp('a', '');\n+  var re = /a/;\n   console.log(re.test('a'));\n }\n console.log(typeof re);\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Name collision across scopes",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Distinct object creation",
+      "hazard": "If the code relies on the RegExp constructor creating a distinct object each time (e.g., for testing `instanceof`), the literal also creates a new object per evaluation, so behavior is preserved—no ha",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useRegexLiterals",
+            "severity": "warning",
+            "message": "Use a regular expression literal instead of the RegExp constructor.",
+            "span": null
+          },
+          {
+            "rule": "complexity/useRegexLiterals",
+            "severity": "warning",
+            "message": "Use a regular expression literal instead of the RegExp constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:13:29.583022207 -0400\n+++ fixed.js\t2026-10-17 16:13:29.864016730 -0400\n@@ -1,6 +1,6 @@\n function test() {\n-  var a = new RegExp('a', '');\n-  var b = new RegExp('a', '');\n+  var a = /a/;\n+  var b = /a/;\n   console.log(a !== b);\n }\n test();\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "RegExp shadowing",
+      "hazard": "If the code is in a context where `RegExp` has been shadowed (e.g., `let RegExp = String;`), the rule should not fire because it’s not the built-in, but if it does due to flawed detection, rewriting t",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[String: 'a']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Null/undefined distinction",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "object\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "This binding",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'getPattern')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Pattern contains forward slash",
+      "hazard": "If the pattern contains a forward slash (`/`), the regex literal may terminate early, causing a syntax error or incorrect pattern (e.g., `new RegExp(\"/abc/\", \"\")` becomes `///abc///`, which is invalid",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useRegexLiterals",
+            "severity": "warning",
+            "message": "Use a regular expression literal instead of the RegExp constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:13:30.706000351 -0400\n+++ fixed.js\t2026-10-17 16:13:30.959995412 -0400\n@@ -1,5 +1,5 @@\n try {\n-  var re = new RegExp('/abc/', '');\n+  var re = /\\/abc\\//;\n   console.log(re.test('/abc/'));\n } catch (e) {\n   console.log(e.name + ': ' + e.message);\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Numeric/string coercion",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Invalid flags in regex literal cause SyntaxError instead of TypeError",
+      "hazard": "If the flags string contains characters not valid in regex literals (e.g., `new RegExp(\"a\", \"xy\")`), the literal `/a/xy` is invalid and throws a SyntaxError, whereas the constructor would have thrown ",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useRegexLiterals",
+            "severity": "warning",
+            "message": "Use a regular expression literal instead of the RegExp constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "SyntaxError: Invalid flags supplied to RegExp constructor 'xy'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-breaks-syntax",
+          "safeLabel": true,
+          "detail": "/home/sun/dev/diaghunt/runs/2026-10-17T20-13-15-620Z-xspf-biome-complexity_useRegexLiterals/r2-p001/fixed.js:2\n  console.log(/a/xy.test(''));\n              ^\n\nSyntaxError: Invalid regular expression flags\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "SyntaxError: Invalid flags supplied to RegExp constructor 'xy'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": false,
+        "diff": "--- orig.js\t2026-10-17 16:13:37.696865576 -0400\n+++ fixed.js\t2026-10-17 16:13:37.977860201 -0400\n@@ -1,5 +1,5 @@\n try {\n-  console.log(new RegExp('a', 'xy').test(''));\n+  console.log(/a/xy.test(''));\n } catch (e) {\n   console.log(e.constructor.name + ': ' + e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Name collision across scopes after a move (shadowing)",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: (intermediate value).test is not a function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Null/undefined distinction with optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Sparse arrays and holes interaction",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useRegexLiterals",
+            "severity": "warning",
+            "message": "Use a regular expression literal instead of the RegExp constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\nhole\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\nhole\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:13:38.464850905 -0400\n+++ fixed.js\t2026-10-17 16:13:38.734845752 -0400\n@@ -1,4 +1,4 @@\n const arr = Array(2);\n-arr[0] = new RegExp('a', 'g');\n+arr[0] = /a/g;\n console.log(arr[0].test('a'));\n console.log(arr[1] === undefined ? 'hole' : arr[1]);\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Order of evaluation with side effects duplicated",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ncount: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Temporal dead zone after hoisting/reordering",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'pattern' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Function declaration inside block interacts with rewrite",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Var hoisting and redeclaration inside loop",
+      "hazard": "Var hoisting and redeclaration (var hoisting and re-declaration inside loops or after use)",
+      "rule": "complexity/useRegexLiterals",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useRegexLiterals",
+            "severity": "warning",
+            "message": "Use a regular expression literal instead of the RegExp constructor.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\ntrue\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ntrue\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:13:39.594829366 -0400\n+++ fixed.js\t2026-10-17 16:13:39.853824434 -0400\n@@ -1,5 +1,5 @@\n for (var i = 0; i < 2; i++) {\n-  var re = new RegExp('a', 'g');\n+  var re = /a/g;\n   console.log(re.test('a'));\n }\n console.log(typeof re);\n"
+      }
+    }
+  ]
+}

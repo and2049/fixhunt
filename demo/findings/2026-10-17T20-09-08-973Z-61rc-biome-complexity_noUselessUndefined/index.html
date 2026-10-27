@@ -1,0 +1,362 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/noUselessUndefined — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/noUselessUndefined <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-09-08-973Z-61rc-biome-complexity_noUselessUndefined · fix labelled <b>safe</b> · 15 programs, 10 fired, 10 fixed, 2 oracle-backed finding(s) · model cost $0.0484</p>
+<div class="card"><b>Rule analysis</b><p>Flags explicit uses of `undefined` where it is redundant because it is already the implicit default.</p><p class="mut">Fix: Removes the explicit `= undefined` initializer or argument default, or replaces `return undefined;`/`yield undefined;` with `return;`/`yield;` respectively.</p><details><summary>10 hazards</summary><ul><li>Rewriting `let x = undefined;` to `let x;` changes behavior if the variable is read before assignment due to TDZ—though both initialize to `undefined`, the temporal dead zone semantics differ slightly in edge cases involving indirect eval or with statements.</li><li>In destructuring like `const {a = undefined} = obj;`, removing `= undefined` alters behavior when `obj.a` is `null` because the default only applies if the property is missing, not if it is present but `null`.</li><li>For function parameters like `function f(a = undefined)`, removing the default changes behavior when `f()` is called with no argument vs. `f(undefined)`—though both result in `a` being `undefined`, the former triggers the default parameter initialization which may have side effects if the default expression is not a literal (but here it is, so low risk; still, spec-wise distinct).</li><li>In object destructuring parameters like `function f({a = undefined})`, omitting the default breaks when the argument is `{a: null}` because the default does not apply, preserving `null` instead of converting to `undefined`.</li><li>Replacing `return undefined;` with `return;` in a function that is used as a constructor changes behavior because `new f()` returns the instance when the return value is not an object, and `undefined` is not an object, so both behave the same—however, if the function is called via `Reflect.construct` with a `newTarget`, the return value handling is identical, so no actual hazard; but per spec, any non-object return is ignored, so safe.</li><li>Replacing `yield undefined;` with `yield;` in a generator changes behavior if the generator&#39;s return value is inspected via `{value, done}` because `yield` produces `{value: undefined, done: false}` just like `yield undefined;`, so equivalent—no hazard.</li><li>If the code relies on the length of the function&#39;s parameter list for reflection (e.g., `f.length`), removing a default parameter does not change the length because parameters with defaults still count toward length—so no hazard.</li><li>In strict mode, if `undefined` is reassigned globally, the literal `undefined` might not refer to the actual undefined value, but the rule only flags syntactic defaults, and the autofix removes the reference entirely, so if `undefined` was shadowed, removing the use avoids relying on the possibly mutated binding—this could fix unintended behavior, not break it.</li><li>The autofix may drop comments attached to the `undefined` token, such as `let x = /* TODO */ undefined;`, which would be lost during rewriting.</li><li>In rare cases involving `with` statements or indirect `eval`, the scope resolution of a bare variable in `let x;` vs. an initializer could differ if `undefined` is not resolvable in the expected scope, but since the initializer is removed and the variable is still declared, the behavior remains consistent.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The program declares a local variable named `undefined` with value 42, shadowing the global `undefined`. The rule removes the initializer `= undefined` from `let x = undefined`, turning it into `let x;`, which changes `x` from 42 to the real `undefined`. This is a silent wrong result in plausible code where `undefined` is shadowed.">judge: real · high</span> Strict mode undefined shadowing made safe by removal<p class="mut">The program declares a local variable named `undefined` with value 42, shadowing the global `undefined`. The rule removes the initializer `= undefined` from `let x = undefined`, turning it into `let x;`, which changes `x` from 42 to the real `undefined`. This is a silent wrong result in plausible code where `undefined` is shadowed.</p>
+<h2>Minimized program (20→10 lines)</h2><pre>let log = [];
+(function(){ 
+  var undefined = 42; // shadowing
+  let x = undefined;  // rule triggers: removes this line
+  log.push(String(x));
+})();
+try {
+} catch(e) {
+}
+console.log(log.join(&#39; | &#39;));
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:09:23.083459600 -0400
++++ fixed.js	2026-10-17 16:09:23.355450389 -0400
+@@ -2,7 +2,7 @@
+ let log = [];
+ (function(){ 
+   var undefined = 42; // shadowing
+<span class="del">-  let x = undefined;  // rule triggers: removes this line</span>
+<span class="add">+  let x ;  // rule triggers: removes this line</span>
+   log.push(String(x));
+ })();
+ 
+</pre>
+<h2>Observed</h2><pre>stdout before:
+42 | undefined
+stdout after:
+undefined | undefined</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11934">biomejs/biome/issues/11934</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11017">biomejs/biome/issues/11017</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6906">biomejs/biome/issues/6906</a> · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p005"><b>r2-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the default parameter `= undefined` from the first parameter, which changes the function&#39;s `length` property from 0 to 2 because `length` counts only parameters without defaults. This is a silent change in observable behavior (the program prints a different number) for a construct that is legal and plausible in real code, so the fix should not be labelled safe.">judge: real · high</span> Function Length Reflection - No Change Expected<p class="mut">The fix removes the default parameter `= undefined` from the first parameter, which changes the function&#39;s `length` property from 0 to 2 because `length` counts only parameters without defaults. This is a silent change in observable behavior (the program prints a different number) for a construct that is legal and plausible in real code, so the fix should not be labelled safe.</p>
+<h2>Minimized program (2→2 lines)</h2><pre>function f(a = undefined, b) {}
+console.log(f.length); // should be 2 regardless of default
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:09:31.089190587 -0400
++++ fixed.js	2026-10-17 16:09:31.345182068 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-function f(a = undefined, b) {}</span>
+<span class="add">+function f(a , b) {}</span>
+ console.log(f.length); // should be 2 regardless of default
+</pre>
+<h2>Observed</h2><pre>stdout before:
+0
+stdout after:
+2</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11934">biomejs/biome/issues/11934</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/12040">biomejs/biome/issues/12040</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11017">biomejs/biome/issues/11017</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6906">biomejs/biome/issues/6906</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6611">biomejs/biome/issues/6611</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6577">biomejs/biome/issues/6577</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6578">biomejs/biome/issues/6578</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3942">biomejs/biome/issues/3942</a> · <a href="reports/r2-p005.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Destructuring assignment with undefined default overwriting null</td><td class="mut">In destructuring like `const {a = undefined} = obj;`, removing `= undefined` alters behavi</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Function parameter default with undefined changing init timing</td><td class="mut">For function parameters like `function f(a = undefined)`, removing the default changes beh</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Object destructuring parameter preserving null vs undefined</td><td class="mut">In object destructuring parameters like `function f({a = undefined})`, omitting the defaul</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>Block-scoped function declaration hoisting differences</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Yield undefined equivalence verified by inspection</td><td class="mut">Replacing `yield undefined;` with `yield;` in a generator changes behavior if the generato</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Strict mode undefined shadowing made safe by removal</td><td class="mut">In strict mode, if `undefined` is reassigned globally, the literal `undefined` might not r</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>Control flow interaction with labeled breaks and finally</td><td class="mut">label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span></td><td>Proto key access unaffected by undefined removal</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Function Parameter Default Undefined - Initialization Timing</td><td class="mut">Removing default parameter &#39;= undefined&#39; changes when the default is evaluated versus when</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Constructor Return Undefined vs Empty Return - Reflect.construct</td><td class="mut">Replacing &#39;return undefined;&#39; with &#39;return;&#39; in a constructor has no behavioral difference</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>ASI Hazard with Leading Parenthesis After Return Undefined</td><td class="mut">Removing &#39;undefined&#39; from &#39;return undefined&#39; can cause ASI to misinterpret the next line s</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Getter/Setter with Undefined Return and Side Effects</td><td class="mut">Replacing &#39;return undefined;&#39; in a getter with &#39;return;&#39; may affect side effects if the ge</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag bad">fix-changes-behavior</span><span class="tag warn">disputed</span></td><td>Function Length Reflection - No Change Expected</td><td class="mut">Removing &#39;= undefined&#39; from parameter does not change function.length, so no behavioral di</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>Class Fields and Static Blocks - No Interaction</td><td class="mut">The rule does not apply to class fields or static blocks, so this is a near-miss to confir</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Temporal Dead Zone - Let Redeclaration After Loop</td><td class="mut">The rule does not cause hoisting or reordering, so no TDZ hazard. We show a loop that reen</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Destructuring assignment with undefined default overwriting null</summary><pre>let log = [];
+function capture(v){ log.push(v); }
+
+// Hazardous pattern: default in destructuring
+data = {a: null}; // note: value is null, not missing
+try {
+  const {a = undefined} = data;
+  capture(&#39;got &#39; + String(a));
+} catch(e) {
+  capture(e.name + &#39;: &#39; + e.message);
+}
+
+console.log(log.join(&#39; | &#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:21.099526993 -0400
++++ fixed.js	2026-10-17 16:09:21.370517776 -0400
+@@ -4,7 +4,7 @@
+ // Hazardous pattern: default in destructuring
+ data = {a: null}; // note: value is null, not missing
+ try {
+<span class="del">-  const {a = undefined} = data;</span>
+<span class="add">+  const {a } = data;</span>
+   capture(&#39;got &#39; + String(a));
+ } catch(e) {
+   capture(e.name + &#39;: &#39; + e.message);
+</pre></details><details id="r1-p002"><summary>r1-p002 — Function parameter default with undefined changing init timing</summary><pre>let callLog = [];
+function sideEffect(){
+  callLog.push(&#39;init&#39;);
+  return undefined;
+}
+
+function f(a = sideEffect()){ // rule triggers here
+  callLog.push(&#39;body: &#39; + (a === undefined ? &#39;undef&#39; : &#39;def&#39;));
+}
+
+f();           // triggers default param init
+f(undefined);  // does NOT trigger default param init
+
+console.log(callLog.join(&#39; | &#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:21.531512300 -0400
++++ fixed.js	2026-10-17 16:09:21.810502811 -0400
+@@ -1,7 +1,7 @@
+ let callLog = [];
+ function sideEffect(){
+   callLog.push(&#39;init&#39;);
+<span class="del">-  return undefined;</span>
+<span class="add">+  return ;</span>
+ }
+ 
+ function f(a = sideEffect()){ // rule triggers here
+</pre></details><details id="r1-p003"><summary>r1-p003 — Object destructuring parameter preserving null vs undefined</summary><pre>let result = [];
+function test(val){
+  result.push(String(val));
+}
+
+// Hazard: default in parameter destructuring
+function g({a = undefined}){
+  test(a);
+}
+
+g({a: null});   // should preserve null -&gt; logs &#39;null&#39;
+g({a: undefined});// logs &#39;undefined&#39;
+g({});          // missing -&gt; default -&gt; logs &#39;undefined&#39;
+
+g = null;       // redeclaration after use
+
+console.log(result.join(&#39; | &#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:21.969497403 -0400
++++ fixed.js	2026-10-17 16:09:22.249487898 -0400
+@@ -4,7 +4,7 @@
+ }
+ 
+ // Hazard: default in parameter destructuring
+<span class="del">-function g({a = undefined}){</span>
+<span class="add">+function g({a }){</span>
+   test(a);
+ }
+ 
+</pre></details><details id="r1-p004"><summary>r1-p004 — Block-scoped function declaration hoisting differences</summary><pre>let out = [];
+{ 
+  function h(){ out.push(&#39;block&#39;); }
+  if(true){ function h(){ out.push(&#39;redeclared&#39;); } }
+  h();
+}
+
+switch(0){
+  case 0:
+    function h(){ out.push(&#39;case&#39;); }
+    break;
+}
+
+h();
+
+label: {
+  function h(){ out.push(&#39;label&#39;); }
+  break label;
+}
+
+h();
+
+console.log(out.join(&#39; | &#39;));
+</pre></details><details id="r1-p005"><summary>r1-p005 — Yield undefined equivalence verified by inspection</summary><pre>function* gen(){
+  yield undefined; // triggers rule
+  yield;         // equivalent, no trigger
+}
+
+const it = gen();
+let log = [];
+log.push(JSON.stringify(it.next()));
+log.push(JSON.stringify(it.next()));
+log.push(JSON.stringify(it.next()));
+
+console.log(log.join(&#39; | &#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:22.645474458 -0400
++++ fixed.js	2026-10-17 16:09:22.919465160 -0400
+@@ -1,5 +1,5 @@
+ function* gen(){
+<span class="del">-  yield undefined; // triggers rule</span>
+<span class="add">+  yield ; // triggers rule</span>
+   yield;         // equivalent, no trigger
+ }
+ 
+</pre></details><details id="r1-p006"><summary>r1-p006 — Strict mode undefined shadowing made safe by removal</summary><pre>&quot;use strict&quot;;
+let log = [];
+(function(){ 
+  var undefined = 42; // shadowing
+  let x = undefined;  // rule triggers: removes this line
+  log.push(String(x));
+})();
+
+// After fix: x is undeclared -&gt; ReferenceError
+try {
+  (function(){
+    var undefined = 42;
+    let x;          // autofixed version
+    log.push(String(x));
+  })();
+} catch(e) {
+  log.push(e.name + &#39;: &#39; + e.message);
+}
+
+console.log(log.join(&#39; | &#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:23.083459600 -0400
++++ fixed.js	2026-10-17 16:09:23.355450389 -0400
+@@ -2,7 +2,7 @@
+ let log = [];
+ (function(){ 
+   var undefined = 42; // shadowing
+<span class="del">-  let x = undefined;  // rule triggers: removes this line</span>
+<span class="add">+  let x ;  // rule triggers: removes this line</span>
+   log.push(String(x));
+ })();
+ 
+</pre></details><details id="r1-p007"><summary>r1-p007 — Control flow interaction with labeled breaks and finally</summary><pre>let trace = [];
+outer: for(let i=0; i&lt;2; i++){
+  try{
+    if(i===0){
+      trace.push(&#39;a&#39;);
+      break outer;
+    }
+    trace.push(&#39;b&#39;);
+    return undefined; // rule triggers
+  } finally{
+    trace.push(&#39;finally&#39;);
+  }
+}
+
+function inner(){ 
+  trace.push(&#39;inner start&#39;);
+  if(true) yield undefined; // rule triggers
+  trace.push(&#39;inner end&#39;);
+}
+
+for(const v of inner()){ trace.push(&#39;yielded: &#39;+v); }
+
+console.log(trace.join(&#39; | &#39;));
+</pre></details><details id="r1-p008"><summary>r1-p008 — Proto key access unaffected by undefined removal</summary><pre>let obj = {__proto__: {toString(){return &#39;proto&#39;}}};
+let copy = {...obj, a: undefined}; // rule triggers on &#39;a: undefined&#39;
+
+let log = [];
+log.push(String(copy.a));
+log.push(String(copy.toString()));
+log.push(String(Object.getPrototypeOf(copy)));
+
+// Re-assign after use
+data = {x:1};
+copy = {...data, y: undefined}; // another trigger
+log.push(String(copy.y));
+
+console.log(log.join(&#39; | &#39;));
+</pre></details><details id="r2-p001"><summary>r2-p001 — Function Parameter Default Undefined - Initialization Timing</summary><pre>let log = [];
+function side() { log.push(&#39;side&#39;); return undefined; }
+function f(a = side()) {
+  return a;
+}
+f(); // call with no arg -&gt; evaluates side()
+f(undefined); // call with undefined arg -&gt; does NOT evaluate side()
+console.log(log.join(&#39;,&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:29.560241608 -0400
++++ fixed.js	2026-10-17 16:09:29.835232417 -0400
+@@ -1,5 +1,5 @@
+ let log = [];
+<span class="del">-function side() { log.push(&#39;side&#39;); return undefined; }</span>
+<span class="add">+function side() { log.push(&#39;side&#39;); return ; }</span>
+ function f(a = side()) {
+   return a;
+ }
+</pre></details><details id="r2-p002"><summary>r2-p002 — Constructor Return Undefined vs Empty Return - Reflect.construct</summary><pre>function F() {
+  this.x = 1;
+  return undefined;
+}
+let o1 = Reflect.construct(F, [], F);
+console.log(o1.x);
+function G() {
+  this.x = 2;
+  return;
+}
+let o2 = Reflect.construct(G, [], G);
+console.log(o2.x);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:30.008226634 -0400
++++ fixed.js	2026-10-17 16:09:30.276217696 -0400
+@@ -1,6 +1,6 @@
+ function F() {
+   this.x = 1;
+<span class="del">-  return undefined;</span>
+<span class="add">+  return ;</span>
+ }
+ let o1 = Reflect.construct(F, [], F);
+ console.log(o1.x);
+</pre></details><details id="r2-p003"><summary>r2-p003 — ASI Hazard with Leading Parenthesis After Return Undefined</summary><pre>function f() {
+  return
+  [
+    function() { return 1; },
+    function() { return 2; }
+  ]
+}
+try {
+  let arr = f();
+  console.log(arr[0]());
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre></details><details id="r2-p004"><summary>r2-p004 — Getter/Setter with Undefined Return and Side Effects</summary><pre>let log = [];
+const obj = {};
+Object.defineProperty(obj, &#39;prop&#39;, {
+  get() {
+    log.push(&#39;get&#39;);
+    return undefined;
+  }
+});
+x = obj.prop;
+y = obj.prop;
+console.log(log.join(&#39;,&#39;));
+// After fix: getter still returns undefined implicitly, but we trace call count
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:30.656205022 -0400
++++ fixed.js	2026-10-17 16:09:30.921196184 -0400
+@@ -3,7 +3,7 @@
+ Object.defineProperty(obj, &#39;prop&#39;, {
+   get() {
+     log.push(&#39;get&#39;);
+<span class="del">-    return undefined;</span>
+<span class="add">+    return ;</span>
+   }
+ });
+ x = obj.prop;
+</pre></details><details id="r2-p005"><summary>r2-p005 — Function Length Reflection - No Change Expected</summary><pre>function f(a = undefined, b) {}
+console.log(f.length); // should be 2 regardless of default
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:31.089190587 -0400
++++ fixed.js	2026-10-17 16:09:31.345182068 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-function f(a = undefined, b) {}</span>
+<span class="add">+function f(a , b) {}</span>
+ console.log(f.length); // should be 2 regardless of default
+</pre></details><details id="r2-p006"><summary>r2-p006 — Class Fields and Static Blocks - No Interaction</summary><pre>class C {
+  static field = undefined;
+  static {
+    console.log(C.field);
+  }
+  method() {}
+}
+// No output expected from rule, but static block runs
+</pre></details><details id="r2-p008"><summary>r2-p008 — Temporal Dead Zone - Let Redeclaration After Loop</summary><pre>for (let i = 0; i &lt; 2; i++) {
+  let x = undefined;
+  if (i === 0) {
+    x = &#39;first&#39;;
+  } else {
+    x = &#39;second&#39;;
+  }
+  console.log(x);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:09:31.730169255 -0400
++++ fixed.js	2026-10-17 16:09:32.006160070 -0400
+@@ -1,5 +1,5 @@
+ for (let i = 0; i &lt; 2; i++) {
+<span class="del">-  let x = undefined;</span>
+<span class="add">+  let x ;</span>
+   if (i === 0) {
+     x = &#39;first&#39;;
+   } else {
+</pre></details></body></html>

@@ -1,0 +1,227 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/useSimplifiedLogicExpression — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/useSimplifiedLogicExpression <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-15-13-121Z-vjcv-biome-complexity_useSimplifiedLogicExpression · fix labelled <b>safe</b> · 16 programs, 10 fired, 10 fixed, 1 oracle-backed finding(s) · model cost $0.0251</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant literals in logical expressions (`&amp;&amp;`, `||`, `!!`) that can be removed without changing truthiness in boolean contexts.</p><p class="mut">Fix: Removes the redundant literal: `true &amp;&amp; expr` → `expr`, `false || expr` → `expr`, `expr || false` → `expr`, `expr &amp;&amp; true` → `expr`, `!a || !b` → `!(a &amp;&amp; b)`, `null ?? expr` → `expr`.</p><details><summary>12 hazards</summary><ul><li>Rewriting `true &amp;&amp; expr` to `expr` changes behavior if `expr` has side effects and the surrounding context relies on short-circuiting (e.g., in `if` conditions where `expr` must not run).</li><li>Rewriting `false || expr` to `expr` alters evaluation order and may cause `expr` to execute when it previously would not have due to short-circuiting.</li><li>Rewriting `expr || false` to `expr` removes a falsy fallback, potentially changing the result when `expr` is `undefined` or `null` in non-boolean contexts (though rule only fires in boolean contexts, this notes boundary risk).</li><li>Rewriting `expr &amp;&amp; true` to `expr` eliminates a truthy guard, which could affect outcomes if `expr` is falsy and the result is used in a non-boolean context (rule restricts to boolean contexts, but notes potential misuse).</li><li>Rewriting `!a || !b` to `!(a &amp;&amp; b)` via De Morgan’s law is logically equivalent but may interfere with debugging or intent if the original form was used for readability or breakpoint placement.</li><li>Rewriting `null ?? expr` to `expr` removes nullish coalescing, causing `expr` to evaluate even when `null` is present (but note: `null ?? expr` only fires if `expr` is truthy? Actually, rule flags `null ?? nonNullExp` as invalid — fix removes `null ??`, so rewrites to `expr`; hazard: if `expr` has side effects, it now runs unconditionally whereas before it only ran if `null` was null/undefined).</li><li>If the expression contains comments (e.g., `true &amp;&amp; /* comment */ foo()`), the autofix may drop inline comments attached to the literal or expression.</li><li>In rare cases involving `eval` or `with`, the rewritten expression might resolve variables differently due to scope changes, though unlikely.</li><li>If `expr` is a getter with side effects, removing the literal may change the number of times it is invoked.</li><li>The fix may break parsing if `expr` begins with a lookahead ambiguity (e.g., `true &amp;&amp; function(){}()` → `function(){}()` which is invalid as a statement).</li><li>In template literals or tagged templates, removing literals could alter the shape of passed arguments if the expression is spread or concatenated.</li><li>If the logical expression is part of a larger sequence (e.g., `return true &amp;&amp; expr, other;`), removing `true &amp;&amp;` may alter comma operator behavior.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-breaks-syntax</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites `true &amp;&amp; function() { return 1; }()` to `function() { return 1; }()`, which changes a function expression in an expression context into a function declaration statement, causing a SyntaxError. This construct is plausible in real code (e.g., IIFEs used for side effects) and the fix should not be labelled safe.">judge: real · high</span> Lookahead ambiguity breaking parse<p class="mut">The fix rewrites `true &amp;&amp; function() { return 1; }()` to `function() { return 1; }()`, which changes a function expression in an expression context into a function declaration statement, causing a SyntaxError. This construct is plausible in real code (e.g., IIFEs used for side effects) and the fix should not be labelled safe.</p>
+<h2>Minimized program (6→4 lines)</h2><pre>try {
+  true &amp;&amp; function() { return 1; }();
+} catch (e) {
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:15:37.605870939 -0400
++++ fixed.js	2026-10-17 16:15:37.866867196 -0400
+@@ -1,5 +1,5 @@
+ try {
+<span class="del">-  true &amp;&amp; function() { return 1; }();</span>
+<span class="add">+  function() { return 1; }();</span>
+   console.log(&#39;ok&#39;);
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+</pre>
+<h2>Observed</h2><pre>/home/sun/dev/diaghunt/runs/2026-10-17T20-15-13-121Z-vjcv-biome-complexity_useSimplifiedLogicExpression/r2-p001/fixed.js:2
+  function() { return 1; }();
+  ^^^^^^^^
+
+SyntaxError: Function statements require a function name
+    at checkSyntax (node:internal/main/check_syntax:84:5)
+
+Node.js v26.8.1
+</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11351">biomejs/biome/issues/11351</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/7984">biomejs/biome/issues/7984</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/8577">biomejs/biome/issues/8577</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/279">biomejs/biome/issues/279</a> · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Rewriting expr || false loses falsy fallback</td><td class="mut">In boolean contexts like ternary conditionals, replacing `x || false` with `x` removes the</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Getter side effects invocation count changed</td><td class="mut">If `expr` is a getter with side effects, rewriting `getter || false` to `getter` does not </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Sparse array holes treated as undefined in logical expressions</td><td class="mut">Accessing a hole in a sparse array yields `undefined`. In `arr[i] || false`, if `arr[i]` i</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Class field initialization with logical expressions</td><td class="mut">Class field initializers run during construction. If an initializer contains `expr || fals</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>__proto__ assignment altered by truthiness shift</td><td class="mut">When assigning to `__proto__`, the value must be an object or `null`. Using `expr || false</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>True &amp;&amp; expr removal breaks short-circuiting expectation</td><td class="mut">Although `true &amp;&amp; expr` always evaluates `expr`, rewriting it to `expr` removes the explic</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Nullish coalescing fallback removal</td><td class="mut">Rewriting `null ?? expr` to `expr` removes the intentional fallback to `expr` when the lef</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Tagged template literal argument shape changed</td><td class="mut">In tagged templates, expressions inside `${}` are passed as arguments. If such an expressi</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-breaks-syntax</span></td><td>Lookahead ambiguity breaking parse</td><td class="mut">Fix removing &#39;true &amp;&amp;&#39; leaves a function expression starting at statement position, which </td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Var hoisting and redeclaration</td><td class="mut">After fixing &#39;true &amp;&amp; var x = 1&#39; to &#39;var x = 1&#39;, hoisting and redeclaration in loop cause </td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>False || expr evaluation order changed</td><td class="mut">Fixing &#39;false || (a=1)&#39; to &#39;(a=1)&#39; causes assignment to run unconditionally, whereas befor</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Comments attached to removed code</td><td class="mut">Fix removes &#39;true &amp;&amp;&#39; and drops the inline comment on the expression, losing documentation</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Nullish coalescing fallback removal</td><td class="mut">Fix rewrites &#39;null ?? expr&#39; to &#39;expr&#39;, causing expr to run unconditionally even when null </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Inline comment dropped</td><td class="mut">Autofix removes &#39;true &amp;&amp;&#39; and the attached inline comment on the expression.</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>ASI with leading paren</td><td class="mut">After fix, expression starts with &#39;(&#39; on next line, causing ASI to misinterpret as functio</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Numeric/string coercion hazard</td><td class="mut">Fix removes &#39;true &amp;&amp;&#39; from expression involving Symbol.toPrimitive, altering coercion path</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Rewriting expr || false loses falsy fallback</summary><pre>function test(val) {
+  return (val || false) ? &#39;truthy&#39; : &#39;falsy&#39;;
+}
+console.log(test(undefined));
+console.log(test(null));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:29.514988087 -0400
++++ fixed.js	2026-10-17 16:15:29.781984182 -0400
+@@ -1,5 +1,5 @@
+ function test(val) {
+<span class="del">-  return (val || false) ? &#39;truthy&#39; : &#39;falsy&#39;;</span>
+<span class="add">+  return (val) ? &#39;truthy&#39; : &#39;falsy&#39;;</span>
+ }
+ console.log(test(undefined));
+ console.log(test(null));
+</pre></details><details id="r1-p002"><summary>r1-p002 — Getter side effects invocation count changed</summary><pre>let callCount = 0;
+const obj = {
+  get value() {
+    callCount++;
+    return 42;
+  }
+};
+if (true &amp;&amp; obj.value) {
+  // first call
+}
+if (obj.value) {
+  // second call after fix
+}
+console.log(&#39;Getter called:&#39;, callCount);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:29.940981857 -0400
++++ fixed.js	2026-10-17 16:15:30.203978018 -0400
+@@ -5,7 +5,7 @@
+     return 42;
+   }
+ };
+<span class="del">-if (true &amp;&amp; obj.value) {</span>
+<span class="add">+if (obj.value) {</span>
+   // first call
+ }
+ if (obj.value) {
+</pre></details><details id="r1-p003"><summary>r1-p003 — Sparse array holes treated as undefined in logical expressions</summary><pre>const arr = [, 1]; // hole at index 0
+let target = {};
+const val = arr[0] || false;
+target.prop = val;
+console.log(&#39;Stored value:&#39;, target.prop, typeof target.prop);
+// After fix: target.prop = arr[0]; → stores undefined
+</pre></details><details id="r1-p004"><summary>r1-p004 — Class field initialization with logical expressions</summary><pre>class C {
+  flag = (this.value || false);
+  constructor() {
+    this.value = undefined;
+  }
+}
+const c = new C();
+console.log(&#39;flag:&#39;, c.flag);
+// After fix: flag = this.value → undefined
+</pre></details><details id="r1-p005"><summary>r1-p005 — __proto__ assignment altered by truthiness shift</summary><pre>let fallbackUsed = false;
+const getValue = () =&gt; {
+  fallbackUsed = true;
+  return null;
+};
+try {
+  const proto = getValue() || false;
+  Object.defineProperty({}, &#39;__proto__&#39;, { value: proto });
+} catch (e) {
+  console.log(&#39;Error:&#39;, e.name, fallbackUsed ? &#39;(fallback used)&#39; : &#39;(no fallback)&#39;);
+}
+</pre></details><details id="r1-p006"><summary>r1-p006 — True &amp;&amp; expr removal breaks short-circuiting expectation</summary><pre>let i = 0;
+while (true &amp;&amp; i &lt; 3) {
+  console.log(&#39;Iteration:&#39;, i);
+  i++;
+}
+console.log(&#39;Loop exited at i=&#39; + i);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:31.009966261 -0400
++++ fixed.js	2026-10-17 16:15:31.261962594 -0400
+@@ -1,5 +1,5 @@
+ let i = 0;
+<span class="del">-while (true &amp;&amp; i &lt; 3) {</span>
+<span class="add">+while (i &lt; 3) {</span>
+   console.log(&#39;Iteration:&#39;, i);
+   i++;
+ }
+</pre></details><details id="r1-p007"><summary>r1-p007 — Nullish coalescing fallback removal</summary><pre>function getConfig() {
+  return null;
+}
+const settings = getConfig() ?? { debug: true };
+console.log(&#39;settings.debug:&#39;, settings.debug);
+// After fix: settings = getConfig() → null, then accessing .debug throws
+</pre></details><details id="r1-p008"><summary>r1-p008 — Tagged template literal argument shape changed</summary><pre>function tags(strings, ...values) {
+  console.log(&#39;Values received:&#39;, values.map(v =&gt; String(v)));
+  return strings.raw.join(&#39;&#39;);
+}
+const x = undefined;
+const result = tags`value: ${x || false}`;
+console.log(&#39;Result:&#39;, result);
+// After fix: ${x} → passes undefined, so values[0] is &#39;undefined&#39;
+</pre></details><details id="r2-p001"><summary>r2-p001 — Lookahead ambiguity breaking parse</summary><pre>try {
+  true &amp;&amp; function() { return 1; }();
+  console.log(&#39;ok&#39;);
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:37.605870939 -0400
++++ fixed.js	2026-10-17 16:15:37.866867196 -0400
+@@ -1,5 +1,5 @@
+ try {
+<span class="del">-  true &amp;&amp; function() { return 1; }();</span>
+<span class="add">+  function() { return 1; }();</span>
+   console.log(&#39;ok&#39;);
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+</pre></details><details id="r2-p002"><summary>r2-p002 — Var hoisting and redeclaration</summary><pre>for (let i = 0; i &lt; 2; i++) {
+  try {
+    true &amp;&amp; var x = i;
+    console.log(x);
+  } catch (e) {
+    console.log(e.name + &#39;: &#39; + e.message);
+  }
+}
+</pre></details><details id="r2-p003"><summary>r2-p003 — False || expr evaluation order changed</summary><pre>let a = 0;
+false || (a = 1);
+console.log(a); // should remain 0 if short-circuited
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:37.968865734 -0400
++++ fixed.js	2026-10-17 16:15:38.234861928 -0400
+@@ -1,3 +1,3 @@
+ let a = 0;
+<span class="del">-false || (a = 1);</span>
+<span class="add">+(a = 1);</span>
+ console.log(a); // should remain 0 if short-circuited
+</pre></details><details id="r2-p004"><summary>r2-p004 — Comments attached to removed code</summary><pre>let x = true &amp;&amp; /* important */ 42;
+console.log(x);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:38.398859582 -0400
++++ fixed.js	2026-10-17 16:15:38.666855749 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-let x = true &amp;&amp; /* important */ 42;</span>
+<span class="add">+let x = 42;</span>
+ console.log(x);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Nullish coalescing fallback removal</summary><pre>let called = 0;
+const f = () =&gt; { called++; return 99; };
+let result = null ?? f();
+console.log(&#39;result=&#39; + result + &#39;, called=&#39; + called);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:38.826853461 -0400
++++ fixed.js	2026-10-17 16:15:39.100849545 -0400
+@@ -1,4 +1,4 @@
+ let called = 0;
+ const f = () =&gt; { called++; return 99; };
+<span class="del">-let result = null ?? f();</span>
+<span class="add">+let result = f();</span>
+ console.log(&#39;result=&#39; + result + &#39;, called=&#39; + called);
+</pre></details><details id="r2-p006"><summary>r2-p006 — Inline comment dropped</summary><pre>let y = true &amp;&amp; /* note */ parseInt(&#39;5&#39;);
+console.log(y);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:39.263847220 -0400
++++ fixed.js	2026-10-17 16:15:39.530843410 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-let y = true &amp;&amp; /* note */ parseInt(&#39;5&#39;);</span>
+<span class="add">+let y = parseInt(&#39;5&#39;);</span>
+ console.log(y);
+</pre></details><details id="r2-p007"><summary>r2-p007 — ASI with leading paren</summary><pre>let z =
+true &amp;&amp;
+( () =&gt; 7 )()
+console.log(z);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:39.693841084 -0400
++++ fixed.js	2026-10-17 16:15:39.958837303 -0400
+@@ -1,4 +1,3 @@
+ let z =
+<span class="del">-true &amp;&amp;</span>
+ ( () =&gt; 7 )()
+ console.log(z);
+</pre></details><details id="r2-p008"><summary>r2-p008 — Numeric/string coercion hazard</summary><pre>const obj = {
+  [Symbol.toPrimitive](hint) {
+    return hint === &#39;string&#39; ? &#39;str&#39; : 42;
+  }
+};
+let res = true &amp;&amp; String(obj);
+console.log(res);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:15:40.131834840 -0400
++++ fixed.js	2026-10-17 16:15:40.399831026 -0400
+@@ -3,5 +3,5 @@
+     return hint === &#39;string&#39; ? &#39;str&#39; : 42;
+   }
+ };
+<span class="del">-let res = true &amp;&amp; String(obj);</span>
+<span class="add">+let res = String(obj);</span>
+ console.log(res);
+</pre></details></body></html>

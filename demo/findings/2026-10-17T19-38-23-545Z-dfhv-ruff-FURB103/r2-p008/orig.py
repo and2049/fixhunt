@@ -1,0 +1,1 @@
+data = b'abcdefghij'\nwith open('tmp.bin', 'wb') as f:\n    f.write(data[:5])  # only first 5 bytes\nwith open('tmp.bin', 'rb') as f:\n    got = f.read()\n    print('wrote:', repr(data[:5]))\n    print('got:', repr(got))\n    assert got == data[:5]\nimport os\nos.remove('tmp.bin')

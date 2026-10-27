@@ -1,0 +1,759 @@
+{
+  "runId": "2026-10-17T20-16-43-882Z-76kg-ruff-C401",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C401",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-generator-set (C401)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary generators that can be rewritten as set\ncomprehensions (or with `set()` directly).\n\n## Why is this bad?\nIt is unnecessary to use `set` around a generator expression, since\nthere are equivalent comprehensions for these types. Using a\ncomprehension is clearer and more idiomatic.\n\nFurther, if the comprehension can be removed entirely, as in the case of\n`set(x for x in foo)`, it's better to use `set(foo)` directly, since it's\neven more direct.\n\n## Example\n```python\nset(f(x) for x in foo)\nset(x for x in foo)\nset((x for x in foo))\n```\n\nUse instead:\n```python\n{f(x) for x in foo}\nset(foo)\nset(foo)\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it may occasionally drop comments\nwhen rewriting the call. In most cases, though, comments will be preserved.\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary uses of set() wrapping a generator expression when they can be replaced by a set comprehension or simplified set() call.",
+    "firingShapes": [
+      "set(f(x) for x in foo)",
+      "set(x for x in foo)",
+      "set((x for x in foo))",
+      "set(g(y) for y in bar if cond(y))",
+      "set(a for a in b for c in d)",
+      "set(x for x in y for z in w)",
+      "set(k(v) for k, v in mapping.items())",
+      "set(item for item in iterable)"
+    ],
+    "silentShapes": [
+      "set([x for x in foo])",
+      "set(map(f, foo))",
+      "{x for x in foo}",
+      "set(foo)",
+      "set()"
+    ],
+    "fixDescription": "Rewrites set(<generator>) to {<expression> for <targets> in <iterables> [<ifs>]} when the generator has a non-trivial expression, otherwise to set(<iterable>) if the generator is simply iterating over the iterable without transformation or filtering.",
+    "hazards": [
+      "The rewrite may drop inline or trailing comments attached to the original set() call or generator expression, as the autofix does not preserve comment tokens.",
+      "If the generator expression contains a walrus operator (:=), the scope of the assigned variable changes from the generator's scope to the comprehension's scope, potentially causing NameError if used outside.",
+      "When the generator is nested inside a larger expression, removing the set() call alters precedence and may change the order of operations relative to surrounding operators.",
+      "If the iterable in the generator is a function call with side effects, rewriting set(x for x in foo()) to set(foo()) may change the number of times the function is invoked if the original code relied on lazy evaluation (though set() forces evaluation, this is a theoretical hazard in altered contexts).",
+      "In rare cases involving __iter__ implementations that return different iterators on each call, replacing a generator with set(foo) could yield different results if foo is not rebounded and its __iter__ is stateful across calls (though set() consumes the iterator, this is only relevant if the original code somehow reused the generator, which it cannot).",
+      "If the generator expression is used in a default argument or class body, moving the comprehension into a set literal may affect timing of evaluation relative to class creation or function definition.",
+      "When the generator includes a conditional that raises an exception, the exception behavior is preserved, but line numbers in tracebacks may shift due to the rewrite, affecting debugging tools that rely on line numbers.",
+      "If the code relies on the generator expression being of type generator for introspection (e.g., checking type(set_gen)), the rewrite removes that object, breaking any such checks.",
+      "In the presence of asynchronous generators (async for), the rule does not apply, but if mistakenly triggered, rewriting would be invalid syntax; however, the rule correctly ignores async generators, so this is a safeguard note.",
+      "If the iterable is a variable named 'set', the rewrite set(foo) could be misinterpreted as a recursive call, though this is prevented by Python's name resolution and is not a real hazard."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0054663,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 14,
+    "fixed": 0,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Stateful iterator consumed multiple times",
+      "hazard": "In rare cases involving __iter__ implementations that return different iterators on each call, replacing a generator with set(foo) could yield different results if foo is not rebounded and its __iter_",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              19,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "first: {1, 2, 3}\nsecond: set()\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first: {1, 2, 3}\nsecond: set()\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Comments lost during rewrite",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a set comprehension)",
+            "span": [
+              4,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Inline and trailing comments stripped",
+      "hazard": "The rewrite may drop inline or trailing comments attached to the original set() call or generator expression, as the autofix does not preserve comment tokens.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a set comprehension)",
+            "span": [
+              3,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "transformed: {4}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "transformed: {4}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Walrus and late binding in comprehension",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a set comprehension)",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "f(): {2, 3}\nf(): {2, 3}\nf(): {2, 3}\ny not accessible: NameError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f(): {2, 3}\nf(): {2, 3}\nf(): {2, 3}\ny not accessible: NameError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Precedence change in larger expression",
+      "hazard": "When the generator is nested inside a larger expression, removing the set() call alters precedence and may change the order of operations relative to surrounding operators.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              51,
+              13
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              105,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "f() before change: {1, 2}\nf() after change: {3, 4}\nTesting precedence:\nset(...) = {1, 2, 3}\n5 + len(s) * 2 = 11\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f() before change: {1, 2}\nf() after change: {3, 4}\nTesting precedence:\nset(...) = {1, 2, 3}\n5 + len(s) * 2 = 11\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Async generator safeguard",
+      "hazard": "In the presence of asynchronous generators (async for), the rule does not apply, but if mistakenly triggered, rewriting would be invalid syntax; however, the rule correctly ignores async generators, s",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "async set: {0, 1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Default argument evaluation timing",
+      "hazard": "If the generator expression is used in a default argument or class body, moving the comprehension into a set literal may affect timing of evaluation relative to class creation or function definition.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              3,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              21,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "foo() first call: {1, 2, 3}\nfoo() second call: {1, 2, 3}\nC.shared: {4, 5, 6}\nC.shared after DATA change: {4, 5, 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "foo() first call: {1, 2, 3}\nfoo() second call: {1, 2, 3}\nC.shared: {4, 5, 6}\nC.shared after DATA change: {4, 5, 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Class attribute vs descriptor side effects",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              12,
+              23
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              29,
+              21
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Accessing MyClass.attr:\nDescriptor accessed, returning {1, 2, 3}\nValue: {1, 2, 3}\nInstance attr: {4, 5, 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Accessing MyClass.attr:\nDescriptor accessed, returning {1, 2, 3}\nValue: {1, 2, 3}\nInstance attr: {4, 5, 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Side-effect count mismatch",
+      "hazard": "If the iterable in the generator is a function call with side effects, rewriting `set(x for x in foo())` to `set(foo())` may change the number of times the function is invoked if the original code rel",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              9,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Function called 1 times, set: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Function called 1 times, set: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Exception in generator expression with finally clause",
+      "hazard": "Exceptions raised inside the rewritten code, finally/else clauses, exception chaining.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              9,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "finally executed\nCaught: ValueError: bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally executed\nCaught: ValueError: bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Generator type introspection broken",
+      "hazard": "If the code relies on the generator expression being of type generator for introspection (e.g., checking type(set_gen)), the rewrite removes that object, breaking any such checks.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Generator type: <class 'generator'>, set: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Mutable default argument and aliasing",
+      "hazard": "Mutable default arguments and aliasing after a rewrite.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              6,
+              5
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              8,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "After first call: [1, 1]\nAfter second call: [1, 1, 1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After first call: [1, 1]\nAfter second call: [1, 1, 1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Consumed iterator reused after rewrite",
+      "hazard": "Generators vs lists, iterators consumed once, lazy vs eager evaluation.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              2,
+              6
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `set()`)",
+            "span": [
+              4,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First set: {1, 2, 3}\nSecond set: set()\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First set: {1, 2, 3}\nSecond set: set()\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Walrus scoping in nested comprehension",
+      "hazard": "Walrus, comprehensions scoping, late binding in closures and lambdas.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a set comprehension)",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Captured y: 2, set: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Captured y: 2, set: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Walrus variable leakage after rewrite",
+      "hazard": "If the generator expression contains a walrus operator (:=), the scope of the assigned variable changes from the generator's scope to the comprehension's scope, potentially causing NameError if used o",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a set comprehension)",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Evaluation order and side effects in duplicated expressions",
+      "hazard": "Evaluation order and side effects when expressions are merged, duplicated or deleted.",
+      "rule": "C401",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C401",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a set comprehension)",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Side effects: [0], set: {0}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Side effects: [0], set: {0}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

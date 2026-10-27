@@ -1,0 +1,174 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>clang-tidy readability-container-size-empty — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>clang-tidy readability-container-size-empty <span class="mut">clang-tidy 21.1.8</span></h1>
+<p class="mut">2026-10-17T20-07-13-128Z-a3zg-clang-tidy-readability-container-size-empty · fix labelled <b>unknown</b> · 6 programs, 5 fired, 5 fixed, 0 oracle-backed finding(s) · model cost $0.0018</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags comparisons of container size() to zero using == or != operators.</p><p class="mut">Fix: Replace &#39;container.size() == 0&#39; with &#39;container.empty()&#39; and &#39;container.size() != 0&#39; with &#39;!container.empty()&#39;</p><details><summary>12 hazards</summary><ul><li>The expression may have side effects if size() is overloaded with non-const or mutating behavior, and empty() may not replicate those effects.</li><li>If the container type lacks an empty() member function, the rewrite will fail to compile.</li><li>The return type of size() might be unsigned, and comparing to zero could trigger warnings that empty() avoids, but the logical equivalence holds only if size() accurately reflects emptiness.</li><li>In templates, empty() might be resolved via ADL or inheritance differently than size(), leading to different overloads being selected.</li><li>If size() is virtual and overridden in a derived class, empty() might not be overridden, breaking behavioral equivalence.</li><li>The rewrite may interfere with debugging or logging if size() has breakpoints or side effects absent in empty().</li><li>If the container is actually a range or view without an empty() method but with size(), the rewrite is invalid.</li><li>Comments attached to the original size() expression may be lost or misplaced during the rewrite.</li><li>The rewrite could change the expression&#39;s type if size() returns a proxy type with operator== defined but empty() returns a different type.</li><li>In constexpr contexts, size() and empty() might differ in evaluation eligibility due to implementation constraints.</li><li>If the container is a custom type where empty() has different complexity guarantees (e.g., O(n) vs O(1)), performance characteristics may change.</li><li>The macro expansion context might cause the rewrite to alter precedence if size() is part of a larger expression involving operators like ?, :, or ,.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Exception Safety During Container Clear</td><td class="mut">exceptions thrown inside the rewritten code, RAII order of destruction</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Iterator Invalidation in Range-Based Loop Rewrite</td><td class="mut">iterators invalidated or consumed when a loop is rewritten to range-based for</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side Effects in Size() via Overloaded Operator</td><td class="mut">implicit conversions, overloaded operators and user-defined conversions with side effects</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Unsigned Underflow in Size Comparison</td><td class="mut">integer promotion, signedness, overflow, narrowing in the rewritten expression</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>size() Accuracy vs Logical Emptiness</td><td class="mut">The return type of size() might be unsigned, and comparing to zero could trigger warnings </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Comment Attachment Lost in Rewrite</td><td class="mut">Comments attached to the original size() expression may be lost or misplaced during the re</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Exception Safety During Container Clear</summary><pre>#include &lt;iostream&gt;
+#include &lt;vector&gt;
+struct ThrowOnCopy {
+    int v;
+    ThrowOnCopy(int x) : v(x) {}
+    ThrowOnCopy(const ThrowOnCopy&amp;) { throw &quot;copy&quot;; }
+};
+int main() {
+    std::vector&lt;ThrowOnCopy&gt; c{ThrowOnCopy(1), ThrowOnCopy(2)};
+    try {
+        if (c.size() == 0) {
+            std::printf(&quot;empty\n&quot;);
+        } else {
+            c.clear(); // clear does not throw
+            if (c.size() == 0) {
+                std::printf(&quot;now empty\n&quot;);
+            }
+        }
+    } catch (const char* e) {
+        std::printf(&quot;caught: %s\n&quot;, e);
+    }
+    return 0;
+}
+</pre><pre class="diff">--- orig.cpp	2026-10-17 16:07:21.391175901 -0400
++++ fixed.cpp	2026-10-17 16:07:25.159069953 -0400
+@@ -8,11 +8,11 @@
+ int main() {
+     std::vector&lt;ThrowOnCopy&gt; c{ThrowOnCopy(1), ThrowOnCopy(2)};
+     try {
+<span class="del">-        if (c.size() == 0) {</span>
+<span class="add">+        if (c.empty()) {</span>
+             std::printf(&quot;empty\n&quot;);
+         } else {
+             c.clear(); // clear does not throw
+<span class="del">-            if (c.size() == 0) {</span>
+<span class="add">+            if (c.empty()) {</span>
+                 std::printf(&quot;now empty\n&quot;);
+             }
+         }
+</pre></details><details id="r1-p002"><summary>r1-p002 — Iterator Invalidation in Range-Based Loop Rewrite</summary><pre>#include &lt;iostream&gt;
+#include &lt;vector&gt;
+int main() {
+    std::vector&lt;int&gt; v{1,2,3};
+    auto it = v.begin();
+    while (v.size() != 0) {
+        std::printf(&quot;%d &quot;, *it); ++it;
+        v.pop_back();
+    }
+    std::printf(&quot;\n&quot;);
+    return 0;
+}
+</pre><pre class="diff">--- orig.cpp	2026-10-17 16:07:27.284918093 -0400
++++ fixed.cpp	2026-10-17 16:07:30.643317673 -0400
+@@ -3,7 +3,7 @@
+ int main() {
+     std::vector&lt;int&gt; v{1,2,3};
+     auto it = v.begin();
+<span class="del">-    while (v.size() != 0) {</span>
+<span class="add">+    while (!v.empty()) {</span>
+         std::printf(&quot;%d &quot;, *it); ++it;
+         v.pop_back();
+     }
+</pre></details><details id="r1-p003"><summary>r1-p003 — Side Effects in Size() via Overloaded Operator</summary><pre>#include &lt;iostream&gt;
+struct Counter {
+    mutable int count = 0;
+    size_t size() const { return ++count; }
+};
+int main() {
+    Counter c;
+    bool b1 = (c.size() == 0);
+    bool b2 = (c.size() == 0);
+    std::printf(&quot;%d %d\n&quot;, b1, b2);
+    return 0;
+}
+</pre></details><details id="r1-p004"><summary>r1-p004 — Unsigned Underflow in Size Comparison</summary><pre>#include &lt;iostream&gt;
+#include &lt;vector&gt;
+int main() {
+    std::vector&lt;unsigned&gt; v{1};
+    v.pop_back();
+    if (v.size() == 0) {
+        std::printf(&quot;zero\n&quot;);
+    } else {
+        std::printf(&quot;%zu\n&quot;, v.size());
+    }
+    if (v.size() != 0) {
+        std::printf(&quot;non-zero\n&quot;);
+    } else {
+        std::printf(&quot;zero again\n&quot;);
+    }
+    return 0;
+}
+</pre><pre class="diff">--- orig.cpp	2026-10-17 16:07:34.965586923 -0400
++++ fixed.cpp	2026-10-17 16:07:38.322081525 -0400
+@@ -3,12 +3,12 @@
+ int main() {
+     std::vector&lt;unsigned&gt; v{1};
+     v.pop_back();
+<span class="del">-    if (v.size() == 0) {</span>
+<span class="add">+    if (v.empty()) {</span>
+         std::printf(&quot;zero\n&quot;);
+     } else {
+         std::printf(&quot;%zu\n&quot;, v.size());
+     }
+<span class="del">-    if (v.size() != 0) {</span>
+<span class="add">+    if (!v.empty()) {</span>
+         std::printf(&quot;non-zero\n&quot;);
+     } else {
+         std::printf(&quot;zero again\n&quot;);
+</pre></details><details id="r1-p005"><summary>r1-p005 — size() Accuracy vs Logical Emptiness</summary><pre>#include &lt;iostream&gt;
+#include &lt;vector&gt;
+struct Broken {
+    std::vector&lt;int&gt; data;
+    size_t size() const { return data.size() + 1; }
+    bool empty() const { return data.empty(); }
+};
+int main() {
+    Broken b;
+    b.data.push_back(1);
+    std::printf(&quot;size==0: %d\n&quot;, (b.size() == 0));
+    std::printf(&quot;empty(): %d\n&quot;, b.empty());
+    return 0;
+}
+</pre><pre class="diff">--- orig.cpp	2026-10-17 16:07:40.377356827 -0400
++++ fixed.cpp	2026-10-17 16:07:43.725678931 -0400
+@@ -8,7 +8,7 @@
+ int main() {
+     Broken b;
+     b.data.push_back(1);
+<span class="del">-    std::printf(&quot;size==0: %d\n&quot;, (b.size() == 0));</span>
+<span class="add">+    std::printf(&quot;size==0: %d\n&quot;, (b.empty()));</span>
+     std::printf(&quot;empty(): %d\n&quot;, b.empty());
+     return 0;
+ }
+</pre></details><details id="r1-p006"><summary>r1-p006 — Comment Attachment Lost in Rewrite</summary><pre>#include &lt;iostream&gt;
+#include &lt;vector&gt;
+int main() {
+    std::vector&lt;int&gt; v{1};
+    if (v.size() == 0) { // check if empty before processing
+        std::printf(&quot;empty\n&quot;);
+    } else {
+        std::printf(&quot;not empty\n&quot;);
+    }
+    return 0;
+}
+</pre><pre class="diff">--- orig.cpp	2026-10-17 16:07:45.743131279 -0400
++++ fixed.cpp	2026-10-17 16:07:49.053346311 -0400
+@@ -2,7 +2,7 @@
+ #include &lt;vector&gt;
+ int main() {
+     std::vector&lt;int&gt; v{1};
+<span class="del">-    if (v.size() == 0) { // check if empty before processing</span>
+<span class="add">+    if (v.empty()) { // check if empty before processing</span>
+         std::printf(&quot;empty\n&quot;);
+     } else {
+         std::printf(&quot;not empty\n&quot;);
+</pre></details></body></html>

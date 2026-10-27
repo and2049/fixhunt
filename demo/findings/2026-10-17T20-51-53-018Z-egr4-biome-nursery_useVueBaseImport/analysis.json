@@ -1,0 +1,35 @@
+{
+  "summary": "The rule flags imports from internal Vue subpackages like @vue/reactivity or @vue/runtime-dom, recommending they be replaced with imports from the main 'vue' package.",
+  "firingShapes": [
+    "import { ref } from \"@vue/reactivity\";",
+    "export { reactive } from \"@vue/runtime-core\";",
+    "import { nextTick } from \"@vue/runtime-dom\";",
+    "import { isRef } from \"@vue/shared\";",
+    "import * as VueReactivity from \"@vue/reactivity\";",
+    "export * from \"@vue/runtime-core\";",
+    "import { watch } from \"@vue/reactivity\";",
+    "import { onMounted } from \"@vue/runtime-dom\";"
+  ],
+  "silentShapes": [
+    "import { ref } from \"vue\";",
+    "import { internalOnly } from \"@vue/reactivity\"; // internal-only export allowed",
+    "import { version } from \"@vue/shared\"; // assuming version is re-exported in main vue",
+    "import { defineComponent } from \"@vue/runtime-core\"; // if defineComponent is considered internal-only per config",
+    "import { ref } from \"@vue/reactivity/dist/reactivity.esm-bundler.js\"; // path variant not matched by rule"
+  ],
+  "fixDescription": "The autofix replaces the import source from the internal Vue package (e.g., '@vue/reactivity') to the main 'vue' package while preserving the imported bindings (names, namespace, or star). For example, 'import { ref } from \"@vue/reactivity\"' becomes 'import { ref } from \"vue\"'.",
+  "hazards": [
+    "Named imports: If the imported name (e.g., 'ref') is not actually exported from the main 'vue' package, the rewrite causes a runtime error due to missing export.",
+    "Namespace imports: Rewriting 'import * as VueReactivity from \"@vue/reactivity\"' to 'import * as VueReactivity from \"vue\"' may include unintended exports from 'vue', potentially causing naming conflicts or exposing internal APIs.",
+    "Star exports: Rewriting 'export * from \"@vue/runtime-dom\"' to 'export * from \"vue\"' may re-export unintended bindings from 'vue', altering the module's public interface.",
+    "Side-effect imports: If the internal package has side effects (e.g., patches global state) not present in the main 'vue' package, removing the import drops those side effects.",
+    "Type-only imports: In TypeScript, 'import type { Ref } from \"@vue/reactivity\"' rewritten to 'import type { Ref } from \"vue\"' may fail if 'Ref' is not available as a type in the main package's type exports.",
+    "Conditional/external mapping: If the project uses module aliases or conditional exports (e.g., via package.json 'exports' field) that map 'vue' to a different build than the internal packages, the rewrite may resolve to an unintended module version.",
+    "Internal-only flag usage: The rule allows certain internal-only imports (e.g., dev-only flags); rewriting those would violate the rule's intent and possibly break builds targeting production.",
+    "Comment attachment: If comments are attached to the import line (e.g., // TODO: migrate), the autofix may discard them during replacement, losing developer intent.",
+    "Evaluation order: If multiple imports from the same internal package exist across files, deduplication via the rewrite may change load order if side effects were relied upon.",
+    "Path resolution: In environments with custom module resolution (e.g., webpack aliases), replacing '@vue/reactivity' with 'vue' may bypass intended redirects or fallbacks.",
+    "Build-time transforms: If the internal package is processed by a transform (e.g., treeshading) that assumes its presence, removing it may prevent dead code elimination or cause bundle bloat.",
+    "Version skew: If the project uses different versions of 'vue' and its internal packages (unsupported but possible), the rewrite may import from a mismatched version, causing API mismatches."
+  ]
+}

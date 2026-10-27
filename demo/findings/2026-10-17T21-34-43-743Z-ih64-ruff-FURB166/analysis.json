@@ -1,0 +1,33 @@
+{
+  "summary": "Flags calls to int() where a string slice removes a numeric prefix (0b/0o/0x) and passes an explicit base matching that prefix.",
+  "firingShapes": [
+    "int(s[2:], 2)",
+    "int(t[2:], 8)",
+    "int(u[2:], 16)",
+    "int(v[2:], 2) if v.startswith('0b') else None",
+    "w = int(x[2:], 16); print(w)",
+    "int(y[2:], 8) + 1",
+    "int(z[2:], 2) * 3",
+    "a = int(b[2:], 16)"
+  ],
+  "silentShapes": [
+    "int(s, 0)",
+    "int(s[1:], 2)",
+    "int(s[2:], 10)",
+    "int(slice_obj, 16)",
+    "int(f\"0x{hex}\", 16)"
+  ],
+  "fixDescription": "Replaces int(expr[2:], base) with int(expr, 0) when expr starts with '0b', '0o', or '0x' and base is 2, 8, or 16 respectively.",
+  "hazards": [
+    "If expr has side effects (e.g., a function call), evaluating it once in int(expr, 0) vs twice in the original (startswith and slice) changes behavior.",
+    "If expr is overwritten between the startswith check and the int call in the original code, the fix uses a stale value.",
+    "When expr is not a string (e.g., int or None), int(expr, 0) raises TypeError while the original may have raised AttributeError on startswith, altering error type.",
+    "If expr is a string but shorter than 2 characters, expr[2:] is empty and int('', base) raises ValueError, whereas int(expr, 0) may raise ValueError for invalid literal, differing in error message or timing.",
+    "If expr contains whitespace after the prefix (e.g., '0x FF'), the slice removes only the prefix leaving ' FF' which int(..., 16) accepts, but int('0x FF', 0) fails due to the space.",
+    "If expr is exactly the prefix (e.g., '0x'), the slice yields '' and int('', 16) raises ValueError, while int('0x', 0) also raises ValueError but the fix may be applied incorrectly if the startswith guard is missing.",
+    "If the code relies on the slice operation to return a substring for other uses (e.g., assigned to a variable), removing the slice breaks that dependency.",
+    "If the int call is inside a lambda or comprehension where expr changes per iteration, hoisting expr evaluation once vs per iteration alters behavior.",
+    "If expr is a bytes object, expr[2:] works but expr may not have startswith, causing AttributeError in the original; the fix would incorrectly apply and raise AttributeError on bytes for startswith.",
+    "If expr is a memoryview or array slice, expr[2:] has different semantics than passing expr to int with base 0, leading to type errors or incorrect parsing."
+  ]
+}

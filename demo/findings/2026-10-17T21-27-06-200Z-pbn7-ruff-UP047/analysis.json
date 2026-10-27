@@ -1,0 +1,35 @@
+{
+  "summary": "Flags standalone TypeVar and ParamSpec usage in generic function annotations.",
+  "firingShapes": [
+    "from typing import TypeVar; T = TypeVar('T')\\ndef f(x: T) -> T: ...",
+    "from typing import TypeVar; U = TypeVar('U', int, str)\\ndef g(a: U, b: U) -> U: ...",
+    "from typing import ParamSpec; P = ParamSpec('P')\\ndef h(*args: P.args, **kwargs: P.kwargs) -> None: ...",
+    "from typing import TypeVar, ParamSpec; T = TypeVar('T'); P = ParamSpec('P')\\ndef i(func: P, x: T) -> T: ...",
+    "from typing import TypeVar; V = TypeVar('V', covariant=True)\\ndef j(y: V) -> V: ...",
+    "from typing import TypeVar; W = TypeVar('W', contravariant=True)\\ndef k(z: W) -> None: ...",
+    "from typing import TypeVar; X = TypeVar('X', bound=Base)\\ndef m(p: X) -> X: ...",
+    "from typing import TypeVar; Y = TypeVar('Y', default=int)\\ndef n(q: Y) -> Y: ..."
+  ],
+  "silentShapes": [
+    "from typing import Generic; class A(Generic[T]): T = TypeVar('T')\\n    def method(self) -> T: ...",
+    "from typing import TypeVar; T = TypeVar('T')\\ndef outer():\\n    def inner(x: T) -> T: ...",
+    "from typing import TypeVar; T = TypeVar('T')\\ndef func(x: int) -> str: ...",
+    "from typing import List\\ndef func(x: List[int]) -> List[int]: ...",
+    "from typing import TypeVar; T = TypeVar('T')\\nalias: T = int"
+  ],
+  "fixDescription": "Removes the standalone TypeVar/ParamSpec variable definitions and adds the corresponding type parameters to the function signature using PEP 695 syntax (e.g., def func[T](x: T) -> T: ...).",
+  "hazards": [
+    "Rewriting changes the scope of the type variable from module-level to function-local, which can break code that references the variable outside the function (e.g., in other function signatures or class definitions).",
+    "If the TypeVar uses a 'default' argument (Python 3.13+), the fix omits the default, altering the inferred type when the parameter is omitted.",
+    "If the TypeVar has a 'bound' constraint, the fix does not preserve the bound in the new syntax, potentially changing type-checking behavior.",
+    "If the TypeVar is contravariant or covariant, the fix drops the variance keyword, and PEP 695 infers variance instead, which may differ and affect subtyping relationships.",
+    "If multiple functions share the same TypeVar, rewriting one function leaves the shared variable defined but may cause mismatches if other functions are not also rewritten.",
+    "If the TypeVar is used in a default argument value (e.g., def f(x: T = SomeDefault)), the fix does not update the default expression, leaving a reference to an undefined name after removal.",
+    "If the TypeVar is used in a type ignore comment or string annotation nearby, removing the variable definition may cause those references to become unresolved.",
+    "If the file contains a conditional import or definition of the TypeVar (e.g., inside an if block), the fix may hoist or misplace the removal, causing syntax errors.",
+    "If the TypeVar is aliased via import (e.g., from mod import TypeVar as TV), the rule may not detect it and leave the alias while incorrectly adding a type parameter, resulting in mixed old/new style.",
+    "If the function is decorated, the fix inserts type parameters before the decorator, which is invalid syntax.",
+    "If the function has overlapping type parameters with another generic function in the same scope, the fix may introduce duplicate or conflicting type parameter names.",
+    "If the code uses a stringized annotation (from __future__ import annotations) and the TypeVar is referenced in a string, removing the definition may break runtime evaluation of annotations."
+  ]
+}

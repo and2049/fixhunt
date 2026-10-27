@@ -1,0 +1,33 @@
+{
+  "summary": "Flags when dict() wraps a list comprehension producing key-value pairs.",
+  "firingShapes": [
+    "dict([(k, v) for k, v in items])",
+    "dict([(key, func(key)) for key in seq if cond])",
+    "dict([(i, i*2) for i in range(n)])",
+    "dict([(a, b) for a, b in zip(x, y)])",
+    "dict([(expr1, expr2) for var in iterable])",
+    "dict(list((x, y) for x, y in stuff))",
+    "dict([tuple(pair) for pair in pairs])",
+    "dict([(k,) + v for k, *v in data])"
+  ],
+  "silentShapes": [
+    "dict({(k, v) for k, v in items})",
+    "dict(zip(keys, values))",
+    "{k: v for k, v in items}",
+    "[(k, v) for k, v in items]",
+    "dict()"
+  ],
+  "fixDescription": "Rewrites dict([(expr1, expr2) for target in iterable if cond]) to {expr1: expr2 for target in iterable if cond}, preserving comprehension structure and filters.",
+  "hazards": [
+    "If the list comprehension uses a variable name that shadows an outer variable in the dict key or value expression, the dict comprehension may capture that variable differently due to its own local scope.",
+    "If the iterable expression has side effects (e.g., a function call), moving it into the dict comprehension changes when those effects occur relative to other expressions in the same statement.",
+    "If the list comprehension is nested inside another expression where the list's identity or mutability matters (e.g., passed to a function that modifies it), replacing it with a dict comprehension alters the object type and breaks expectations.",
+    "If the comprehension contains a bare yield or yield-from, rewriting it as a dict comprehension changes it from a generator expression to a dict comprehension, altering execution timing and preventing lazy evaluation.",
+    "If the original code relies on the list being built eagerly (e.g., for truthiness or length before iteration), the dict comprehension's lazy-like evaluation (though still eager in CPython) may not preserve intermediate state assumptions in rare edge cases involving __bool__ or __len__ overrides.",
+    "If the list comprehension is part of a larger expression where operator precedence groups it unexpectedly (e.g., dict([(k, v) for k, v in items]) + {}), removing the list constructor could change parsing if parentheses are omitted incorrectly during rewrite.",
+    "If the comprehension includes a tuple with more than two elements (e.g., [(k, v, w) for ...]), the rule should not fire, but if misapplied, the fix would raise a ValueError due to too many values to unpack in the dict comprehension.",
+    "If the list comprehension is inside a lambda or nested function and uses a nonlocal variable, the dict comprehension's implicit scope may not preserve the same closure behavior, especially in Python 2 or under atypical execution contexts.",
+    "Comments attached to the list brackets or for/clause tokens may be dropped during AST rewrite, even if the tool attempts preservation, due to formatting loss in the conversion process.",
+    "If the iterable is the same variable being assigned to in the comprehension (e.g., dict([(x, x+1) for x in xs]) where xs is later reused), the rewrite is safe, but if the variable is deleted or reassigned mid-comprehension via del or side effect, the timing of observation differs."
+  ]
+}

@@ -1,0 +1,421 @@
+{
+  "runId": "2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useExportType",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useExportType\n- Fix: safe\n- Default severity: warn\n- Available from version: 1.5.0\n- Diagnostic category: lint/style/useExportType\n- This rule is recommended\n\nDescription\n\n Promotes the use of `export type` for types.\n\n _TypeScript_ allows specifying a `type` keyword on an `export` to indicate that the `export` doesn't exist at runtime.\n This allows compilers to safely drop exports of types without looking for their definition.\n\n The rule ensures that all exports used only as a type use a type-only `export`.\n It also groups inline type exports into a grouped `export type`.\n\n If you use the TypeScript Compiler (TSC) to compile your code into JavaScript,\n then you can disable this rule, as TSC can remove exports only used as types.\n However, for consistency and compatibility with other compilers, you may want to enable this rule.\n In that case, it's recommended to enable TSC's [`verbatimModuleSyntax`](https://www.typescriptlang.org/tsconfig/#verbatimModuleSyntax).\n This configuration ensures that TSC preserves exports not marked with the `type` keyword.\n\nExamples\n\nInvalid\n\n ```ts,expect_diagnostic\n interface I {}\n export { I };\n ```\n\n ```ts,expect_diagnostic\n type T = number;\n export { T };\n ```\n\n ```ts,expect_diagnostic\n import type { T } from \"./mod.js\";\n export { T };\n ```\n\n ```ts,expect_diagnostic\n export { type X, type Y };\n ```\n\nValid\n\n ```js\n class C {}\n function f() {}\n export { C, f };\n ```\n\n This rules checks only the identifiers that are defined in a file.\n It doesn't warn against a type exported as a value in a re-export clause such as:\n\n ```ts,ignore\n export { TypeA } from \"./mod.ts\"\n ```\n\nOptions\n\n`style`\n\n The `style` option allows enforcing a style for exporting types.\n The option supports three values:\n\n - `inlineType`: always use `export { type T }` instead of `export type { T }`\n - `separatedType`: always use `export type { T }` instead of `export { type T }`\n - `auto`: use `export type { T }` or `export { type T, V }` when values are exported alongside types (default)\n\n ```jsonc,options\n {\n     \"options\": {\n         \"style\": \"inlineType\"\n     }\n }\n ```\n\n ```ts,expect_diagnostic,use_options\n import type { A } from \"./mod.ts\";\n export { A };\n ```\n\n ```ts,expect_diagnostic,use_options\n import { A } from \"./mod.ts\";\n export type { A };\n ```\n\n ```jsonc,options\n {\n     \"options\": {\n         \"style\": \"separatedType\"\n     }\n }\n ```\n\n ```ts,expect_diagnostic,use_options\n import type { A } from \"./mod.ts\";\n export { A };\n ```\n\n ```ts,expect_diagnostic,use_options\n import { A, B } from \"./mod.ts\";\n export { type A, B };\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags named exports where the exported identifier is used exclusively as a type annotation and lacks the 'type' keyword on the export statement.",
+    "firingShapes": [
+      "interface I {}; export { I };",
+      "type T = string; export { T };",
+      "import type { U } from './mod'; export { U };",
+      "export { type X, type Y };",
+      "class C {}; type D = C; export { D };",
+      "function f(): void {}; type F = typeof f; export { F };",
+      "enum E { A }; export { E };",
+      "namespace N {}; export { N };"
+    ],
+    "silentShapes": [
+      "const v = 42; export { v };",
+      "function g() {}; export { g };",
+      "class H {}; export { H };",
+      "import { k } from './mod'; export { k };",
+      "export { type L, m };"
+    ],
+    "fixDescription": "The autofix adds the 'type' keyword before the exported identifier(s) in the export statement, transforming 'export { I };' into 'export { type I };' for single or multiple type-only exports, and converts mixed exports like 'export { type X, Y };' into 'export type { X }; export { Y };' when the 'style' option is set to 'separatedType', or keeps them grouped as 'export { type X, Y };' under 'auto' or 'inlineType' styles if values are present.",
+    "hazards": [
+      "Rewriting 'export { I };' to 'export { type I };' changes the meaning if I is later used as a value (e.g., new I()) in another file, causing a runtime error because the type-only export is erased.",
+      "If the exported identifier is a namespace (e.g., export { N }; \u2192 export { type N };), the rewrite is invalid because namespaces cannot be exported as types, leading to a parse error.",
+      "When the identifier is an enum (e.g., export { E }; \u2192 export { type E };), the rewrite may break code that relies on the enum's runtime value (e.g., E.A) since type-only enums are not emitted.",
+      "Adding 'type' to an export of a const variable (e.g., export { v }; \u2192 export { type v };) is invalid syntax because const declarations cannot be type-only exported, causing a parse error.",
+      "In a file with 'export { type X, Y };', the autofix under 'separatedType' style may split it into 'export type { X }; export { Y };', but if Y is actually a type used elsewhere, the second export becomes incorrect and may trigger the same rule again or cause errors.",
+      "If the exported identifier is declared in the same file via a type alias that is conditionally defined (e.g., type T = cond ? string : number;), marking it as type-only is safe, but if the alias is later used in a value position (e.g., as a default export), the rewrite hides that usage and may lead to undetected misuse.",
+      "The autofix may move or drop attached comments (e.g., JSDoc or // TODO) on the export statement if the tool does not preserve them during rewriting, especially when splitting or reformatting the export clause.",
+      "In a re-export like 'export { T } from \"mod\";', if T is a type in the source module but the rule incorrectly flags it (though documentation says it should ignore), applying 'type' would be invalid because re-exports cannot be marked as type-only in the same way, causing a parse error.",
+      "If the file is in a JavaScript context (not TypeScript) and the rule is mistakenly applied, adding 'type' introduces invalid syntax that breaks parsing.",
+      "When using 'export { type I };' under 'inlineType' style, if the file also exports a value with the same name (e.g., const I = 5;), the rewrite creates a duplicate identifier error because 'type I' and 'value I' conflict in the same scope.",
+      "The fix assumes that all references to the identifier are type-only, but if there is a dynamic import like import('./mod').then(({ I }) => new I()), the static analysis may miss the value usage, making the rewrite unsafe.",
+      "If the export statement is inside a nested block (e.g., if (false) { export { I }; }), the rewrite is syntactically invalid because exports cannot appear inside blocks, though the original would also be invalid\u2014this edge case highlights that the rule assumes top-level exports."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034446,
+  "summary": {
+    "programs": 16,
+    "invalid": 8,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hazard 1: Exported interface used as constructor",
+      "hazard": "Rewriting `export { I };` to `export { type I };` removes the type at runtime, breaking value usage.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r1-p001/orig.js:2\ninterface I {}\n^^^^^^^^^\n\nSyntaxError: Unexpected strict mode reserved word\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Hazard 2: Enum used via property access",
+      "hazard": "Rewriting `export { E };` to `export { type E };` removes enum runtime value, breaking E.A access.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r1-p002/orig.js:2\nenum E { A }\n^^^^\n\nSyntaxError: Unexpected reserved word\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Hazard 3: Order of evaluation with side effects",
+      "hazard": "Duplicating export statements can cause initializer side effects to run multiple times.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r1-p003/orig.js:4\n{ export { obj.value as v }; } // block to isolate\n  ^^^^^^\n\nSyntaxError: Unexpected token 'export'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p004",
+      "title": "Hazard 4: JavaScript file with invalid 'type' keyword",
+      "hazard": "Adding 'type' in a .js file causes syntax error due to invalid token.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "should not reach\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Hazard 5: Attached JSDoc comment lost during rewrite",
+      "hazard": "Autofix may drop JSDoc comment on export statement when adding 'type'.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r1-p005/orig.js:3\ninterface I {}\n^^^^^^^^^\n\nSyntaxError: Unexpected strict mode reserved word\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Hazard 6: Comment on moved code dropped",
+      "hazard": "When splitting exports, comments on individual specifiers may be lost.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Hazard 7: Name collision after move",
+      "hazard": "Moving an export to a separate statement may cause it to be shadowed by a local var.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r1-p007/orig.js:3\n{ export { type X }; } // block scope\n  ^^^^^^\n\nSyntaxError: Unexpected token 'export'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Hazard 8: Strict mode semantics affected by code motion",
+      "hazard": "Moving code into a function block may change 'this' or arguments behavior.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r1-p008/orig.js:4\n  export { arguments }; // invalid, but we avoid syntax error by not actually exporting\n  ^^^^^^\n\nSyntaxError: Unexpected token 'export'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNo"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Hazard 1: Exporting const variable with added 'type'",
+      "hazard": "Adding 'type' to an export of a const variable is invalid syntax.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Hazard 2: JS file with invalid 'type' keyword",
+      "hazard": "In .js file, adding 'type' causes syntax error.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "HELLO\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Hazard 3: Export inside nested block",
+      "hazard": "Export inside block is invalid; fix assumes top-level.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r2-p003/orig.js:3\n  export { B }; // Invalid in original, flagged but fix irrelevant\n  ^^^^^^\n\nSyntaxError: Unexpected token 'export'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Hazard 4: Re-export with type marker",
+      "hazard": "Cannot add 'type' to re-export statement.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "Error [ERR_UNSUPPORTED_ESM_URL_SCHEME]: Only URLs with a scheme in: file, data, and node are supported by the default ESM loader. Received protocol 'typescript:'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Hazard 5: Control flow - break/label/finally",
+      "hazard": "Side effects in labeled blocks with break/finally.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType/r2-p005/orig.js:7\n} finally {\n  ^^^^^^^\n\nSyntaxError: Unexpected token 'finally'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p006",
+      "title": "Hazard 6: Function with arguments, length, rest",
+      "hazard": "Function exported; rule should not fire (value used).",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p007",
+      "title": "Hazard 7: Exporting namespace with added 'type'",
+      "hazard": "Cannot export namespace as type-only.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Hazard 8: __proto__ and prototype access",
+      "hazard": "Object mutation via __proto__; export unchanged.",
+      "rule": "style/useExportType",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    }
+  ]
+}

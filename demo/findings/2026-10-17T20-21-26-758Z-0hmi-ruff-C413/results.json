@@ -1,0 +1,843 @@
+{
+  "runId": "2026-10-17T20-21-26-758Z-0hmi-ruff-C413",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C413",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-call-around-sorted (C413)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary `list()` or `reversed()` calls around `sorted()`\ncalls.\n\n## Why is this bad?\nIt is unnecessary to use `list()` around `sorted()`, as the latter already\nreturns a list.\n\nIt is also unnecessary to use `reversed()` around `sorted()`, as the latter\nhas a `reverse` argument that can be used in lieu of an additional\n`reversed()` call.\n\nIn both cases, it's clearer and more efficient to avoid the redundant call.\n\n## Example\n```python\nreversed(sorted(iterable))\n```\n\nUse instead:\n```python\nsorted(iterable, reverse=True)\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe for `reversed()` cases, as `reversed()`\nand `reverse=True` will yield different results in the event of custom sort\nkeys or equality functions. Specifically, `reversed()` will reverse the order\nof the collection, while `sorted()` with `reverse=True` will perform a stable\nreverse sort, which will preserve the order of elements that compare as\nequal.\n\nThe fix is marked as safe for `list()` cases, as removing `list()` around\n`sorted()` does not change the behavior.\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary list() or reversed() wrappers around sorted() calls.",
+    "firingShapes": [
+      "list(sorted(x))",
+      "reversed(sorted(y))",
+      "list(sorted(z, key=len))",
+      "reversed(sorted(w, reverse=False))"
+    ],
+    "silentShapes": [
+      "sorted(a)",
+      "list(reversed(b))",
+      "reversed(list(c))",
+      "tuple(sorted(d))"
+    ],
+    "fixDescription": "Replaces list(sorted(...)) with sorted(...) and reversed(sorted(...)) with sorted(..., reverse=True).",
+    "hazards": [
+      "For reversed(sorted(...)), the fix changes behavior when a custom key function is used because reversed() reverses the final list while sorted(..., reverse=True) performs a reverse sort that may reorder equal elements differently.",
+      "If the sorted call uses a custom comparator via functools.cmp_to_key, reversed() and reverse=True are not equivalent due to differing stability properties.",
+      "When the iterable passed to sorted is not a list (e.g., a generator), removing list() in list(sorted(...)) changes the return type from list to an iterator, breaking code that expects a list.",
+      "If the result of list(sorted(...)) is assigned to a variable and later mutated, the fix may affect aliasing if other references expect a list but now get an iterator.",
+      "Comments inside the list() or reversed() call (e.g., list(sorted(# comment\nx))) would be dropped by the rewrite as they are not preserved in the simplified expression.",
+      "If sorted() is called with side-effecting key or reverse expressions (e.g., sorted(x, key=print(len(i)))), the evaluation order of those expressions is unchanged, but the outer call removal could affect debugging or profiling tools that count function invocations.",
+      "In rare cases where sorted returns a subclass of list (e.g., from a user-defined class overriding __sorted__), removing list() could change the exact type returned, affecting isinstance checks.",
+      "If the code relies on the fact that list(sorted(...)) creates a new list object (which it does), and sorted(...) also creates a new list, there is no behavioral difference—but if sorted were overridden to return a singleton or cached result, the fix could expose that, though sorted is built-in and not overridable in standard Python."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.016349000000000002,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 9,
+    "fixed": 6,
+    "disputed": 7,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r2-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "import builtins\noriginal_sorted = builtins.sorted\ncache = []\ndef cached_sorted(*args, **kwargs):\n    if not cache:\n        cache.append(original_sorted(*args, **kwargs))\n    return cache[0]\nbuiltins.sorted = cached_sorted\nx = [3, 1, 2]\na = list(sorted(x))\nb = sorted(x)\nprint(a is b)\n",
+      "lines": {
+        "before": 13,
+        "after": 12
+      },
+      "reportPath": "runs/2026-10-17T20-21-26-758Z-0hmi-ruff-C413/reports/r2-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/10245",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/20632",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/2772",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule documentation explicitly states the fix is safe for `list()` cases because it does not change behavior, but the program demonstrates that removing `list()` changes object identity when `sorted` is monkey-patched to return a cached instance. The rewrite alters runtime semantics in plausible code that intercepts the built-in function.",
+        "docsQuote": "The fix is marked as safe for `list()` cases, as removing `list()` around `sorted()` does not change the behavior.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "C413 fix",
+          "C413 list constructor redundant",
+          "ruff C413 unnecessary list call",
+          "list() around function call avoidable"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "C414 --fix is also unsafe for sorted(reversed(iterable)), and other issues encountered when comparing with shed",
+            "url": "https://github.com/astral-sh/ruff/issues/10245",
+            "state": "open",
+            "snippet": "C414 is marked as unsafe fix, but only because of dropping comments: https://docs.astral.sh/ruff/rules/unnecessary-double-cast-or-process/#fix-safety\r\n\r\nEDIT: I noticed now that C413 has an extensive warning about safety with regards to stable sorting https://docs.astral.sh/ruff/rules/unnecessary-ca"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "C413 documentation implies the fix is unsafer than it is",
+            "url": "https://github.com/astral-sh/ruff/issues/20632",
+            "state": "closed",
+            "snippet": "### Summary\n\nThe documentation for [`unnecessary-call-around-sorted` (C413)](https://docs.astral.sh/ruff/rules/unnecessary-call-around-sorted/#fix-safety) says:\n> This rule's fix is marked as unsafe, as `reversed()` and `reverse=True` will yield different results in the event of custom sort keys or "
+          },
+          {
+            "source": "github",
+            "title": "C413 fix is wrong when a newline appears between `sorted` and the opening parenthesis",
+            "url": "https://github.com/astral-sh/ruff/issues/15789",
+            "state": "closed",
+            "snippet": "### Description\n\nThe fix for [`unnecessary-call-around-sorted` (C413)](https://docs.astral.sh/ruff/rules/unnecessary-call-around-sorted/) in Ruff 0.9.3 can introduce a syntax error or change behavior when a newline appears between `sorted` and the opening parenthesis.\n\nSyntax error:\n```console\n$ cat"
+          },
+          {
+            "source": "github",
+            "title": "Policy for linter fixes that can drop comments",
+            "url": "https://github.com/astral-sh/ruff/issues/9790",
+            "state": "closed",
+            "snippet": "In some cases, a lint fix can drop comments. Retaining all comments was a major goal in the Ruff formatter and we've learned that it is very hard to accomplish. There is significant foundational work that would need to be invested in the linter to prevent it from ever dropping comments. While we wou"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          },
+          {
+            "source": "github",
+            "title": "C413 fix for reversed(sorted(..., reverse=...)) needs parentheses when key is a boolop to avoid changing semantics",
+            "url": "https://github.com/astral-sh/ruff/issues/10335",
+            "state": "closed",
+            "snippet": "```python\r\nreversed(sorted([1, 2, 3], reverse=False or True)) # reverses twice -> 1, 2, 3\r\n# ruff C413 autofixes the above line to the below\r\nsorted([1, 2, 3], reverse=not False or True) # reverses once -> 3, 2, 1\r\n# if a paren were to be added, the problem is resolved\r\nsorted([1, 2, 3], reverse=not"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors",
+            "url": "https://github.com/astral-sh/ruff/issues/7455",
+            "state": "closed",
+            "snippet": "- [x] - B006 - https://github.com/astral-sh/ruff/issues/7455#issuecomment-1722458825\r\n- [x] - B009 - https://github.com/astral-sh/ruff/issues/7455#issuecomment-1722458885\r\n- [x] - C402 - https://github.com/astral-sh/ruff/issues/7455#issuecomment-1722458940\r\n- [ ] - C413 - https://github.com/astral-s"
+          },
+          {
+            "source": "github",
+            "title": "`C413` breaks reversed(sorted(generator expression))",
+            "url": "https://github.com/astral-sh/ruff/issues/7289",
+            "state": "closed",
+            "snippet": "C413 breaks reversed(sorted(generator expression))\r\n\r\n* The command you invoked - `ruff main.py --isolated --select C413 --fix`\r\n* The current Ruff settings - none\r\n* The current Ruff version - `ruff 0.0.288`\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n```\r\n# main.py\r\n\r\nx = reversed(sorted"
+          },
+          {
+            "source": "github",
+            "title": "Fixed code unformatted",
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "state": "closed",
+            "snippet": "Feel free to close if this is expected currently but the following change introduced three consecutive new lines which breaks formatting:\r\n\r\n![image](https://github.com/astral-sh/ruff/assets/9677399/6487e202-c9d6-4576-adfa-48fd0985ae40)\r\n"
+          },
+          {
+            "source": "tavily",
+            "title": "Incorrect double reverse in sorted rule C413 · Issue #2772 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/2772",
+            "snippet": "Issue body actions\n\nThe comprehension fixits assume the user was unaware of the reverse=True keyword. This not always the case and it can be caused by an accidental double apply or an unnecessary attempt to ensure sorted is a stable sort (it is in recent Python versions). The fixits generated here a"
+          },
+          {
+            "source": "tavily",
+            "title": "Ruff (and flake8) doesn't report a situation where a variable ...",
+            "url": "https://github.com/astral-sh/ruff/issues/2493",
+            "snippet": "This means we might get a runtime UnboundLocalError. In runtime_error , the name y is never bound to a variable when we come to evaluate list(y)"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10245",
+            "relation": "related",
+            "why": "C414 issue about sorted(reversed(iterable)) and other safety concerns, different construct than list(sorted(...))"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Unused function argument with Unicode variable name, completely different rule and defect class"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20632",
+            "relation": "related",
+            "why": "C413 documentation about fix safety mentions stable sorting but not list() call removal changing identity"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15789",
+            "relation": "unrelated",
+            "why": "C413 fix syntax error with newline between sorted and parenthesis, different construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9790",
+            "relation": "unrelated",
+            "why": "General policy about comment dropping in linter fixes, not specific to C413 or list(sorted())"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "Fuzzer autofix/infinite loop error pack, not specific to this C413 defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10335",
+            "relation": "unrelated",
+            "why": "C413 fix for reversed(sorted(..., reverse=...)) with boolop key needing parentheses, different construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/7455",
+            "relation": "unrelated",
+            "why": "Fuzzer autofix error pack with C413 unchecked, not specific to list(sorted()) identity change"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/7289",
+            "relation": "unrelated",
+            "why": "C413 breaks reversed(sorted(generator expression)), different construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "relation": "unrelated",
+            "why": "Fixed code formatting issue with extra newlines, not about behavior change"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2772",
+            "relation": "related",
+            "why": "C413 incorrect double reverse assumption, same rule but different construct (reversed(sorted(...)) vs list(sorted(...)))"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2493",
+            "relation": "unrelated",
+            "why": "Runtime UnboundLocalError detection, completely different rule and defect"
+          }
+        ],
+        "cost": 0.003879
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:28:22.351908845 -0400\n+++ fixed.py\t2026-10-22 13:28:24.399942978 -0400\n@@ -7,6 +7,6 @@\n     return cache[0]\n builtins.sorted = cached_sorted\n x = [3, 1, 2]\n-a = list(sorted(x))\n+a = sorted(x)\n b = sorted(x)\n print(a is b)\n",
+        "observed": "stdout before:\nFalse\nstdout after:\nTrue",
+        "before": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "import builtins\noriginal_sorted = builtins.sorted\ncache = []\ndef cached_sorted(*args, **kwargs):\n    if not cache:\n        cache.append(original_sorted(*args, **kwargs))\n    return cache[0]\nbuiltins.sorted = cached_sorted\nx = [3, 1, 2]\na = sorted(x)\nb = sorted(x)\nprint(a is b)\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select C413 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original code calls `list(sorted(x))`, which creates a new list from the iterator returned by `sorted`. Since `cached_sorted` returns the same cached list object on every call (after the first), both `a` and `b` refer to that same list only if `a` does not copy it. However, `list(sorted(x))` produces a distinct list instance, so `a` is a copy while `b` is the cached list—making `a is b` false. After the fix, `a = sorted(x)` directly assigns the cached list to `a`, so both `a` and `b` reference the identical cached object, making `a is b` true. The change removes the list-copying step, altering object identity.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "reversed_sorted_key_behavior_change",
+      "hazard": "For reversed(sorted(...)), the fix changes behavior when a custom key function is used because reversed() reverses the final list while sorted(..., reverse=True) performs a reverse sort that may reord",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `reversed()` call around `sorted()`",
+            "span": [
+              2,
+              22
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before fix: [('c', 2), ('b', 1), ('a', 1)]\nAfter fix : [('c', 2), ('a', 1), ('b', 1)]\nEqual? False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before fix: [('c', 2), ('b', 1), ('a', 1)]\nAfter fix : [('c', 2), ('a', 1), ('b', 1)]\nEqual? False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "class_attribute_property_side_effect",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Access count via property: 2\nSorted result: [(1, 1), (2, 2)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "star_import_module_side_effects_all",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "COUNTER after list(sorted): 2\nLength: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "side_effecting_key_expression_evaluation_order",
+      "hazard": "If sorted() is called with side-effecting key or reverse expressions (e.g., sorted(x, key=print(len(i)))), the evaluation order of those expressions is unchanged, but the outer call removal could affe",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Key call log: [('key', 3), ('key', 1), ('key', 2)]\nList wrapped: [1, 2, 3]\nSame as sorted? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "walrus_comprehension_scoping_late_binding",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `list()` call around `sorted()`",
+            "span": [
+              6,
+              16
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Closure results: [[0, 2], [0, 2], [0, 2]]\nList wrapped: [0]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Closure results: [[0, 2], [0, 2], [0, 2]]\nList wrapped: [0]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:21:40.281536202 -0400\n+++ fixed.py\t2026-10-17 16:21:40.442535376 -0400\n@@ -3,6 +3,6 @@\n     if (tmp := sorted([i, 0])):\n         f = lambda: tmp\n         funcs.append(f)\n-list_wrapped = list(sorted([0]))\n+list_wrapped = sorted([0])\n print('Closure results:', [f() for f in funcs])\n print('List wrapped:', list_wrapped)\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "bytes_vs_str_encoding_newline_handling",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Sorted lines: [\"'a\\\\n'\", \"'b\\\\n'\", \"'c'\"]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "mutable_default_arguments_aliasing_after_rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Default arg state after key calls: [3, 1, 2]\nWrapped list: [3, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "evaluation_order_side_effects_merged_deleted",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Side effect log: [1, 2, 3]\nList wrapped: [-3, -2, -1]\nSum of wrapped: -6\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "shadowed_builtins_redefinition",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "mutation_aliasing_after_fix",
+      "hazard": "If the result of list(sorted(...)) is assigned to a variable and later mutated, the fix may affect aliasing if other references expect a list but now get an iterator.",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `list()` call around `sorted()`",
+            "span": [
+              2,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[99, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[99, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:21:48.216496016 -0400\n+++ fixed.py\t2026-10-17 16:21:48.379495202 -0400\n@@ -1,4 +1,4 @@\n x = [3, 1, 2]\n-a = b = list(sorted(x))\n+a = b = sorted(x)\n a[0] = 99\n print(b)\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "cmp_to_key_stability_difference",
+      "hazard": "If the sorted call uses a custom comparator via functools.cmp_to_key, reversed() and reverse=True are not equivalent due to differing stability properties.",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `reversed()` call around `sorted()`",
+            "span": [
+              5,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[2, 1, -2, -1]\n[1, 2, -1, -2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2, 1, -2, -1]\n[1, 2, -1, -2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "custom_key_reverse_equivalence",
+      "hazard": "For reversed(sorted(...)), the fix changes behavior when a custom key function is used because reversed() reverses the final list while sorted(..., reverse=True) performs a reverse sort that may reord",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `reversed()` call around `sorted()`",
+            "span": [
+              2,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[(2, 'b'), (1, 'c'), (1, 'a')]\n[(2, 'b'), (1, 'a'), (1, 'c')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[(2, 'b'), (1, 'c'), (1, 'a')]\n[(2, 'b'), (1, 'a'), (1, 'c')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "evaluation_order_side_effects_merged",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `list()` call around `sorted()`",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2] 0\n[1, 2] 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2] 0\n[1, 2] 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:21:48.822492991 -0400\n+++ fixed.py\t2026-10-17 16:21:48.996492123 -0400\n@@ -4,7 +4,7 @@\n     counter += 1\n     return counter\n x = [inc(), inc()]\n-r = list(sorted(x))\n+r = sorted(x)\n counter = 0\n r2 = sorted(x)\n print(r, counter)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "singleton_sorted_return_exposure",
+      "hazard": "If the code relies on the fact that list(sorted(...)) creates a new list object (which it does), and sorted(...) also creates a new list, there is no behavioral difference—but if sorted were overridde",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `list()` call around `sorted()`",
+            "span": [
+              10,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nFalse\nTrue\nstdout after:\nTrue\nTrue"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:21:49.098491615 -0400\n+++ fixed.py\t2026-10-17 16:21:49.261490804 -0400\n@@ -7,7 +7,7 @@\n     return cache[0]\n builtins.sorted = cached_sorted\n x = [3, 1, 2]\n-a = list(sorted(x))\n+a = sorted(x)\n b = sorted(x)\n print(a is b)\n print(a == b)\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "coercion_and_rounding_edge",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `list()` call around `sorted()`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "<class 'decimal.Decimal'> 1.4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'decimal.Decimal'> 1.4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:21:49.364490292 -0400\n+++ fixed.py\t2026-10-17 16:21:49.538489426 -0400\n@@ -1,4 +1,4 @@\n from decimal import Decimal\n x = [Decimal('1.5'), Decimal('1.4')]\n-r = list(sorted(x))\n+r = sorted(x)\n print(type(r[0]), r[0])\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "walrus_lambda_late_binding",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "C413",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C413",
+            "severity": "warning",
+            "message": "Unnecessary `list()` call around `sorted()`",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[[0, 1], [0, 1]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[[0, 1], [0, 1]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:21:49.637488934 -0400\n+++ fixed.py\t2026-10-17 16:21:49.803488108 -0400\n@@ -1,5 +1,5 @@\n fs = []\n for i in range(2):\n-    if (x := list(sorted([i, 0]))) is not None:\n+    if (x := sorted([i, 0])) is not None:\n         fs.append(lambda: x)\n print([f() for f in fs])\n"
+      }
+    }
+  ]
+}

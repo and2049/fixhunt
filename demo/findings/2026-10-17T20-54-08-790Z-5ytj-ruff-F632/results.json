@@ -1,0 +1,2452 @@
+{
+  "runId": "2026-10-17T20-54-08-790Z-5ytj-ruff-F632",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "F632",
+    "fixKind": "unknown",
+    "docs": "# is-literal (F632)\n\nDerived from the **Pyflakes** linter.\n\nFix is always available.\n\n## What it does\nChecks for `is` and `is not` comparisons against literals, like integers,\nstrings, or lists.\n\n## Why is this bad?\nThe `is` and `is not` comparators operate on identity, in that they check\nwhether two objects are the same object. If the objects are not the same\nobject, the comparison will always be `False`. Using `is` and `is not` with\nconstant literals often works \"by accident\", but are not guaranteed to produce\nthe expected result.\n\nAs of Python 3.8, using `is` and `is not` with constant literals will produce\na `SyntaxWarning`.\n\nThis rule will also flag `is` and `is not` comparisons against non-constant\nliterals, like lists, sets, and dictionaries. While such comparisons will\nnot raise a `SyntaxWarning`, they are still likely to be incorrect, as they\nwill compare the identities of the objects instead of their values, which\nwill always evaluate to `False`.\n\nInstead, use `==` and `!=` to compare literals, which will compare the\nvalues of the objects instead of their identities.\n\n## Example\n```python\nx = 200\nif x is 200:\n    print(\"It's 200!\")\n```\n\nUse instead:\n```python\nx = 200\nif x == 200:\n    print(\"It's 200!\")\n```\n\n## References\n- [Python documentation: Identity comparisons](https://docs.python.org/3/reference/expressions.html#is-not)\n- [Python documentation: Value comparisons](https://docs.python.org/3/reference/expressions.html#value-comparisons)\n- [_Why does Python log a SyntaxWarning for ‘is’ with literals?_ by Adam Johnson](https://adamj.eu/tech/2020/01/21/why-does-python-3-8-syntaxwarning-for-is-literal/)\n"
+  },
+  "analysis": {
+    "summary": "Flags 'is' or 'is not' comparisons between any expression and literal constants (including strings, numbers, None, booleans, and compound literals like lists/dicts/sets).",
+    "firingShapes": [
+      "x is 5",
+      "y is not \"hello\"",
+      "z is []",
+      "a is not {}",
+      "b is set()",
+      "c is True",
+      "d is not None",
+      "e is b'a'"
+    ],
+    "silentShapes": [
+      "x is y",
+      "x is not y",
+      "func() is 5",
+      "x is get_value()",
+      "[].is([])"
+    ],
+    "fixDescription": "Replaces 'is' with '==' and 'is not' with '!=' when comparing against literal constants, preserving all other expression structure.",
+    "hazards": [
+      "Rewriting 'x is 5' to 'x == 5' changes behavior if x defines __eq__ with side effects, as the comparison may now execute where it previously did not due to short-circuiting in identity checks.",
+      "If x is a numpy array, 'x is 5' is always False (no rewrite needed), but 'x == 5' returns an array of booleans, altering truth value in conditionals and potentially causing ValueError.",
+      "When x is None, 'x is not None' rewritten to 'x != None' may invoke __eq__ on x if x is an object with a custom __eq__, whereas identity check bypasses it entirely.",
+      "For class instances where __eq__ is overridden to return NotImplemented, 'x == 5' may trigger fallback to __eq__ on 5 (int), which returns NotImplemented and results in False, while 'x is 5' was already False—so behavior may seem same but relies on different mechanics.",
+      "In code like 'if (x is 0) and y:', rewriting to 'if (x == 0) and y:' preserves logic only if x == 0 has no side effects; if __eq__ mutates state, evaluation order side effects differ.",
+      "If x is a string literal like 'hello', 'x is \"hello\"' may be True due to interning, but 'x == \"hello\"' is also True—so no behavioral change, but the fix is still applied; however, relying on interning is fragile and the rewrite is semantically safer.",
+      "When x is a bytes object from external input, 'x is b\"a\"' is almost always False, but 'x == b\"a\"' compares values—correcting the intent, yet if the code depended on object identity for caching or pooling, the rewrite breaks that assumption.",
+      "If the literal is a mutable compound like [] and x is a local variable, 'x is []' is False unless x is that exact list, but 'x == []' may be True for empty lists—fix corrects mistaken identity use, but if x was intended to be checked for being the same mutable object (e.g., in a cache), the rewrite loses that distinction.",
+      "In rare cases where x is a property that returns a new list on each access, 'x is []' is always False, and 'x == []' may be True if the property returns an empty list—fix is correct, but if the code relied on the identity check to detect initialization state via object uniqueness, the rewrite obscures intent.",
+      "Comments attached to the 'is' or 'is not' operator (e.g., 'x is  # inline comment\n 5') may be lost or misplaced during rewrite if the tool does not preserve whitespace and comment tokens around the operator.",
+      "If the comparison is part of a larger expression like 'x is 5 or y is 10', rewriting each 'is' independently is safe, but if the literal is a complex expression mistakenly treated as constant (e.g., due to tool error), it could rewrite non-literals."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.1066128,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 10,
+    "fixed": 10,
+    "disputed": 6,
+    "fix-changes-behavior": 6
+  },
+  "reports": [
+    {
+      "programId": "r1-p004",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class BadDict:\n    def __eq__(self, other):\n        return 42\nd = BadDict()\nprint(d is {})     # False\n",
+      "lines": {
+        "before": 9,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T20-54-08-790Z-5ytj-ruff-F632/reports/r1-p004.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12518",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11736",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9374",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8589",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6891",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1057",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule rewrites 'd is {}' to 'd == {}', changing an identity check into a value comparison. The program defines a class with a custom __eq__ that returns 42, so the equality comparison invokes that method and prints 42, whereas the original identity comparison correctly returned False. The documentation presents the rewrite as a safe equivalence for literal comparisons, but it is not equivalent when the left-hand operand overrides equality.",
+        "docsQuote": "use == and != to compare literals, which will compare the values of the objects instead of their identities",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "F632 fix",
+          "ruff F632 identity comparison dict",
+          "F632 replace is with equals literal",
+          "rule F632 fix object equality check"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Isort rule misses unsorted imports when using user-level ruff.toml file on windows",
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "state": "closed",
+            "snippet": "### Summary\n\nFirst of all, thank you for the great work on both Ruff, uv, and ty.   \nSorry if this isn't a bug, but a misunderstanding\n\nWhen using the following `ruff.toml` config file on Windows:\n> `%userprofile%\\AppData\\Roaming\\ruff`\n```toml\n[lint]\nselect = [\"I\"]\n```\n\nAnd the following file struct"
+          },
+          {
+            "source": "github",
+            "title": "[Feature Idea] Add column headers to `ruff check --statistics`, to avoid ambiguity",
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "state": "closed",
+            "snippet": "This is a question that can be easily answered, but ideally wouldn't have to be asked if there were column headers.\r\n\r\nHere is an example output to running `ruff check --statistics`\r\n\r\n```\r\n$ ruff check --statistics\r\n317     F541    [*] f-string-missing-placeholders\r\n241     F401    [ ] unused-impor"
+          },
+          {
+            "source": "github",
+            "title": "F632 suggestion leads to false positive when comparing False == 0",
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Rule F632 cause panic",
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "state": "closed",
+            "snippet": "ruff 0.4.7 (latest changes from main branch)\r\n```\r\nruff  *.py --select F632 --no-cache --fix --unsafe-fixes --preview --output-format concise --isolated\r\n```\r\n\r\nfile content:\r\n```\r\nrelese_version :\"0.0is 64\"\r\n```\r\n\r\nerror\r\n```\r\nAll checks passed!\r\n\r\nerror: Panicked while linting /opt/tmp_folder/1138"
+          },
+          {
+            "source": "github",
+            "title": "[QA] Should Ruff be able to fix indentation errors (E999) ?",
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "state": "closed",
+            "snippet": "I have ruff setup in neovim as a LSP using `ruff server --preview` .\r\nHowever, if there is an indentation issue E999  in the code ruff cannot format or fix until all E999's have been manually fixed.\r\nSometimes, it will also cause the LSP to disconnect and no longer be available for python file types"
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop in F632/E711",
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "state": "closed",
+            "snippet": "I just tried this on master (6c0734680ede806cef849d2d8c7105e2ecd785ad).\r\n\r\nConsider the following snippet:\r\n```py\r\nfor x in c > 0 == None:\r\n pass\r\n```\r\n\r\nThis fails to converge as `==` is replaced with `is` and back over and over.\r\n\r\nThis appears in real code: https://github.com/CARocha/suco_proga/b"
+          },
+          {
+            "source": "github",
+            "title": "Catch `variable is []`",
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Rules E712,F632 causes infinite loop",
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "state": "closed",
+            "snippet": "Ruff 0.0.286 (latest changes from main branch)\r\n\r\n```\r\nruff  *.py --select E712,F632 --no-cache\r\n```\r\n\r\nfile content:\r\n```\r\nclass RefsContainerTests:\r\n        f.write(\r\n            b\"\\n\".join(\r\n                line\r\n                for line in refs_data.split(b\"\\n\")\r\n                if not line or l"
+          },
+          {
+            "source": "tavily",
+            "title": "[bug] ruff chokes when fixing invalid comparison (`F632`) · Issue #1057 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "snippet": "```\ntype_check_fn=lambda _, value: isinstance(value, int) and value % 2 is 0, \n```\n\nError message:\n\n```\n[2022-12-05][08:09:02][ruff::pyflakes::plugins::invalid_literal_comparisons][ERROR] Failed to fix invalid comparison: Failed to extract CST from source \n```\n\nSubsequent runs of `ruff --fix` print "
+          },
+          {
+            "source": "tavily",
+            "title": "D205 not fixable · Issue #1672 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "snippet": "Resolved settings for: \"/Users/lucabaggi/Documents/dev/futura-aws/src/futura_aws/__init__.py\" Settings { allowed_confusables: {}, cache_dir: \"/Users/lucabaggi/Documents/dev/futura-aws/.ruff_cache\", dummy_variable_rgx: ^(_+|(_+[a-zA-Z0-9_][a-zA-Z0-9]+?))$, enabled: { E401, F822, F704, D411, F631, D40"
+          },
+          {
+            "source": "tavily",
+            "title": "Multi-root workspace makes Ruff use wrong settings · Issue #925 · astral-sh/ruff-vscode · GitHub",
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "snippet": "(F509), string-dot-format-invalid-format (F521), string-dot-format-extra-named-arguments (F522), string-dot-format-extra-positional-arguments (F523), string-dot-format-missing-arguments (F524), string-dot-format-mixing-automatic (F525), f-string-missing-placeholders (F541), multi-value-repeated-key-"
+          },
+          {
+            "source": "tavily",
+            "title": "Feature: Port Sonar's Python scanner checks · Issue #4935 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "snippet": "| ✅ | RSPEC-5780 | F601, F602 | Expressions creating dictionaries should not have duplicate keys |\n   | ✅ | RSPEC-5781 | B033 | Expressions creating sets should not have duplicate values |\n   | ✅ | RSPEC-5795 | F632 | Identity comparisons should not be used with cached types |\n   | ✅ | RSPEC-5806 | "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Reports an unused-argument false positive for a non-ASCII variable name, unrelated to F632 identity-comparison fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "Parent tracking issue for Pylint parity, not a specific F632 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "relation": "unrelated",
+            "why": "Windows-specific isort configuration bug, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "relation": "unrelated",
+            "why": "Feature request for column headers in statistics output, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: false positive when comparing `False == 0` instead of identity comparison with a custom `__eq__`."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: panic on invalid syntax rather than behavior-changing fix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "relation": "unrelated",
+            "why": "Question about fixing indentation errors (E999), unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: infinite loop toggling `==`/`is` in a chained comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: catching `variable is []` literal comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: infinite loop with E712 on generator expression."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: choking on invalid comparison inside a lambda default argument."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "relation": "unrelated",
+            "why": "Reports D205 not fixable, unrelated to F632 identity-comparison fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "relation": "unrelated",
+            "why": "VS Code extension multi-root workspace settings bug, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "relation": "unrelated",
+            "why": "Feature request to port Sonar scanner checks, mentions F632 as already implemented but not a defect report."
+          }
+        ],
+        "cost": 0.0044472999999999995
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:33:59.673563633 -0400\n+++ fixed.py\t2026-10-22 13:34:01.793599341 -0400\n@@ -2,4 +2,4 @@\n     def __eq__(self, other):\n         return 42\n d = BadDict()\n-print(d is {})     # False\n+print(d == {})     # False\n",
+        "observed": "stdout before:\nFalse\nstdout after:\n42",
+        "before": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class BadDict:\n    def __eq__(self, other):\n        return 42\nd = BadDict()\nprint(d == {})     # False\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select F632 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original expression `d is {}` checks object identity between instance `d` and a newly created empty dict literal; since they are distinct objects, it evaluates to `False`. The rewrite replaces this with `d == {}`, which invokes `__eq__` on `d` (defined in `BadDict`) passing the new dict as `other`. That method returns the integer `42`, so the print outputs `42` instead of `False`, changing both type and value. Thus the transformation alters program semantics.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class Container:\n    def __init__(self):\n        self._data = None\n    @property\n    def data(self):\n        return [] if self._data is None else self._data\nc = Container()\nprint(c.data is [])   # Always False (new list each time)\n",
+      "lines": {
+        "before": 12,
+        "after": 8
+      },
+      "reportPath": "runs/2026-10-17T20-54-08-790Z-5ytj-ruff-F632/reports/r1-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12518",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11736",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9374",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8589",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6891",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1057",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule rewrites 'is' to '==' for literal comparisons because identity checks against literals are unreliable and will become SyntaxWarnings in Python 3.8. The program's comment acknowledges the original 'is []' comparison always returns False due to new list creation, while the fixed '== []' correctly returns True when the container's data property returns an empty list, demonstrating the intended semantic change from identity to value comparison.",
+        "docsQuote": "use == and != to compare literals, which will compare the values of the objects instead of their identities",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "F632 fix",
+          "F632 property returns new mutable object",
+          "is comparison against literal list in property accessor",
+          "identity check on freshly created container instance"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Isort rule misses unsorted imports when using user-level ruff.toml file on windows",
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "state": "closed",
+            "snippet": "### Summary\n\nFirst of all, thank you for the great work on both Ruff, uv, and ty.   \nSorry if this isn't a bug, but a misunderstanding\n\nWhen using the following `ruff.toml` config file on Windows:\n> `%userprofile%\\AppData\\Roaming\\ruff`\n```toml\n[lint]\nselect = [\"I\"]\n```\n\nAnd the following file struct"
+          },
+          {
+            "source": "github",
+            "title": "[Feature Idea] Add column headers to `ruff check --statistics`, to avoid ambiguity",
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "state": "closed",
+            "snippet": "This is a question that can be easily answered, but ideally wouldn't have to be asked if there were column headers.\r\n\r\nHere is an example output to running `ruff check --statistics`\r\n\r\n```\r\n$ ruff check --statistics\r\n317     F541    [*] f-string-missing-placeholders\r\n241     F401    [ ] unused-impor"
+          },
+          {
+            "source": "github",
+            "title": "F632 suggestion leads to false positive when comparing False == 0",
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Rule F632 cause panic",
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "state": "closed",
+            "snippet": "ruff 0.4.7 (latest changes from main branch)\r\n```\r\nruff  *.py --select F632 --no-cache --fix --unsafe-fixes --preview --output-format concise --isolated\r\n```\r\n\r\nfile content:\r\n```\r\nrelese_version :\"0.0is 64\"\r\n```\r\n\r\nerror\r\n```\r\nAll checks passed!\r\n\r\nerror: Panicked while linting /opt/tmp_folder/1138"
+          },
+          {
+            "source": "github",
+            "title": "[QA] Should Ruff be able to fix indentation errors (E999) ?",
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "state": "closed",
+            "snippet": "I have ruff setup in neovim as a LSP using `ruff server --preview` .\r\nHowever, if there is an indentation issue E999  in the code ruff cannot format or fix until all E999's have been manually fixed.\r\nSometimes, it will also cause the LSP to disconnect and no longer be available for python file types"
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop in F632/E711",
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "state": "closed",
+            "snippet": "I just tried this on master (6c0734680ede806cef849d2d8c7105e2ecd785ad).\r\n\r\nConsider the following snippet:\r\n```py\r\nfor x in c > 0 == None:\r\n pass\r\n```\r\n\r\nThis fails to converge as `==` is replaced with `is` and back over and over.\r\n\r\nThis appears in real code: https://github.com/CARocha/suco_proga/b"
+          },
+          {
+            "source": "github",
+            "title": "Catch `variable is []`",
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Rules E712,F632 causes infinite loop",
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "state": "closed",
+            "snippet": "Ruff 0.0.286 (latest changes from main branch)\r\n\r\n```\r\nruff  *.py --select E712,F632 --no-cache\r\n```\r\n\r\nfile content:\r\n```\r\nclass RefsContainerTests:\r\n        f.write(\r\n            b\"\\n\".join(\r\n                line\r\n                for line in refs_data.split(b\"\\n\")\r\n                if not line or l"
+          },
+          {
+            "source": "tavily",
+            "title": "[bug] ruff chokes when fixing invalid comparison (`F632`) · Issue #1057 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "snippet": "```\ntype_check_fn=lambda _, value: isinstance(value, int) and value % 2 is 0, \n```\n\nError message:\n\n```\n[2022-12-05][08:09:02][ruff::pyflakes::plugins::invalid_literal_comparisons][ERROR] Failed to fix invalid comparison: Failed to extract CST from source \n```\n\nSubsequent runs of `ruff --fix` print "
+          },
+          {
+            "source": "tavily",
+            "title": "D205 not fixable · Issue #1672 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "snippet": "Resolved settings for: \"/Users/lucabaggi/Documents/dev/futura-aws/src/futura_aws/__init__.py\" Settings { allowed_confusables: {}, cache_dir: \"/Users/lucabaggi/Documents/dev/futura-aws/.ruff_cache\", dummy_variable_rgx: ^(_+|(_+[a-zA-Z0-9_][a-zA-Z0-9]+?))$, enabled: { E401, F822, F704, D411, F631, D40"
+          },
+          {
+            "source": "tavily",
+            "title": "Multi-root workspace makes Ruff use wrong settings · Issue #925 · astral-sh/ruff-vscode · GitHub",
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "snippet": "(F509), string-dot-format-invalid-format (F521), string-dot-format-extra-named-arguments (F522), string-dot-format-extra-positional-arguments (F523), string-dot-format-missing-arguments (F524), string-dot-format-mixing-automatic (F525), f-string-missing-placeholders (F541), multi-value-repeated-key-"
+          },
+          {
+            "source": "tavily",
+            "title": "Warn against quadratic list summation · Issue #5073 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/5073",
+            "snippet": "Issue body actions\n\nI can't find a linter that warns me about `sum(list_of_lists, [])`. Basically any time the `default` arg of `sum` is a list literal, I think something slow could happen. Maybe ruff could warn me about this? :-)\n\nReactions are currently unavailable\n\n## Activity\n\n1. ### konstincomm"
+          },
+          {
+            "source": "tavily",
+            "title": "complete expression type inference · Issue #244 · astral-sh/ty · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/12701",
+            "snippet": "number literal expression\n string literal expression\n bytes literal expression\n f-string expression\n ellipsis literal expression\n call expression\n unary expression\n binary expression\n boolean expression\n [[red-knot] Compare expressions ruff#13618](\n [[red-knot] Infer subscript expression types ruff#"
+          },
+          {
+            "source": "tavily",
+            "title": "[ty] Recognize string-literal types as subtypes of `Sequence[Literal[chars]]` by jhartum · Pull Request #22415 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/22415",
+            "snippet": "| I think this should help with the memory regression. The issue is we're doing expensive character processing for every `StringLiteral` vs `NominalInstance` comparison, even when it's clearly not a sequence type.  Here's a quick fix that adds a cheap MRO check before any allocations:  ``` diff --gi"
+          },
+          {
+            "source": "tavily",
+            "title": "[`flake8-simplify`] Fix `SIM905` autofix for `rsplit` creating a reversed list literal by LaBatata101 · Pull Request #18045 · astral-sh/ruff · GitHub",
+            "url": "https://redirect.github.com/astral-sh/ruff/pull/18045",
+            "snippet": "@dylwil3 dylwil3 added  bug  An issue describing something that isn't working, or a PR that fixes a bug  fixes  Related to suggested fixes for violations labels May 12, 2025\n\n@LaBatata101\n\n`Update code`\n\n`00311d6`\n\n@LaBatata101\n\nLaBatata101 requested a review from dylwil3 May 12, 2025 19:42\n\ndylwil3"
+          },
+          {
+            "source": "tavily",
+            "title": "Discrepancy between `format` and `check` for a long string literal · Issue #9926 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9926",
+            "snippet": "Anything we can do to help there?\n16. ### MichaReisercommentedon Feb 25, 2024\n\n    @MichaReiser\n\n    MichaReiser\n\n    on Feb 25, 2024\n\n    Member\n\n    More actions\n\n    > Anything we can do to help there?\n\n    Not yet, because we haven't started yet. But we plan to pick this up soon (I think @AlexWa"
+          },
+          {
+            "source": "tavily",
+            "title": "`F821` on use of `Literal` with strings, e.g. `Literal['foo']` · Issue #128 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/128",
+            "snippet": "From this code (and some other places in that file), I get: [...] ``` [...] ```"
+          },
+          {
+            "source": "tavily",
+            "title": "F821 on a `Literal` type that isn't directly imported by the current module · Issue #2105 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/2105",
+            "snippet": "script.py\n\n```\nfrom import annotations from script_typing import Literal testing_archs list Literal \"x86_64\" \"arm64\" testing_archs = 'x86_64' print testing_archs\n```\n\nscript\\_typing.py\n\n```\nimport sys if sys version_info< 3 8 from typing_extensions import Literal else from typing import Literal\n```\n"
+          },
+          {
+            "source": "tavily",
+            "title": "[`ruff`] Expand rule for `list(iterable).pop(0)` idiom (`RUF015`) by robincaloudis · Pull Request #10148 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/10148",
+            "snippet": "--ignore RUF9 --output-format concise --preview ```  ``` - samcli/commands/delete/delete_context.py:30:7: PLR0902 Too many instance attributes (14/7) - samcli/commands/deploy/deploy_context.py:43:7: PLR0902 Too many instance attributes (28/7) - samcli/commands/deploy/guided_context.py:42:7: PLR0902 "
+          },
+          {
+            "source": "tavily",
+            "title": "TC001-3 runtime-evaluated-decorators not working when an instance is created via a function. · Issue #20637 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/20637",
+            "snippet": "## Navigation Menu. # Search code, repositories, users, issues, pull requests... # Provide feedback. We read every piece of feedback, and take your input very seriously. # Saved searches. ## Use saved searches to filter your results more quickly. To see all available qualifiers, see our documentatio"
+          },
+          {
+            "source": "tavily",
+            "title": "Proposal: Disallow Instance Variable Shadowing of Class Variable Annotations · Issue #18513 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/18513",
+            "snippet": "### Labels\n\nneeds-decisionAwaiting a decision from a maintainerAwaiting a decision from a maintainerruleImplementing or modifying a lint ruleImplementing or modifying a lint rule\n\nNo type\n\nNo projects\n\nNo milestone\n\nNone yet\n\nNo branches or pull requests\n\n## Issue actions\n\nYou can’t perform that act"
+          },
+          {
+            "source": "tavily",
+            "title": "Trigger violation on mutable values and function calls for non-dataclass attribute defaults · Issue #4053 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/4053",
+            "snippet": "added\n\n   questionAn issue asking for support or clarificationAn issue asking for support or clarification\n\n   on Apr 21, 2023\n4. ### hmc-cs-mdrissicommentedon Apr 21, 2023\n\n   @hmc-cs-mdrissi\n\n   hmc-cs-mdrissi\n\n   on Apr 21, 2023\n\n   More actions\n\n   I'll note some libraries do re-use/support data"
+          },
+          {
+            "source": "tavily",
+            "title": "cached-instance-method (B019) for async_lru and aiocache · Issue #16436 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/16436",
+            "snippet": "Title: cached-instance-method (B019) for async_lru and aiocache · Issue #16436 · astral-sh/ruff · GitHub\n## Navigation Menu. # Search code, repositories, users, issues, pull requests... # Provide feedback. We read every piece of feedback, and take your input very seriously. # Saved searches. ## Use "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Reports an unused-argument false positive for a variable named 次, unrelated to F632 literal-comparison fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "Parent tracking issue for Pylint parity, not a specific F632 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "relation": "unrelated",
+            "why": "Windows-specific isort configuration issue, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "relation": "unrelated",
+            "why": "Feature request for column headers in statistics output, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "relation": "related",
+            "why": "Same rule F632, but defect involves False == 0 comparison, not identity check against a fresh list literal."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "relation": "related",
+            "why": "Same rule F632, but defect is a panic/crash on invalid syntax, not a behavior-changing fix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "relation": "unrelated",
+            "why": "Asks about fixing indentation errors (E999), unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "relation": "related",
+            "why": "Same rule F632, but defect is an infinite loop between == and is on chained comparisons, not a fresh-list identity check."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "relation": "duplicate",
+            "why": "Explicitly titled 'Catch variable is []' — the same F632 rewrite (is -> ==) on a fresh list literal from a property/accessor."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "relation": "related",
+            "why": "Same rules F632/E712, but defect is an infinite loop on a generator expression, not a fresh-list identity check."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "relation": "related",
+            "why": "Same rule F632, but defect is a crash extracting CST from a lambda default value from a lambda default, not a behavior-changing fix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "relation": "unrelated",
+            "why": "Reports D205 not fixable, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "relation": "unrelated",
+            "why": "VS Code extension multi-root workspace settings issue, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/5073",
+            "relation": "unrelated",
+            "why": "Feature request to warn about quadratic list summation, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12701",
+            "relation": "unrelated",
+            "why": "Type inference enhancement for ty, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/22415",
+            "relation": "unrelated",
+            "why": "PR optimizing string-literal type handling, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/18045",
+            "relation": "unrelated",
+            "why": "PR fixing flake8-simplify SIM905 autofix for rsplit, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9926",
+            "relation": "unrelated",
+            "why": "Discrepancy between format and check for long string literals, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/128",
+            "relation": "unrelated",
+            "why": "F821 false positive on Literal['foo'], unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2105",
+            "relation": "unrelated",
+            "why": "F821 on Literal not directly imported, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/10148",
+            "relation": "unrelated",
+            "why": "PR expanding RUF015 for list(iterable).pop(0), unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20637",
+            "relation": "unrelated",
+            "why": "TC001-3 runtime-evaluated decorators issue, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18513",
+            "relation": "unrelated",
+            "why": "Proposal to disallow instance variable shadowing, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4053",
+            "relation": "unrelated",
+            "why": "Trigger violation on mutable defaults for non-dataclass attributes, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16436",
+            "relation": "unrelated",
+            "why": "B019 cached-instance-method for async_lru/aiocache, unrelated to F632."
+          }
+        ],
+        "cost": 0.0077234
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:05.095654961 -0400\n+++ fixed.py\t2026-10-22 13:34:07.218690724 -0400\n@@ -5,4 +5,4 @@\n     def data(self):\n         return [] if self._data is None else self._data\n c = Container()\n-print(c.data is [])   # Always False (new list each time)\n+print(c.data == [])   # Always False (new list each time)\n",
+        "observed": "stdout before:\nFalse\nstdout after:\nTrue",
+        "before": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class Container:\n    def __init__(self):\n        self._data = None\n    @property\n    def data(self):\n        return [] if self._data is None else self._data\nc = Container()\nprint(c.data == [])   # Always False (new list each time)\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select F632 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original expression `c.data is []` checks object identity; since `[]` creates a new empty list on each call to `.data`, it never matches the newly created literal in the condition, so the result is always False. After rewriting to `c.data == []`, equality compares values: both sides evaluate to empty lists with identical contents, yielding True despite being distinct objects. Thus the change from identity (`is`) to equality (`==`) alters the program’s observable output.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class MockArray:\n    def __init__(self, val):\n        self.val = val\nx = MockArray(5)\nprint(x is 5)   # False\n",
+      "lines": {
+        "before": 15,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T20-54-08-790Z-5ytj-ruff-F632/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12518",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11736",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9374",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8589",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6891",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1057",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/4560",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule rewrites identity comparison (`is`) to equality comparison (`==`) for literals, which is the documented semantic change. The program's custom class `MockArray` does not define `__eq__`, so `x == 5` falls back to identity comparison and returns `False`, matching the original `x is 5` result. The observed difference is the removal of the SyntaxWarning, which is the intended effect of the fix.",
+        "docsQuote": "Using `is` and `is not` with constant literals often works \"by accident\", but are not guaranteed to produce the expected result. Instead, use `==` and `!=` to compare literals, which will compare the values of the objects instead of their identities.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "F632 fix",
+          "F632 identity comparison integer",
+          "ruff F632 is int literal warning",
+          "MockArray equality check replacement"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Isort rule misses unsorted imports when using user-level ruff.toml file on windows",
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "state": "closed",
+            "snippet": "### Summary\n\nFirst of all, thank you for the great work on both Ruff, uv, and ty.   \nSorry if this isn't a bug, but a misunderstanding\n\nWhen using the following `ruff.toml` config file on Windows:\n> `%userprofile%\\AppData\\Roaming\\ruff`\n```toml\n[lint]\nselect = [\"I\"]\n```\n\nAnd the following file struct"
+          },
+          {
+            "source": "github",
+            "title": "[Feature Idea] Add column headers to `ruff check --statistics`, to avoid ambiguity",
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "state": "closed",
+            "snippet": "This is a question that can be easily answered, but ideally wouldn't have to be asked if there were column headers.\r\n\r\nHere is an example output to running `ruff check --statistics`\r\n\r\n```\r\n$ ruff check --statistics\r\n317     F541    [*] f-string-missing-placeholders\r\n241     F401    [ ] unused-impor"
+          },
+          {
+            "source": "github",
+            "title": "F632 suggestion leads to false positive when comparing False == 0",
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Rule F632 cause panic",
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "state": "closed",
+            "snippet": "ruff 0.4.7 (latest changes from main branch)\r\n```\r\nruff  *.py --select F632 --no-cache --fix --unsafe-fixes --preview --output-format concise --isolated\r\n```\r\n\r\nfile content:\r\n```\r\nrelese_version :\"0.0is 64\"\r\n```\r\n\r\nerror\r\n```\r\nAll checks passed!\r\n\r\nerror: Panicked while linting /opt/tmp_folder/1138"
+          },
+          {
+            "source": "github",
+            "title": "[QA] Should Ruff be able to fix indentation errors (E999) ?",
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "state": "closed",
+            "snippet": "I have ruff setup in neovim as a LSP using `ruff server --preview` .\r\nHowever, if there is an indentation issue E999  in the code ruff cannot format or fix until all E999's have been manually fixed.\r\nSometimes, it will also cause the LSP to disconnect and no longer be available for python file types"
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop in F632/E711",
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "state": "closed",
+            "snippet": "I just tried this on master (6c0734680ede806cef849d2d8c7105e2ecd785ad).\r\n\r\nConsider the following snippet:\r\n```py\r\nfor x in c > 0 == None:\r\n pass\r\n```\r\n\r\nThis fails to converge as `==` is replaced with `is` and back over and over.\r\n\r\nThis appears in real code: https://github.com/CARocha/suco_proga/b"
+          },
+          {
+            "source": "github",
+            "title": "Catch `variable is []`",
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Rules E712,F632 causes infinite loop",
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "state": "closed",
+            "snippet": "Ruff 0.0.286 (latest changes from main branch)\r\n\r\n```\r\nruff  *.py --select E712,F632 --no-cache\r\n```\r\n\r\nfile content:\r\n```\r\nclass RefsContainerTests:\r\n        f.write(\r\n            b\"\\n\".join(\r\n                line\r\n                for line in refs_data.split(b\"\\n\")\r\n                if not line or l"
+          },
+          {
+            "source": "tavily",
+            "title": "[bug] ruff chokes when fixing invalid comparison (`F632`) · Issue #1057 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "snippet": "```\ntype_check_fn=lambda _, value: isinstance(value, int) and value % 2 is 0, \n```\n\nError message:\n\n```\n[2022-12-05][08:09:02][ruff::pyflakes::plugins::invalid_literal_comparisons][ERROR] Failed to fix invalid comparison: Failed to extract CST from source \n```\n\nSubsequent runs of `ruff --fix` print "
+          },
+          {
+            "source": "tavily",
+            "title": "D205 not fixable · Issue #1672 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "snippet": "Resolved settings for: \"/Users/lucabaggi/Documents/dev/futura-aws/src/futura_aws/__init__.py\" Settings { allowed_confusables: {}, cache_dir: \"/Users/lucabaggi/Documents/dev/futura-aws/.ruff_cache\", dummy_variable_rgx: ^(_+|(_+[a-zA-Z0-9_][a-zA-Z0-9]+?))$, enabled: { E401, F822, F704, D411, F631, D40"
+          },
+          {
+            "source": "tavily",
+            "title": "Multi-root workspace makes Ruff use wrong settings · Issue #925 · astral-sh/ruff-vscode · GitHub",
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "snippet": "(F509), string-dot-format-invalid-format (F521), string-dot-format-extra-named-arguments (F522), string-dot-format-extra-positional-arguments (F523), string-dot-format-missing-arguments (F524), string-dot-format-mixing-automatic (F525), f-string-missing-placeholders (F541), multi-value-repeated-key-"
+          },
+          {
+            "source": "tavily",
+            "title": "Fix (E712) changing `==`/`!=` to `is`/`is not` is not correct for some types · Issue #4560 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/4560",
+            "snippet": "In the meantime, you may:\n\n Disable rule E712\n Use an alternative comparison method that is not ambiguous (e.g. `pandas.Series.eq`)\n\n## Examples\n\n```\nimport numpy numpy array True False == False# array([False, True]) numpy array True False is False # False\n```\n\n```\nimport pandas pandas Series True F"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Reports an unused-argument false positive for a non-ASCII variable name, unrelated to F632 literal-comparison fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "Parent tracking issue for Pylint parity, not a specific F632 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "relation": "unrelated",
+            "why": "Concerns isort missing imports on Windows with user-level config, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "relation": "unrelated",
+            "why": "Feature request for column headers in statistics output, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "relation": "related",
+            "why": "Same rule F632 but a different construct: the fix incorrectly suggests '==' for 'False is 0' where 'is' is actually correct."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "relation": "related",
+            "why": "Same rule F632 but a different cause: the fixer panics on a malformed string containing 'is' rather than rewriting a comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "relation": "unrelated",
+            "why": "Asks whether Ruff can auto-fix indentation errors (E999), unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "relation": "related",
+            "why": "Same rule F632 but a different construct: an infinite loop toggling between '==' and 'is' in a chained comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "relation": "related",
+            "why": "Same rule F632 but a different construct: requests catching 'variable is []' list-literal comparisons."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "relation": "related",
+            "why": "Same rules F632/E712 but a different construct: infinite loop when fixing comparisons inside a generator expression."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "relation": "related",
+            "why": "Same rule F632 but a different cause: the fixer chokes on a lambda containing 'is 0' and fails to extract a CST."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "relation": "unrelated",
+            "why": "Reports D205 not being fixable under certain settings, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "relation": "unrelated",
+            "why": "VS Code extension issue about multi-root workspace settings, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4560",
+            "relation": "related",
+            "why": "Same rule F632/E712 but a different construct: fix incorrectly changes '==' to 'is' for NumPy/Pandas arrays where element-wise comparison is needed."
+          }
+        ],
+        "cost": 0.0046315
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:10.868752213 -0400\n+++ fixed.py\t2026-10-22 13:34:12.939787105 -0400\n@@ -2,4 +2,4 @@\n     def __init__(self, val):\n         self.val = val\n x = MockArray(5)\n-print(x is 5)   # False\n+print(x == 5)   # False\n",
+        "observed": "stderr before: /w/prog.py:5: SyntaxWarning: \"is\" with 'int' literal. Did you mean \"==\"?\nstderr after: (none)",
+        "before": {
+          "stdout": "False\n",
+          "stderr1": "/w/prog.py:5: SyntaxWarning: \"is\" with 'int' literal. Did you mean \"==\"?",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class MockArray:\n    def __init__(self, val):\n        self.val = val\nx = MockArray(5)\nprint(x == 5)   # False\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select F632 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original expression `x is 5` checks identity between object `x` and integer literal `5`, which is always false for distinct objects; the warning notes this misuse. Replacing `is` with `==` changes the operation to value equality, invoking `__eq__` if defined or default object comparison—here still false but semantically different: identity versus equivalence. The fix alters the program’s meaning by substituting a fundamentally different operation, despite both yielding false in this case. This violates semantic preservation because the logical intent of the test changes, even if the outcome coincides here. The tool incorrectly labels the rewrite safe, ignoring that `is` and `==` are not interchangeable in general.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p001",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "__all__ = ['x']\nx = []\nif x is []:\n  print('same object')\ndel x\nfrom __main__ import *\n",
+      "lines": {
+        "before": 9,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T20-54-08-790Z-5ytj-ruff-F632/reports/r2-p001.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12518",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11736",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9374",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8589",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6891",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1057",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/pull/8607",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/pull/12049",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "high",
+        "why": "The rule rewrites `x is []` to `x == []`, changing an identity comparison to a value comparison. The documentation explicitly states that `is` with literals is incorrect and that `==` should be used instead, so the behavioral change (from False to True) is exactly the semantic change the rule intends.",
+        "docsQuote": "Using `is` and `is not` with constant literals often works \"by accident\", but are not guaranteed to produce the expected result. Instead, use `==` and `!=` to compare literals, which will compare the values of the objects instead of their identities.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "F632 fix",
+          "F632 identity comparison list literal",
+          "is empty list check replacement",
+          "list equality vs identity lint"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Isort rule misses unsorted imports when using user-level ruff.toml file on windows",
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "state": "closed",
+            "snippet": "### Summary\n\nFirst of all, thank you for the great work on both Ruff, uv, and ty.   \nSorry if this isn't a bug, but a misunderstanding\n\nWhen using the following `ruff.toml` config file on Windows:\n> `%userprofile%\\AppData\\Roaming\\ruff`\n```toml\n[lint]\nselect = [\"I\"]\n```\n\nAnd the following file struct"
+          },
+          {
+            "source": "github",
+            "title": "[Feature Idea] Add column headers to `ruff check --statistics`, to avoid ambiguity",
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "state": "closed",
+            "snippet": "This is a question that can be easily answered, but ideally wouldn't have to be asked if there were column headers.\r\n\r\nHere is an example output to running `ruff check --statistics`\r\n\r\n```\r\n$ ruff check --statistics\r\n317     F541    [*] f-string-missing-placeholders\r\n241     F401    [ ] unused-impor"
+          },
+          {
+            "source": "github",
+            "title": "F632 suggestion leads to false positive when comparing False == 0",
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Rule F632 cause panic",
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "state": "closed",
+            "snippet": "ruff 0.4.7 (latest changes from main branch)\r\n```\r\nruff  *.py --select F632 --no-cache --fix --unsafe-fixes --preview --output-format concise --isolated\r\n```\r\n\r\nfile content:\r\n```\r\nrelese_version :\"0.0is 64\"\r\n```\r\n\r\nerror\r\n```\r\nAll checks passed!\r\n\r\nerror: Panicked while linting /opt/tmp_folder/1138"
+          },
+          {
+            "source": "github",
+            "title": "[QA] Should Ruff be able to fix indentation errors (E999) ?",
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "state": "closed",
+            "snippet": "I have ruff setup in neovim as a LSP using `ruff server --preview` .\r\nHowever, if there is an indentation issue E999  in the code ruff cannot format or fix until all E999's have been manually fixed.\r\nSometimes, it will also cause the LSP to disconnect and no longer be available for python file types"
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop in F632/E711",
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "state": "closed",
+            "snippet": "I just tried this on master (6c0734680ede806cef849d2d8c7105e2ecd785ad).\r\n\r\nConsider the following snippet:\r\n```py\r\nfor x in c > 0 == None:\r\n pass\r\n```\r\n\r\nThis fails to converge as `==` is replaced with `is` and back over and over.\r\n\r\nThis appears in real code: https://github.com/CARocha/suco_proga/b"
+          },
+          {
+            "source": "github",
+            "title": "Catch `variable is []`",
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Rules E712,F632 causes infinite loop",
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "state": "closed",
+            "snippet": "Ruff 0.0.286 (latest changes from main branch)\r\n\r\n```\r\nruff  *.py --select E712,F632 --no-cache\r\n```\r\n\r\nfile content:\r\n```\r\nclass RefsContainerTests:\r\n        f.write(\r\n            b\"\\n\".join(\r\n                line\r\n                for line in refs_data.split(b\"\\n\")\r\n                if not line or l"
+          },
+          {
+            "source": "tavily",
+            "title": "[bug] ruff chokes when fixing invalid comparison (`F632`) · Issue #1057 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "snippet": "```\ntype_check_fn=lambda _, value: isinstance(value, int) and value % 2 is 0, \n```\n\nError message:\n\n```\n[2022-12-05][08:09:02][ruff::pyflakes::plugins::invalid_literal_comparisons][ERROR] Failed to fix invalid comparison: Failed to extract CST from source \n```\n\nSubsequent runs of `ruff --fix` print "
+          },
+          {
+            "source": "tavily",
+            "title": "D205 not fixable · Issue #1672 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "snippet": "Resolved settings for: \"/Users/lucabaggi/Documents/dev/futura-aws/src/futura_aws/__init__.py\" Settings { allowed_confusables: {}, cache_dir: \"/Users/lucabaggi/Documents/dev/futura-aws/.ruff_cache\", dummy_variable_rgx: ^(_+|(_+[a-zA-Z0-9_][a-zA-Z0-9]+?))$, enabled: { E401, F822, F704, D411, F631, D40"
+          },
+          {
+            "source": "tavily",
+            "title": "Multi-root workspace makes Ruff use wrong settings · Issue #925 · astral-sh/ruff-vscode · GitHub",
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "snippet": "(F509), string-dot-format-invalid-format (F521), string-dot-format-extra-named-arguments (F522), string-dot-format-extra-positional-arguments (F523), string-dot-format-missing-arguments (F524), string-dot-format-mixing-automatic (F525), f-string-missing-placeholders (F541), multi-value-repeated-key-"
+          },
+          {
+            "source": "github",
+            "title": "Feature: Port Sonar's Python scanner checks",
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "state": "open",
+            "snippet": "More of a challenge than porting flake8 plugins, because these are written in Java: https://github.com/SonarSource/sonar-python\r\n\r\nBut some of them are somewhat useful and I didn't see equivalent code in any flake8 plugins.\r\n\r\n(Feel free to edit this to make it a checklist)\r\n\r\n"
+          },
+          {
+            "source": "tavily",
+            "title": "Add check for is comparison with mutable initialisers to rule F632 by jesse1412 · Pull Request #8607 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/8607",
+            "snippet": "| Original file line number | Diff line number | Diff line change |\n --- \n| Expand Up | @@ -166,7 +166,7 @@ constant\\_literals.py:16:4: E711 [\\] Comparison to `None` should be `cond is None |\n| 16 |+if None is False: # E711, E712 (fix) |\n| 17 17 | pass |\n| 18 18 | |\n| 19 19 | ### |\n| 19 19 | named\\_"
+          },
+          {
+            "source": "tavily",
+            "title": "[`pyflakes`] Stabilize detection of is comparisons to lists, etc. (`F632`) by charliermarsh · Pull Request #12049 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/12049",
+            "snippet": "This file contains hidden or bidirectional Unicode text that may be interpreted or compiled differently than what appears below. To review, open the file in an editor that reveals hidden Unicode characters. Learn more about bidirectional Unicode characters \n\nShow hidden characters\n\nSign up for free "
+          },
+          {
+            "source": "github",
+            "title": "Fixes on Jupyter notebooks cause panics when fix replaces/deletes multiple cells",
+            "url": "https://github.com/astral-sh/ruff/issues/14445",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-async rules",
+            "url": "https://github.com/astral-sh/ruff/issues/8451",
+            "state": "open",
+            "snippet": "## General Rules\n\n- [x] `ASYNC100`: `A with trio.fail_after(...): or with trio.move_on_after(...): context does not contain any await statements. This makes it pointless, as the timeout can only be triggered by a checkpoint.`\n- [ ] `ASYNC101`: `yield inside a nursery or cancel scope is only safe whe"
+          },
+          {
+            "source": "github",
+            "title": "Suggestion: Implement Sourcery rules",
+            "url": "https://github.com/astral-sh/ruff/issues/11060",
+            "state": "open",
+            "snippet": "[Sourcery](https://github.com/sourcery-ai/sourcery) is a closed-source, paid program with refactoring/suggestion rules, some of which are covered by existing rules within Ruff.\r\n\r\nSince Sourcery is closed-source, the rules would need to be clean room implementations.\r\n\r\nBelow, I've enumerated all cu"
+          },
+          {
+            "source": "github",
+            "title": "B009 safe fix discards evaluation of ** arguments",
+            "url": "https://github.com/astral-sh/ruff/issues/28732",
+            "state": "closed",
+            "snippet": "### Summary\n\nI'm not sure whether this is intended, but B009's safe fix removes the evaluation of a `**` argument expression in the example below, changing the behavior of a program that originally runs successfully.\n\n### Reproduction\n\nTested with Ruff 0.16.8, CPython 3.12.3, on Linux x86_64.\n\nSave "
+          },
+          {
+            "source": "github",
+            "title": "Airflow 3.0 deprecations",
+            "url": "https://github.com/astral-sh/ruff/issues/14626",
+            "state": "closed",
+            "snippet": "Tracking issue for the `AIR3xx` rules that implements Airflow 3.0 deprecations.\n\nFor details, refer to the Airflow tracking issue: https://github.com/apache/airflow/issues/44556\n\n## Help wanted\n\nThe following is a \"help wanted\" task list:\n\n- [x] Add infrastructure to provide an auto-fix for the migr"
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "github",
+            "title": "Update bugbear",
+            "url": "https://github.com/astral-sh/ruff/issues/2954",
+            "state": "closed",
+            "snippet": "Looks like bugbear has new rules:\r\n\r\n- [x] B028: No explicit stacklevel keyword argument found. The warn method from the warnings module uses a stacklevel of 1 by default. This will only show a stack trace for the line on which the warn method is called. It is therefore recommended to use a stacklev"
+          },
+          {
+            "source": "tavily",
+            "title": "0.16.0 removed 18 rules from the default set without recording it in BREAKING_CHANGES.md · Issue #27199 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/27199",
+            "snippet": "ruff check --isolated --no-cache dropped.py --select E711,E712,E713,E714,E721,F722dropped.py:5:9: E711 Comparison to `None` should be `cond is None`dropped.py:7:4: E712 Avoid equality comparisons to `True`; use `x:` for truth checksdropped.py:9:8: E713 Test for membership should be `not in`dropped.p"
+          },
+          {
+            "source": "tavily",
+            "title": "Implement remaining `pycodestyle` rules · Issue #2402 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/2402",
+            "snippet": "on Jan 31, 2023\n\n   MemberAuthor\n\n   More actions\n\n   I've updated this lint to include all the current `pydocstyle` rules, less those that are ignored in the default configuration and those that deal with pre-Python 3.7 code.\n6. ### charliermarshcommentedon Jan 31, 2023\n\n   @charliermarsh\n\n   charl"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Issue about unused argument linting with Unicode variable names, not about F632 comparison fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "Parent tracking issue for Pylint parity, not a specific F632 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "relation": "unrelated",
+            "why": "Windows-specific isort configuration issue, unrelated to F632 comparison rewrites."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "relation": "unrelated",
+            "why": "Feature request for statistics output formatting, not a code fix defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: False == 0 comparison instead of list identity check."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "relation": "related",
+            "why": "Same rule F632 but different trigger: panic on invalid syntax rather than behavior-changing fix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "relation": "unrelated",
+            "why": "Question about fixing indentation errors E999, not F632 comparison logic."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "relation": "related",
+            "why": "Same rule F632 but different defect: infinite loop between == and is on chained comparisons."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "relation": "duplicate",
+            "why": "Same rule F632 and same construct: 'variable is []' identity comparison being incorrectly rewritten to '== []'."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "relation": "related",
+            "why": "Same rule F632 but different defect: infinite loop with E712 on generator expressions."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: 'value % 2 is 0' modulo comparison causing fix panic."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "relation": "unrelated",
+            "why": "Issue about D205 rule not being fixable, not F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "relation": "unrelated",
+            "why": "VS Code extension workspace settings issue, not a core linter fix defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "relation": "unrelated",
+            "why": "Feature request to port Sonar rules, not an F632 bug report."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/8607",
+            "relation": "related",
+            "why": "Same rule F632 but different construct: 'None is False' constant comparison stabilization."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/12049",
+            "relation": "related",
+            "why": "Same rule F632 but broader stabilization work on 'is' comparisons to lists, not the specific behavior-change fix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14445",
+            "relation": "unrelated",
+            "why": "Jupyter notebook multi-cell fix panic, not F632 comparison logic."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8451",
+            "relation": "unrelated",
+            "why": "Feature request for flake8-async rules implementation."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11060",
+            "relation": "unrelated",
+            "why": "Feature request for Sourcery rules, not an F632 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28732",
+            "relation": "unrelated",
+            "why": "B009 rule fix discarding ** argument evaluation, different rule and construct."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14626",
+            "relation": "unrelated",
+            "why": "Airflow 3.0 deprecation tracking issue, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "unrelated",
+            "why": "Feature request for flake8-type-checking implementation."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2954",
+            "relation": "unrelated",
+            "why": "Bugbear rule update tracking, not F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/27199",
+            "relation": "unrelated",
+            "why": "Changelog omission for removed rules, not an F632 fix defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2402",
+            "relation": "unrelated",
+            "why": "PyCodeStyle rules implementation tracking, not F632."
+          }
+        ],
+        "cost": 0.0071947999999999995
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:17.421862621 -0400\n+++ fixed.py\t2026-10-22 13:34:19.520897989 -0400\n@@ -1,6 +1,6 @@\n __all__ = ['x']\n x = []\n-if x is []:\n+if x == []:\n   print('same object')\n del x\n from __main__ import *\n",
+        "observed": "stdout before:\n\nstdout after:\nsame object",
+        "before": {
+          "stdout": "",
+          "stderr1": "AttributeError: module '__main__' has no attribute 'x'",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "same object\n",
+          "stderr1": "AttributeError: module '__main__' has no attribute 'x'",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "__all__ = ['x']\nx = []\nif x == []:\n  print('same object')\ndel x\nfrom __main__ import *\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select F632 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition `x is []` checks identity; since each literal `[]` creates a new list object, it evaluates to False, so nothing prints. After rewriting to `x == []`, equality compares contents—both lists are empty—so True triggers printing 'same object'. Thus behavior changes because identity versus value equality differ for mutable objects like lists. No other modifications affect output.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p005",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "x = 'hello'\nif x is 'hello':\n  print('interned')\n",
+      "lines": {
+        "before": 9,
+        "after": 3
+      },
+      "reportPath": "runs/2026-10-17T20-54-08-790Z-5ytj-ruff-F632/reports/r2-p005.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12518",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11736",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9374",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8589",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6891",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1057",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/4560",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule F632 explicitly rewrites identity comparisons (`is`) against literals to value comparisons (`==`) because `is` checks object identity, which is unreliable for literals. The observed change—removal of the SyntaxWarning and the program printing 'interned'—is exactly the semantic change the rule documents as its purpose. The program's behavior changes from a warning and no output to no warning and output, which is the intended fix.",
+        "docsQuote": "Using `is` and `is not` with constant literals often works \"by accident\", but are not guaranteed to produce the expected result. Instead, use `==` and `!=` to compare literals, which will compare the values of the objects instead of their identities.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "F632 fix",
+          "F632 identity comparison string literals",
+          "Ruff rule F632 is vs equals strings",
+          "Fix identity check to equality string"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Isort rule misses unsorted imports when using user-level ruff.toml file on windows",
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "state": "closed",
+            "snippet": "### Summary\n\nFirst of all, thank you for the great work on both Ruff, uv, and ty.   \nSorry if this isn't a bug, but a misunderstanding\n\nWhen using the following `ruff.toml` config file on Windows:\n> `%userprofile%\\AppData\\Roaming\\ruff`\n```toml\n[lint]\nselect = [\"I\"]\n```\n\nAnd the following file struct"
+          },
+          {
+            "source": "github",
+            "title": "[Feature Idea] Add column headers to `ruff check --statistics`, to avoid ambiguity",
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "state": "closed",
+            "snippet": "This is a question that can be easily answered, but ideally wouldn't have to be asked if there were column headers.\r\n\r\nHere is an example output to running `ruff check --statistics`\r\n\r\n```\r\n$ ruff check --statistics\r\n317     F541    [*] f-string-missing-placeholders\r\n241     F401    [ ] unused-impor"
+          },
+          {
+            "source": "github",
+            "title": "F632 suggestion leads to false positive when comparing False == 0",
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Rule F632 cause panic",
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "state": "closed",
+            "snippet": "ruff 0.4.7 (latest changes from main branch)\r\n```\r\nruff  *.py --select F632 --no-cache --fix --unsafe-fixes --preview --output-format concise --isolated\r\n```\r\n\r\nfile content:\r\n```\r\nrelese_version :\"0.0is 64\"\r\n```\r\n\r\nerror\r\n```\r\nAll checks passed!\r\n\r\nerror: Panicked while linting /opt/tmp_folder/1138"
+          },
+          {
+            "source": "github",
+            "title": "[QA] Should Ruff be able to fix indentation errors (E999) ?",
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "state": "closed",
+            "snippet": "I have ruff setup in neovim as a LSP using `ruff server --preview` .\r\nHowever, if there is an indentation issue E999  in the code ruff cannot format or fix until all E999's have been manually fixed.\r\nSometimes, it will also cause the LSP to disconnect and no longer be available for python file types"
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop in F632/E711",
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "state": "closed",
+            "snippet": "I just tried this on master (6c0734680ede806cef849d2d8c7105e2ecd785ad).\r\n\r\nConsider the following snippet:\r\n```py\r\nfor x in c > 0 == None:\r\n pass\r\n```\r\n\r\nThis fails to converge as `==` is replaced with `is` and back over and over.\r\n\r\nThis appears in real code: https://github.com/CARocha/suco_proga/b"
+          },
+          {
+            "source": "github",
+            "title": "Catch `variable is []`",
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Rules E712,F632 causes infinite loop",
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "state": "closed",
+            "snippet": "Ruff 0.0.286 (latest changes from main branch)\r\n\r\n```\r\nruff  *.py --select E712,F632 --no-cache\r\n```\r\n\r\nfile content:\r\n```\r\nclass RefsContainerTests:\r\n        f.write(\r\n            b\"\\n\".join(\r\n                line\r\n                for line in refs_data.split(b\"\\n\")\r\n                if not line or l"
+          },
+          {
+            "source": "tavily",
+            "title": "[bug] ruff chokes when fixing invalid comparison (`F632`) · Issue #1057 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "snippet": "```\ntype_check_fn=lambda _, value: isinstance(value, int) and value % 2 is 0, \n```\n\nError message:\n\n```\n[2022-12-05][08:09:02][ruff::pyflakes::plugins::invalid_literal_comparisons][ERROR] Failed to fix invalid comparison: Failed to extract CST from source \n```\n\nSubsequent runs of `ruff --fix` print "
+          },
+          {
+            "source": "tavily",
+            "title": "D205 not fixable · Issue #1672 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "snippet": "Resolved settings for: \"/Users/lucabaggi/Documents/dev/futura-aws/src/futura_aws/__init__.py\" Settings { allowed_confusables: {}, cache_dir: \"/Users/lucabaggi/Documents/dev/futura-aws/.ruff_cache\", dummy_variable_rgx: ^(_+|(_+[a-zA-Z0-9_][a-zA-Z0-9]+?))$, enabled: { E401, F822, F704, D411, F631, D40"
+          },
+          {
+            "source": "tavily",
+            "title": "Multi-root workspace makes Ruff use wrong settings · Issue #925 · astral-sh/ruff-vscode · GitHub",
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "snippet": "(F509), string-dot-format-invalid-format (F521), string-dot-format-extra-named-arguments (F522), string-dot-format-extra-positional-arguments (F523), string-dot-format-missing-arguments (F524), string-dot-format-mixing-automatic (F525), f-string-missing-placeholders (F541), multi-value-repeated-key-"
+          },
+          {
+            "source": "github",
+            "title": "Feature: Port Sonar's Python scanner checks",
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "state": "open",
+            "snippet": "More of a challenge than porting flake8 plugins, because these are written in Java: https://github.com/SonarSource/sonar-python\r\n\r\nBut some of them are somewhat useful and I didn't see equivalent code in any flake8 plugins.\r\n\r\n(Feel free to edit this to make it a checklist)\r\n\r\n"
+          },
+          {
+            "source": "tavily",
+            "title": "Fix (E712) changing `==`/`!=` to `is`/`is not` is not correct for some types · Issue #4560 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/4560",
+            "snippet": "More actions\n\n    Another example with sqlalchemy2 ( where syntax has changed a lot comparing with versions 1.x):\n\n    ```\n    query = request dbsession execute select Station func min Check result# pylint: disable=E1102 join Check channel join Channel station where Station triggered == False all\n  "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Reports an unused-argument false positive for a non-ASCII variable name, unrelated to F632 literal-comparison fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "Parent tracking issue for Pylint parity, not a specific F632 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "relation": "unrelated",
+            "why": "Concerns isort misbehavior on Windows with user-level config, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "relation": "unrelated",
+            "why": "Feature request for column headers in statistics output, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "relation": "related",
+            "why": "Same rule F632 but a different construct: the fix incorrectly rewrites `False == 0` (bool-int comparison) instead of a string literal comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "relation": "related",
+            "why": "Same rule F632 but a different cause: the fix panics on malformed source (`0.0is 64`) rather than rewriting a valid string `is` comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "relation": "unrelated",
+            "why": "Asks whether Ruff can fix indentation errors (E999), unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "relation": "related",
+            "why": "Same rule F632 but a different defect: an infinite loop toggling between `==` and `is` on a chained comparison, not a simple string literal."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "relation": "related",
+            "why": "Same rule F632 but a different construct: requests catching `variable is []` (list literal) instead of a string literal."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "relation": "related",
+            "why": "Same rule F632 but a different defect: infinite loop between E712 and F632 on bytes join, not a string `is` comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "relation": "related",
+            "why": "Same rule F632 but a different cause: fix fails to extract CST on `value % 2 is 0` (int modulo), not a string literal."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "relation": "unrelated",
+            "why": "Reports D205 not fixable with a list of enabled rules, unrelated to F632 string comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "relation": "unrelated",
+            "why": "VS Code extension multi-root workspace settings issue, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "relation": "unrelated",
+            "why": "Feature request to port Sonar Java checks, unrelated to F632."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4560",
+            "relation": "related",
+            "why": "Same rule F632/E712 but a different construct: fix incorrectly rewrites `triggered == False` (bool comparison) instead of a string literal."
+          }
+        ],
+        "cost": 0.0049297
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:22.951955804 -0400\n+++ fixed.py\t2026-10-22 13:34:25.030990839 -0400\n@@ -1,3 +1,3 @@\n x = 'hello'\n-if x is 'hello':\n+if x == 'hello':\n   print('interned')\n",
+        "observed": "stderr before: /w/prog.py:2: SyntaxWarning: \"is\" with 'str' literal. Did you mean \"==\"?\nstderr after: (none)",
+        "before": {
+          "stdout": "interned\n",
+          "stderr1": "/w/prog.py:2: SyntaxWarning: \"is\" with 'str' literal. Did you mean \"==\"?",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "interned\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "x = 'hello'\nif x == 'hello':\n  print('interned')\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select F632 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original uses `is` to test object identity; due to string interning in CPython, `'hello'` may be reused so `x is 'hello'` can evaluate True. Replacing it with `==` changes the check from identity to value equality—while both often yield True for identical literals, they differ when strings are constructed separately or via non-interning operations, making the transformation unsafe as it alters semantic intent.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "cache = []\ndef get_cache():\n  return cache\nx = get_cache()\nif x is []:\n  print('cache hit')\n",
+      "lines": {
+        "before": 18,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T20-54-08-790Z-5ytj-ruff-F632/reports/r2-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12518",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11736",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9374",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8589",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6891",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1057",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "high",
+        "why": "The rule rewrites 'x is []' to 'x == []' because identity comparison with a list literal is always False; the program demonstrates the semantic change by printing 'cache hit' only after the fix, which is exactly the behavior the rule documents as correct.",
+        "docsQuote": "comparisons to literals using is always evaluate to False",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "F632 fix",
+          "ruff F632 identity comparison list literal",
+          "F632 replace is with equals empty list",
+          "rule F632 fix identity check to equality"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Isort rule misses unsorted imports when using user-level ruff.toml file on windows",
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "state": "closed",
+            "snippet": "### Summary\n\nFirst of all, thank you for the great work on both Ruff, uv, and ty.   \nSorry if this isn't a bug, but a misunderstanding\n\nWhen using the following `ruff.toml` config file on Windows:\n> `%userprofile%\\AppData\\Roaming\\ruff`\n```toml\n[lint]\nselect = [\"I\"]\n```\n\nAnd the following file struct"
+          },
+          {
+            "source": "github",
+            "title": "[Feature Idea] Add column headers to `ruff check --statistics`, to avoid ambiguity",
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "state": "closed",
+            "snippet": "This is a question that can be easily answered, but ideally wouldn't have to be asked if there were column headers.\r\n\r\nHere is an example output to running `ruff check --statistics`\r\n\r\n```\r\n$ ruff check --statistics\r\n317     F541    [*] f-string-missing-placeholders\r\n241     F401    [ ] unused-impor"
+          },
+          {
+            "source": "github",
+            "title": "F632 suggestion leads to false positive when comparing False == 0",
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Rule F632 cause panic",
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "state": "closed",
+            "snippet": "ruff 0.4.7 (latest changes from main branch)\r\n```\r\nruff  *.py --select F632 --no-cache --fix --unsafe-fixes --preview --output-format concise --isolated\r\n```\r\n\r\nfile content:\r\n```\r\nrelese_version :\"0.0is 64\"\r\n```\r\n\r\nerror\r\n```\r\nAll checks passed!\r\n\r\nerror: Panicked while linting /opt/tmp_folder/1138"
+          },
+          {
+            "source": "github",
+            "title": "[QA] Should Ruff be able to fix indentation errors (E999) ?",
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "state": "closed",
+            "snippet": "I have ruff setup in neovim as a LSP using `ruff server --preview` .\r\nHowever, if there is an indentation issue E999  in the code ruff cannot format or fix until all E999's have been manually fixed.\r\nSometimes, it will also cause the LSP to disconnect and no longer be available for python file types"
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop in F632/E711",
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "state": "closed",
+            "snippet": "I just tried this on master (6c0734680ede806cef849d2d8c7105e2ecd785ad).\r\n\r\nConsider the following snippet:\r\n```py\r\nfor x in c > 0 == None:\r\n pass\r\n```\r\n\r\nThis fails to converge as `==` is replaced with `is` and back over and over.\r\n\r\nThis appears in real code: https://github.com/CARocha/suco_proga/b"
+          },
+          {
+            "source": "github",
+            "title": "Catch `variable is []`",
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Rules E712,F632 causes infinite loop",
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "state": "closed",
+            "snippet": "Ruff 0.0.286 (latest changes from main branch)\r\n\r\n```\r\nruff  *.py --select E712,F632 --no-cache\r\n```\r\n\r\nfile content:\r\n```\r\nclass RefsContainerTests:\r\n        f.write(\r\n            b\"\\n\".join(\r\n                line\r\n                for line in refs_data.split(b\"\\n\")\r\n                if not line or l"
+          },
+          {
+            "source": "tavily",
+            "title": "[bug] ruff chokes when fixing invalid comparison (`F632`) · Issue #1057 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "snippet": "```\ntype_check_fn=lambda _, value: isinstance(value, int) and value % 2 is 0, \n```\n\nError message:\n\n```\n[2022-12-05][08:09:02][ruff::pyflakes::plugins::invalid_literal_comparisons][ERROR] Failed to fix invalid comparison: Failed to extract CST from source \n```\n\nSubsequent runs of `ruff --fix` print "
+          },
+          {
+            "source": "tavily",
+            "title": "D205 not fixable · Issue #1672 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "snippet": "Resolved settings for: \"/Users/lucabaggi/Documents/dev/futura-aws/src/futura_aws/__init__.py\" Settings { allowed_confusables: {}, cache_dir: \"/Users/lucabaggi/Documents/dev/futura-aws/.ruff_cache\", dummy_variable_rgx: ^(_+|(_+[a-zA-Z0-9_][a-zA-Z0-9]+?))$, enabled: { E401, F822, F704, D411, F631, D40"
+          },
+          {
+            "source": "tavily",
+            "title": "Multi-root workspace makes Ruff use wrong settings · Issue #925 · astral-sh/ruff-vscode · GitHub",
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "snippet": "(F509), string-dot-format-invalid-format (F521), string-dot-format-extra-named-arguments (F522), string-dot-format-extra-positional-arguments (F523), string-dot-format-missing-arguments (F524), string-dot-format-mixing-automatic (F525), f-string-missing-placeholders (F541), multi-value-repeated-key-"
+          },
+          {
+            "source": "github",
+            "title": "Feature: Port Sonar's Python scanner checks",
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "state": "open",
+            "snippet": "More of a challenge than porting flake8 plugins, because these are written in Java: https://github.com/SonarSource/sonar-python\r\n\r\nBut some of them are somewhat useful and I didn't see equivalent code in any flake8 plugins.\r\n\r\n(Feel free to edit this to make it a checklist)\r\n\r\n"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Report concerns unused argument detection with Unicode variable names, not F632 literal comparisons."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "Parent tracking issue for Pylint parity, not a specific F632 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19646",
+            "relation": "unrelated",
+            "why": "Windows-specific isort configuration issue, unrelated to F632 comparison fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13717",
+            "relation": "unrelated",
+            "why": "Feature request for CLI statistics output formatting, not a code fix defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12518",
+            "relation": "related",
+            "why": "Same F632 rule but different construct: False == 0 boolean/integer comparison vs list identity check."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11736",
+            "relation": "related",
+            "why": "Same F632 rule but different trigger: parser panic on invalid syntax vs valid list identity comparison."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11846",
+            "relation": "unrelated",
+            "why": "Concerns E999 indentation fixing and LSP stability, not F632 comparison logic."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9374",
+            "relation": "related",
+            "why": "Same F632 rule but different construct: chained comparison loop (c > 0 == None) vs simple list identity check."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8589",
+            "relation": "duplicate",
+            "why": "Same F632 rule and same construct: 'variable is []' list identity comparison incorrectly rewritten to '=='."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6891",
+            "relation": "related",
+            "why": "Same F632 rule but different construct: complex generator expression comparison causing infinite loop vs simple list identity."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1057",
+            "relation": "related",
+            "why": "Same F632 rule but different construct: modulo comparison 'value % 2 is 0' causing CST extraction failure vs list identity."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1672",
+            "relation": "unrelated",
+            "why": "Concerns D205 rule fixability and configuration, not F632 comparison behavior."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/925",
+            "relation": "unrelated",
+            "why": "VS Code extension workspace configuration issue, not a core linter rule defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "relation": "unrelated",
+            "why": "Feature request to port Sonar Java scanner checks, unrelated to F632 autofix behavior."
+          }
+        ],
+        "cost": 0.0043649
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:28.894055941 -0400\n+++ fixed.py\t2026-10-22 13:34:31.196094739 -0400\n@@ -2,5 +2,5 @@\n def get_cache():\n   return cache\n x = get_cache()\n-if x is []:\n+if x == []:\n   print('cache hit')\n",
+        "observed": "stdout before:\n\nstdout after:\ncache hit",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "cache hit\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "cache = []\ndef get_cache():\n  return cache\nx = get_cache()\nif x == []:\n  print('cache hit')\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select F632 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition `x is []` checks whether `x` refers to the exact same list object as the newly created literal `[]`. Since each evaluation of `[]` produces a distinct list object, even if two lists have identical contents, they are different objects in memory. Therefore, `x is []` evaluates to False when `x` is the list returned by `get_cache()`, which is the same object as `cache`. After the rewrite, `x == []` compares the contents of the lists for equality. Because both lists are empty, this comparison returns True, causing the print statement to execute where it previously did not. This change in behavior occurs because identity (`is`) and equality (`==`) are fundamentally different operations in Python. The fix incorrectly assumes they are interchangeable here, but they are not—especially when dealing with mutable objects like lists that can have equal contents without being the same object. Thus, the transformation alters the program’s semantics.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Shadowed Builtins",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Int/Float Coercion",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Custom __eq__ on None Check",
+      "hazard": "When x is None, 'x is not None' rewritten to 'x != None' may invoke __eq__ on x if x is an object with a custom __eq__",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "identity\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Dict Ordering and Overrides",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              7,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nFalse\nTrue\nstdout after:\nTrue\nTrue"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:26.411796362 -0400\n+++ fixed.py\t2026-10-17 16:54:26.574798907 -0400\n@@ -4,6 +4,6 @@\n     def __hash__(self):\n         return 42\n d = BadDict()\n-print(d is {})     # False\n+print(d == {})     # False\n print(d == {})     # True after fix → triggers __eq__\n # Before fix: identity check → False; after fix: equality → True (calls __eq__)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Exception in Rewritten Code",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Property Returns New List",
+      "hazard": "If x is a property that returns a new list on each access, 'x is []' is always False, and 'x == []' may be True",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              10,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nFalse\nTrue\nstdout after:\nTrue\nTrue"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:26.812802623 -0400\n+++ fixed.py\t2026-10-17 16:54:26.974805153 -0400\n@@ -7,6 +7,6 @@\n     def set_data(self, val):\n         self._data = val\n c = Container()\n-print(c.data is [])   # Always False (new list each time)\n+print(c.data == [])   # Always False (new list each time)\n print(c.data == [])   # True → fix changes behavior\n # Before: identity → False; after: equality → True\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Numpy Array Comparison",
+      "hazard": "If x is a numpy array, 'x is 5' is always False, but 'x == 5' returns an array of booleans",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              12,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\n[True]\n",
+          "stderr1": "<wd>/prog: SyntaxWarning: \"is\" with 'int' literal. Did you mean \"==\"?",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nFalse\n[True]\nstdout after:\n[True]\n[True]\nstderr before: <wd>/prog: SyntaxWarning: \"is\" with 'int' literal. Did you mean \"==\"?\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[True]\n[True]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:27.078806775 -0400\n+++ fixed.py\t2026-10-17 16:54:27.274809834 -0400\n@@ -9,7 +9,7 @@\n     def __is__(self, other):\n         return False  # not real, but we simulate\n x = MockArray(5)\n-print(x is 5)   # False\n+print(x == 5)   # False\n print(x == 5)   # [True] → truth value of list is True → changes conditional behavior\n # Before: `if x is 5:` → False\n # After fix: `if x == 5:` → if [True]: → True → different branch\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "File Modes and Truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: write() argument must be str, not bytes",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Star Imports and Module Effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              3,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "different\n",
+          "stderr1": "AttributeError: module '__main__' has no attribute 'x'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\ndifferent\nstdout after:\nsame object"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "same object\n",
+          "stderr1": "AttributeError: module '__main__' has no attribute 'x'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:35.720941205 -0400\n+++ fixed.py\t2026-10-17 16:54:36.128947530 -0400\n@@ -1,6 +1,6 @@\n __all__ = ['x']\n x = []\n-if x is []:\n+if x == []:\n   print('same object')\n else:\n   print('different')\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Generator Consumption Once",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              5,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "not list\n2 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not list\n2 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:36.335950738 -0400\n+++ fixed.py\t2026-10-17 16:54:36.496953232 -0400\n@@ -2,7 +2,7 @@\n   yield 1\n   yield 2\n g = gen()\n-if g is []:\n+if g == []:\n   print('unreachable')\n else:\n   print('not list')\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Async Generator Await Ordering",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              5,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "not list\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not list\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:36.600954844 -0400\n+++ fixed.py\t2026-10-17 16:54:36.891959353 -0400\n@@ -2,7 +2,7 @@\n   yield 1\n async def main():\n   ag = agen()\n-  if ag is []:\n+  if ag == []:\n     print('wrong')\n   else:\n     print('not list')\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Shadowed Built-in Redefinition",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              2,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "no match\n<class 'int'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "no match\n<class 'int'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:37.055961893 -0400\n+++ fixed.py\t2026-10-17 16:54:37.220964448 -0400\n@@ -1,5 +1,5 @@\n list = 5\n-if list is []:\n+if list == []:\n   print('matched')\n else:\n   print('no match')\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "String Interning Safety",
+      "hazard": "If x is a string literal like 'hello', 'x is \"hello\"' may be True due to interning, but 'x == \"hello\"' is also True—so no behavioral change, but the fix is still applied; however, relying on interning",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              2,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "interned\nequal\n",
+          "stderr1": "<wd>/prog: SyntaxWarning: \"is\" with 'str' literal. Did you mean \"==\"?",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stderr before: <wd>/prog: SyntaxWarning: \"is\" with 'str' literal. Did you mean \"==\"?\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "interned\nequal\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:37.320965996 -0400\n+++ fixed.py\t2026-10-17 16:54:37.516969031 -0400\n@@ -1,5 +1,5 @@\n x = 'hello'\n-if x is 'hello':\n+if x == 'hello':\n   print('interned')\n else:\n   print('not interned')\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Mutable List Identity vs Equality",
+      "hazard": "If the literal is a mutable compound like [] and x is a local variable, 'x is []' is False unless x is that exact list, but 'x == []' may be True for empty lists—fix corrects mistaken identity use, bu",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              3,
+              4
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              15,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a is not new list\na is empty\ncache miss\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\na is not new list\na is empty\ncache miss\nstdout after:\na is new list\na is empty\ncache hit"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a is new list\na is empty\ncache hit\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:37.612970517 -0400\n+++ fixed.py\t2026-10-17 16:54:37.771972979 -0400\n@@ -1,6 +1,6 @@\n a = []\n b = []\n-if a is []:\n+if a == []:\n   print('a is new list')\n else:\n   print('a is not new list')\n@@ -12,7 +12,7 @@\n def get_cache():\n   return cache\n x = get_cache()\n-if x is []:\n+if x == []:\n   print('cache hit')\n else:\n   print('cache miss')\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Numpy Array Comparison Risk",
+      "hazard": "If x is a numpy array, 'x is 5' is always False (no rewrite needed), but 'x == 5' returns an array of booleans, altering truth value in conditionals and potentially causing ValueError.",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "F632",
+            "severity": "warning",
+            "message": "Use `==` to compare constant literals",
+            "span": [
+              3,
+              20
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'numpy'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'numpy'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:54:37.874974574 -0400\n+++ fixed.py\t2026-10-17 16:54:38.264980609 -0400\n@@ -1,6 +1,6 @@\n import numpy as np\n x = np.array([5])\n-print('is check:', x is 5)\n+print('is check:', x == 5)\n try:\n   result = x == 5\n   print('== result:', result, type(result))\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "File Write Truncation Hazard",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "F632",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "opened ok\nwrite error: TypeError a bytes-like object is required, not 'int'\nfile size: 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

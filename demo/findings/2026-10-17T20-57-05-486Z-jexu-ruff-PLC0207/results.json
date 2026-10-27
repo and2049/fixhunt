@@ -1,0 +1,601 @@
+{
+  "runId": "2026-10-17T20-57-05-486Z-jexu-ruff-PLC0207",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLC0207",
+    "fixKind": "unknown",
+    "docs": "# missing-maxsplit-arg (PLC0207)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\n## What it does\nChecks for access to the first or last element of `str.split()` or `str.rsplit()` without a\n`maxsplit=1` argument.\n\n## Why is this bad?\nCalling `str.split()` or `str.rsplit()` without passing `maxsplit=1` splits on every delimiter in the\nstring. When accessing only the first or last element of the result, it\nwould be more efficient to split only once.\n\n## Example\n```python\nurl = \"www.example.com\"\nprefix = url.split(\".\")[0]\n```\n\nUse instead:\n```python\nurl = \"www.example.com\"\nprefix = url.split(\".\", maxsplit=1)[0]\n```\n\nTo access the last element, use `str.rsplit()` instead of `str.split()`:\n```python\nurl = \"www.example.com\"\nsuffix = url.rsplit(\".\", maxsplit=1)[-1]\n```\n\n## Fix Safety\nThis rule's fix is marked as unsafe for `split()`/`rsplit()` calls that contain `*args` or\n`**kwargs` arguments, as adding a `maxsplit` argument to such a call may lead to duplicate\narguments.\n"
+  },
+  "analysis": {
+    "summary": "The rule flags str.split() or str.rsplit() calls used immediately after indexing [0] or [-1] when no maxsplit=1 argument is present.",
+    "firingShapes": [
+      "s.split(\"x\")[0]",
+      "t.rsplit(\"y\", -1)[-1]",
+      "path.split(\"/\")[0]",
+      "line.rsplit(\",\", None)[-1]",
+      "a.split()[0]",
+      "b.rsplit()[0]",
+      "c.split(\"\")[[-1]]",
+      "d.rsplit(\".\", 0)[0]"
+    ],
+    "silentShapes": [
+      "s.split(\"x\", maxsplit=1)[0]",
+      "t.rsplit(\"y\", 1)[-1]",
+      "u.split(\"z\", maxsplit=1)[1]",
+      "v.rsplit(\"w\", maxsplit=2)[-1]",
+      "w.split(sep=\"x\", maxsplit=1)[0]"
+    ],
+    "fixDescription": "Adds maxsplit=1 as a keyword argument to the split or rsplit call; if positional arguments exist, inserts maxsplit=1 as the second positional argument after the separator (or as the first if no separator is given).",
+    "hazards": [
+      "If the call uses *args, inserting maxsplit=1 may cause a duplicate keyword argument error when *args unpacks a value for maxsplit.",
+      "If the call uses **kwargs, inserting maxsplit=1 may cause a duplicate keyword argument error if **kwargs already contains maxsplit.",
+      "If the separator argument is a variable that evaluates to None, adding maxsplit=1 as a second positional argument changes the call from split(None) to split(None, 1), which alters behavior (split(None) splits on whitespace, split(None, 1) splits on whitespace at most once).",
+      "If the call has no separator and uses split(), adding maxsplit=1 as a positional argument changes split() to split(None, 1), altering behavior from splitting on whitespace to splitting on whitespace at most once.",
+      "If the call uses split('') with an empty separator, adding maxsplit=1 is invalid and raises ValueError because empty separators are not allowed, though the original call would have already raised this error—however, the fix may change the error context or timing if the call was guarded.",
+      "If the call is part of a larger expression where the split result is used elsewhere (e.g., assigned to a variable then indexed), the fix only applies to the indexed use and may miss optimizing other uses, but this is not a behavioral change—however, the rule only triggers on direct indexing, so indirect uses are not fired on.",
+      "If the call appears in a lambda or comprehension and the fix introduces a keyword argument that conflicts with a parameter name in the surrounding scope, it could cause a binding conflict (e.g., split(maxsplit=1) where maxsplit is a lambda parameter).",
+      "If the call is inside a try-except block and the fix changes the exception type (e.g., from TypeError due to duplicate keyword to ValueError), the except handler may not catch it.",
+      "If the call is commented out or dead code, the fix still applies but may be unnecessary; however, this does not change behavior.",
+      "If the call uses keyword arguments for sep or maxsplit already, the fix may incorrectly insert a duplicate (though the rule avoids this by checking for existing maxsplit)."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0028932000000000003,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 8,
+    "fixed": 7,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Keyword-only, positional-only, *args/**kwargs",
+      "hazard": "Testing interaction with function signatures that restrict argument kinds.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:16.243291557 -0400\n+++ fixed.py\t2026-10-17 16:57:16.413293913 -0400\n@@ -1,3 +1,3 @@\n def f(*, sep=None):\n-    return 'a b'.rsplit(sep)[0]\n+    return 'a b'.split(sep, maxsplit=1)[0]\n f()\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Empty separator value error propagation",
+      "hazard": "Split on empty string always raises ValueError; fixing should preserve that.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ValueError empty separator\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ValueError empty separator\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:16.508295231 -0400\n+++ fixed.py\t2026-10-17 16:57:16.668297449 -0400\n@@ -1,4 +1,4 @@\n try:\n-    ''.split('')[0]\n+    ''.split('', maxsplit=1)[0]\n except ValueError as e:\n     print(type(e).__name__, str(e))\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Generator consumption and iterator state",
+      "hazard": "Ensuring iterator is not prematurely consumed by split-side effects.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "generator exhausted\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p004",
+      "title": "Dead code elimination safety",
+      "hazard": "Verifying that lint fixes do not alter behavior of unreachable code.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "unreachable code ignored\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "unreachable code ignored\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:16.901300679 -0400\n+++ fixed.py\t2026-10-17 16:57:17.065302952 -0400\n@@ -1,3 +1,3 @@\n if False:\n-    'x y'.split()[0]\n+    'x y'.split(maxsplit=1)[0]\n print('unreachable code ignored')\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Separator None alters splitting semantics",
+      "hazard": "Adding maxsplit=1 as positional arg changes split(None) -> split(None,1).",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              2,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:17.162304296 -0400\n+++ fixed.py\t2026-10-17 16:57:17.322306513 -0400\n@@ -1,2 +1,2 @@\n s = 'a b c'\n-print(s.split(None)[0], s.split(None, 1)[0])\n+print(s.split(None, maxsplit=1)[0], s.split(None, 1)[0])\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Runtime type annotation evaluation",
+      "hazard": "Annotations using string literals or forward refs must not break under fix.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Non-file context manager with write()",
+      "hazard": "Objects mimicking partial file interface should not break split logic.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "context manager used\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exception handling and finally clauses",
+      "hazard": "Ensuring rewritten code does not interfere with exception propagation or cleanup.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              2,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: ValueError\ncleanup\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: ValueError\ncleanup\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:17.692311639 -0400\n+++ fixed.py\t2026-10-17 16:57:17.862313995 -0400\n@@ -1,5 +1,5 @@\n try:\n-    result = ''.split('')[0]\n+    result = ''.split('', maxsplit=1)[0]\n except ValueError as e:\n     print('caught:', type(e).__name__)\n finally:\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "comments and docstrings",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              5,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:24.768409450 -0400\n+++ fixed.py\t2026-10-17 16:57:24.937411781 -0400\n@@ -2,6 +2,6 @@\n     \"\"\"Process input.\"\"\"\n     s = 'a b c'\n     # keep first word\n-    first = s.split()[0]  # inline comment\n+    first = s.split(maxsplit=1)[0]  # inline comment\n     print(first)\n f()\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "int/float/bool coercion",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: invalid literal for int() with base 10: '3.14'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "bytes vs str",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "keyword-only, positional-only, *args/**kwargs",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "*args causing duplicate keyword",
+      "hazard": "If the call uses *args, inserting maxsplit=1 may cause a duplicate keyword argument error when *args unpacks a value for maxsplit.",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "x\nx\nTypeError: call_split() got an unexpected keyword argument 'maxsplit'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x\nx\nTypeError: call_split() got an unexpected keyword argument 'maxsplit'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "separator None alters semantics",
+      "hazard": "If the separator argument is a variable that evaluates to None, adding maxsplit=1 as a second positional argument changes the call from split(None) to split(None, 1), which alters behavior (split(None",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0207",
+            "severity": "warning",
+            "message": "String is split more times than necessary",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "'a'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'a'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:25.836424176 -0400\n+++ fixed.py\t2026-10-17 16:57:25.997426395 -0400\n@@ -1,4 +1,4 @@\n sep = None\n text = '  a   b  c '\n-parts = text.split(sep)[0]  # rule triggers: split(None)[0]\n+parts = text.split(sep, maxsplit=1)[0]  # rule triggers: split(None)[0]\n print(repr(parts))  # '' before fix, '  a' after fix\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "star-imports, module-level side effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "['hello', 'world']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p008",
+      "title": "pathlib vs os.path",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "PLC0207",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

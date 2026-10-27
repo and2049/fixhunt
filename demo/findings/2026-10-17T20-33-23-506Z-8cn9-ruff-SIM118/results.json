@@ -1,0 +1,765 @@
+{
+  "runId": "2026-10-17T20-33-23-506Z-8cn9-ruff-SIM118",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM118",
+    "fixKind": "unknown",
+    "docs": "# in-dict-keys (SIM118)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for key-existence checks against `dict.keys()` calls.\n\n## Why is this bad?\nWhen checking for the existence of a key in a given dictionary, using\n`key in dict` is more readable and efficient than `key in dict.keys()`,\nwhile having the same semantics.\n\n## Example\n```python\nkey in foo.keys()\n```\n\nUse instead:\n```python\nkey in foo\n```\n\n## Fix safety\nGiven `key in obj.keys()`, `obj` _could_ be a dictionary, or it could be\nanother type that defines a `.keys()` method. In the latter case, removing\nthe `.keys()` attribute could lead to a runtime error. The fix is marked\nas safe when the type of `obj` is known to be a dictionary; otherwise, it\nis marked as unsafe.\n\n## References\n- [Python documentation: Mapping Types](https://docs.python.org/3/library/stdtypes.html#mapping-types-dict)\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant .keys() usage in membership tests like 'x in d.keys()' where direct 'x in d' is preferred.",
+    "firingShapes": [
+      "key in my_dict.keys()",
+      "value in data.keys()",
+      "'item' in mapping.keys()",
+      "x in obj.keys() if hasattr(obj, 'keys') else False",
+      "a in b.keys() or c in d.keys()",
+      "not k in cache.keys()",
+      "k in get_dict().keys()",
+      "func(arg in params.keys())"
+    ],
+    "silentShapes": [
+      "key in obj.keys",
+      "key in list(obj.keys())",
+      "key in set(obj.keys())",
+      "hasattr(obj, 'keys') and key in obj.keys()",
+      "key in obj.keys() and other_condition"
+    ],
+    "fixDescription": "Rewrites 'key in obj.keys()' to 'key in obj' by removing the redundant .keys() attribute access while preserving the membership test semantics.",
+    "hazards": [
+      "If obj is not a dict but has a .keys() method returning a non-container (e.g., generator), removing .keys() may cause TypeError during membership test.",
+      "If obj.keys() has side effects (e.g., prints, state changes), removing the call eliminates those effects.",
+      "If obj is a property that returns a dict-like object with .keys(), accessing obj directly may trigger different behavior than obj.keys() due to property logic.",
+      "If obj is None or lacks __contains__, the rewrite may raise AttributeError instead of returning False.",
+      "If obj is a custom class where __contains__ differs from membership in .keys() (violating dict contract), semantics change.",
+      "If the expression uses short-circuiting and obj.keys() is evaluated conditionally, removing .keys() may evaluate obj earlier/later.",
+      "If obj.keys() is used elsewhere in the same line for another purpose (e.g., assignment), the rewrite breaks that usage.",
+      "If obj is a built-in type like list (which has no .keys()), the rule shouldn't fire, but if misapplied, the rewrite would fail."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0030645000000000004,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 13,
+    "fixed": 6,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Custom class with overridden __contains__",
+      "hazard": "If obj is a custom class where __contains__ differs from membership in .keys() (violating dict contract), semantics change.",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              8,
+              25
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a in d: False\na in d.keys(): True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a in d: False\na in d.keys(): True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Context manager without close() but with write()",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              12,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "found\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "found\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:33:32.250802483 -0400\n+++ fixed.py\t2026-10-17 16:33:32.418802746 -0400\n@@ -9,6 +9,6 @@\n         pass\n with Writer() as w:\n     d = {'x': 1}\n-    if 'x' in d.keys():\n+    if 'x' in d:\n         w.write('found')\n print(''.join(w.data))\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Property with side effects on .keys() access",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              10,
+              4
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              13,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First access: 1 \nSecond access: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First access: 1 \nSecond access: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Runtime type annotation with typing import",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              3,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:33:32.692803176 -0400\n+++ fixed.py\t2026-10-17 16:33:32.869803453 -0400\n@@ -1,4 +1,4 @@\n from typing import Dict\n D: Dict[str, int] = {'x': 42}\n-if 'x' in D.keys():\n+if 'x' in D:\n     print(D['x'])\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Property returning dict-like with different behavior",
+      "hazard": "If obj is a property that returns a dict-like object with .keys(), accessing obj directly may trigger different behavior than obj.keys() due to property logic.",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              10,
+              4
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              13,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First check: \nSecond check: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First check: \nSecond check: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Keyword-only and positional-only args with default evaluation",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p007",
+      "title": "Misapplication to list (no .keys()) - should not fire",
+      "hazard": "If obj is a built-in type like list (which has no .keys()), the rule shouldn't fire, but if misapplied, the rewrite would fail.",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              4,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "AttributeError 'list' object has no attribute 'keys'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "AttributeError 'list' object has no attribute 'keys'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "String formatting with nested quotes and f-strings",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              3,
+              4
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              9,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Hello Alice, you are 30 years old\nAge: 30\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Hello Alice, you are 30 years old\nAge: 30\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:33:33.464804387 -0400\n+++ fixed.py\t2026-10-17 16:33:33.628804645 -0400\n@@ -1,10 +1,10 @@\n d = {'name': 'Alice', 'age': 30}\n template = \"Hello {name}, you are {age} years old\"\n-if 'name' in d.keys():\n+if 'name' in d:\n     result = template.format(**d)\n else:\n     result = 'missing'\n print(result)\n # Also test f-string interaction\n-if 'age' in d.keys():\n+if 'age' in d:\n     print(f\"Age: {d['age']}\")\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Side effect in keys() method",
+      "hazard": "If obj.keys() has side effects (e.g., prints, state changes), removing the call eliminates those effects.",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              11,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "keys called 1\n",
+          "stderr1": "AttributeError: 'super' object has no attribute 'keys'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "keys called 1\n",
+          "stderr1": "AttributeError: 'super' object has no attribute 'keys'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "String formatting with nested quotes and f-strings",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              2,
+              4
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              3,
+              36
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Nested: inner\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Nested: inner\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:33:38.922813027 -0400\n+++ fixed.py\t2026-10-17 16:33:39.089813294 -0400\n@@ -1,6 +1,6 @@\n d = {'key': 'value'}\n-if 'key' in d.keys():\n-    result = f\"Nested: {'inner' if 'key' in d.keys() else 'outer'}\"\n+if 'key' in d:\n+    result = f\"Nested: {'inner' if 'key' in d else 'outer'}\"\n else:\n     result = \"not found\"\n print(result)\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Built-in type without keys()",
+      "hazard": "If obj is a built-in type like list (which has no .keys()), the rule shouldn't fire, but if misapplied, the rewrite would fail.",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "AttributeError: 'list' object has no attribute 'keys'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "AttributeError: 'list' object has no attribute 'keys'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Star-imports and module-level side effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              15,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Shared state: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Shared state: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Class attributes vs instance attributes, descriptors, properties with side effects",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Descriptor calls: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Short-circuiting and conditional evaluation of obj.keys()",
+      "hazard": "If the expression uses short-circuiting and obj.keys() is evaluated conditionally, removing .keys() may evaluate obj earlier/later.",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              3,
+              30
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              3,
+              53
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              3,
+              30
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:33:39.813814450 -0400\n+++ fixed.py\t2026-10-17 16:33:39.983814721 -0400\n@@ -1,4 +1,4 @@\n obj = None\n safe_dict = {'key': 'value'}\n-result = obj is not None and 'key' in obj.keys() or 'key' in safe_dict.keys()\n+result = obj is not None and 'key' in obj.keys() or 'key' in safe_dict\n print(f'Result: {result}')\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Mutable default arguments and aliasing after a rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "SIM118",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM118",
+            "severity": "warning",
+            "message": "Use `key in dict` instead of `key in dict.keys()`",
+            "span": [
+              5,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "['found']\n['found']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['found']\n['found']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:33:40.082814880 -0400\n+++ fixed.py\t2026-10-17 16:33:40.252815152 -0400\n@@ -2,7 +2,7 @@\n     if lst is None:\n         lst = []\n     d = {'key': 'value'}\n-    if 'key' in d.keys():\n+    if 'key' in d:\n         lst.append('found')\n     return lst\n \n"
+      }
+    }
+  ]
+}

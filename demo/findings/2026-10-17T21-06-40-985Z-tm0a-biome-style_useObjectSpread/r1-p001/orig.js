@@ -1,0 +1,10 @@
+let result
+(() => {
+  const r = Object.assign({}, {x: 1})
+  return r.x
+})().then(v => {
+  console.log('result:', v)
+}).catch(e => {
+  console.error('error:', e.message)
+});
+[].forEach.call([], () => {})

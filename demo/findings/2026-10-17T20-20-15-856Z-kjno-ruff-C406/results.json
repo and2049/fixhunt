@@ -1,0 +1,510 @@
+{
+  "runId": "2026-10-17T20-20-15-856Z-kjno-ruff-C406",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C406",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-literal-dict (C406)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary list or tuple literals.\n\n## Why is this bad?\nIt's unnecessary to use a list or tuple literal within a call to `dict()`.\nIt can be rewritten as a dict literal (`{}`).\n\n## Example\n```python\ndict([(1, 2), (3, 4)])\ndict(((1, 2), (3, 4)))\ndict([])\n```\n\nUse instead:\n```python\n{1: 2, 3: 4}\n{1: 2, 3: 4}\n{}\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it may occasionally drop comments\nwhen rewriting the call. In most cases, though, comments will be preserved.\n"
+  },
+  "analysis": {
+    "summary": "Flags calls to dict() constructed with list/tuple literals containing key-value pairs.",
+    "firingShapes": [
+      "dict([(k, v)])",
+      "dict(((k, v)))",
+      "dict([])",
+      "dict(([a, b], [c, d]))",
+      "dict(list(zip(x, y)))",
+      "dict(tuple(pairs))",
+      "dict([[('a', 1)]])",
+      "dict(((), ))"
+    ],
+    "silentShapes": [
+      "dict({})",
+      "dict(**kw)",
+      "dict(iterable)",
+      "dict(mapping=other_dict)",
+      "func(dict([(1,2)]))"
+    ],
+    "fixDescription": "Rewrites dict(L) where L is a list or tuple of 2-element iterables into a dict literal {k: v for k, v in L}, preserving order and duplicates as per Python semantics.",
+    "hazards": [
+      "If the list/tuple contains duplicate keys, the dict literal preserves last-wins behavior identical to dict() constructor, but if the iterable is not actually a sequence of pairs (e.g., flat list), the comprehension may raise ValueError during construction where dict() would have succeeded by treating elements as pairs via iteration.",
+      "If the input iterable is not actually iterable (e.g., None), both forms raise TypeError, but the rewrite may fail earlier during comprehension setup if the type is incompatible with iteration.",
+      "If the list/tuple expression contains side effects (e.g., function calls with prints), moving them into a dict literal comprehension preserves evaluation order but may alter timing relative to surrounding expressions due to changes in when the iterable is materialized.",
+      "If the list/tuple is used elsewhere after the dict() call (aliasing), the rewrite creates a new dict and does not preserve the original list/tuple, potentially breaking code that mutates or inspects it later.",
+      "If the dict() call appears in a context where its return value is ignored but the list/tuple construction has side effects (e.g., dict([print('x'), (1,2)][0])), the rewrite may drop those side effects if the comprehension short-circuits or fails to evaluate all elements.",
+      "If the list/tuple contains unhashable keys (e.g., lists), both forms fail at runtime with TypeError, but the dict literal comprehension may fail during key hashing in a different order than the constructor's internal processing.",
+      "If the code relies on the exact type being dict (not a subclass), the rewrite produces a built-in dict, which is equivalent for all standard uses but may break isinstance checks against a custom dict subclass if one was monkey-patched or expected via factory.",
+      "If the list/tuple literal contains nested mutable objects that are mutated during iteration (e.g., dict([(x.append(1), x.pop()) for x in [[], []]])), the rewrite preserves mutation order but may interact poorly with optimizations or early termination in comprehensions.",
+      "Comments attached to the list/tuple brackets or commas may be lost during AST rewrite, as the autofix replaces the entire node with a dict literal and does not transfer associated comment nodes.",
+      "If the dict() call is part of a larger expression where operator precedence groups unexpectedly (e.g., dict([(1,2)]) + 3 vs {(1,2):} + 3), the rewrite does not change precedence because the dict literal binds tighter than addition, but the original call already had dict() as a unit—so no change in meaning, only risk is if parentheses were omitted and relied on for grouping.",
+      "In rare cases involving __dict__ or descriptor interactions, replacing a call with a literal may bypass __call__ overrides if dict is shadowed locally, but the rule only triggers on built-in dict, so this is unsafe only if 'dict' is rebound in scope."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0044796,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 4,
+    "fixed": 0,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Dict subclass check",
+      "hazard": "Rewriting dict(L) to {k:v for k,v in L} produces a plain dict, breaking isinstance checks against a custom dict subclass.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C406",
+            "severity": "warning",
+            "message": "Unnecessary list literal (rewrite as a dict literal)",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "<class 'dict'> <class 'set'>\nFalse False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'dict'> <class 'set'>\nFalse False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Exception handling in dict construction",
+      "hazard": "Exceptions raised during dict() construction (e.g., in key/value expressions) are preserved in order, but finally/else clauses and exception chaining may differ due to AST rewrite timing.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C406",
+            "severity": "warning",
+            "message": "Unnecessary list literal (rewrite as a dict literal)",
+            "span": [
+              3,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: ZeroDivisionError\nfinally\ncaught: ZeroDivisionError\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: ZeroDivisionError\nfinally\ncaught: ZeroDivisionError\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Side effect timing in iterable",
+      "hazard": "Moving side effects (prints) from list/tuple into dict literal comprehension preserves order but changes when the iterable is materialized relative to surrounding expressions.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "before\nside\nafter\nbefore\nside\nafter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Aliasing and mutation",
+      "hazard": "If the list/tuple is aliased and mutated after dict() call, the rewrite breaks because it no longer references the original object.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "pairs: [('a', 1), ('b', 2)]\nd: {'a': 1}\npairs: [('a', 1), ('b', 2)]\nd: {'a': 1}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Unhashable keys failure order",
+      "hazard": "Both forms fail with unhashable keys, but dict literal comprehension may fail during hashing in a different order than dict() constructor.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C406",
+            "severity": "warning",
+            "message": "Unnecessary list literal (rewrite as a dict literal)",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "dict(): cannot use 'list' as a dict key (unhashable type: 'list')\n{}: cannot use 'list' as a dict key (unhashable type: 'list')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "dict(): cannot use 'list' as a dict key (unhashable type: 'list')\n{}: cannot use 'list' as a dict key (unhashable type: 'list')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Pathlib vs os.path (irrelevant to rule)",
+      "hazard": "This hazard is unrelated to dict() rewriting; included to show silence on near-miss.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "pathlib exists: True\nos.path exists: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Local dict shadowing bypass",
+      "hazard": "If 'dict' is rebound in scope, the rule does not fire (it only triggers on built-in dict), but if it did, the rewrite would bypass __call__ overrides.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "{'mocked': True}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Lost comments in AST rewrite",
+      "hazard": "Comments attached to list/tuple brackets or commas are lost when replacing dict(L) with {k:v for k,v in L}.",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C406",
+            "severity": "warning",
+            "message": "Unnecessary list literal (rewrite as a dict literal)",
+            "span": [
+              1,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "{1: 2}\n{1: 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "{1: 2}\n{1: 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Rebound dict builtin",
+      "hazard": "In rare cases involving __dict__ or descriptor interactions, replacing a call with a literal may bypass __call__ overrides if dict is shadowed locally, but the rule only triggers on built-in dict, so ",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "['shadow']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Descriptor with side effect in __get__",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "desc get\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p003",
+      "title": "Aliasing and mutation after dict() call",
+      "hazard": "If the list/tuple is used elsewhere after the dict() call (aliasing), the rewrite creates a new dict and does not preserve the original list/tuple, potentially breaking code that mutates or inspects i",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "pairs: [(1, 2), (3, 4)]\nd: {1: 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "File write with truncated data",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "{b'hello': 5}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p005",
+      "title": "Star import and module level side effect",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "module side effect\nside effect seen\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "Pathlib vs os.path symlink resolution",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p007",
+      "title": "Exception in dict construction with finally",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: bad\nfinally block\nd exists: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Generator consumed once vs reusable list",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "C406",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "d1: {1: 2, 3: 4}\nd2: {}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

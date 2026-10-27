@@ -1,0 +1,812 @@
+{
+  "runId": "2026-10-17T21-34-43-743Z-ih64-ruff-FURB166",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB166",
+    "fixKind": "unknown",
+    "docs": "# int-on-sliced-str (FURB166)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `int` with an explicit base in which a string expression\nis stripped of its leading prefix (i.e., `0b`, `0o`, or `0x`).\n\n## Why is this bad?\nGiven an integer string with a prefix (e.g., `0xABC`), Python can automatically\ndetermine the base of the integer by the prefix without needing to specify\nit explicitly.\n\nInstead of `int(num[2:], 16)`, use `int(num, 0)`, which will automatically\ndeduce the base based on the prefix.\n\n## Example\n```python\nnum = \"0xABC\"\n\nif num.startswith(\"0b\"):\n    i = int(num[2:], 2)\nelif num.startswith(\"0o\"):\n    i = int(num[2:], 8)\nelif num.startswith(\"0x\"):\n    i = int(num[2:], 16)\n\nprint(i)\n```\n\nUse instead:\n```python\nnum = \"0xABC\"\n\ni = int(num, 0)\n\nprint(i)\n```\n\n## Fix safety\nThe rule's fix is marked as unsafe, as Ruff cannot guarantee that the\nargument to `int` will remain valid when its base is included in the\nfunction call.\n\n## References\n- [Python documentation: `int`](https://docs.python.org/3/library/functions.html#int)\n"
+  },
+  "analysis": {
+    "summary": "Flags calls to int() where a string slice removes a numeric prefix (0b/0o/0x) and passes an explicit base matching that prefix.",
+    "firingShapes": [
+      "int(s[2:], 2)",
+      "int(t[2:], 8)",
+      "int(u[2:], 16)",
+      "int(v[2:], 2) if v.startswith('0b') else None",
+      "w = int(x[2:], 16); print(w)",
+      "int(y[2:], 8) + 1",
+      "int(z[2:], 2) * 3",
+      "a = int(b[2:], 16)"
+    ],
+    "silentShapes": [
+      "int(s, 0)",
+      "int(s[1:], 2)",
+      "int(s[2:], 10)",
+      "int(slice_obj, 16)",
+      "int(f\"0x{hex}\", 16)"
+    ],
+    "fixDescription": "Replaces int(expr[2:], base) with int(expr, 0) when expr starts with '0b', '0o', or '0x' and base is 2, 8, or 16 respectively.",
+    "hazards": [
+      "If expr has side effects (e.g., a function call), evaluating it once in int(expr, 0) vs twice in the original (startswith and slice) changes behavior.",
+      "If expr is overwritten between the startswith check and the int call in the original code, the fix uses a stale value.",
+      "When expr is not a string (e.g., int or None), int(expr, 0) raises TypeError while the original may have raised AttributeError on startswith, altering error type.",
+      "If expr is a string but shorter than 2 characters, expr[2:] is empty and int('', base) raises ValueError, whereas int(expr, 0) may raise ValueError for invalid literal, differing in error message or timing.",
+      "If expr contains whitespace after the prefix (e.g., '0x FF'), the slice removes only the prefix leaving ' FF' which int(..., 16) accepts, but int('0x FF', 0) fails due to the space.",
+      "If expr is exactly the prefix (e.g., '0x'), the slice yields '' and int('', 16) raises ValueError, while int('0x', 0) also raises ValueError but the fix may be applied incorrectly if the startswith guard is missing.",
+      "If the code relies on the slice operation to return a substring for other uses (e.g., assigned to a variable), removing the slice breaks that dependency.",
+      "If the int call is inside a lambda or comprehension where expr changes per iteration, hoisting expr evaluation once vs per iteration alters behavior.",
+      "If expr is a bytes object, expr[2:] works but expr may not have startswith, causing AttributeError in the original; the fix would incorrectly apply and raise AttributeError on bytes for startswith.",
+      "If expr is a memoryview or array slice, expr[2:] has different semantics than passing expr to int with base 0, leading to type errors or incorrect parsing."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0055601999999999995,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 15,
+    "fixed": 0,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Generators vs Lists - Lazy Evaluation Hazard",
+      "hazard": "Rewriting consumes generator twice due to shared expression after merge, while list would allow reuse.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              6,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              10,
+              19
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First pass: [10]\nSecond pass: [15]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First pass: [10]\nSecond pass: [15]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Context Manager Write-Only Object",
+      "hazard": "Object with .write() but no .close() used as context manager fails when fix introduces double entry/exit via merged expression.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              16,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Writer buffer: '1010'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Writer buffer: '1010'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Bytes Object StartsWith AttributeError",
+      "hazard": "expr is bytes: expr[2:] works but expr.startswith('0b') raises AttributeError; fix would incorrectly apply and crash.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              39,
+              18
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Slice result: 10\nOriginal works: 10\nWith slice saved: 10 1010\nNo issue demonstrated\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Slice result: 10\nOriginal works: 10\nWith slice saved: 10 1010\nNo issue demonstrated\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Memoryview Slice Semantics Change",
+      "hazard": "expr is memoryview: expr[2:] creates a new memoryview, but int(expr, 0) tries to parse the memoryview as a literal string, failing.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              9,
+              14
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              32,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Original memoryview: b'0b1012'\nOriginal error: TypeError int() can't convert non-string with explicit base\nFixed error: TypeError int() can't convert non-string with explicit base\nSlice processed: b'1012'\nError in reuse: TypeError int() can't convert non-string with explicit base\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Original memoryview: b'0b1012'\nOriginal error: TypeError int() can't convert non-string with explicit base\nFixed error: TypeError int() can't convert non-string with explicit base\nSlice processed: b'1012'\nError in reuse: TypeError int() can't convert non-string with explicit base\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Slice Used Elsewhere - Breaking Dependency",
+      "hazard": "expr[2:] is assigned to a variable and used later; removing the slice breaks that dependency when fix is applied.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              6,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              21,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              43,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: duplicate argument 'self' in function definition",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: duplicate argument 'self' in function definition",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Bytes vs Str Encoding and Newlines",
+      "hazard": "expr is bytes containing newline; int(expr, 0) interprets ASCII correctly but slice+different base may mishandle encoding vs str semantics.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              4,
+              14
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              16,
+              15
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              22,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Slice result: 10\nFixed result: 10\nClean slice: 10 fixed: 10\nStr slice: 10\nStr fixed: 10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Slice result: 10\nFixed result: 10\nClean slice: 10 fixed: 10\nStr slice: 10\nStr fixed: 10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "String Formatting Edge Cases",
+      "hazard": "expr involves % formatting or f-string where slice changes meaning vs base 0 interpretation (e.g., leading zeros).",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              5,
+              14
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              18,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Fmt slice error: ValueError invalid literal for int() with base 2: '000a'\nFmt fixed error: ValueError invalid literal for int() with base 0: '0b000a'\n%% slice error: ValueError invalid literal for int() with base 2: '000a'\n%% fixed error: ValueError invalid literal for int() with base 0: '0b000a'\nSlice was invalid base 2, fixed works\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Fmt slice error: ValueError invalid literal for int() with base 2: '000a'\nFmt fixed error: ValueError invalid literal for int() with base 0: '0b000a'\n%% slice error: ValueError invalid literal for int() with base 2: '000a'\n%% fixed error: ValueError invalid literal for int() with base 0: '0b000a'\nSlice was invalid base 2, fixed works\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Evaluation Order and Side Effects",
+      "hazard": "expr contains a function call with side effects; merging duplicates the call (if slice had side effects) or changes order when base 0 is used.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              13,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "After s1, counter: 1\nVal1: 1 Counter after int: 1\nAfter s2, counter: 2\nVal2: 2 Counter after int: 2\nFinal counter: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After s1, counter: 1\nVal1: 1 Counter after int: 1\nAfter s2, counter: 2\nVal2: 2 Counter after int: 2\nFinal counter: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Walrus operator captures original expression before rewrite",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              4,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Slice result reused after int conversion",
+      "hazard": "If the code relies on the slice operation to return a substring for other uses (e.g., assigned to a variable)",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "int=5, sliced=101\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "File write with sliced string used for mode",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              3,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Mutable default captures slice result across calls",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              2,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Lambda in loop captures changing slice per iteration",
+      "hazard": "If the int call is inside a lambda or comprehension where expr changes per iteration, hoisting expr evaluation once vs per iteration alters behavior.",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              3,
+              26
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Async generator yields sliced values over time",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              3,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Short string slice yields empty string; int('', 2) vs int('0', 0)",
+      "hazard": "If expr is a string but shorter than 2 characters, expr[2:] is empty and int('', base) raises ValueError, whereas int(expr, 0) may raise ValueError for invalid literal, differing in error message or t",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              3,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "ValueError: invalid literal for int() with base 2: ''\nValueError: invalid literal for int() with base 2: ''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ValueError: invalid literal for int() with base 2: ''\nValueError: invalid literal for int() with base 2: ''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict comprehension keys depend on slice side effect",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "FURB166",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB166",
+            "severity": "warning",
+            "message": "Use of `int` with explicit `base=2` after removing prefix",
+            "span": [
+              1,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "{1: '0b1', 2: '0b10'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "{1: '0b1', 2: '0b10'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

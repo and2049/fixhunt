@@ -1,0 +1,597 @@
+{
+  "runId": "2026-10-17T20-59-08-073Z-9q1i-ruff-PLE4703",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLE4703",
+    "fixKind": "unknown",
+    "docs": "# modified-iterating-set (PLE4703)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for loops in which a `set` is modified during iteration.\n\n## Why is this bad?\nIf a `set` is modified during iteration, it will cause a `RuntimeError`.\n\nIf you need to modify a `set` within a loop, consider iterating over a copy\nof the `set` instead.\n\n## Known problems\nThis rule favors false negatives over false positives. Specifically, it\nwill only detect variables that can be inferred to be a `set` type based on\nlocal type inference, and will only detect modifications that are made\ndirectly on the variable itself (e.g., `set.add()`), as opposed to\nmodifications within other function calls (e.g., `some_function(set)`).\n\n## Example\n```python\nnums = {1, 2, 3}\nfor num in nums:\n    nums.add(num + 5)\n```\n\nUse instead:\n```python\nnums = {1, 2, 3}\nfor num in nums.copy():\n    nums.add(num + 5)\n```\n\n## Fix safety\nThis fix is always unsafe because it changes the program’s behavior. Replacing the\noriginal set with a copy during iteration allows code that would previously raise a\n`RuntimeError` to run without error.\n\n## References\n- [Python documentation: `set`](https://docs.python.org/3/library/stdtypes.html#set)\n"
+  },
+  "analysis": {
+    "summary": "Flags loops where a set is directly modified via methods like add(), remove(), discard(), pop(), clear(), or update() while iterating over that same set.",
+    "firingShapes": [
+      "s = {1}; for x in s: s.add(x)",
+      "t = {'a'}; for y in t: t.remove(y)",
+      "u = {1,2}; for z in u: u.discard(z)",
+      "v = {3}; for w in v: v.pop()",
+      "x = {4,5}; for p in x: x.clear()",
+      "y = {6}; for q in y: y.update({q+1})"
+    ],
+    "silentShapes": [
+      "s = {1}; for x in s.copy(): s.add(x)",
+      "t = {'a'}; lst = list(t); for y in lst: t.remove(y)",
+      "u = {1,2}; iterator = iter(u); for z in iterator: u.discard(z)"
+    ],
+    "fixDescription": "Rewrites the for-loop header from 'for var in set_var:' to 'for var in set_var.copy():', leaving the loop body unchanged.",
+    "hazards": [
+      "The rewrite evaluates set_var.copy() at loop start, so if set_var is reassigned before the loop begins, the original code would iterate over the reassigned set while the fix iterates over a copy of the original set, changing which elements are processed.",
+      "If set_var is a property or item access (e.g., obj.attr or arr[i]), the fix evaluates it once for the copy, whereas the original re-evaluates it on each iteration, potentially iterating over a different object if the property/item changes during looping.",
+      "When the set variable is aliased (another name refers to the same set), modifications via the alias in the loop body affect the original set, but the fix iterates over a snapshot, so the loop may terminate earlier or later than in the original code.",
+      "If the loop body contains a break, continue, or return statement, the fix may execute fewer iterations than the original would have before the error, altering side effects that depend on the number of iterations.",
+      "Any expressions in the loop header beyond the set variable (e.g., in a nested loop or complex target list) are not adjusted by the fix, so malformed headers could become invalid or change meaning after rewriting.",
+      "The fix does not preserve trailing comments on the for line; they are dropped because the entire header is replaced.",
+      "If the set variable is used in a comprehension or lambda within the loop body that captures the variable by reference, the fix’s use of a copy may cause those inner functions to see a different set than the original code would have.",
+      "When the set is empty, the fix still evaluates .copy() (producing an empty set), which is behaviorally equivalent, but if .copy() is overridden in a subclass to have side effects, those side effects occur where none existed before."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.005619600000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 8,
+    "fixed": 0,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Reassignment Before Loop",
+      "hazard": "If `set_var` is reassigned before the loop starts, evaluating `.copy()` too early causes iteration over stale data.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "start: {2}\nend: [2, 99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Non-file Context Manager",
+      "hazard": "Using .copy() inside a non-file cm still locks snapshot; mutation proceeds fine but semantics differ if __exit__ depends on live state.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              9,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Complex Loop Header",
+      "hazard": "Nested loop variables or destructuring targets are not copied, breaking semantics when mutated.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              2,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: 'break' outside loop",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: 'break' outside loop",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Lambda Capture in Body",
+      "hazard": ".copy() freezes the set; lambdas inside body capture the copy, not the mutating original.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Text Encoding Edge Case",
+      "hazard": "Writing strings vs bytes differs; .copy() doesn't affect I/O but deterministic trace requires showing state split across modes.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "'αβ'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Generator Consumption",
+      "hazard": "Iterating a generator once exhausts it; .copy() creates eager snapshot but underlying mutation still affects later reuse if aliased.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              5,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "String Formatting",
+      "hazard": "%s, .format(), f-strings all resolve values at runtime; copying the iterated set doesn't change formatting but proves determinism via captured values.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Mutable Default Aliasing",
+      "hazard": "Loop variable aliased as default arg; .copy() breaks identity causing default to bind to stale copy.",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              5,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: 'break' outside loop",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: 'break' outside loop",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "bytes vs str encoding",
+      "hazard": "text/binary mode confusion affecting set mutation safety during iteration",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "type annotations runtime eval",
+      "hazard": "typing-only import causing NameError at runtime when annotation is evaluated",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program does not terminate within the time limit"
+    },
+    {
+      "id": "r2-p003",
+      "title": "non-file context manager",
+      "hazard": "object with write() but no close() used in with statement",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              9,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'Buffer' object does not support the context manager protocol (missed __exit__ method)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'Buffer' object does not support the context manager protocol (missed __exit__ method)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "exceptions in rewritten code",
+      "hazard": "exception inside loop body triggering finally/else interaction",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLE4703",
+            "severity": "warning",
+            "message": "Iterated set `s` is modified within the `for` loop",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "ValueError: ValueError bad\nfinal set: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ValueError: ValueError bad\nfinal set: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "custom truthiness",
+      "hazard": "__bool__ and __len__ affecting loop entry and set mutation safety",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "reassignment before loop",
+      "hazard": "set_var reassigned before loop, so .copy() uses old value but loop iterates over new set",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: 3\n",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "async def await ordering",
+      "hazard": "async iteration over set with mutation inside awaited coroutine",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "evaluation order side effects",
+      "hazard": "set var appears in multiple places, copy() evaluates once but original may change",
+      "rule": "PLE4703",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "get_set called\nx: 1\n",
+          "stderr1": "RuntimeError: Set changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

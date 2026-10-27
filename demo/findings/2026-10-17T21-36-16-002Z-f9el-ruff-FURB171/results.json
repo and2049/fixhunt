@@ -1,0 +1,723 @@
+{
+  "runId": "2026-10-17T21-36-16-002Z-f9el-ruff-FURB171",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB171",
+    "fixKind": "unknown",
+    "docs": "# single-item-membership-test (FURB171)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for membership tests against single-item containers.\n\n## Why is this bad?\nPerforming a membership test against a container (like a `list` or `set`)\nwith a single item is less readable and less efficient than comparing\nagainst the item directly.\n\n## Example\n```python\n1 in [1]\n```\n\nUse instead:\n```python\n1 == 1\n```\n\n## Fix safety\nThe fix is always marked as unsafe.\n\nWhen the right-hand side is a string, this fix can change the behavior of your program.\nThis is because `c in \"a\"` is true both when `c` is `\"a\"` and when `c` is the empty string.\n\nAdditionally, converting `in`/`not in` against a single-item container to `==`/`!=` can\nchange runtime behavior: `in` may consider identity (e.g., `NaN`) and always\nyields a `bool`.\n\nComments within the replacement range will also be removed.\n\n## References\n- [Python documentation: Comparisons](https://docs.python.org/3/reference/expressions.html#comparisons)\n- [Python documentation: Membership test operations](https://docs.python.org/3/reference/expressions.html#membership-test-operations)\n"
+  },
+  "analysis": {
+    "summary": "Flags membership tests (`in`/`not in`) where the right operand is a literal container containing exactly one element.",
+    "firingShapes": [
+      "x in [1]",
+      "x not in {2}",
+      "x in (\"hello\",)",
+      "x in frozenset([None])",
+      "x in b'\\x00'",
+      "x not in [True]",
+      "x in {'a': 1}.keys()",
+      "x in [obj]"
+    ],
+    "silentShapes": [
+      "x in [1, 2]",
+      "x in []",
+      "x in {1: 'a', 2: 'b']",
+      "x in s",
+      "x in func()"
+    ],
+    "fixDescription": "Replaces `x in [y]` with `x == y` and `x not in [y]` with `x != y`, preserving the left operand and the single item from the container literal.",
+    "hazards": [
+      "For string containers like `x in \"a\"`, the rewrite to `x == \"a\"` fails to match the empty string, changing behavior when `x` is `\"\"`.",
+      "For `NaN` values, `nan in [nan]` evaluates to `True` due to identity-based membership, but `nan == nan` is `False`, altering the result.",
+      "If the container is a view like `d.keys()` where `d` is later mutated, the rewrite evaluates the view earlier, potentially capturing a stale state.",
+      "When the single item is an expression with side effects (e.g., `x in [f()]`), the rewrite may evaluate it once instead of preserving the original evaluation context.",
+      "If the left operand `x` is a complex expression with side effects (e.g., `g() in [1]`), the rewrite duplicates its evaluation, causing unintended repeated side effects.",
+      "The fix removes any comments located between the `in`/`not in` operator and the container brackets, altering source code formatting.",
+      "For byte strings like `x in b'\\x00'`, the rewrite to `x == b'\\x00'[0]` incorrectly compares to an integer instead of a byte string element.",
+      "When the container holds a mutable object (e.g., `x in [[]]`), the rewrite uses `==` which may trigger `__eq__` overrides, differing from identity-based `in` semantics.",
+      "If the single item is a placeholder like `...` (Ellipsis), the rewrite to `x == ...` is syntactically valid but semantically opaque and not intended for direct comparison.",
+      "In `not in` contexts, rewriting `x not in [y]` to `x != y` fails when `x` and `y` are of incomparable types that still define `__contains__` (e.g., mixed types in custom containers).",
+      "The rewrite assumes the container is literally a single-element display; it does not apply to variables or function calls, so misapplication could occur if the linter is bypassed.",
+      "For containers formed via unpacking like `x in [*[y]]`, the fix may not trigger or may produce invalid syntax if applied incorrectly."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0077901,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 10,
+    "fixed": 0,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "String container length mismatch",
+      "hazard": "For string containers like `x in \"a\"`, the rewrite to `x == \"a\"` fails to match the empty string, changing behavior when `x` is `\"\"`.",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              6,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[True, True]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[True, True]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Keyword-only argument evaluation timing",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              26,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              31,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              34,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\nTrue\nTrue\nTrue\nFalse\nFalse\nFalse\nTrue\nFalse\nTrue\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nTrue\nTrue\nTrue\nFalse\nFalse\nFalse\nTrue\nFalse\nTrue\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Star-import and __all__ interaction",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              36,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              52,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              65,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              84,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              108,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'counter' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'counter' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Byte string element vs container",
+      "hazard": "For byte strings like `x in b'\\x00'`, the rewrite to `x == b'\\x00'[0]` incorrectly compares to an integer instead of a byte string element.",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Mutable default argument aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nTrue\nFalse\nFalse\nin result: False\n== result: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Ellipsis placeholder comparison",
+      "hazard": "If the single item is a placeholder like `...` (Ellipsis), the rewrite to `x == ...` is syntactically valid but semantically opaque and not intended for direct comparison.",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              28,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              40,
+              39
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\nTrue\nResult of Ellipsis in [...]: True\nResult of Ellipsis == [...] [0]: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nTrue\nResult of Ellipsis in [...]: True\nResult of Ellipsis == [...] [0]: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Class attribute vs instance attribute with property",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              30,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'get_y_count' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'get_y_count' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Unpacking container literal",
+      "hazard": "For containers formed via unpacking like `x in [*[y]]`, the fix may not trigger or may produce invalid syntax if applied incorrectly.",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nNo rule trigger expected\nTrue\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p001",
+      "title": "Type annotation evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              7,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "in\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "in\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "String container matching empty string",
+      "hazard": "For string containers like `x in \"a\"`, the rewrite to `x == \"a\"` fails to match the empty string, changing behavior when `x` is `\"\".",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "matched\neq matched\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "String formatting and repr/str edge cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "in formatted\neq\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Evaluation order and side effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              5,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "side effect\nside effect\nyes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "side effect\nside effect\nyes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "NaN identity vs equality",
+      "hazard": "For `NaN` values, `nan in [nan]` evaluates to `True` due to identity-based membership, but `nan == nan` is `False`, altering the result.",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              3,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "in: True\neq: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "in: True\neq: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Mutable object __eq__ override",
+      "hazard": "When the container holds a mutable object (e.g., `x in [[]]`), the rewrite uses `==` which may trigger `__eq__` overrides, differing from identity-based `in` semantics.",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              7,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "in: yes\n__eq__ called\neq: yes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "in: yes\n__eq__ called\neq: yes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Not in with incomparable types",
+      "hazard": "In `not in` contexts, rewriting `x not in [y]` to `x != y` fails when `x` and `y` are of incomparable types that still define `__contains__` (e.g., mixed types in custom containers).",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "not in: True\nneq: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Truthy/falsy and __bool__/__len__",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "FURB171",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB171",
+            "severity": "warning",
+            "message": "Membership test against single-item container",
+            "span": [
+              7,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "in: True\neq: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "in: True\neq: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

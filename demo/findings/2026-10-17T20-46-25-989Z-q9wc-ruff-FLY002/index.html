@@ -1,0 +1,223 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FLY002 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FLY002 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-46-25-989Z-q9wc-ruff-FLY002 · fix labelled <b>unknown</b> · 16 programs, 7 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0053</p>
+<div class="card"><b>Rule analysis</b><p>Flags str.join() calls where all arguments are simple variables or literals and suggests replacing them with equivalent f-strings.</p><p class="mut">Fix: Rewrites str.join(separator, iterable) into an f-string where each element from the iterable is placed literally separated by the separator, preserving order and literal separator content.</p><details><summary>10 hazards</summary><ul><li>If any joined element is not a string, the f-string will invoke its __format__ method (default str) while str.join requires actual strings, potentially changing output or raising AttributeError.</li><li>If an element defines a custom __format__ that differs from its __str__, the f-string output will diverge from the join result.</li><li>If evaluating any element has side effects (e.g., function calls), the f-string evaluates them once during formatting, same as join, but if the join argument is an iterator consumed elsewhere, behavior may differ due to consumption timing.</li><li>If the separator contains replacement field syntax like &#39;{&#39; or &#39;}&#39;, the f-string will interpret it as a format specifier, altering output or causing ValueError.</li><li>If the iterable is not a tuple/list (e.g., set, dict_keys), the f-string preserves iteration order but join may have used arbitrary order (for sets), leading to non-deterministic output changes.</li><li>If any element equals None, str.join raises TypeError while f-string converts it to &#39;None&#39;, changing behavior from exception to string output.</li><li>If the iterable is empty, both produce empty string, but if the separator is invalid in an f-string context (e.g., unbalanced braces), the f-string may raise ValueError where join succeeds.</li><li>Comments inside the join call parentheses or on the same line may be lost during rewrite, as the autofix replaces the entire expression without preserving internal comments.</li><li>If the join call is part of a larger expression and the f-string introduces unintended line breaks or changes precedence due to formatting, it could alter grouping.</li><li>If any element is an object with a __format__ method that returns non-string (e.g., bytes), the f-string result may be bytes while join expects strings, causing type errors downstream.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side effect evaluation consistency</td><td class="mut">If evaluating any element has side effects (e.g., function calls), the f-string evaluates </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Precedence change in larger expression</td><td class="mut">If the join call is part of a larger expression and the f-string introduces unintended lin</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Non-string elements and __format__ vs str()</td><td class="mut">If any joined element is not a string, the f-string will invoke its __format__ method (def</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable defaults and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Set iteration order non-determinism</td><td class="mut">If the iterable is not a tuple/list (e.g., set, dict_keys), the f-string preserves iterati</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generators consumed once vs eager</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Exceptions in rewritten code and finally/else</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Async def/await ordering and async generators</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus and comprehension scoping</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>None element behavior difference</td><td class="mut">If any element equals None, str.join raises TypeError while f-string converts it to &#39;None&#39;</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Custom __format__ divergence</td><td class="mut">If an element defines a custom __format__ that differs from its __str__, the f-string outp</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default arguments and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Separator with brace syntax</td><td class="mut">If the separator contains replacement field syntax like &#39;{&#39; or &#39;}&#39;, the f-string will inte</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Shadowed builtins</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Empty iterable with invalid separator braces</td><td class="mut">If the iterable is empty, both produce empty string, but if the separator is invalid in an</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>__format__ returns non-string</td><td class="mut">If any element is an object with a __format__ method that returns non-string (e.g., bytes)</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Side effect evaluation consistency</summary><pre>def get_a():
+    print(&#39;A&#39;)
+    return &#39;a&#39;
+def get_b():
+    print(&#39;B&#39;)
+    return &#39;b&#39;
+s = &#39; &#39;
+trace = []
+trace.append(s.join((get_a(), get_b())))
+trace.append(f&#39;{get_a()} {get_b()}&#39;)
+print(&#39;|&#39;.join(trace))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Precedence change in larger expression</summary><pre>a = &#39;hello&#39;
+b = &#39;world&#39;
+expr = &#39;-&#39; + &#39; &#39;.join((a, b)) + &#39;-&#39;
+fexpr = &#39;-&#39; + f&#39;{a} {b}&#39; + &#39;-&#39;
+print(expr == fexpr)
+# Force different grouping via missing parentheses
+x = 1
+y = 2
+z = 3
+bad_join = &#39;&#39; + &#39;&#39;.join((str(x), str(y))) + str(z)
+bad_fstring = &#39;&#39; + f&#39;{x}{y}&#39; + str(z)
+print(bad_join, bad_fstring, sep=&#39;|&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Non-string elements and __format__ vs str()</summary><pre>class NotStr:
+    def __init__(self, val):
+        self.val = val
+    def __str__(self):
+        return f&#39;[{self.val}]&#39;
+    def __format__(self, fmt):
+        return f&#39;&lt;{self.val}&gt;&#39;
+a = NotStr(&#39;x&#39;)
+b = NotStr(&#39;y&#39;)
+try:
+    res = &#39;&#39;.join((a, b))
+except Exception as e:
+    res = f&#39;{type(e).__name__}: {e}&#39;
+try:
+    fres = f&#39;{a}{b}&#39;
+except Exception as e:
+    fres = f&#39;{type(e).__name__}: {e}&#39;
+print(f&#39;join:{res}|fstring:{fres}&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Mutable defaults and aliasing</summary><pre>def make_pair(lst=None):
+    if lst is None:
+        lst = []
+    lst.extend([&#39;a&#39;, &#39;b&#39;])
+    return lst
+pair1 = make_pair()
+pair2 = make_pair()
+sep = &#39; &#39;
+joined = sep.join(pair1)
+fstringed = f&#39;{pair1[0]} {pair1[1]}&#39;
+print(f&#39;{joined}|{fstringed}&#39;)
+# Show aliasing
+pair1.clear()
+print(len(pair2))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Set iteration order non-determinism</summary><pre>s = {&#39;b&#39;, &#39;a&#39;}
+joined = &#39;&#39;.join(s)
+fstringed = &#39;&#39;.join([f&#39;{c}&#39; for c in s])  # simulate f-string order
+print(f&#39;join:{joined}|fstring_sim:{fstringed}&#39;)
+# To see difference, we need fixed iteration vs random; but sets are unordered.
+# Instead show that f-string forces list order while join uses set&#39;s arbitrary order.
+# We&#39;ll run twice and see if join differs.
+results = []
+for _ in range(2):
+    s = {&#39;b&#39;, &#39;a&#39;}
+    results.append(&#39;&#39;.join(s))
+print(f&#39;join varies: {results[0] != results[1]}&#39;)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Generators consumed once vs eager</summary><pre>def gen():
+    yield &#39;x&#39;
+    yield &#39;y&#39;
+g = gen()
+first = &#39;&#39;.join(g)
+try:
+    second = &#39;&#39;.join(g)
+except:
+    second = &#39;&lt;exhausted&gt;&#39;
+# Reset
+g = gen()
+fstring_first = f&#39;{next(g)}{next(g)}&#39;
+print(f&#39;join1:{first}|join2:{second}|fstring:{fstring_first}&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Exceptions in rewritten code and finally/else</summary><pre>def fails():
+    raise ValueError(&#39;bad&#39;)
+try:
+    result = &#39;:&#39;.join((&#39;ok&#39;, fails()))
+except Exception as e:
+    join_ex = f&#39;{type(e).__name__}: {e}&#39;
+try:
+    result = f&#39;{fails()}:ok&#39;
+except Exception as e:
+    fstring_ex = f&#39;{type(e).__name__}: {e}&#39;
+print(f&#39;join:{join_ex}|fstring:{fstring_ex}&#39;)
+# Finally clause
+try:
+    x = 1
+    _ = &#39;:&#39;.join((str(x), fails()))
+except:
+    pass
+else:
+    print(&#39;no_exc_join&#39;, end=&#39;&#39;)
+finally:
+    print(&#39;_finally_join&#39;)
+try:
+    x = 1
+    _ = f&#39;{x}:{fails()}&#39;
+except:
+    pass
+else:
+    print(&#39;no_exc_fstring&#39;, end=&#39;&#39;)
+finally:
+    print(&#39;_finally_fstring&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Async def/await ordering and async generators</summary><pre>import asyncio
+async def afunc():
+    await asyncio.sleep(0.001)
+    return &#39;done&#39;
+async def main():
+    r1 = &#39; &#39;.join((await afunc(), await afunc()))
+    r2 = f&#39;{await afunc()} {await afunc()}&#39;
+    print(f&#39;{r1}|{r2}&#39;)
+asyncio.run(main())
+</pre></details><details id="r2-p001"><summary>r2-p001 — Walrus and comprehension scoping</summary><pre>def f():
+    x = 1
+    g = lambda: &quot; &quot;.join((y := x, x + 1))
+    x = 2
+    return g()
+print(f())
+</pre></details><details id="r2-p002"><summary>r2-p002 — None element behavior difference</summary><pre>a = None
+b = &#39;hello&#39;
+try:
+    result = &#39; &#39;.join((a, b))
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+else:
+    print(repr(result))
+# f-string version would print: &#39;None hello&#39;
+</pre></details><details id="r2-p003"><summary>r2-p003 — Custom __format__ divergence</summary><pre>class Custom:
+    def __str__(self):
+        return &#39;str&#39;
+    def __format__(self, spec):
+        return f&#39;fmt[{spec}]&#39;
+c = Custom()
+print(&#39;|&#39;.join((c,)))          # -&gt; &#39;str&#39;
+print(f&#39;{c}|&#39;)                  # -&gt; &#39;fmt[]&#39; (different)
+# Rule would suggest f&#39;{c}&#39; which changes meaning
+</pre></details><details id="r2-p004"><summary>r2-p004 — Mutable default arguments and aliasing</summary><pre>def append_join(x, lst=[]):
+    lst.append(x)
+    return &#39;-&#39;.join((lst[0], lst[-1]))
+print(append_join(1))  # [&#39;1&#39;] -&gt; &#39;1-1&#39;
+print(append_join(2))  # [&#39;1&#39;, &#39;2&#39;] -&gt; &#39;1-2&#39;
+# After f-string fix: f&#39;{lst[0]}-{lst[-1]}&#39; still uses current list, so same?
+</pre></details><details id="r2-p005"><summary>r2-p005 — Separator with brace syntax</summary><pre>sep = &#39;{name}&#39;
+a = &#39;Alice&#39;
+b = &#39;Bob&#39;
+joined = sep.join((a, b))
+print(repr(joined))  # &#39;Alice{name}Bob&#39;
+# F-string would try: f&#39;Alice{name}Bob&#39; -&gt; NameError if name undefined, or value if defined
+# To make deterministic: define name
+name = &#39;X&#39;
+fstring_result = f&#39;{a}{sep}{b}&#39;
+print(f&#39;F-string gives: {repr(fstring_result)}&#39;)  # &#39;Alice{X}Bob&#39; != &#39;Alice{name}Bob&#39;
+</pre></details><details id="r2-p006"><summary>r2-p006 — Shadowed builtins</summary><pre>str = lambda x: f&#39;[{x}]&#39;
+try:
+    result = &#39;&#39;.join((str, str))  # str is now lambda, not builtin
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+else:
+    print(repr(result))
+# After rebuild: str is reassigned below, but closure captures outer? 
+# Actually: at join time, str is lambda -&gt; TypeError: join expects str, got function
+</pre></details><details id="r2-p007"><summary>r2-p007 — Empty iterable with invalid separator braces</summary><pre>sep = &#39;{&#39;
+items = []
+joined = sep.join(items)
+print(repr(joined))  # &#39;&#39;
+try:
+    # Simulate what f-string would do: f&#39;&#39; (no content) but sep has {
+    # Actually, f-string wouldn&#39;t use sep if empty? Hazard: if rule tries to make f&#39;&#39; and puts sep inside?
+    # Assume rule does: for empty, f&#39;&#39; but if separator has {, it might still be part of template
+    # But with no elements, f-string would be just &#39;&#39; regardless of sep? 
+    # To make sep matter: rule might incorrectly do f&#39;{sep}&#39; even when empty? Not per spec.
+    # Instead: hazard says if separator invalid in f-string context.
+    # Let&#39;s make a case where separator alone causes f-string error.
+    dummy = f&#39;{sep}&#39;  # This line alone would raise ValueError: unsupported format specifier
+    print(&#39;This should not print&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+else:
+    print(repr(dummy))
+</pre></details><details id="r2-p008"><summary>r2-p008 — __format__ returns non-string</summary><pre>class BytesReturn:
+    def __format__(self, spec):
+        return b&#39;bytes&#39;
+    def __str__(self):
+        return &#39;str&#39;
+obj = BytesReturn()
+try:
+    j = &#39;|&#39;.join((obj,))
+    print(f&#39;Join result: {repr(j)}&#39;)  # -&gt; &#39;str&#39;
+except Exception as e:
+    print(f&#39;Join error: {type(e).__name__}: {e}&#39;)
+try:
+    fs = f&#39;{obj}|&#39;  # -&gt; b&#39;bytes|&#39; (bytes)
+    print(f&#39;F-string result: {repr(fs)}&#39;)
+    # Downstream: if used where string expected
+    print(fs.upper())  # AttributeError: bytes has no upper
+except Exception as e:
+    print(f&#39;F-string downstream: {type(e).__name__}: {e}&#39;)
+</pre></details></body></html>

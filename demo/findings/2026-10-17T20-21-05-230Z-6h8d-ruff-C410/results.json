@@ -1,0 +1,618 @@
+{
+  "runId": "2026-10-17T20-21-05-230Z-6h8d-ruff-C410",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C410",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-literal-within-list-call (C410)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for `list()` calls that take unnecessary list or tuple literals as\narguments.\n\n## Why is this bad?\nIt's unnecessary to use a list or tuple literal within a `list()` call,\nsince there is a literal syntax for these types.\n\nIf a list literal is passed in, then the outer call to `list()` should be\nremoved. Otherwise, if a tuple literal is passed in, then it should be\nrewritten as a list literal.\n\n## Example\n```python\nlist([1, 2])\nlist((1, 2))\n```\n\nUse instead:\n```python\n[1, 2]\n[1, 2]\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it may occasionally drop comments\nwhen rewriting the call. In most cases, though, comments will be preserved.\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant list() constructor calls wrapping list or tuple literals.",
+    "firingShapes": [
+      "list([1, 2])",
+      "list((1, 2))",
+      "list([])",
+      "list(())",
+      "list([x for x in range(5)])",
+      "list((a, b, c))",
+      "list([\"a\", \"b\"])",
+      "list(tuple([1, 2]))"
+    ],
+    "silentShapes": [
+      "list(iterable)",
+      "list(map(int, ['1', '2']))",
+      "list(generator_expression)",
+      "list(set([1, 2]))",
+      "list(f()) where f returns a list"
+    ],
+    "fixDescription": "Rewrites list(literal) to the literal itself if it's a list literal, or to a list literal with the same elements if it's a tuple literal.",
+    "hazards": [
+      "If the literal contains a comment inside (e.g., list([1, # comment\n2])), the autofix may drop the comment when converting to [1, 2].",
+      "If the literal is part of a larger expression where the list() call affects operator precedence (e.g., list([1, 2]) + [3]), removing list() could change evaluation order due to binding differences.",
+      "If the literal is used in a context where the list() call is relied upon to create a new list (e.g., for mutation safety), replacing list((1,2)) with [1,2] still creates a new list, so no semantic change, but if the literal is a variable referencing a mutable list, the fix does not apply—this hazard is not applicable as the rule only triggers on literals.",
+      "If the code relies on the list() constructor for debugging or side effects (e.g., list(print([1,2]) or [])), the rule does not fire because the argument is not a literal, so no fix is attempted—this hazard is not applicable.",
+      "If the literal contains nested expressions with side effects (e.g., list([f(), g()])), the rule does not fire because the argument is not a literal (it's a list containing calls), so no fix is attempted—this hazard is not applicable.",
+      "If the literal is a tuple containing a starred expression (e.g., list((*range(3),))), the rule does not fire because starred expressions are not allowed in tuple literals in this context—invalid syntax, so rule does not fire.",
+      "If the code is in a string or comment (e.g., '# list([1,2])'), the linter does not parse it as code, so no fix is attempted—this hazard is not applicable.",
+      "If the literal is a list literal that is empty and the surrounding code depends on the identity of the list (e.g., is(list([])) is not list([])), removing list() changes identity because [] is a singleton in some contexts? Actually, [] is not a singleton; each [] creates a new list, so list([]) and [] are both new lists—no identity difference. However, in CPython, small tuples may be interned, but lists are not. So no hazard.",
+      "If the literal is a tuple and the code uses the fact that list(tuple) raises TypeError on non-tuple (but the argument is a literal tuple, so safe), no issue.",
+      "If the literal is a tuple and the rewrite to list literal fails due to being in a context that expects a tuple (e.g., as a key in a dict: {list((1,2)): 3} becomes {[1,2]: 3}), which is invalid because lists are unhashable—this changes behavior from valid to TypeError."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0029142000000000005,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 9,
+    "fixed": 0,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Precedence Hazard",
+      "hazard": "If the literal is part of a larger expression where the list() call affects operator precedence, removing list() could change evaluation order.",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary list literal passed to `list()` (remove the outer call to `list()`)",
+            "span": [
+              3,
+              18
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: [1, 2, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: [1, 2, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Type Annotation Runtime Evaluation",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary list literal passed to `list()` (remove the outer call to `list()`)",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Received: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Received: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Starred Expression Near-Miss",
+      "hazard": "If the literal is a tuple containing a starred expression, the rule does not fire because starred expressions are not allowed in tuple literals in this context—invalid syntax, so rule does not fire.",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "No trigger: starred expression in tuple literal is invalid syntax\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p004",
+      "title": "Walrus and Comprehension Scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First call: [0, 1]\nSecond call: [0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Coercion and Rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary tuple literal passed to `list()` (rewrite as a single list literal)",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Sum: 4.0\nRounded: 4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Sum: 4.0\nRounded: 4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Tuple Type Safety",
+      "hazard": "If the literal is a tuple and the code uses the fact that list(tuple) raises TypeError on non-tuple (but the argument is a literal tuple, so safe), no issue.",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "List from tuple: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Comments and Docstrings",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary list literal passed to `list()` (remove the outer call to `list()`)",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Data: [10, 20]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Data: [10, 20]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exception Handling and Finally",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary tuple literal passed to `list()` (rewrite as a single list literal)",
+            "span": [
+              3,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Cleanup\nCaught: ZeroDivisionError - division by zero\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Cleanup\nCaught: ZeroDivisionError - division by zero\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "String formatting interaction",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello, 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Mutable default argument aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary list literal passed to `list()` (remove the outer call to `list()`)",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2, 99]\n[1, 2, 99, 99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2, 99]\n[1, 2, 99, 99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Keyword-only and *args forwarding",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1:2:3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Tuple-to-list-as-dict-key TypeError",
+      "hazard": "If the literal is a tuple and the rewrite to list literal fails due to being in a context that expects a tuple (e.g., as a key in a dict: {list((1,2)): 3} becomes {[1,2]: 3}), which is invalid because",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary tuple literal passed to `list()` (rewrite as a single list literal)",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError: cannot use 'list' as a dict key (unhashable type: 'list')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: cannot use 'list' as a dict key (unhashable type: 'list')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Star-import and __all__ side effect",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary list literal passed to `list()` (remove the outer call to `list()`)",
+            "span": [
+              1,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "['mod_item']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['mod_item']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Shadowed builtin list",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'tuple' object has no attribute 'upper'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Starred expression in tuple (no trigger)",
+      "hazard": "If the literal is a tuple containing a starred expression (e.g., list((*range(3),))), the rule does not fire because starred expressions are not allowed in tuple literals in this context—invalid synta",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "no trigger\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p008",
+      "title": "Walrus and comprehension scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "C410",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C410",
+            "severity": "warning",
+            "message": "Unnecessary tuple literal passed to `list()` (rewrite as a single list literal)",
+            "span": [
+              3,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[2, 2, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2, 2, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

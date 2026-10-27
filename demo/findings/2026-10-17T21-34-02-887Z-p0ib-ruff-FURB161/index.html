@@ -1,0 +1,239 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB161 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB161 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-34-02-887Z-p0ib-ruff-FURB161 · fix labelled <b>unknown</b> · 16 programs, 13 fired, 1 fixed, 0 oracle-backed finding(s) · model cost $0.0042</p>
+<div class="card"><b>Rule analysis</b><p>Flags calls to bin(x).count(&#39;1&#39;) where x is an integer expression, recommending replacement with x.bit_count().</p><p class="mut">Fix: Replaces bin(X).count(&#39;1&#39;) with X.bit_count(), preserving the inner expression X exactly as it appeared.</p><details><summary>10 hazards</summary><ul><li>If X is a function call with side effects, the rewrite changes evaluation timing but not frequency—still one call—but may affect interleaving with other expressions in larger statements.</li><li>If X raises an exception (e.g., AttributeError, TypeError), the exception type and timing remain identical; however, if X returns a non-int that defines __index__ but not bit_count (e.g., custom numeric type), the rewrite will raise AttributeError where the original would succeed after bin conversion.</li><li>If X returns a float, both versions raise TypeError, but the original does so during bin() conversion while the rewrite raises AttributeError on bit_count lookup, altering the exception type.</li><li>If X returns a bool, both work (bool inherits bit_count), but the rewrite may be misleading stylistically though behaviorally equivalent.</li><li>If X is an expression whose value is used elsewhere in the same statement (e.g., in a tuple or assignment), the rewrite preserves the value and any side effects, but intermediate reuse of X is not possible since it&#39;s evaluated once in both forms.</li><li>If X is a conditional expression like a if cond else b, the rewrite preserves short-circuiting behavior identically.</li><li>If the code contains a comment between bin( and .count (e.g., bin(/* hint */x).count(&#39;1&#39;)), the autofix will drop the comment as it only preserves the inner expression.</li><li>If X is a lambda or comprehension that captures local state, the rewrite preserves capture semantics since evaluation is otherwise identical.</li><li>If X is a super() call or attribute access on a nested object (e.g., bin(self.obj.x).count(&#39;1&#39;)), the rewrite preserves the same attribute lookup chain.</li><li>If the code relies on bin(X) returning a string for further use (impossible here since .count(&#39;1&#39;) is chained), no issue arises—the intermediate string is never accessible.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Float argument changes exception type from TypeError to AttributeError</td><td class="mut">If X returns a float, both versions raise TypeError, but the original does so during bin()</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Conditional expression preserves short-circuiting identically</td><td class="mut">If X is a conditional expression like a if cond else b, the rewrite preserves short-circui</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Walrus operator scoping preserved in comprehension</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Attribute chain preserved on super() and nested object access</td><td class="mut">If X is a super() call or attribute access on a nested object (e.g., bin(self.obj.x).count</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Generator vs list: single consumption preserved</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Context manager with write but no close: no interference</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Star-imports and module-level side effects: no disruption</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Exception inside rewritten code: finally/else and chaining preserved</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Custom Truthiness and Identity</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Boolean Return Value</td><td class="mut">If X returns a bool, both work (bool inherits bit_count), but the rewrite may be misleadin</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Function Call Side Effects Evaluation Timing</td><td class="mut">If X is a function call with side effects, the rewrite changes evaluation timing but not f</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation Order and Side Effects in Larger Expressions</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Conditional Expression Short-Circuiting</td><td class="mut">If X is a conditional expression like a if cond else b, the rewrite preserves short-circui</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">invalid</span></td><td>Walrus and Comprehension Scoping</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Runtime Type Annotations and Typing-Only Imports</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">invalid</span></td><td>Pathlib vs os.path Behavior</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Float argument changes exception type from TypeError to AttributeError</summary><pre>def f():
+    return 3.14
+try:
+    result = bin(f()).count(&#39;1&#39;)
+except Exception as e:
+    print(type(e).__name__, str(e))
+try:
+    result = f().bit_count()
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Conditional expression preserves short-circuiting identically</summary><pre>def g():
+    print(&#39;g called&#39;)
+    return 5
+def h():
+    print(&#39;h called&#39;)
+    return 3
+cond = False
+try:
+    v = bin(g() if cond else h()).count(&#39;1&#39;)
+except: pass
+print(&#39;g&#39; if not cond else &#39;h&#39;, &#39;not called&#39; if cond else &#39;called&#39;)
+cond = True
+try:
+    v = bin(g() if cond else h()).count(&#39;1&#39;)
+except: pass
+print(&#39;g&#39; if cond else &#39;h&#39;, &#39;called&#39; if cond else &#39;not called&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Walrus operator scoping preserved in comprehension</summary><pre>vals = []
+for i in range(2):
+    vals.append((lambda: [x for j in range(1) if (x := i + j) and bin(x).count(&#39;1&#39;)])())
+print(vals)
+# After fix: same behavior, walrus scoped correctly
+</pre></details><details id="r1-p004"><summary>r1-p004 — Attribute chain preserved on super() and nested object access</summary><pre>class A:
+    x = 5
+class B(A):
+    def get(self):
+        return super().x
+obj = B()
+print(bin(obj.get()).count(&#39;1&#39;))
+obj2 = type(&#39;Obj&#39;, (), {&#39;x&#39;: 10})()
+print(bin(obj2.x).count(&#39;1&#39;))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Generator vs list: single consumption preserved</summary><pre>def gen():
+    yield 7
+    yield 3
+print(sum(bin(x).count(&#39;1&#39;) for x in gen()))
+g = gen()
+print(list(g))  # should be empty after first consumption
+</pre></details><details id="r1-p006"><summary>r1-p006 — Context manager with write but no close: no interference</summary><pre>class Writable:
+    def __enter__(self):
+        self.data = []
+        return self
+    def write(self, x):
+        self.data.append(x)
+    def __exit__(self, *args):
+        pass
+with Writable() as w:
+    w.write(str(bin(15).count(&#39;1&#39;)))
+print(w.data)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:34:12.949814493 -0400
++++ fixed.py	2026-10-17 17:34:13.111812519 -0400
+@@ -7,5 +7,5 @@
+     def __exit__(self, *args):
+         pass
+ with Writable() as w:
+<span class="del">-    w.write(str(bin(15).count(&#39;1&#39;)))</span>
+<span class="add">+    w.write(str((15).bit_count()))</span>
+ print(w.data)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Star-imports and module-level side effects: no disruption</summary><pre>import sys
+mod = type(&#39;M&#39;, (), {})
+mod.VALUE = 42
+sys.modules[&#39;mymod&#39;] = mod
+from mymod import *
+print(VALUE)
+print(bin(VALUE).count(&#39;1&#39;))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exception inside rewritten code: finally/else and chaining preserved</summary><pre>def bad():
+    raise ValueError(&#39;bad&#39;)
+try:
+    try:
+        bin(bad()).count(&#39;1&#39;)
+    except ValueError as e:
+        raise RuntimeError(&#39;worse&#39;) from e
+except RuntimeError as e:
+    print(type(e).__name__, str(e))
+    print(type(e.__cause__).__name__, str(e.__cause__) if e.__cause__ else None)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Custom Truthiness and Identity</summary><pre>class C:
+    def __init__(self, v): self.v = v
+    def __bool__(self): return self.v &gt; 0
+    def __len__(self): return abs(self.v)
+a = C(-1)
+b = C(0)
+c = C(1)
+print(f&#39;a_bool={bool(a)} a_len={len(a)} a_is_none={a is None}&#39;)
+print(f&#39;b_bool={bool(b)} b_len={len(b)} b_is_none={b is None}&#39;)
+print(f&#39;c_bool={bool(c)} c_len={len(c)} c_is_none={c is None}&#39;)
+if bin(a).count(&#39;1&#39;): print(&#39;a count True&#39;)
+else: print(&#39;a count False&#39;)
+if bin(b).count(&#39;1&#39;): print(&#39;b count True&#39;)
+else: print(&#39;b count False&#39;)
+if bin(c).count(&#39;1&#39;): print(&#39;c count True&#39;)
+else: print(&#39;c count False&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Boolean Return Value</summary><pre>def f(): return True
+def g(): return False
+print(f&#39;f()={f()} g()={g()}&#39;)
+print(f&#39;bin(f()).count(\&#39;1\&#39;)={bin(f()).count(\&#39;1\&#39;)} f().bit_count()={f().bit_count()}&#39;)
+print(f&#39;bin(g()).count(\&#39;1\&#39;)={bin(g()).count(\&#39;1\&#39;)} g().bit_count()={g().bit_count()}&#39;)
+x = f()
+y = g()
+if bin(x).count(&#39;1&#39;) == x.bit_count(): print(&#39;Match for f()&#39;)
+else: print(&#39;Mismatch for f()&#39;)
+if bin(y).count(&#39;1&#39;) == y.bit_count(): print(&#39;Match for g()&#39;)
+else: print(&#39;Mismatch for g()&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Function Call Side Effects Evaluation Timing</summary><pre>state = []
+def log(n):
+    state.append(f&#39;called {n}&#39;)
+    return n * 2
+print(&#39;Start:&#39;, state)
+try:
+    val = bin(log(3)).count(&#39;1&#39;)
+except Exception as e:
+    print(f&#39;Error: {type(e).__name__}: {e}&#39;)
+print(&#39;After bin(log(3)).count(\&#39;1\&#39;):&#39;, state)
+state.clear()
+state.append(&#39;reset&#39;)
+try:
+    val = bin(log(5)).bit_count()
+except Exception as e:
+    print(f&#39;Error: {type(e).__name__}: {e}&#39;)
+print(&#39;After bin(log(5)).bit_count():&#39;, state)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Evaluation Order and Side Effects in Larger Expressions</summary><pre>side = []
+def f():
+    side.append(&#39;f&#39;)
+    return 3
+def g():
+    side.append(&#39;g&#39;)
+    return 5
+side.clear()
+result = f() + bin(g()).count(&#39;1&#39;)
+print(f&#39;f then g: side={side}, result={result}&#39;)
+side.clear()
+result = bin(f()).count(&#39;1&#39;) + g()
+print(f&#39;bin(f) then g: side={side}, result={result}&#39;)
+side.clear()
+result = f() + bin(g()).bit_count()
+print(f&#39;f then bit_count g: side={side}, result={result}&#39;)
+side.clear()
+result = bin(f()).bit_count() + g()
+print(f&#39;bit_count f then g: side={side}, result={result}&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Conditional Expression Short-Circuiting</summary><pre>def a(): print(&#39;a called&#39;); return 1
+def b(): print(&#39;b called&#39;); return 2
+cond = False
+print(&#39;Testing bin(a() if cond else b()).count(\&#39;1\&#39;):&#39;)
+try:
+    r = bin(a() if cond else b()).count(&#39;1&#39;)
+except Exception as e:
+    print(f&#39;  Error: {type(e).__name__}: {e}&#39;)
+cond = True
+print(&#39;Testing bin(a() if cond else b()).count(\&#39;1\&#39;):&#39;)
+try:
+    r = bin(a() if cond else b()).count(&#39;1&#39;)
+except Exception as e:
+    print(f&#39;  Error: {type(e).__name__}: {e}&#39;)
+cond = False
+print(&#39;Testing bin(a() if cond else b()).bit_count():&#39;)
+try:
+    r = bin(a() if cond else b()).bit_count()
+except Exception as e:
+    print(f&#39;  Error: {type(e).__name__}: {e}&#39;)
+cond = True
+print(&#39;Testing bin(a() if cond else b()).bit_count():&#39;)
+try:
+    r = bin(a() if cond else b()).bit_count()
+except Exception as e:
+    print(f&#39;  Error: {type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Walrus and Comprehension Scoping</summary><pre>lst = [5, 6, 7]
+print(&#39;List comprehension with walrus:&#39;)
+squares = [ (n := x) * n for x in lst if bin(n := x).count(&#39;1&#39;) == 2 ]
+print(f&#39;  Result: {squares}, final n: {n}&#39;)
+print(&#39;
+Generator expression capture:&#39;)
+gen = (bin(n := x).count(&#39;1&#39;) for x in lst)
+first = next(gen)
+print(f&#39;  First from gen: {first}, n after: {n}&#39;)
+second = next(gen)
+print(f&#39;  Second from gen: {second}, n after: {n}&#39;)
+print(&#39;
+Lambda late-binding:&#39;)
+funcs = [lambda x=x: bin(n := x).count(&#39;1&#39;) for x in lst]
+for f in funcs:
+    print(f&#39;  Lambda result: {f()}&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Runtime Type Annotations and Typing-Only Imports</summary><pre>from typing import List
+def process(x: int) -&gt; int:
+    return bin(x).count(&#39;1&#39;)
+print(f&#39;process(5) = {process(5)}&#39;)
+print(f&#39;Annotations: {process.__annotations__}&#39;)
+try:
+    if bin(process.__annotations__[&#39;return&#39;]).count(&#39;1&#39;):
+        print(&#39;Return annotation has odd popcount&#39;)
+    else:
+        print(&#39;Return annotation has even popcount&#39;)
+except Exception as e:
+    print(f&#39;Error checking annotation: {type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Pathlib vs os.path Behavior</summary><pre>import os
+open(&#39;test.txt&#39;, &#39;w&#39;).write(&#39;hello&#39;)
+try:
+    p_len = len(&#39;test.txt&#39;)
+    print(f&#39;Path length: {p_len}&#39;)
+    print(f&#39;bin(len(\&#39;test.txt\&#39;)).count(\&#39;1\&#39;) = {bin(p_len).count(\&#39;1\&#39;)}&#39;)
+    print(f&#39;bin(len(\&#39;test.txt\&#39;)).bit_count() = {p_len.bit_count()}&#39;)
+    os.symlink(&#39;test.txt&#39;, &#39;link.txt&#39;)
+    l_len = len(os.readlink(&#39;link.txt&#39;))
+    print(f&#39;Symlink target length: {l_len}&#39;)
+    print(f&#39;bin(len(os.readlink(\&#39;link.txt\&#39;))).count(\&#39;1\&#39;) = {bin(l_len).count(\&#39;1\&#39;)}&#39;)
+    print(f&#39;bin(len(os.readlink(\&#39;link.txt\&#39;))).bit_count() = {l_len.bit_count()}&#39;)
+except Exception as e:
+    print(f&#39;Error: {type(e).__name__}: {e}&#39;)
+finally:
+    try:
+        os.unlink(&#39;test.txt&#39;)
+        os.unlink(&#39;link.txt&#39;)
+    except FileNotFoundError:
+        pass
+</pre></details></body></html>

@@ -1,0 +1,431 @@
+{
+  "runId": "2026-10-17T20-45-09-298Z-olks-ruff-TC008",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "TC008",
+    "fixKind": "unknown",
+    "docs": "# quoted-type-alias (TC008)\n\nDerived from the **flake8-type-checking** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for unnecessary quotes in [PEP 613] explicit type aliases\nand [PEP 695] type statements.\n\n## Why is this bad?\nUnnecessary string forward references can lead to additional overhead\nin runtime libraries making use of type hints. They can also have bad\ninteractions with other runtime uses like [PEP 604] type unions.\n\nPEP-613 type aliases are only flagged by the rule if Ruff can have high\nconfidence that the quotes are unnecessary. Specifically, any PEP-613\ntype alias where the type expression on the right-hand side contains\nsubscripts or attribute accesses will not be flagged. This is because\ntype aliases can reference types that are, for example, generic in stub\nfiles but not at runtime. That can mean that a type checker expects the\nreferenced type to be subscripted with type arguments despite the fact\nthat doing so would fail at runtime if the type alias value was not\nquoted. Similarly, a type alias might need to reference a module-level\nattribute that exists in a stub file but not at runtime, meaning that\nthe type alias value would need to be quoted to avoid a runtime error.\n\n## Example\nGiven:\n```python\nfrom typing import TypeAlias\n\nOptInt: TypeAlias = \"int | None\"\n```\n\nUse instead:\n```python\nfrom typing import TypeAlias\n\nOptInt: TypeAlias = int | None\n```\n\nGiven:\n```python\ntype OptInt = \"int | None\"\n```\n\nUse instead:\n```python\ntype OptInt = int | None\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the type annotation contains comments.\n\n## See also\nThis rule only applies to type aliases in non-stub files. For removing quotes in other\ncontexts or in stub files, see:\n\n- [`quoted-annotation-in-stub`][PYI020]: A rule that\n  removes all quoted annotations from stub files\n- [`quoted-annotation`][UP037]: A rule that removes unnecessary quotes\n  from *annotations* in runtime files.\n\n## References\n- [PEP 613 – Explicit Type Aliases](https://peps.python.org/pep-0613/)\n- [PEP 695: Generic Type Alias](https://peps.python.org/pep-0695/#generic-type-alias)\n- [PEP 604 – Allow writing union types as `X | Y`](https://peps.python.org/pep-0604/)\n\n[PEP 604]: https://peps.python.org/pep-0604/\n[PEP 613]: https://peps.python.org/pep-0613/\n[PEP 695]: https://peps.python.org/pep-0695/#generic-type-alias\n[PYI020]: https://docs.astral.sh/ruff/rules/quoted-annotation-in-stub/\n[UP037]: https://docs.astral.sh/ruff/rules/quoted-annotation/\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary quotes in PEP 613 explicit type aliases and PEP 695 type statements when the quoted content is a valid type expression without forward references.",
+    "firingShapes": [
+      "from typing import TypeAlias\nOptInt: TypeAlias = \"int | None\"",
+      "type OptInt = \"int | None\"",
+      "from typing import TypeAlias\nStrList: TypeAlias = \"list[str]\"",
+      "type StrList = \"list[str]\"",
+      "from typing import TypeAlias\nMyDict: TypeAlias = \"dict[str, int]\"",
+      "type MyDict = \"dict[str, int]\""
+    ],
+    "silentShapes": [
+      "from typing import TypeAlias\nForwardRef: TypeAlias = \"SomeClass\"  # SomeClass defined later",
+      "type ForwardRef = \"SomeClass\"  # comment after quote",
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from mod import SomeClass\nMyAlias: TypeAlias = \"SomeClass\"",
+      "from typing import TypeAlias\nComplexAlias: TypeAlias = \"List['int']\"  # nested quotes"
+    ],
+    "fixDescription": "Removes the outer double quotes around the type expression while preserving whitespace and inner structure, converting e.g., \"int | None\" to int | None.",
+    "hazards": [
+      "Rewriting may break code if the quoted string contains a comment, as the fix does not preserve comments inside the quotes.",
+      "If the type expression relies on a name only available via TYPE_CHECKING imports, removing quotes could cause a NameError at runtime.",
+      "In stub files, removing quotes might violate stub-only type contracts where the unquoted form is not available at runtime.",
+      "If the quoted expression includes a forward reference to a class defined later in the same module, the fix assumes it is defined, which may not hold during execution.",
+      "The fix does not account for string concatenation inside quotes (e.g., \"int\" \"|\" \"None\"), leaving it unchanged but potentially misleading users.",
+      "If the quoted string contains escaped quotes (e.g., \"\\\"int\\\" |\"), the fix incorrectly strips outer quotes, corrupting the expression.",
+      "When the type alias is used in a runtime context (e.g., isinstance), removing quotes could alter behavior if the string was intentionally used as a fallback.",
+      "The fix may interfere with tools that inspect source strings directly, expecting the quotes to be present for metadata or code generation."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.011429000000000002,
+  "summary": {
+    "programs": 8,
+    "invalid": 0,
+    "fired": 5,
+    "fixed": 5,
+    "disputed": 4,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r1-p005",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "from typing import TypeAlias\nBadAlias: TypeAlias = \"int\" \"|\" \"None\"\nprint(repr(BadAlias))\n",
+      "lines": {
+        "before": 4,
+        "after": 3
+      },
+      "reportPath": "runs/2026-10-17T20-45-09-298Z-olks-ruff-TC008/reports/r1-p005.md",
+      "duplicates": [],
+      "verdict": {
+        "grade": "real",
+        "severity": "medium",
+        "why": "The rule removes quotes from a PEP 613 type alias that uses concatenated string literals ('int' '|' 'None'), rewriting it to the unquoted union int|None. At runtime, the original alias evaluates to the string 'int|None' (no spaces), while the fixed alias evaluates to the types.Union object int | None (repr shows spaces). This changes the program's observable behavior: the printed representation differs, and any code inspecting the alias value would see a string vs a union object. The documentation presents the rewrite as removing unnecessary quotes but does not warn that concatenated string literals produce a different runtime value than the unquoted union, making the fix unsafe for this construct.",
+        "docsQuote": "Unnecessary string forward references can lead to additional overhead in runtime libraries making use of type hints. They can also have bad interactions with other runtime uses like PEP 604 type unions.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC008 fix",
+          "TC008 TypeAlias string union",
+          "TypeAlias literal pipe syntax",
+          "ruff TC008 quoted types fix"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "[`docs`] Some rule's examples do not trigger out-of-the-box",
+            "url": "https://github.com/astral-sh/ruff/issues/18972",
+            "state": "open",
+            "snippet": "While going through the rules hunting for issues, I noticed a fair number have an example that doesn't give an error when copy/pasted verbatim. This is both inconvenient and misleading, so I wrote a script to try and find all of these cases. This issue is intended to serve as a tracking place for th"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18972",
+            "relation": "unrelated",
+            "why": "The existing report is about documentation examples not triggering errors, while the new finding is about a TC008 autofix changing runtime behavior of a TypeAlias with string-literal union syntax."
+          }
+        ],
+        "cost": 0.0008279
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:31:25.571973028 -0400\n+++ fixed.py\t2026-10-22 13:31:27.675008309 -0400\n@@ -1,3 +1,3 @@\n from typing import TypeAlias\n-BadAlias: TypeAlias = \"int\" \"|\" \"None\"\n+BadAlias: TypeAlias = int|None\n print(repr(BadAlias))\n",
+        "observed": "stdout before:\n'int|None'\nstdout after:\nint | None",
+        "before": {
+          "stdout": "'int|None'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "int | None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "from typing import TypeAlias\nBadAlias: TypeAlias = int|None\nprint(repr(BadAlias))\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC008 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original string literal `\"int\" \\| \\\"None\\\"` evaluates to the exact text `int|None`, which prints as `'int|None'`. Replacing it with the type expression `int|None` creates a union type object whose `__repr__` yields `int | None` (spaces added by Python’s formatting). Since a string and a type are distinct objects with different representations, the change alters observable output, violating semantic equivalence.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Mutable Default Arguments & Aliasing After Rewrite",
+      "hazard": "TC008 removes quotes from 'list[int]' used as a function default argument; if the alias points to a mutable object shared across calls, removing quotes doesn't affect runtime behavior—but misleads dev",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'str' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Bytes vs Str Encoding & Newline Handling",
+      "hazard": "Rewriting 'bytes' to bare identifier breaks code that relied on the string being a type annotation for bytes literals; if misread as str, encoding assumptions fail.",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC008",
+            "severity": "warning",
+            "message": "Remove quotes from type alias",
+            "span": [
+              2,
+              22
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "hello\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:45:18.878566251 -0400\n+++ fixed.py\t2026-10-17 16:45:19.063571336 -0400\n@@ -1,5 +1,5 @@\n from typing import TypeAlias\n-MyBytes: TypeAlias = \"bytes\"\n+MyBytes: TypeAlias = bytes\n def g(b: MyBytes) -> str:\n     return b.decode('utf-8')\n try:\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Forward Reference Assumed Defined Later",
+      "hazard": "Rule removes quotes from 'SomeClass' assuming it's defined, but if SomeClass is defined later in the module, the bare name causes NameError at runtime.",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC008",
+            "severity": "warning",
+            "message": "Remove quotes from type alias",
+            "span": [
+              1,
+              15
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "SomeClass\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "SomeClass\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:45:19.193574906 -0400\n+++ fixed.py\t2026-10-17 16:45:19.362579547 -0400\n@@ -1,4 +1,4 @@\n-type OptCls = \"SomeClass\"\n+type OptCls = SomeClass\n class SomeClass:\n     pass\n inst: OptCls = SomeClass()\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "pathlib vs os.path Behavior on Relative Paths",
+      "hazard": "Rewriting 'Path' to bare identifier in alias breaks if user mistakenly uses os.path functions on the type; but since it's a type alias, no runtime effect—yet misleading in static analysis.",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC008",
+            "severity": "warning",
+            "message": "Remove quotes from type alias",
+            "span": [
+              3,
+              16
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "True\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:45:19.463582321 -0400\n+++ fixed.py\t2026-10-17 16:45:19.675588143 -0400\n@@ -1,6 +1,6 @@\n from typing import TypeAlias\n from pathlib import Path\n-P: TypeAlias = \"Path\"\n+P: TypeAlias = Path\n p: P = Path('.')\n print(p.exists())\n print(p.is_absolute())\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "String Concatenation Inside Quotes Left Unchanged",
+      "hazard": "Rule does not rewrite '\"int\" \"|\" \"None\"' (concatenated strings), so alias remains quoted; if developer expects it to be unquoted, they may misuse it.",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC008",
+            "severity": "warning",
+            "message": "Remove quotes from type alias",
+            "span": [
+              2,
+              23
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "<class 'str'>\n'int|None'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        },
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n<class 'str'>\n'int|None'\nstdout after:\n<class 'typing.Union'>\nint | None"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'typing.Union'>\nint | None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:45:19.800591576 -0400\n+++ fixed.py\t2026-10-17 16:45:20.001597096 -0400\n@@ -1,4 +1,4 @@\n from typing import TypeAlias\n-BadAlias: TypeAlias = \"int\" \"|\" \"None\"\n+BadAlias: TypeAlias = int|None\n print(type(BadAlias))\n print(repr(BadAlias))\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Tool Expecting Quotes for Metadata Inspection",
+      "hazard": "A tool that scans source for quoted type aliases to extract documentation expects quotes; after fix, it fails to detect the alias.",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC008",
+            "severity": "warning",
+            "message": "Remove quotes from type alias",
+            "span": [
+              2,
+              23
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Tool would find it\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Tool would find it\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:45:20.115600222 -0400\n+++ fixed.py\t2026-10-17 16:45:20.294605132 -0400\n@@ -1,5 +1,5 @@\n from typing import TypeAlias\n-DocAlias: TypeAlias = \"str | None\"  # Tool expects this format\n+DocAlias: TypeAlias = str | None  # Tool expects this format\n source = open(__file__).read()\n if '\"DocAlias:' in source and '=\"' in source:\n     print('Tool would find it')\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "String Formatting Edge Cases: % , format(), f-strings",
+      "hazard": "If the quoted type alias is used in an f-string or % formatting, removing quotes changes behavior: e.g., f'{ListInt}' becomes f'{list[int]}' which may eval or raise.",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "list[int]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Evaluation Order & Side Effects in Merged Expressions",
+      "hazard": "If the quoted expression has side effects (e.g., function call), removing quotes doesn't change evaluation—but if the alias is reused in multiple contexts, duplication may cause unexpected behavior.",
+      "rule": "TC008",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Side effect\nBefore use\nAfter use\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

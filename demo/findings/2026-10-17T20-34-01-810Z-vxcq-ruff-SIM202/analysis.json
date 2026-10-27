@@ -1,0 +1,33 @@
+{
+  "summary": "Flags negated inequality expressions (`not x != y`) to suggest replacing them with equality checks (`x == y`).",
+  "firingShapes": [
+    "not a != b",
+    "not(x != y)",
+    "(not (a != b))",
+    "not foo() != bar()",
+    "not obj.attr != value",
+    "not lst[0] != item",
+    "not x != y if cond else z",
+    "not (a + b) != (c * d)"
+  ],
+  "silentShapes": [
+    "a != b",
+    "not (a == b)",
+    "not a == b",
+    "not (a != b) and c",
+    "not (a != b) or c"
+  ],
+  "fixDescription": "Replaces `not X != Y` with `X == Y`, preserving the surrounding expression structure but removing the outer `not` and inverting the inequality operator to equality.",
+  "hazards": [
+    "If `X.__ne__` returns a non-boolean (e.g., int, None), `not X != Y` may be truthy/falsy based on that value, while `X == Y` invokes `__eq__` which may return a different non-boolean, altering truthiness.",
+    "If `X.__eq__` has side effects (e.g., logging, state mutation), the fix introduces those where none occurred before, as the original only evaluated `__ne__`.",
+    "If `X` or `Y` is a property with side effects in its getter, the fix may evaluate it once (for `==`) vs twice (once for `!=` in `not ...`), changing side effect count.",
+    "In expressions like `not x != y if cond else z`, the fix alters grouping: original parses as `not (x != y) if cond else z`, fix produces `x == y if cond else z`, which is equivalent, but if misparsed due to low precedence of `if-else`, could risk misgrouping—though Ruff respects precedence, this notes developer confusion potential.",
+    "If `X` or `Y` overloads `__ne__` to return a custom truthy/falsey object (e.g., always returns `1`), `not X != Y` is `False`, while `X == Y` may invoke `__eq__` returning `0` → still `False`, but if `__eq__` returns `2`, both false; however, if `__ne__` returns `0` (falsey) → `not 0` is `True`, but `__eq__` returns `None` → `not None` is `True` only if fixed to `X == Y` then `not` removed—wait: fix removes `not`, so `X == Y` directly: if `__eq__` returns `None`, it's falsey → `False`, whereas original `not (X != Y)` with `__ne__` returning `0` (falsey) → `not falsey` → `True`. So divergence when `__ne__` returns falsey non-bool and `__eq__` returns falsey non-bool but different falsiness nuance? Actually: original: `not (X != Y)`. If `X != Y` returns `0` → `not 0` → `True`. Fix: `X == Y`. If `X == Y` returns `None` → falsey → `False`. So behavior differs. Hazard: return types of `__ne__`/`__eq__` affect truth value after `not` vs direct eval.",
+    "If `X` is `NaN` (float), `X != X` is `True`, so `not X != X` is `False`; `X == X` is `False` (since `NaN != NaN`), so fix gives `False` → same. But if `__eq__` overridden to return `True` for `NaN`, then fix diverges. Covered by non-boolean return, but worth noting: even boolean-returning overrides can break if they violate reflexivity/symmetry expectations assumed by the fix.",
+    "If the expression contains a `# type: ignore` comment on the `!=` token, the fix may drop it when rewriting the operator, losing suppression.",
+    "If the code relies on the syntactic form `not ... != ...` for searchability or tooling (e.g., regex-based refactors), the fix alters the source pattern, breaking such tools.",
+    "If `X` or `Y` is a tuple/list comparison, `not X != Y` is equivalent to `X == Y` only if `__ne__` and `__eq__` are consistent; but if one is overridden and not the other (e.g., `__ne__` returns `NotImplemented` leading to fallback, `__eq__` overridden), the fix may not mirror fallback behavior.",
+    "In rare cases where `X != Y` raises an exception (e.g., `AttributeError` in `__ne__`), the original `not X != Y` propagates it; the fix `X == Y` may not raise (if `__eq__` handles it) or raise a different exception, altering error flow."
+  ]
+}

@@ -1,0 +1,1641 @@
+{
+  "runId": "2026-10-17T21-39-23-080Z-ah8u-ruff-RUF019",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF019",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-key-check (RUF019)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary key checks prior to accessing a dictionary.\n\n## Why is this bad?\nWhen working with dictionaries, the `get` can be used to access a value\nwithout having to check if the dictionary contains the relevant key,\nreturning `None` if the key is not present.\n\n## Example\n```python\nif \"key\" in dct and dct[\"key\"]:\n    ...\n```\n\nUse instead:\n```python\nif dct.get(\"key\"):\n    ...\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the expression contains comments\nor may have side effects.\n"
+  },
+  "analysis": {
+    "summary": "The rule flags redundant 'in' checks before dict[key] when followed by truthiness test.",
+    "firingShapes": [
+      "if \"x\" in d and d[\"x\"]:",
+      "while \"y\" in mapping and mapping[\"y\"]:",
+      "if val := d.get(\"z\") if \"z\" in d else None:",
+      "assert \"k\" in d and d[\"k\"]",
+      "if \"a\" in d and d[\"a\"] > 0:",
+      "elif \"b\" in d and d[\"b\"]:",
+      "for item in lst if \"c\" in d and d[\"c\"]:",
+      "if \"d\" in d and d[\"d\"] is not None:"
+    ],
+    "silentShapes": [
+      "if \"x\" in d:",
+      "if d.get(\"x\") is None:",
+      "if \"x\" in d and d[\"x\"] == 0:",
+      "if \"x\" not in d or d[\"x\"]:",
+      "if \"x\" in d and d[\"x\"] and \"y\" in e:"
+    ],
+    "fixDescription": "Replace 'if key in d and d[key]' with 'if d.get(key)' preserving original formatting and comments when safe.",
+    "hazards": [
+      "Rewriting 'if \"x\" in d and d[\"x\"]:' changes behavior when d[\"x\"] evaluates to False but key exists, as d.get(\"x\") returns the value (False) which is falsy, but the original condition would skip due to falsiness while the fix proceeds.",
+      "If d[\"x\"] has side effects (e.g., a property getter), evaluating it twice in the original vs once in the fix alters side effect count.",
+      "When d[\"x\"] raises KeyError for missing keys (impossible with 'in' guard), removing the guard could expose the error if the fix is applied incorrectly.",
+      "If d is not a dict but a custom mapping with __getitem__ side effects, the fix may not preserve behavior.",
+      "Comments between 'in' and 'and' or after 'd[key]' may be lost if the autofix does not preserve them.",
+      "If d[key] is used later in the same block, the fix does not eliminate redundant lookups; it only replaces the condition.",
+      "In nested expressions like f(\"x\" in d and d[\"x\"]), the fix may break if the surrounding context expects boolean short-circuiting.",
+      "When the value is 0, the original condition fails (due to falsiness) but d.get(\"x\") returns 0 which is falsy, so behavior is preserved—but if the code relies on the key existence check separately, it is lost.",
+      "If d[\"x\"] returns an object with custom __bool__ that returns False, the original skips the block but the fix enters it if the value is truthy after get—wait, no: both are falsy, so same outcome. Correction: hazard is when the value is truthy but the original condition fails due to other reasons? Actually, the original requires both key presence and truthy value. The fix only checks truthy value via get, which returns None if missing (falsy). So if key missing, original: short-circuits at 'in' → false; fix: get returns None → false. If key present and value falsy (0, [], etc): original: true and false → false; fix: get returns falsy → false. If key present and value truthy: both true. So logically equivalent. Hazard must be about side effects or non-dict mappings.",
+      "If d is a subclass of dict that overrides __contains__ or __getitem__ with side effects, the fix may alter behavior.",
+      "The fix assumes d.get(key) returns None for missing keys, but if default is overridden (not possible in get(key) call), it’s safe—however, if someone monkeypatched dict.get, it could break."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0590776,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 12,
+    "fixed": 12,
+    "fix-changes-behavior": 5,
+    "disputed": 3
+  },
+  "reports": [
+    {
+      "programId": "r1-p002",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "import os\nimport tempfile\nwith tempfile.TemporaryDirectory() as td:\n    p = os.path.join(td, 'link')\n    class P:\n        def __contains__(self, k): return os.path.exists(p) if k == 'x' else False\n        def __getitem__(self, k):\n            raise KeyError(k)\n    d = P()\n    if \"x\" in d and d[\"x\"]:\n        print(\"falsy\")\n",
+      "lines": {
+        "before": 15,
+        "after": 11
+      },
+      "reportPath": "runs/2026-10-17T21-39-23-080Z-ah8u-ruff-RUF019/reports/r1-p002.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14011",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12953",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12285",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule assumes the object is a dict-like with a .get method, but the program uses a custom class that implements __contains__ and __getitem__ without providing .get. The rewrite replaces a working containment check and subscript access with a call to a missing method, causing an AttributeError.",
+        "docsQuote": "the `get` can be used to access a value without having to check if the dictionary contains the relevant key, returning `None` if the key is not present",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "RUF019 fix",
+          "RUF019 dict get method call",
+          "ruff RUF019 replace membership test",
+          "rule RUF019 avoid redundant key lookup"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Possible false positives for RUF019",
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "`contains_effect` should consider f-strings to have effects",
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "state": "closed",
+            "snippet": "`contains_effect` should consider f-strings to have effects because of the implicit `__str__` or `__repr__` call. This affects any rule that relies on `contains_effect`; here is an example with [RUF019](https://docs.astral.sh/ruff/rules/unnecessary-key-check/).\r\n```console\r\n$ ruff --version\r\nruff 0."
+          },
+          {
+            "source": "github",
+            "title": "False negative for RUF019 with `not` operator",
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "state": "closed",
+            "snippet": "RUF019 checks for things like `\"key\" in dct and dct[\"key\"]` in boolean contexts, like an `if` condition or the argument to `bool`. It should also detect it as the operand of `not`.\r\n```console\r\n$ ruff --version\r\nruff 0.5.1\r\n$ echo 'bool(\"key\" in dct and dct[\"key\"])' | ruff check --isolated --output-"
+          },
+          {
+            "source": "github",
+            "title": "Fixed code unformatted",
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "state": "closed",
+            "snippet": "Feel free to close if this is expected currently but the following change introduced three consecutive new lines which breaks formatting:\r\n\r\n![image](https://github.com/astral-sh/ruff/assets/9677399/6487e202-c9d6-4576-adfa-48fd0985ae40)\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Add option to disable preview warnings",
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "state": "closed",
+            "snippet": "I would like to wrap Ruff without having to know which rules are under preview or not and suppress the warnings. Also, I think there are many duplicate warnings:\r\n\r\n```\r\ncmd [1] | python -m ruff check --fix --select A001,A002,A003,ARG001,ARG002,ARG003,ARG004,ARG005,ASYNC100,ASYNC101,ASYNC102,B002,B0"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (general false positives vs custom mapping without get)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused arguments with unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (f-string side effects vs custom mapping without get)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (not operator handling vs custom mapping without get)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "relation": "unrelated",
+            "why": "formatting issue with consecutive new lines after fix"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "relation": "unrelated",
+            "why": "feature request for preview warning suppression"
+          }
+        ],
+        "cost": 0.0021839999999999997
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:43:18.714383557 -0400\n+++ fixed.py\t2026-10-22 13:43:21.758204671 -0400\n@@ -7,5 +7,5 @@\n         def __getitem__(self, k):\n             raise KeyError(k)\n     d = P()\n-    if \"x\" in d and d[\"x\"]:\n+    if d.get(\"x\"):\n         print(\"falsy\")\n",
+        "observed": "exit 0 → 1\nstderr before: (none)\nstderr after: AttributeError: 'P' object has no attribute 'get'",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'P' object has no attribute 'get'",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "import os\nimport tempfile\nwith tempfile.TemporaryDirectory() as td:\n    p = os.path.join(td, 'link')\n    class P:\n        def __contains__(self, k): return os.path.exists(p) if k == 'x' else False\n        def __getitem__(self, k):\n            raise KeyError(k)\n    d = P()\n    if d.get(\"x\"):\n        print(\"falsy\")\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select RUF019 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The rewrite replaces `if \\\"x\\\" in d and d[\\\"x\\\"]:` with `if d.get(\\\"x\\\"):`. However, class `P` defines `__contains__` but does not define a `get` method, so calling `d.get(\\\"x\\\")` raises an `AttributeError`, changing the program’s behavior from printing nothing to crashing. The original condition safely checks membership via `__contains__` and then accesses the item only if present; the rewrite assumes a dictionary-like interface that `P` does not provide. Thus, the transformation is not semantics‑preserving for this user‑defined type.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "state = []\nclass D:\n    def __contains__(self, k):\n        return k == 'x'\n    def __getitem__(self, k):\n        return 1 if k == 'x' else None\nd = D()\nif \"x\" in d and d[\"x\"]:\n    print(\"true\", state)\n",
+      "lines": {
+        "before": 22,
+        "after": 9
+      },
+      "reportPath": "runs/2026-10-17T21-39-23-080Z-ah8u-ruff-RUF019/reports/r1-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14011",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12953",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12285",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule assumes the target object has a `get` method like a standard dict, but the program uses a custom class that implements `__contains__` and `__getitem__` without providing `get`. The rewrite replaces a working containment check and item access with a call to a missing method, causing an AttributeError at runtime.",
+        "docsQuote": "the `get` can be used to access a value without having to check if the dictionary contains the relevant key",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "RUF019 fix",
+          "RUF019 dict get optimization",
+          "in operator redundant check",
+          "__contains__ method replacement"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Possible false positives for RUF019",
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "`contains_effect` should consider f-strings to have effects",
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "state": "closed",
+            "snippet": "`contains_effect` should consider f-strings to have effects because of the implicit `__str__` or `__repr__` call. This affects any rule that relies on `contains_effect`; here is an example with [RUF019](https://docs.astral.sh/ruff/rules/unnecessary-key-check/).\r\n```console\r\n$ ruff --version\r\nruff 0."
+          },
+          {
+            "source": "github",
+            "title": "False negative for RUF019 with `not` operator",
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "state": "closed",
+            "snippet": "RUF019 checks for things like `\"key\" in dct and dct[\"key\"]` in boolean contexts, like an `if` condition or the argument to `bool`. It should also detect it as the operand of `not`.\r\n```console\r\n$ ruff --version\r\nruff 0.5.1\r\n$ echo 'bool(\"key\" in dct and dct[\"key\"])' | ruff check --isolated --output-"
+          },
+          {
+            "source": "github",
+            "title": "Fixed code unformatted",
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "state": "closed",
+            "snippet": "Feel free to close if this is expected currently but the following change introduced three consecutive new lines which breaks formatting:\r\n\r\n![image](https://github.com/astral-sh/ruff/assets/9677399/6487e202-c9d6-4576-adfa-48fd0985ae40)\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Add option to disable preview warnings",
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "state": "closed",
+            "snippet": "I would like to wrap Ruff without having to know which rules are under preview or not and suppress the warnings. Also, I think there are many duplicate warnings:\r\n\r\n```\r\ncmd [1] | python -m ruff check --fix --select A001,A002,A003,ARG001,ARG002,ARG003,ARG004,ARG005,ASYNC100,ASYNC101,ASYNC102,B002,B0"
+          },
+          {
+            "source": "github",
+            "title": "Improve detection of redundant parenthesis",
+            "url": "https://github.com/astral-sh/ruff/issues/19027",
+            "state": "open",
+            "snippet": "### Summary\n\n## Problem Statement\n\nI'm maintaining a flake8 plugin that (besides some other things) lints on redundant parenthesis: https://github.com/robsdedude/flake8-picky-parentheses\n\nIt covers many more cases compared to `UP034`. Examples are\n```python\na = ((\"a\"),)  # same as `a = (\"a\",)`\na = ("
+          },
+          {
+            "source": "github",
+            "title": "Implement remaining `pycodestyle` rules",
+            "url": "https://github.com/astral-sh/ruff/issues/2402",
+            "state": "open",
+            "snippet": "Note: some of the checked-off rules are still gated behind the `logical_lines` feature flag. To see the list of rules enabled in the current release, refer to the [docs](https://github.com/charliermarsh/ruff#error-e).\n\n## E1  Indentation\n- [x] `E101` (\"indentation contains mixed spaces and tabs\")\n- "
+          },
+          {
+            "source": "github",
+            "title": "Feature: Port Sonar's Python scanner checks",
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "state": "open",
+            "snippet": "More of a challenge than porting flake8 plugins, because these are written in Java: https://github.com/SonarSource/sonar-python\r\n\r\nBut some of them are somewhat useful and I didn't see equivalent code in any flake8 plugins.\r\n\r\n(Feel free to edit this to make it a checklist)\r\n\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Support for refurb",
+            "url": "https://github.com/astral-sh/ruff/issues/1348",
+            "state": "open",
+            "snippet": "It would be nice to have support for refurb (https://github.com/dosisod/refurb) - a great tool for simplifying and modernizing Python code. It currently includes 48 checks."
+          },
+          {
+            "source": "github",
+            "title": "Preview rules",
+            "url": "https://github.com/astral-sh/ruff/issues/27051",
+            "state": "open",
+            "snippet": "This is a tracking issue for stabilizing the rules in preview. As described in https://github.com/astral-sh/ruff/issues/25299#issuecomment-4510539865, for each minor release, we consider all of the rules in preview for stabilization, going through recent bug reports and changes to the rules to decid"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Implement C0325 to catch unnecessary parentheses",
+            "url": "https://github.com/astral-sh/ruff/issues/2389",
+            "state": "open",
+            "snippet": "not detected:\r\n`ruff --isolated --select UP034 - <<<\"set(('1.3.6.1.4.1.4203.666.11.1.4.2.12.1'),)\"`\r\n\r\nexpected:\r\n`-:1:5: UP034 Avoid extraneous parentheses`"
+          },
+          {
+            "source": "github",
+            "title": "Ruleset Suggestion: wemake-python-styleguide",
+            "url": "https://github.com/astral-sh/ruff/issues/3845",
+            "state": "open",
+            "snippet": "`wemake-python-styleguide` is a Flake8-based style guide that depends on many other Flake8 plugins (AFAICT all implemented by Ruff), but it also ships [lots of custom Flake8 rules](https://wemake-python-styleguide.readthedocs.io/en/latest/pages/usage/violations/index.html). Is there an interest to i"
+          },
+          {
+            "source": "github",
+            "title": "PYI061 fix can change operator precedence",
+            "url": "https://github.com/astral-sh/ruff/issues/20265",
+            "state": "closed",
+            "snippet": "### Summary\n\nThe fix for [`redundant-none-literal` (PYI061)](https://docs.astral.sh/ruff/rules/redundant-none-literal/) in Python 3.10 and later changes a subscription into a `|` expression, which has different precedence, which can change the program’s behavior outside of typing contexts. The fix s"
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "relation": "duplicate",
+            "why": "Same rule RUF019 and same defect class: the fix replaces 'key in obj and obj[key]' with 'obj.get(key)' on an object lacking .get(), changing behavior."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Different rule (ARG001/ARG005) about unused function arguments with a Unicode variable name."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "relation": "related",
+            "why": "Same rule RUF019 but different cause: f-string side effects in contains_effect vs missing .get() method on custom mapping."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "relation": "related",
+            "why": "Same rule RUF019 but different construct: missing detection with 'not' operator vs incorrect rewrite on custom mapping without .get()."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "relation": "unrelated",
+            "why": "Formatting issue about extra newlines after fixes, not a semantic rewrite bug."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "relation": "unrelated",
+            "why": "Feature request to disable preview warnings, unrelated to RUF019 logic."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19027",
+            "relation": "unrelated",
+            "why": "Different rule UP034 about redundant parentheses detection."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2402",
+            "relation": "unrelated",
+            "why": "Tracking issue for implementing pycodestyle rules, not a bug report."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "relation": "unrelated",
+            "why": "Feature request to port Sonar checks, unrelated to RUF019."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1348",
+            "relation": "unrelated",
+            "why": "Feature request for refurb support, unrelated to RUF019."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/27051",
+            "relation": "unrelated",
+            "why": "Tracking issue for stabilizing preview rules, not a specific defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "Parent issue for Pylint parity, not a specific RUF019 bug."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2389",
+            "relation": "unrelated",
+            "why": "Different rule UP034 about unnecessary parentheses in set literals."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/3845",
+            "relation": "unrelated",
+            "why": "Ruleset suggestion for wemake-python-styleguide, unrelated to RUF019."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20265",
+            "relation": "unrelated",
+            "why": "Different rule PYI061 about operator precedence in type annotations."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "unrelated",
+            "why": "Different rule TC006 about runtime cast values adding quotes."
+          }
+        ],
+        "cost": 0.0047432
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:43:27.006387129 -0400\n+++ fixed.py\t2026-10-22 13:43:28.930786122 -0400\n@@ -5,5 +5,5 @@\n     def __getitem__(self, k):\n         return 1 if k == 'x' else None\n d = D()\n-if \"x\" in d and d[\"x\"]:\n+if d.get(\"x\"):\n     print(\"true\", state)\n",
+        "observed": "stdout before:\ntrue []\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: AttributeError: 'D' object has no attribute 'get'",
+        "before": {
+          "stdout": "true []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'D' object has no attribute 'get'",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "state = []\nclass D:\n    def __contains__(self, k):\n        return k == 'x'\n    def __getitem__(self, k):\n        return 1 if k == 'x' else None\nd = D()\nif d.get(\"x\"):\n    print(\"true\", state)\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select RUF019 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition checks membership via `__contains__` then accesses `d['x']` using `__getitem__`. The replacement uses `dict.get`, which requires a `get` method; class `D` lacks it, causing an `AttributeError`. Since `__contains__` returns `True` for `'x'` and `__getitem__` returns `1` (truthy), the original prints `\"true []\"`; the rewritten version fails before reaching that point. Thus, the fix alters behavior by assuming a dictionary interface not present in `D`.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class D:\n    def __contains__(self, k): return k == 'x'\n    def __getitem__(self, k):\n        if k == 'x': raise ValueError('bad')\n        try:\n            return self[k]\n        except ValueError:\n            return default\nd = D()\ntry:\n    if \"x\" in d and d[\"x\"]:\n        print(\"yes after get\")\nexcept ValueError as e:\n    print(\"no exception after get\")\n",
+      "lines": {
+        "before": 26,
+        "after": 14
+      },
+      "reportPath": "runs/2026-10-17T21-39-23-080Z-ah8u-ruff-RUF019/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14011",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12953",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12285",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule assumes the target object has a `get` method like a standard dict, but the program uses a custom class `D` that implements `__contains__` and `__getitem__` without providing `get`. After the fix, calling `d.get(\"x\")` raises an AttributeError, changing the program's behavior from catching a ValueError to crashing with an AttributeError.",
+        "docsQuote": "the `get` can be used to access a value without having to check if the dictionary contains the relevant key",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "RUF019 fix",
+          "RUF019 dict membership access pattern",
+          "RUF019 replace in-and-get with get method call",
+          "RUF019 unsafe dictionary key access transformation"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Possible false positives for RUF019",
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "`contains_effect` should consider f-strings to have effects",
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "state": "closed",
+            "snippet": "`contains_effect` should consider f-strings to have effects because of the implicit `__str__` or `__repr__` call. This affects any rule that relies on `contains_effect`; here is an example with [RUF019](https://docs.astral.sh/ruff/rules/unnecessary-key-check/).\r\n```console\r\n$ ruff --version\r\nruff 0."
+          },
+          {
+            "source": "github",
+            "title": "False negative for RUF019 with `not` operator",
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "state": "closed",
+            "snippet": "RUF019 checks for things like `\"key\" in dct and dct[\"key\"]` in boolean contexts, like an `if` condition or the argument to `bool`. It should also detect it as the operand of `not`.\r\n```console\r\n$ ruff --version\r\nruff 0.5.1\r\n$ echo 'bool(\"key\" in dct and dct[\"key\"])' | ruff check --isolated --output-"
+          },
+          {
+            "source": "github",
+            "title": "Fixed code unformatted",
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "state": "closed",
+            "snippet": "Feel free to close if this is expected currently but the following change introduced three consecutive new lines which breaks formatting:\r\n\r\n![image](https://github.com/astral-sh/ruff/assets/9677399/6487e202-c9d6-4576-adfa-48fd0985ae40)\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Add option to disable preview warnings",
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "state": "closed",
+            "snippet": "I would like to wrap Ruff without having to know which rules are under preview or not and suppress the warnings. Also, I think there are many duplicate warnings:\r\n\r\n```\r\ncmd [1] | python -m ruff check --fix --select A001,A002,A003,ARG001,ARG002,ARG003,ARG004,ARG005,ASYNC100,ASYNC101,ASYNC102,B002,B0"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (general false positives vs specific .get() rewrite on non-dict)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused arguments with unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (f-string effects vs .get() rewrite on non-dict)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (not operator handling vs .get() rewrite on non-dict)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "relation": "unrelated",
+            "why": "formatting issue with consecutive newlines, not a logic defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "relation": "unrelated",
+            "why": "feature request for preview warning suppression, not a logic defect"
+          }
+        ],
+        "cost": 0.0022603
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:43:38.465278058 -0400\n+++ fixed.py\t2026-10-22 13:43:40.378862388 -0400\n@@ -8,7 +8,7 @@\n             return default\n d = D()\n try:\n-    if \"x\" in d and d[\"x\"]:\n+    if d.get(\"x\"):\n         print(\"yes after get\")\n except ValueError as e:\n     print(\"no exception after get\")\n",
+        "observed": "stdout before:\nno exception after get\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: AttributeError: 'D' object has no attribute 'get'",
+        "before": {
+          "stdout": "no exception after get\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'D' object has no attribute 'get'",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "class D:\n    def __contains__(self, k): return k == 'x'\n    def __getitem__(self, k):\n        if k == 'x': raise ValueError('bad')\n        try:\n            return self[k]\n        except ValueError:\n            return default\nd = D()\ntry:\n    if d.get(\"x\"):\n        print(\"yes after get\")\nexcept ValueError as e:\n    print(\"no exception after get\")\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select RUF019 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition checks membership via `__contains__` then accesses `d[\"x\"]`, which raises `ValueError` caught by the outer `try`. The rewritten expression uses `d.get(\"x\")`, but class `D` defines no `get` method, causing an `AttributeError` that propagates uncaught, changing both output and exit status. The transformation assumes a mapping interface with `get`, which `D` does not provide.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p002",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class SideEffectMap:\n    def __init__(self):\n        self.data = {'x': 1}\n        self.calls = 0\n    def __contains__(self, key):\n        return key in self.data\n    def __getitem__(self, key):\n        return self.data[key]\nm = SideEffectMap()\nif 'x' in m and m['x']:\n    print(f'second: calls={m.calls}')\n",
+      "lines": {
+        "before": 17,
+        "after": 11
+      },
+      "reportPath": "runs/2026-10-17T21-39-23-080Z-ah8u-ruff-RUF019/reports/r2-p002.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14011",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12953",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12285",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule assumes the object has a `get` method like a standard dict, but the program uses a custom mapping class that implements `__contains__` and `__getitem__` without providing `get`. The rewrite replaces a working `in`/`__getitem__` protocol with a call to a missing method, causing an AttributeError and changing the exit status from 0 to 1.",
+        "docsQuote": "the `get` can be used to access a value without having to check if the dictionary contains the relevant key",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "RUF019 fix",
+          "RUF019 membership test dict get",
+          "RUF019 boolean condition simplification",
+          "RUF019 truthy value check optimization"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Possible false positives for RUF019",
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "`contains_effect` should consider f-strings to have effects",
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "state": "closed",
+            "snippet": "`contains_effect` should consider f-strings to have effects because of the implicit `__str__` or `__repr__` call. This affects any rule that relies on `contains_effect`; here is an example with [RUF019](https://docs.astral.sh/ruff/rules/unnecessary-key-check/).\r\n```console\r\n$ ruff --version\r\nruff 0."
+          },
+          {
+            "source": "github",
+            "title": "False negative for RUF019 with `not` operator",
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "state": "closed",
+            "snippet": "RUF019 checks for things like `\"key\" in dct and dct[\"key\"]` in boolean contexts, like an `if` condition or the argument to `bool`. It should also detect it as the operand of `not`.\r\n```console\r\n$ ruff --version\r\nruff 0.5.1\r\n$ echo 'bool(\"key\" in dct and dct[\"key\"])' | ruff check --isolated --output-"
+          },
+          {
+            "source": "github",
+            "title": "Fixed code unformatted",
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "state": "closed",
+            "snippet": "Feel free to close if this is expected currently but the following change introduced three consecutive new lines which breaks formatting:\r\n\r\n![image](https://github.com/astral-sh/ruff/assets/9677399/6487e202-c9d6-4576-adfa-48fd0985ae40)\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Add option to disable preview warnings",
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "state": "closed",
+            "snippet": "I would like to wrap Ruff without having to know which rules are under preview or not and suppress the warnings. Also, I think there are many duplicate warnings:\r\n\r\n```\r\ncmd [1] | python -m ruff check --fix --select A001,A002,A003,ARG001,ARG002,ARG003,ARG004,ARG005,ASYNC100,ASYNC101,ASYNC102,B002,B0"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (general false positives vs. missing get method on custom mapping)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused arguments with Unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "relation": "related",
+            "why": "same rule RUF019 and same contains_effect logic but different construct (f-string side effects vs. missing get method)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (not operator handling vs. missing get method)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "relation": "unrelated",
+            "why": "formatting issue with consecutive new lines after fix"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "relation": "unrelated",
+            "why": "feature request for disabling preview warnings"
+          }
+        ],
+        "cost": 0.0022185
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:43:45.221930762 -0400\n+++ fixed.py\t2026-10-22 13:43:47.138607553 -0400\n@@ -7,5 +7,5 @@\n     def __getitem__(self, key):\n         return self.data[key]\n m = SideEffectMap()\n-if 'x' in m and m['x']:\n+if m.get('x'):\n     print(f'second: calls={m.calls}')\n",
+        "observed": "stdout before:\nsecond: calls=0\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: AttributeError: 'SideEffectMap' object has no attribute 'get'",
+        "before": {
+          "stdout": "second: calls=0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'SideEffectMap' object has no attribute 'get'",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "class SideEffectMap:\n    def __init__(self):\n        self.data = {'x': 1}\n        self.calls = 0\n    def __contains__(self, key):\n        return key in self.data\n    def __getitem__(self, key):\n        return self.data[key]\nm = SideEffectMap()\nif m.get('x'):\n    print(f'second: calls={m.calls}')\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select RUF019 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition evaluates `'x' in m`, which invokes `__contains__` to check membership without side effects; if true, it then accesses `m['x']` via `__getitem__`. The rewritten expression uses `m.get('x')`, but `SideEffectMap` lacks a `get` method, causing an `AttributeError`. Since the left operand of `and` was true (`'x'` present), the original proceeded to evaluate `m['x']`, printing the message with zero calls. The fix replaces a valid two-part test with an undefined method call, altering both control flow and error behavior. This is not semantics‑preserving because it changes what operations are performed and introduces an exception where none occurred before.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p008",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class LoggingDict(dict):\n    def __contains__(self, key):\n        print(f'__contains__({key})')\nd = LoggingDict({'x': 1})\nif 'x' in d and d['x']:\n    print('condition passed')\n",
+      "lines": {
+        "before": 10,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T21-39-23-080Z-ah8u-ruff-RUF019/reports/r2-p008.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14011",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12953",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule replaces an explicit key check (`'x' in d`) followed by access (`d['x']`) with a single `d.get('x')` call. In this program, the dictionary subclass overrides `__contains__` to produce a side effect (printing). The original code invokes `__contains__`, so the side effect occurs; the rewritten code calls `get`, which does not invoke `__contains__`, so the side effect is lost and the program's observable behavior changes silently.",
+        "docsQuote": "the `get` can be used to access a value without having to check if the dictionary contains the relevant key",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "RUF019 fix",
+          "RUF019 dict get truthiness",
+          "LoggingDict contains method call",
+          "in operator replaced with get"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Possible false positives for RUF019",
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "`contains_effect` should consider f-strings to have effects",
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "state": "closed",
+            "snippet": "`contains_effect` should consider f-strings to have effects because of the implicit `__str__` or `__repr__` call. This affects any rule that relies on `contains_effect`; here is an example with [RUF019](https://docs.astral.sh/ruff/rules/unnecessary-key-check/).\r\n```console\r\n$ ruff --version\r\nruff 0."
+          },
+          {
+            "source": "github",
+            "title": "False negative for RUF019 with `not` operator",
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "state": "closed",
+            "snippet": "RUF019 checks for things like `\"key\" in dct and dct[\"key\"]` in boolean contexts, like an `if` condition or the argument to `bool`. It should also detect it as the operand of `not`.\r\n```console\r\n$ ruff --version\r\nruff 0.5.1\r\n$ echo 'bool(\"key\" in dct and dct[\"key\"])' | ruff check --isolated --output-"
+          },
+          {
+            "source": "github",
+            "title": "Fixed code unformatted",
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "state": "closed",
+            "snippet": "Feel free to close if this is expected currently but the following change introduced three consecutive new lines which breaks formatting:\r\n\r\n![image](https://github.com/astral-sh/ruff/assets/9677399/6487e202-c9d6-4576-adfa-48fd0985ae40)\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Add option to disable preview warnings",
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "state": "closed",
+            "snippet": "I would like to wrap Ruff without having to know which rules are under preview or not and suppress the warnings. Also, I think there are many duplicate warnings:\r\n\r\n```\r\ncmd [1] | python -m ruff check --fix --select A001,A002,A003,ARG001,ARG002,ARG003,ARG004,ARG005,ASYNC100,ASYNC101,ASYNC102,B002,B0"
+          },
+          {
+            "source": "github",
+            "title": "needless bool for needless-bool",
+            "url": "https://github.com/astral-sh/ruff/issues/15323",
+            "state": "open",
+            "snippet": "Function to check random numbers:\n\n```python\nfrom random import randint\n\ndef check_zero(end: int) -> bool:\n    \"\"\"Check if two random numbers from 0 to END are both 0.\"\"\"\n    if randint(0, end) == 0 and randint(0, end) == 0:\n        return True\n    else:\n        return False\n```\n\nRaises warning `SIM"
+          },
+          {
+            "source": "github",
+            "title": "new rule - replace `d.update({'key': 'value'})` with `d['key'] = 'value'`",
+            "url": "https://github.com/astral-sh/ruff/issues/13533",
+            "state": "open",
+            "snippet": "I suggest adding a rule that detects this\r\n```python\r\nd = {}\r\nd.update({'key': 'value'})\r\n```\r\n\r\nand replacing it\r\n```python\r\nd = {}\r\nd['key'] = 'value'\r\n```\r\nAs a result, the code becomes simpler and more understandable."
+          },
+          {
+            "source": "github",
+            "title": "Support for refurb",
+            "url": "https://github.com/astral-sh/ruff/issues/1348",
+            "state": "open",
+            "snippet": "It would be nice to have support for refurb (https://github.com/dosisod/refurb) - a great tool for simplifying and modernizing Python code. It currently includes 48 checks."
+          },
+          {
+            "source": "github",
+            "title": "Feature: Port Sonar's Python scanner checks",
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "state": "open",
+            "snippet": "More of a challenge than porting flake8 plugins, because these are written in Java: https://github.com/SonarSource/sonar-python\r\n\r\nBut some of them are somewhat useful and I didn't see equivalent code in any flake8 plugins.\r\n\r\n(Feel free to edit this to make it a checklist)\r\n\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "UP032: Don't suggest f-string inside logging statements",
+            "url": "https://github.com/astral-sh/ruff/issues/13916",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "`FURB118` is incorrector for `operator.contains`. The operands are reversed!",
+            "url": "https://github.com/astral-sh/ruff/issues/9191",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "[Infinite loop] My File: pandas\\tests\\io\\test_common.py",
+            "url": "https://github.com/astral-sh/ruff/issues/4281",
+            "state": "closed",
+            "snippet": "## Version(ruff --version)\r\n**ruff 0.0.265**\r\n## Command(Powershell)\r\n```powershell\r\nruff check --select=ALL .\\test_common.py\r\n```\r\n**If you add --isolated , there will be no problem about Infinite loop**\r\n## Terminal Content\r\n```powershell\r\nwarning: `one-blank-line-before-class` (D203) and `no-blan"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (general false positives vs side-effectful __contains__)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused arguments"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "relation": "related",
+            "why": "same rule RUF019 and same root cause (contains_effect missing side-effects)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "relation": "unrelated",
+            "why": "different construct (not operator vs and operator)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "relation": "unrelated",
+            "why": "formatting issue, not a logic defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "relation": "unrelated",
+            "why": "feature request about preview warnings"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15323",
+            "relation": "unrelated",
+            "why": "different rule SIM103 about needless bool"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13533",
+            "relation": "unrelated",
+            "why": "feature request for new rule about dict.update"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1348",
+            "relation": "unrelated",
+            "why": "feature request for refurb support"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4935",
+            "relation": "unrelated",
+            "why": "feature request to port Sonar rules"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "tracking issue for Pylint parity"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13916",
+            "relation": "unrelated",
+            "why": "different rule UP032 about logging f-strings"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9191",
+            "relation": "unrelated",
+            "why": "different rule FURB118 about operator.contains operand order"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4281",
+            "relation": "unrelated",
+            "why": "infinite loop bug on specific file"
+          }
+        ],
+        "cost": 0.0038244999999999998
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:43:54.010646894 -0400\n+++ fixed.py\t2026-10-22 13:43:55.931430934 -0400\n@@ -2,5 +2,5 @@\n     def __contains__(self, key):\n         print(f'__contains__({key})')\n d = LoggingDict({'x': 1})\n-if 'x' in d and d['x']:\n+if d.get('x'):\n     print('condition passed')\n",
+        "observed": "stdout before:\n__contains__(x)\nstdout after:\ncondition passed",
+        "before": {
+          "stdout": "__contains__(x)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "condition passed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class LoggingDict(dict):\n    def __contains__(self, key):\n        print(f'__contains__({key})')\nd = LoggingDict({'x': 1})\nif d.get('x'):\n    print('condition passed')\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select RUF019 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition evaluates `'x' in d` first, which triggers `__contains__`, printing '__contains__(x)'. Since this returns True, it then checks `d['x']`, retrieving the value 1 (truthy), so the message prints. The rewrite replaces both with `d.get('x')`, which directly fetches the value without calling `__contains__`. Thus, no print occurs, and only 'condition passed' appears—altering observable behavior. This change is unsafe because `__contains__` may have side effects beyond membership testing, which the fix ignores. The transformation assumes equivalence that does not hold when `__contains__` is overridden.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "KeyError exposed by incorrect removal of 'in' guard",
+      "hazard": "If the fix removes the 'in' check without replacing with .get(), accessing d[key] for missing key raises KeyError.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:36.405526324 -0400\n+++ fixed.py\t2026-10-17 17:39:36.579524841 -0400\n@@ -1,6 +1,6 @@\n d = {}\n try:\n-    if \"x\" in d and d[\"x\"]:\n+    if d.get(\"x\"):\n         print(\"inside\")\n except KeyError as e:\n     print(f\"KeyError: {e}\")\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "pathlib vs os.path: existence and symlink sensitivity",
+      "hazard": "Path.exists() and os.path.exists() differ on broken symlinks; the fix assumes dict-like truthiness but Path objects have different semantics.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              12,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "falsy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nfalsy\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: AttributeError: 'P' object has no attribute 'get'"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'P' object has no attribute 'get'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:36.693523869 -0400\n+++ fixed.py\t2026-10-17 17:39:36.911522010 -0400\n@@ -9,7 +9,7 @@\n             if k == 'x': return p\n             raise KeyError(k)\n     d = P()\n-    if \"x\" in d and d[\"x\"]:\n+    if d.get(\"x\"):\n         print(\"truthy\")\n     else:\n         print(\"falsy\")\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Evaluation order and side effects in merged expressions",
+      "hazard": "Original evaluates 'in' then __getitem__; fix may evaluate __getitem__ twice or change order if not using .get().",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              14,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "true ['contains', 'getitem']\ntrue after fix ['get', 'contains', 'getitem']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\ntrue ['contains', 'getitem']\ntrue after fix ['get', 'contains', 'getitem']\nstdout after:\ntrue ['get', 'contains', 'getitem']\ntrue after fix ['get', 'contains', 'getitem']"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true ['get', 'contains', 'getitem']\ntrue after fix ['get', 'contains', 'getitem']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:37.155519931 -0400\n+++ fixed.py\t2026-10-17 17:39:37.312518594 -0400\n@@ -11,7 +11,7 @@\n         return self[k] if k in self else default\n \n d = D()\n-if \"x\" in d and d[\"x\"]:\n+if d.get(\"x\"):\n     print(\"true\", state)\n else:\n     print(\"false\", state)\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Custom mapping with side effects in __getitem__",
+      "hazard": "If __getitem__ has side effects (e.g. state change), the original guards against it with 'in', but .get() still calls it.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              12,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "block skipped ['x']\nblock skipped after fix ['x']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "block skipped ['x']\nblock skipped after fix ['x']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:37.416517708 -0400\n+++ fixed.py\t2026-10-17 17:39:37.581516303 -0400\n@@ -9,7 +9,7 @@\n         return self[k] if k in self else default\n \n m = M()\n-if \"x\" in m and m[\"x\"]:\n+if m.get(\"x\"):\n     print(\"block entered\")\n else:\n     print(\"block skipped\", call_log)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Nested expression expecting boolean short-circuiting",
+      "hazard": "In f(\"x\" in d and d[\"x\"]), the original short-circuits on missing key; fix using .get() may evaluate f's argument differently if .get() has side effects.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "original: 1, log=['contains:x', 'getitem:x']\nafter fix: 1, log=['get:x', 'contains:x', 'getitem:x']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Truthiness: None vs falsy vs custom __bool__",
+      "hazard": "When d[\"x\"] returns a custom object with __bool__ returning False, both versions agree—but if the fix mistakenly uses 'is not None', behavior diverges.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              5,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "false\nfalse after get\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\nfalse after get\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:37.809514361 -0400\n+++ fixed.py\t2026-10-17 17:39:37.976512938 -0400\n@@ -2,7 +2,7 @@\n     def __bool__(self): return False\n \n d = {'x': Falsy()}\n-if \"x\" in d and d[\"x\"]:\n+if d.get(\"x\"):\n     print(\"true\")\n else:\n     print(\"false\")\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Exceptions inside rewritten code with finally/else",
+      "hazard": "If d[\"x\"] raises an exception (e.g. ValueError), the original is guarded by 'in', but .get() does not suppress it—though for missing keys it returns None. Hazard arises if 'in' is removed and .get() n",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              14,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: bad\nno exception after get\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\ncaught: bad\nno exception after get\nstdout after:\nno exception\nno exception after get"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "no exception\nno exception after get\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:38.076512087 -0400\n+++ fixed.py\t2026-10-17 17:39:38.239510700 -0400\n@@ -11,7 +11,7 @@\n \n d = D()\n try:\n-    if \"x\" in d and d[\"x\"]:\n+    if d.get(\"x\"):\n         print(\"yes\")\n except ValueError as e:\n     print(f\"caught: {e}\")\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Custom __bool__ returning False: equivalence under get()",
+      "hazard": "Both original and fix are logically equivalent when using .get(), but the hazard is clarifying that no divergence occurs here—this is a negative case to confirm understanding.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Monkey-patched dict.get altering fallback behavior",
+      "hazard": "1. The fix assumes d.get(key) returns None for missing keys, but if someone monkeypatched dict.get, it could break.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              7,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot set 'get' attribute of immutable type 'dict'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot set 'get' attribute of immutable type 'dict'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:44.430458161 -0400\n+++ fixed.py\t2026-10-17 17:39:44.817454887 -0400\n@@ -4,7 +4,7 @@\n     return default if key in self else 'patched'\n dict.get = fake_get\n try:\n-    if 'x' in d and d['x']:\n+    if d.get('x'):\n         print('truthy')\n     else:\n         print(falsy if 'x' not in d else d['x'])\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Custom mapping with side effects in __getitem__",
+      "hazard": "2. If d is not a dict but a custom mapping with __getitem__ side effects, the fix may not preserve behavior.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              13,
+              4
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              15,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "first: calls=1\nsecond: calls=2\ntotal calls: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nfirst: calls=1\nsecond: calls=2\ntotal calls: 2\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: AttributeError: 'SideEffectMap' object has no attribute 'get'"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'SideEffectMap' object has no attribute 'get'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:45.035453042 -0400\n+++ fixed.py\t2026-10-17 17:39:45.204451614 -0400\n@@ -10,8 +10,8 @@\n             raise KeyError(key)\n         return self.data[key]\n m = SideEffectMap()\n-if 'x' in m and m['x']:\n+if m.get('x'):\n     print(f'first: calls={m.calls}')\n-if 'x' in m and m['x']:\n+if m.get('x'):\n     print(f'second: calls={m.calls}')\n print(f'total calls: {m.calls}')\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Exceptions in condition with finally clause",
+      "hazard": "3. exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              8,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "finally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:45.414449839 -0400\n+++ fixed.py\t2026-10-17 17:39:45.576448469 -0400\n@@ -5,7 +5,7 @@\n         return super().__getitem__(key)\n d = BadDict()\n try:\n-    if 'x' in d and d['x']:\n+    if d.get('x'):\n         print('yes')\n except ValueError as e:\n     print(f'caught: {e}')\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Key used later in block, redundant lookup not eliminated",
+      "hazard": "4. If d[key] is used later in the same block, the fix does not eliminate redundant lookups; it only replaces the condition.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              9,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'access_count' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: no binding for nonlocal 'access_count' found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:45.679447599 -0400\n+++ fixed.py\t2026-10-17 17:39:46.087444151 -0400\n@@ -6,6 +6,6 @@\n         access_count += 1\n         return super().__getitem__(key)\n d = CountingDict({'x': 42})\n-if 'x' in d and d['x']:\n+if d.get('x'):\n     val = d['x']\n     print(f'value: {val}, accesses: {access_count}')\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Descriptor with side effects on class attribute access",
+      "hazard": "5. class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "not in block\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Value is zero: falsy in both versions but existence check lost",
+      "hazard": "6. When the value is 0, the original condition fails (due to falsiness) but d.get(\"x\") returns 0 which is falsy, so behavior is preserved—but if the code relies on the key existence check separately, ",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              2,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "'x' in d: True, d['x']: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'x' in d: True, d['x']: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:46.413441397 -0400\n+++ fixed.py\t2026-10-17 17:39:46.580439987 -0400\n@@ -1,5 +1,5 @@\n d = {'x': 0}\n-if 'x' in d and d['x']:\n+if d.get('x'):\n     print('exists and truthy')\n else:\n     print(f\"'x' in d: {'x' in d}, d['x']: {d['x']}\")\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Star-import and module-level side effect in condition",
+      "hazard": "7. star-imports, module-level side effects, __all__",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'dict'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict subclass overriding __contains__ and __getitem__ with side effects",
+      "hazard": "8. If d is a subclass of dict that overrides __contains__ or __getitem__ with side effects, the fix may alter behavior.",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              9,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "__contains__(x)\n__getitem__(x)\ncondition passed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n__contains__(x)\n__getitem__(x)\ncondition passed\nstdout after:\ncondition passed"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "condition passed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:39:47.030436187 -0400\n+++ fixed.py\t2026-10-17 17:39:47.188434854 -0400\n@@ -6,5 +6,5 @@\n         print(f'__getitem__({key})')\n         return super().__getitem__(key)\n d = LoggingDict({'x': 1})\n-if 'x' in d and d['x']:\n+if d.get('x'):\n     print('condition passed')\n"
+      }
+    }
+  ]
+}

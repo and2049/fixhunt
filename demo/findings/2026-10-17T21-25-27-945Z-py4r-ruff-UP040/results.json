@@ -1,0 +1,459 @@
+{
+  "runId": "2026-10-17T21-25-27-945Z-py4r-ruff-UP040",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP040",
+    "fixKind": "unknown",
+    "docs": "# non-pep695-type-alias (UP040)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for use of `TypeAlias` annotations and `TypeAliasType` assignments\nfor declaring type aliases.\n\n## Why is this bad?\nThe `type` keyword was introduced in Python 3.12 by [PEP 695] for defining\ntype aliases. The `type` keyword is easier to read and provides cleaner\nsupport for generics.\n\n## Known problems\n[PEP 695] uses inferred variance for type parameters, instead of the\n`covariant` and `contravariant` keywords used by `TypeVar` variables. As\nsuch, rewriting a type alias using a PEP-695 `type` statement may change\nthe variance of the alias's type parameters.\n\nUnlike type aliases that use simple assignments, definitions created using\n[PEP 695] `type` statements cannot be used as drop-in replacements at\nruntime for the value on the right-hand side of the statement. This means\nthat while for some simple old-style type aliases you can use them as the\nsecond argument to an `isinstance()` call (for example), doing the same\nwith a [PEP 695] `type` statement will always raise `TypeError` at\nruntime.\n\n## Example\n```python\nfrom typing import Annotated, TypeAlias, TypeAliasType\nfrom annotated_types import Gt\n\nListOfInt: TypeAlias = list[int]\nPositiveInt = TypeAliasType(\"PositiveInt\", Annotated[int, Gt(0)])\n```\n\nUse instead:\n```python\nfrom typing import Annotated\nfrom annotated_types import Gt\n\ntype ListOfInt = list[int]\ntype PositiveInt = Annotated[int, Gt(0)]\n```\n\n## Fix safety\n\nThis fix is always marked unsafe because it can change runtime behavior and type-checking\nsemantics, as described above. It may also remove comments.\n\nThe rule also cannot inspect type variables defined in another module. For `TypeAlias`\nannotations, this means the fix may fail to convert legacy type variables to type parameters,\nproducing code that will be rejected by type checkers. For `TypeAliasType`, legacy type\nvariables are recognized via the explicit `type_params` argument, but the type variable's\ndefinition cannot be resolved to preserve its bounds, constraints, defaults, or even kind,\nproducing unconstrained `TypeVar`s.\n\n## See also\n\nThis rule only applies to `TypeAlias`es and `TypeAliasType`s. See\n[`non-pep695-generic-class`][UP046] and [`non-pep695-generic-function`][UP047] for similar\ntransformations for generic classes and functions.\n\nThis rule replaces standalone type variables in aliases but doesn't remove the corresponding\ntype variables even if they are unused after the fix. See [`unused-private-type-var`][PYI018]\nfor a rule to clean up unused private type variables.\n\nThis rule will not rename private type variables to remove leading underscores, even though the\nnew type parameters are restricted in scope to their associated aliases. See\n[`private-type-parameter`][UP049] for a rule to update these names.\n\n## Options\n\n- `target-version`\n\n[PEP 695]: https://peps.python.org/pep-0695/\n[PYI018]: https://docs.astral.sh/ruff/rules/unused-private-type-var/\n[UP046]: https://docs.astral.sh/ruff/rules/non-pep695-generic-class/\n[UP047]: https://docs.astral.sh/ruff/rules/non-pep695-generic-function/\n[UP049]: https://docs.astral.sh/ruff/rules/private-type-parameter/\n"
+  },
+  "analysis": {
+    "summary": "Flags usage of typing.TypeAlias annotation and typing.TypeAliasType assignment for declaring type aliases.",
+    "firingShapes": [
+      "T: TypeAlias = int\n",
+      "U = TypeAliasType('U', str)\n",
+      "V: TypeAlias = list[str]\n",
+      "W = TypeAliasType('W', dict[str, int], type_params=(X,))\n",
+      "X: TypeAlias = tuple[Y, ...]\n",
+      "Z = TypeAliasType('Z', Optional[bytes])\n"
+    ],
+    "silentShapes": [
+      "type T = int\n",
+      "T = int  # plain assignment, no TypeAlias\n",
+      "from typing import TypeAlias\nT: TypeAlias = int  # if target-version < py312\n",
+      "class C: T: TypeAlias = int\n"
+    ],
+    "fixDescription": "Replaces 'Name: TypeAlias = expr' with 'type Name = expr' and 'Name = TypeAliasType(\"Name\", expr[, type_params=params])' with 'type Name = expr', stripping the type_params argument and importing Name if needed.",
+    "hazards": [
+      "Rewriting TypeAlias changes the declaration from a variable annotation to a type statement, which cannot be used as a runtime value (e.g., in isinstance() or issubclass()).",
+      "Rewriting TypeAliasType loses explicit variance (covariant/contravariant) from TypeVar definitions, replacing it with inferred variance which may differ.",
+      "The fix cannot resolve TypeVar definitions from other modules, so bounds, constraints, defaults, or kind are lost, producing unconstrained TypeVars in the generated type parameter list.",
+      "If the TypeAliasType's first argument (the name string) does not match the variable name, the resulting type statement may bind to a different name, breaking references.",
+      "Comments attached to the original TypeAlias or TypeAliasType line may be dropped during the rewrite.",
+      "If the aliased expression contains side effects (e.g., function calls), moving it into a type statement changes evaluation timing from runtime to definition time, potentially altering behavior.",
+      "In nested scopes (e.g., inside functions or classes), the rewritten type statement may not be accessible where the original alias was, due to differing scoping rules for type statements.",
+      "If the module defines a __getattr__ or __dir__ that relies on the TypeAlias or TypeAliasType being present as a runtime attribute, the rewrite will remove it, causing AttributeError.",
+      "The fix may produce invalid syntax if the target version is pre-3.12, as 'type' statements are not supported.",
+      "When multiple type aliases are defined in a single line via tuple unpacking, the fix may incorrectly split or fail to parse the construct."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.006493199999999999,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 13
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Variance loss in TypeAliasType -> type",
+      "hazard": "Rewriting TypeAliasType loses explicit variance (covariant/contravariant) from TypeVar definitions, replacing it with inferred variance which may differ.",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: isinstance() arg 2 must be a type, a tuple of types, or a union",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Side effect timing in alias expression",
+      "hazard": "If the aliased expression contains side effects (e.g., function calls), moving it into a type statement changes evaluation timing from runtime to definition time, potentially altering behavior.",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TypeAliasType' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mismatched name in TypeAliasType first argument",
+      "hazard": "If the TypeAliasType's first argument (the name string) does not match the variable name, the resulting type statement may bind to a different name, breaking references.",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TypeAliasType' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Class attribute descriptor interaction",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TypeAliasType' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Evaluation order with side effects in compound expression",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Shadowed builtin later redefined",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TypeAliasType' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "String formatting in alias expression",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TypeAliasType' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Pathlib vs os.path behavior",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Class attribute vs instance attribute, descriptor interaction",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'int'>\n<class 'int'>\n99\n<class 'int'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Target version pre-3.12: 'type' statement invalid syntax",
+      "hazard": "The fix may produce invalid syntax if the target version is pre-3.12, as 'type' statements are not supported.",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "T is <class 'int'> and type(T) is <class 'type'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Nested scope accessibility: type statement not visible where alias was",
+      "hazard": "In nested scopes (e.g., inside functions or classes), the rewritten type statement may not be accessible where the original alias was, due to differing scoping rules for type statements.",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Outer returned: list[str]\nTypeError: isinstance() argument 2 cannot be a parameterized generic\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "__getattr__ / __dir__ relies on TypeAlias as runtime attribute",
+      "hazard": "If the module defines a __getattr__ or __dir__ that relies on the TypeAlias or TypeAliasType being present as a runtime attribute, the rewrite will remove it, causing AttributeError.",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before any access: <class 'int'>\nAfter defining T via getattr: <class 'int'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "TypeAlias cannot be used in isinstance() after rewrite to type statement",
+      "hazard": "Rewriting TypeAlias changes the declaration from a variable annotation to a type statement, which cannot be used as a runtime value (e.g., in isinstance() or issubclass()).",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "isinstance(x, T) before any fix: True\ntype(T): <class 'type'>\nT is: <class 'int'>\nid(T): 11118080\nT() succeeded\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Type annotations evaluated at runtime, typing-only imports",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Mylist: typing.List[int]\ntype(Mylist): <class 'typing._GenericAlias'>\nVariable annotation with Mylist: [1, 2]\nSuccessfully used Mylist in type annotation\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "UP040",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "D (alias): {Weird(1): 'b', Weird(2): 'c'}\nlen(D): 2\n  Weird(1): 'b'\n  Weird(2): 'c'\nAfter adding: {Weird(1): 'b', Weird(2): 'c', Weird(3): 'd'}\nlen now: 3\nD() failed: TypeError: 'dict' object is not callable\nSuccessfully used D as type annotation: {Weird(4): 'e'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

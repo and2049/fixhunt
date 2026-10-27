@@ -1,0 +1,1493 @@
+{
+  "runId": "2026-10-17T21-02-04-500Z-1p30-ruff-PLR1733",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLR1733",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-dict-index-lookup (PLR1733)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\n## What it does\nChecks for key-based dict accesses during `.items()` iterations.\n\n## Why is this bad?\nWhen iterating over a dict via `.items()`, the current value is already\navailable alongside its key. Using the key to look up the value is\nunnecessary.\n\n## Example\n```python\nFRUITS = {\"apple\": 1, \"orange\": 10, \"berry\": 22}\n\nfor fruit_name, fruit_count in FRUITS.items():\n    print(FRUITS[fruit_name])\n```\n\nUse instead:\n```python\nFRUITS = {\"apple\": 1, \"orange\": 10, \"berry\": 22}\n\nfor fruit_name, fruit_count in FRUITS.items():\n    print(fruit_count)\n```\n"
+  },
+  "analysis": {
+    "summary": "The rule flags dictionary index lookups using the loop variable when iterating over .items() where the corresponding value is already available.",
+    "firingShapes": [
+      "for k, v in d.items(): x = d[k]",
+      "for key, val in mapping.items(): if mapping[key] > 0:",
+      "for a, b in obj.items(): print(obj[a])",
+      "for x, y in data.items(): return data[x]",
+      "for name, age in people.items(): total += people[name]",
+      "for k, v in d.items(): d[k] = v * 2",
+      "for i, j in items.items(): yield items[i]",
+      "for k, v in d.items(): lst.append(d[k])"
+    ],
+    "silentShapes": [
+      "for k in d.items(): x = k[0]",
+      "for k, v in d: x = d[k]",
+      "for k, v in enumerate(d): x = d[k]",
+      "for k, v in d.items(): x = v",
+      "for k, v in d.items(): print(k)"
+    ],
+    "fixDescription": "Replace the dictionary index lookup d[key] with the already available loop variable value that corresponds to the value in the iteration.",
+    "hazards": [
+      "Rewriting d[k] to v changes behavior if the loop variable v is reassigned later in the loop body, as the original code would re-read the current dictionary value while the fix uses the stale local variable.",
+      "If the dictionary d is mutated during iteration (e.g., keys added/removed), the original d[k] may raise KeyError or reflect updates, whereas the fixed v refers to the value at iteration start and avoids such errors or misses them.",
+      "When d is not a standard dict but a custom mapping with __getitem__ side effects (e.g., logging, state changes), replacing d[k] with v omits those effects.",
+      "If k or v is used elsewhere in an outer scope and the rewrite alters which variable is referenced due to name collision or shadowing, the fix may incorrectly bind or use the wrong variable.",
+      "The fix may remove a necessary del or reassignment to d[k] if the lookup was part of a larger expression involving assignment or deletion, altering mutability intent.",
+      "If the dictionary value accessed via d[k] is a mutable object and the code relies on retrieving the latest reference (e.g., after in-place mutation elsewhere), using v may refer to an outdated object if the dictionary was updated and the loop variable not refreshed.",
+      "Comments attached to the d[k] expression may be lost if the autofix replaces the entire expression without preserving inline or trailing comments.",
+      "In nested loops where inner loop variables reuse k or v names, the fix may incorrectly resolve to an inner loop variable instead of the intended outer one, altering semantics.",
+      "If the dictionary access d[k] occurs in a context where its type is used for overload resolution or generic specialization (e.g., in templating or generic functions), replacing it with v may alter inferred types and break type checking.",
+      "When d[k] is used in a default argument or lambda capture within the loop, the timing of evaluation shifts from lookup-time to loop-entry-time, potentially capturing different values if the dictionary mutates."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.055061900000000004,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 8,
+    "fixed": 8,
+    "disputed": 8,
+    "fix-changes-behavior": 4
+  },
+  "reports": [
+    {
+      "programId": "r1-p004",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "outer = {'x': 10}\nmiddle = {'y': 20}\nfor k, v in outer.items():          # outer k='x', v=10\n    for k, v in middle.items():       # inner k='y', v=20 (shadows outer)\n            x = outer[k]              # triggers PLR1733: outer['y']?? -> KeyError\n",
+      "lines": {
+        "before": 11,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T21-02-04-500Z-1p30-ruff-PLR1733/reports/r1-p004.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25182",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/29422",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25150",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix incorrectly assumes the loop variable 'k' refers to the outer dictionary's key, but the inner loop shadows 'k' with the inner dictionary's key. Replacing 'outer[k]' with 'v' uses the inner loop's value instead of the outer loop's key, changing a KeyError into silent wrong behavior.",
+        "docsQuote": "When iterating over a dict via .items(), the current value is already available alongside its key. Using the key to look up the value is unnecessary.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "PLR1733 fix",
+          "PLR1733 variable shadowing nested loops",
+          "PLR1733 dictionary key access loop variables",
+          "PLR1733 unused loop variable replacement"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Additional false positives in `PLR1733` and `PLR1736`",
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "state": "open",
+            "snippet": "This is a follow-up issue to https://github.com/astral-sh/ruff/issues/25150, tracking a couple of additional false positives. https://github.com/astral-sh/ruff/pull/25177 fixed the first one:\n\n```py\ndef foo(d: dict):\n    for k, v in d.items():\n        ...\n    else:\n        print(d[k])  # resolved fa"
+          },
+          {
+            "source": "github",
+            "title": "A few more: missed reports vs flake8/pylint, plus two fix bugs (B012, F402, F823, SIM102, SIM401, PLW1641, PLR1736, PLW0406, N801, UP034)",
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "state": "open",
+            "snippet": "### Summary\n\nHi! Thanks for jumping on the last ones so quickly 🙏 I found a few more while comparing ruff with flake8 and pylint on popular PyPI packages, and as you suggested in #29400, they're all in this one issue. Everything below reproduces on ruff 0.17.0 with `ruff check --isolated --select <"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "PLR1733 false positive",
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "state": "closed",
+            "snippet": "### Summary\n\nPLR1733 is giving a false positive for dictionary access on `else` clause of `for`.\n\nExample:\n\n```python\nimport fnmatch\n\n\ndef clean_globs_with_priorities (globs_priorities: list[tuple[str, float]]) -> dict[str, float]:\n    result: dict[str, float] = {}\n\n    for glob, priority in globs_p"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "relation": "related",
+            "why": "same rule PLR1733 but different construct (for-else clause vs nested loop variable shadowing)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "relation": "related",
+            "why": "same rule PLR1733 mentioned among other fix bugs but no detail on this construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG005/ARG001 about unused arguments with Unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "parent tracking issue for Pylint parity, not a specific defect report"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "relation": "related",
+            "why": "same rule PLR1733 false positive but different construct (for-else clause vs nested loop variable shadowing)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "fuzzer autofix/infinite loop meta-issue, not a specific PLR1733 defect"
+          }
+        ],
+        "cost": 0.0023967000000000003
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:46.096345908 -0400\n+++ fixed.py\t2026-10-22 13:34:48.204381448 -0400\n@@ -2,4 +2,4 @@\n middle = {'y': 20}\n for k, v in outer.items():          # outer k='x', v=10\n     for k, v in middle.items():       # inner k='y', v=20 (shadows outer)\n-            x = outer[k]              # triggers PLR1733: outer['y']?? -> KeyError\n+            x = v              # triggers PLR1733: outer['y']?? -> KeyError\n",
+        "observed": "exit 1 → 0\nstderr before: KeyError: 'y'\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "KeyError: 'y'",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "outer = {'x': 10}\nmiddle = {'y': 20}\nfor k, v in outer.items():          # outer k='x', v=10\n    for k, v in middle.items():       # inner k='y', v=20 (shadows outer)\n            x = v              # triggers PLR1733: outer['y']?? -> KeyError\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select PLR1733 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original code uses `k` from the inner loop to index into `outer`, which shadows the outer `k`. After fixing, it incorrectly replaces `outer[k]` with `v`, where `v` comes from the inner loop (`'y'`), but this does not replicate the intended access—it changes the meaning entirely, causing different behavior despite avoiding the error.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class LogDict(dict):\n    def __getitem__(self, key):\n        print(f'GET {key}')\nd = LogDict({'a': 1})\nfor k, v in d.items():\n    _ = d[k]  # triggers PLR1733: logs again; fix would omit log\n",
+      "lines": {
+        "before": 10,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T21-02-04-500Z-1p30-ruff-PLR1733/reports/r1-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25182",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/29422",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25150",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "medium",
+        "why": "The program uses a dict subclass that overrides __getitem__ to log each access. The rule's fix replaces d[k] with the loop variable v, which bypasses the overridden method and eliminates the log output. The documentation presents the rewrite as equivalent for ordinary dicts but does not account for subclasses with side effects in __getitem__.",
+        "docsQuote": "the current value is already available alongside its key. Using the key to look up the value is unnecessary",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "PLR1733 fix",
+          "PLR1733 dict items iteration redundant access",
+          "ruff PLR1733 unnecessary dictionary lookup during items loop",
+          "dict.__getitem__ called on already retrieved value from items()"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Additional false positives in `PLR1733` and `PLR1736`",
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "state": "open",
+            "snippet": "This is a follow-up issue to https://github.com/astral-sh/ruff/issues/25150, tracking a couple of additional false positives. https://github.com/astral-sh/ruff/pull/25177 fixed the first one:\n\n```py\ndef foo(d: dict):\n    for k, v in d.items():\n        ...\n    else:\n        print(d[k])  # resolved fa"
+          },
+          {
+            "source": "github",
+            "title": "A few more: missed reports vs flake8/pylint, plus two fix bugs (B012, F402, F823, SIM102, SIM401, PLW1641, PLR1736, PLW0406, N801, UP034)",
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "state": "open",
+            "snippet": "### Summary\n\nHi! Thanks for jumping on the last ones so quickly 🙏 I found a few more while comparing ruff with flake8 and pylint on popular PyPI packages, and as you suggested in #29400, they're all in this one issue. Everything below reproduces on ruff 0.17.0 with `ruff check --isolated --select <"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "PLR1733 false positive",
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "state": "closed",
+            "snippet": "### Summary\n\nPLR1733 is giving a false positive for dictionary access on `else` clause of `for`.\n\nExample:\n\n```python\nimport fnmatch\n\n\ndef clean_globs_with_priorities (globs_priorities: list[tuple[str, float]]) -> dict[str, float]:\n    result: dict[str, float] = {}\n\n    for glob, priority in globs_p"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          },
+          {
+            "source": "tavily",
+            "title": "PLC0206 should not flag if dict is being written · Issue #14585 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/14585",
+            "snippet": "Open\n\nOpen\n\nPLC0206 should not flag if dict is being written#14585\n\nCopy link\n\nLabels\n\nruleImplementing or modifying a lint ruleImplementing or modifying a lint rule\n\n## Description\n\n@silverwind\n\nsilverwind\n\nopened on Nov 25, 2024\n\nIssue body actions\n\nThis code is flagged for PLC0206 with v0.8.0:\n\n`"
+          },
+          {
+            "source": "tavily",
+            "title": "dict-index-missing-items (PLC0206) should allow assignment by key · Issue #13821 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/13821",
+            "snippet": "> ```\n>\n> ```\n> ruff --isolated check --preview --select=PLC0206 test.pytest.py:2:1: PLC0206 Extracting value from dictionary without calling `.items()`  |1 | m = {\"foo\": \"bar\"}2 | / for k in m:3 | | print(\"test-\" + m[k])  | |_________________________^ PLC0206  |Found 1 error.\n> ``` [...] ```\nruff -"
+          },
+          {
+            "source": "tavily",
+            "title": "[ty] fix query cycles in decorated function with parameter defaults by carljm · Pull Request #23014 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/23014",
+            "snippet": "Merged\n\n## [[ty] fix query cycles in decorated function with parameter defaults](#top)#23014 carljm merged 2 commits into mainastral-sh/ruff:mainfrom claude/minimize-handler-metrics-issue-rLJYmastral-sh/ruff:claude/minimize-handler-metrics-issue-rLJYmCopy head branch name to clipboard\n\n## Conversati"
+          },
+          {
+            "source": "tavily",
+            "title": "[Feature Request] Sort dict keys · Issue #10085 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/10085",
+            "snippet": "However, I think we should keep this open. The first two of those issues were closed in favour of #1198, which was closed out without implementing this specific feature. The third is different enough to this that it could be considered separate. [...] ## Issue actions\n\nYou can’t perform that action "
+          },
+          {
+            "source": "tavily",
+            "title": "[flake8-simplify] SIM910/SIM911 false negative if variable is named dict · Issue #18777 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/18777",
+            "snippet": "1. MeGaGiGaGon\n\n   changed the title ~~[-][flake8-simplify] SIM911 false negative if variable is named dict[/-]~~ [+][flake8-simplify] SIM910/SIM911 false negative if variable is named dict[/+] on Jun 19, 2025\n2. ntBre\n\n   added\n\n   bugAn issue describing something that isn't working, or a PR that f"
+          },
+          {
+            "source": "tavily",
+            "title": "Style suggestion: Allow aligning dict values · Issue #10462 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/10462",
+            "snippet": "Skip to content   \n \n \n\n## Navigation Menu\n\nSign in\n\nAppearance settings\n\nSign in\n\nSign up\n\nAppearance settings\n\nYou signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or "
+          },
+          {
+            "source": "tavily",
+            "title": "[ty] Fix iteration over intersections with TypeVars whose bounds contain non-iterable types by charliermarsh · Pull Request #22117 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/22117",
+            "snippet": "Skip to content   \n \n \n\n## Navigation Menu\n\nSign in\n\nAppearance settings\n\nSign in\n\nSign up\n\nAppearance settings\n\nYou signed in with another tab or window. Reload to refresh your session. You signed out in another tab or window. Reload to refresh your session. You switched accounts on another tab or "
+          },
+          {
+            "source": "tavily",
+            "title": "New Linting Rule: Prefer `setdefault` Over Conditional Key Checks for Dictionary Assignment · Issue #7897 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/7897",
+            "snippet": "Before:\n\n```\nnew = for key value in data if key in new new key append value else new key = value\n```\n\nAfter:\n\n```\nnew = for key value in data new setdefault key append value\n```\n\nIn this scenario, `setdefault` is used to group items by their keys in a dictionary. If a key already exists in the dicti"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "relation": "related",
+            "why": "same rule PLR1733 but different construct (else-clause access vs loop-body redundant indexing)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "relation": "related",
+            "why": "same rule PLR1733 mentioned among other fix bugs but no snippet shows this exact redundant-indexing pattern"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule (ARG005/ARG001) and different defect (unused argument with unicode name)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "parent tracking issue for Pylint parity, not a specific defect report"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "relation": "related",
+            "why": "same rule PLR1733 but different construct (else-clause false positive vs loop-body redundant indexing)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "meta-issue collecting many autofix/infinite-loop bugs across different rules"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14585",
+            "relation": "unrelated",
+            "why": "different rule PLC0206 about dict writes, not PLR1733 redundant reads"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13821",
+            "relation": "unrelated",
+            "why": "different rule PLC0206 about missing .items() on iteration, not redundant indexing inside .items() loop"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/23014",
+            "relation": "unrelated",
+            "why": "PR fixing query cycles in decorated functions, unrelated to PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10085",
+            "relation": "unrelated",
+            "why": "feature request for sorting dict keys, not a PLR1733 defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18777",
+            "relation": "unrelated",
+            "why": "different rule SIM910/SIM911 about variable named 'dict', not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10462",
+            "relation": "unrelated",
+            "why": "style suggestion for aligning dict values, unrelated to PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/22117",
+            "relation": "unrelated",
+            "why": "PR fixing type-var iteration, unrelated to PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/7897",
+            "relation": "unrelated",
+            "why": "feature request for new rule preferring setdefault, not a PLR1733 defect"
+          }
+        ],
+        "cost": 0.0046166
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:51.917444053 -0400\n+++ fixed.py\t2026-10-22 13:34:54.131481385 -0400\n@@ -3,4 +3,4 @@\n         print(f'GET {key}')\n d = LogDict({'a': 1})\n for k, v in d.items():\n-    _ = d[k]  # triggers PLR1733: logs again; fix would omit log\n+    _ = v  # triggers PLR1733: logs again; fix would omit log\n",
+        "observed": "stdout before:\nGET a\nstdout after:\n",
+        "before": {
+          "stdout": "GET a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class LogDict(dict):\n    def __getitem__(self, key):\n        print(f'GET {key}')\nd = LogDict({'a': 1})\nfor k, v in d.items():\n    _ = v  # triggers PLR1733: logs again; fix would omit log\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select PLR1733 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original loop accesses each value via `d[k]`, which invokes `__getitem__` and prints 'GET a'. The fix replaces this with `_ = v`, using the already retrieved value from iteration without re-accessing the dictionary, so `__getitem__` is never called and nothing is printed. This changes observable behavior because the side effect of logging depends on dictionary access, which the fix eliminates. Thus, the rewrite is not semantics‑preserving—it removes a required side effect even though the variable `v` holds the same value as `d[k]` would return. The fix incorrectly assumes that avoiding re‑access preserves meaning, ignoring that the access itself performs work beyond value retrieval.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "async def get_val(k):\n    return k\nclass AwaitableDict(dict):\n    def __getitem__(self, key):\n        return get_val(key)\nasync def main():\n    d = AwaitableDict({'x': 1})\n    for k, v in d.items():\n        x = await d[k]  # triggers PLR1733: would become await v — but v is int, not awaitable\nimport asyncio\nresult = asyncio.run(main())\n",
+      "lines": {
+        "before": 17,
+        "after": 11
+      },
+      "reportPath": "runs/2026-10-17T21-02-04-500Z-1p30-ruff-PLR1733/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25182",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/29422",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25150",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule assumes that the value yielded by .items() is identical to the value returned by __getitem__, but the program uses a custom dict subclass where __getitem__ returns an awaitable while the stored value is an int. The rewrite changes await d[k] (which awaits the async result) to await v (which tries to await an int), causing a TypeError.",
+        "docsQuote": "the current value is already available alongside its key",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "PLR1733 fix",
+          "PLR1733 dict items loop",
+          "await expression optimization",
+          "ruff autofix await variable"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Additional false positives in `PLR1733` and `PLR1736`",
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "state": "open",
+            "snippet": "This is a follow-up issue to https://github.com/astral-sh/ruff/issues/25150, tracking a couple of additional false positives. https://github.com/astral-sh/ruff/pull/25177 fixed the first one:\n\n```py\ndef foo(d: dict):\n    for k, v in d.items():\n        ...\n    else:\n        print(d[k])  # resolved fa"
+          },
+          {
+            "source": "github",
+            "title": "A few more: missed reports vs flake8/pylint, plus two fix bugs (B012, F402, F823, SIM102, SIM401, PLW1641, PLR1736, PLW0406, N801, UP034)",
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "state": "open",
+            "snippet": "### Summary\n\nHi! Thanks for jumping on the last ones so quickly 🙏 I found a few more while comparing ruff with flake8 and pylint on popular PyPI packages, and as you suggested in #29400, they're all in this one issue. Everything below reproduces on ruff 0.17.0 with `ruff check --isolated --select <"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "PLR1733 false positive",
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "state": "closed",
+            "snippet": "### Summary\n\nPLR1733 is giving a false positive for dictionary access on `else` clause of `for`.\n\nExample:\n\n```python\nimport fnmatch\n\n\ndef clean_globs_with_priorities (globs_priorities: list[tuple[str, float]]) -> dict[str, float]:\n    result: dict[str, float] = {}\n\n    for glob, priority in globs_p"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          },
+          {
+            "source": "github",
+            "title": "Don't parenthesize unsplittable expressions to make comments fit",
+            "url": "https://github.com/astral-sh/ruff/issues/8041",
+            "state": "closed",
+            "snippet": "Black:\r\n```python\r\n__ = excel_safe  # just so the compatibility import above is \"used\" and doesn't get removed by linter\r\n```\r\nOurs:\r\n```python\r\n__ = (\r\n    excel_safe\r\n)  # just so the compatibility import above is \"used\" and doesn't get removed by linter\r\n```\r\nWe make the comment fit, but the styl"
+          },
+          {
+            "source": "tavily",
+            "title": "[syntax-errors] Remaining syntax errors raised by the compiler · Issue #17412 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/17412",
+            "snippet": "`return` with value in async generator (B901)\n  + [[`flake8-bugbear`] Catch `yield` expressions within other statements (`B901`) #21200](\n  + partial overlap with B901, which also applies to sync generators. This is  \n     only a syntax error in the async case\n no binding for nonlocal (PLE0117)\n  + "
+          },
+          {
+            "source": "tavily",
+            "title": "Feature Request : C0103/invalid-name: Allow specifying valid variable and constant patterns with regular expressions. · Issue #10629 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/10629",
+            "snippet": "More actions\n\n   > Is the main goal to enforce snake, pascal, or another predefined casing standard? Iˋm asking because Ruff canˋt offer autofixes when we allow a custom regex (and error message would probably also be somewhat cryptic).\n   >\n   > Another reason for not allowing a regex is that ruff "
+          },
+          {
+            "source": "tavily",
+            "title": "F841 \"Undefined name\" false positive in exception-nested-closure · Issue #6878 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/6878",
+            "snippet": "I'm not exactly sure how to handle. I'll have to think on it. My initial reaction is that our behavior is reasonable since the variable could be unbound depending on when the lambda is called, but it would be nice not to remove the `as e` there when autofixing.\n2. charliermarsh\n\n   added\n\n   needs-d"
+          },
+          {
+            "source": "tavily",
+            "title": "Autofix S101 · Issue #7635 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/7635",
+            "snippet": "More actions\n\n    I agree that this should be a pretty straightforward autofix:\n\n    ```\n    assert {condition}, {message} \n    ```\n\n    should become:\n\n    ```\n    if not ({condition}): raise AssertionError({message}) \n    ```\n\n    If no `{message}` then just:\n\n    ```\n    if not ({condition}): rai"
+          },
+          {
+            "source": "tavily",
+            "title": "add rule to catch `any` and `callable` in typing context · Issue #17224 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/17224",
+            "snippet": "If red-knot does have the option to autofix this then probably doesn't make sense to implement in ruff itself [...] Sounds like you don't mind having the rule, if you don't want to invest resources into implementing it I can give it a shot myself\n5. ### MichaReisercommentedon Apr 7, 2025\n\n   @MichaR"
+          },
+          {
+            "source": "tavily",
+            "title": "Option to sort re-exports in `__all__` (`sort_exports` from isort) · Issue #1198 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/1198",
+            "snippet": "Do other Ruff lint rule autofixes run when you issue a \"Format code\" command? The autofix is offered as part of Ruff's linter rather than our formatter -- that might be part of the issue here.\n26. ### flisboaccommentedon Jan 29, 2025\n\n    @flisboac\n\n    flisboac\n\n    on Jan 29, 2025\n\n    More action"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "relation": "related",
+            "why": "same rule PLR1733 but different construct (else-clause dictionary access vs for-loop items iteration)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "relation": "related",
+            "why": "same rule PLR1733 mentioned among other fix bugs but no detail on this construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule (ARG005/ARG001) and defect (unused argument with Unicode name)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "meta issue tracking Pylint parity, not a specific PLR1733 defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "relation": "related",
+            "why": "same rule PLR1733 false positive but different construct (else-clause vs for-loop items iteration)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "fuzzer autofix/infinite loop errors for various rules, not PLR1733 specific"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8041",
+            "relation": "unrelated",
+            "why": "formatting issue about parenthesization, not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/17412",
+            "relation": "unrelated",
+            "why": "syntax errors in async generators (B901), not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10629",
+            "relation": "unrelated",
+            "why": "feature request for C0103 regex patterns, not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6878",
+            "relation": "unrelated",
+            "why": "F841 undefined name false positive in exception-nested-closure, not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/7635",
+            "relation": "unrelated",
+            "why": "autofix for S101 assert statements, not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/17224",
+            "relation": "unrelated",
+            "why": "feature request for typing context rule, not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1198",
+            "relation": "unrelated",
+            "why": "feature request for sorting __all__ exports, not PLR1733"
+          }
+        ],
+        "cost": 0.0043545
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:34:58.178549629 -0400\n+++ fixed.py\t2026-10-22 13:35:01.283601992 -0400\n@@ -6,6 +6,6 @@\n async def main():\n     d = AwaitableDict({'x': 1})\n     for k, v in d.items():\n-        x = await d[k]  # triggers PLR1733: would become await v — but v is int, not awaitable\n+        x = await v  # triggers PLR1733: would become await v — but v is int, not awaitable\n import asyncio\n result = asyncio.run(main())\n",
+        "observed": "exit 0 → 1\nstderr before: (none)\nstderr after: TypeError: object int can't be used in 'await' expression",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "TypeError: object int can't be used in 'await' expression",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "async def get_val(k):\n    return k\nclass AwaitableDict(dict):\n    def __getitem__(self, key):\n        return get_val(key)\nasync def main():\n    d = AwaitableDict({'x': 1})\n    for k, v in d.items():\n        x = await v  # triggers PLR1733: would become await v — but v is int, not awaitable\nimport asyncio\nresult = asyncio.run(main())\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select PLR1733 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original code awaits `d[k]`, which invokes `__getitem__` returning `get_val(k)`—a coroutine that yields the integer value of `k`. After rewriting to `await v`, it attempts to await the loop variable `v`, which is the actual dictionary value (an integer), not a coroutine. Since integers are not awaitable, this raises a TypeError, changing behavior from successful execution to failure.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class Mapping:\n    def __init__(self):\n        self.data = {'a': 1}\n        self.log = []\n    def __getitem__(self, k):\n        self.log.append(k)\n    def items(self):\n        return self.data.items()\nm = Mapping()\nfor k, v in m.items():\n    print(m[k])  # triggers __getitem__, logs 'a'\n",
+      "lines": {
+        "before": 14,
+        "after": 11
+      },
+      "reportPath": "runs/2026-10-17T21-02-04-500Z-1p30-ruff-PLR1733/reports/r2-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25182",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/29422",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25150",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule assumes the iterated object is a plain dict where m[k] is a pure lookup with no side effects. Here m is a custom Mapping whose __getitem__ logs each access; the fix replaces the logged lookup with the already-available value v, silently dropping the log entry and changing the observable behavior.",
+        "docsQuote": "When iterating over a dict via .items(), the current value is already available alongside its key. Using the key to look up the value is unnecessary.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "PLR1733 fix",
+          "PLR1733 avoid redundant mapping access",
+          "PLR1733 use unpacked value instead of key lookup",
+          "PLR1733 replace dict[key] with value in iteration"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Additional false positives in `PLR1733` and `PLR1736`",
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "state": "open",
+            "snippet": "This is a follow-up issue to https://github.com/astral-sh/ruff/issues/25150, tracking a couple of additional false positives. https://github.com/astral-sh/ruff/pull/25177 fixed the first one:\n\n```py\ndef foo(d: dict):\n    for k, v in d.items():\n        ...\n    else:\n        print(d[k])  # resolved fa"
+          },
+          {
+            "source": "github",
+            "title": "A few more: missed reports vs flake8/pylint, plus two fix bugs (B012, F402, F823, SIM102, SIM401, PLW1641, PLR1736, PLW0406, N801, UP034)",
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "state": "open",
+            "snippet": "### Summary\n\nHi! Thanks for jumping on the last ones so quickly 🙏 I found a few more while comparing ruff with flake8 and pylint on popular PyPI packages, and as you suggested in #29400, they're all in this one issue. Everything below reproduces on ruff 0.17.0 with `ruff check --isolated --select <"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "PLR1733 false positive",
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "state": "closed",
+            "snippet": "### Summary\n\nPLR1733 is giving a false positive for dictionary access on `else` clause of `for`.\n\nExample:\n\n```python\nimport fnmatch\n\n\ndef clean_globs_with_priorities (globs_priorities: list[tuple[str, float]]) -> dict[str, float]:\n    result: dict[str, float] = {}\n\n    for glob, priority in globs_p"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          },
+          {
+            "source": "tavily",
+            "title": "[syntax-errors] Detect duplicate keys in `match` mapping patterns by ntBre · Pull Request #17129 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/17129",
+            "snippet": "### Choose a reason for hiding this comment\n\nThe reason will be displayed to describe this comment to others. Learn more.\n\nI think we should avoid breaking here and report all duplicate keys within a single mapping pattern. Or, do you see any limitation or challenges in that approach? What do you th"
+          },
+          {
+            "source": "tavily",
+            "title": "Avoid panic in unfixable `redundant-numeric-union` by charliermarsh · Pull Request #14402 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/14402",
+            "snippet": "You can’t perform that action at this time. [...] in this line in order to create a valid suggestion.Outdated suggestions cannot be applied.This suggestion has been applied or marked resolved.Suggestions cannot be applied from pending reviews.Suggestions cannot be applied on multi-line comments.Sugg"
+          },
+          {
+            "source": "tavily",
+            "title": "[ty] Add assert_never fixes for redundant final elif branches by AlexWaygood · Pull Request #28178 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/28178",
+            "snippet": "``` [...] ``` [...] in this line in order to create a valid suggestion.Outdated suggestions cannot be applied.This suggestion has been applied or marked resolved.Suggestions cannot be applied from pending reviews.Suggestions cannot be applied on multi-line comments.Suggestions cannot be applied whil"
+          },
+          {
+            "source": "tavily",
+            "title": "[`flake8-pyi`] Implement `redundant-none-literal` (`PYI061`) by sbrugman · Pull Request #14316 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/14316",
+            "snippet": "in this line in order to create a valid suggestion.Outdated suggestions cannot be applied.This suggestion has been applied or marked resolved.Suggestions cannot be applied from pending reviews.Suggestions cannot be applied on multi-line comments.Suggestions cannot be applied while the pull request i"
+          },
+          {
+            "source": "tavily",
+            "title": "Automatically remove redundant open modes · Issue #640 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/640",
+            "snippet": "added a commit that references this issue on Nov 21, 2022\n\n   Automatically remove redundant open modes [#640 (#843)](\n\n   ce116a8\n8. ### charliermarshcommentedon Nov 22, 2022\n\n   @charliermarsh\n\n   charliermarsh\n\n   on Nov 22, 2022\n\n   MemberAuthor\n\n   More actions\n\n   Solved by #640.\n9. charlierma"
+          },
+          {
+            "source": "tavily",
+            "title": "Validation for ruff config file · Issue #10487 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/10487",
+            "snippet": "# \"D200\" \" \"# One-line docstring should fit on one line # \"D202\" \" \" # No blank lines allowed after function docstring # \"D300\" \" \" # Use triple double quotes \"\"\" # \"D404\" \" \" # First word of the docstring should not be \"This\" # \"UP003\" \" \"# Use {} instead of type(...) # \"UP008\" \" \"# Use super() ins"
+          },
+          {
+            "source": "tavily",
+            "title": "SyntaxError in Python 3.11 when unpacking sequences inside of [] · Issue #2321 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/2321",
+            "snippet": "More actions\n\n    Thank you for fixing it so quickly! ❤️\n\n    Reacted by Jonathan Plasse\n\nSign up for free to join this conversation on GitHub. Already have an account? Sign in to comment\n\n## Metadata\n\n## Metadata\n\nNo one assigned\n\n### Labels\n\nbugAn issue describing something that isn't working, or "
+          },
+          {
+            "source": "tavily",
+            "title": "New Linting Rule: Prefer `setdefault` Over Conditional Key Checks for Dictionary Assignment · Issue #7897 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/7897",
+            "snippet": "The reason for this preference is that `setdefault` combines the check for the existence of the key and the assignment of the value into a single operation. This makes the code more readable and slightly more efficient, as it reduces the number of dictionary lookups. Additionally, `setdefault` is at"
+          },
+          {
+            "source": "tavily",
+            "title": "Use str.casefold() instead of str.lower() for comparison. · Issue #7728 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/7728",
+            "snippet": "None yet\n\nNo branches or pull requests\n\n## Issue actions\n\nYou can’t perform that action at this time. [...] Broken: [...] ```"
+          },
+          {
+            "source": "tavily",
+            "title": "[ty] Fix variance of frozen dataclass-transform models by sharkdp · Pull Request #23931 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/23931",
+            "snippet": "in this line in order to create a valid suggestion.Outdated suggestions cannot be applied.This suggestion has been applied or marked resolved.Suggestions cannot be applied from pending reviews.Suggestions cannot be applied on multi-line comments.Suggestions cannot be applied while the pull request i"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "relation": "related",
+            "why": "same rule PLR1733 but different construct (else-clause dict access vs custom mapping iteration)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "relation": "related",
+            "why": "same rule PLR1733 mentioned among other fix bugs but no detail on this construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG005/ARG001 about unused arguments with unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "parent tracking issue for Pylint parity, not a specific defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25150",
+            "relation": "related",
+            "why": "same rule PLR1733 false positive but on for-else dictionary access, not custom mapping iteration"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "fuzzer autofix/infinite loop meta-issue, not PLR1733"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/17129",
+            "relation": "unrelated",
+            "why": "match statement duplicate keys detection, unrelated rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/14402",
+            "relation": "unrelated",
+            "why": "panic in unfixable redundant-numeric-union, unrelated rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/28178",
+            "relation": "unrelated",
+            "why": "redundant final elif branches assert_never fixes, unrelated rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/14316",
+            "relation": "unrelated",
+            "why": "flake8-pyi redundant-none-literal implementation, unrelated rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/640",
+            "relation": "unrelated",
+            "why": "redundant open modes removal, unrelated rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10487",
+            "relation": "unrelated",
+            "why": "ruff config file validation, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2321",
+            "relation": "unrelated",
+            "why": "SyntaxError unpacking sequences in brackets, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/7897",
+            "relation": "unrelated",
+            "why": "new rule prefer setdefault over conditional key checks, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/7728",
+            "relation": "unrelated",
+            "why": "str.casefold vs str.lower comparison, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/23931",
+            "relation": "unrelated",
+            "why": "variance of frozen dataclass-transform models, unrelated"
+          }
+        ],
+        "cost": 0.004748199999999999
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:35:05.557674074 -0400\n+++ fixed.py\t2026-10-22 13:35:08.181718331 -0400\n@@ -8,4 +8,4 @@\n         return self.data.items()\n m = Mapping()\n for k, v in m.items():\n-    print(m[k])  # triggers __getitem__, logs 'a'\n+    print(v)  # triggers __getitem__, logs 'a'\n",
+        "observed": "stdout before:\nNone\nstdout after:\n1",
+        "before": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class Mapping:\n    def __init__(self):\n        self.data = {'a': 1}\n        self.log = []\n    def __getitem__(self, k):\n        self.log.append(k)\n    def items(self):\n        return self.data.items()\nm = Mapping()\nfor k, v in m.items():\n    print(v)  # triggers __getitem__, logs 'a'\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select PLR1733 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original loop iterates over key-value pairs from `m.items()`, then prints `m[k]`, which calls `__getitem__` with each key `'a'`. Since `self.data['a']` is defined as `1`, this should print `1`, but the observed output shows `None`, indicating that `__getitem__` likely returns `None` when accessed via `m[k]` despite logging the key—perhaps due to missing or incorrect return logic in `__getitem__`. However, the fix replaces `m[k]` with `v`, which is the value directly yielded by `items()` (i.e., `1`), bypassing `__getitem__` entirely. Thus, the fix changes behavior because it avoids the side-effect-prone `__getitem__` call, and the original method does not return the expected value, making the rewrite unsafe despite being labeled as such. The label \"safe\" is incorrect here because the semantic dependency on `__getitem__`’s return value is violated.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Evaluation Order & Side Effects",
+      "hazard": "Replacing d[k] with v changes evaluation order and duplicates side-effectful expressions.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              17,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "trace: [(1, 'first'), (1, 'second')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "trace: [(1, 'first'), (1, 'second')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:17.837145789 -0400\n+++ fixed.py\t2026-10-17 17:02:18.007147810 -0400\n@@ -14,5 +14,5 @@\n trace = []\n for k, v in d.items():\n     trace.append((k.n, v))\n-    _ = d[k]  # triggers PLR1733: d[k] re-evaluates __hash__ again\n+    _ = v  # triggers PLR1733: d[k] re-evaluates __hash__ again\n print('trace:', trace)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Name Collision/Outer Scope Shadowing",
+      "hazard": "Rewrite uses loop variable 'v' which shadows an outer variable named 'v', changing binding.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 1, 2, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 1, 2, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:18.108149010 -0400\n+++ fixed.py\t2026-10-17 17:02:18.275150994 -0400\n@@ -3,7 +3,7 @@\n     trace = []\n     for k, v in d.items():  # inner v shadows outer v\n         trace.append(v)     # refers to inner v (dict value)\n-        x = d[k]            # triggers PLR1733: would become x = v (still inner)\n+        x = v            # triggers PLR1733: would become x = v (still inner)\n         trace.append(x)\n     return trace\n print(f({'a': 1, 'b': 2}))\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Del/Reassignment Mutability Intent",
+      "hazard": "Rewrite removes d[k] from del d[k], breaking deletion intent.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: dictionary changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Nested Loops Variable Capture",
+      "hazard": "Inner loop reuses k,v; fix incorrectly binds to inner loop var instead of outer dict lookup.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              9,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "KeyError: 'y'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\ntrace: [('y', 20), ('got', 20), ('y', 20), ('got', 20)]\nexit 1 → 0\nstderr before: KeyError: 'y'\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "trace: [('y', 20), ('got', 20), ('y', 20), ('got', 20)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:18.733156437 -0400\n+++ fixed.py\t2026-10-17 17:02:19.118161012 -0400\n@@ -6,6 +6,6 @@\n     for k, v in middle.items():       # inner k='y', v=20 (shadows outer)\n         for _ in inner:\n             trace.append((k, v))      # k,y v,20 from middle\n-            x = outer[k]              # triggers PLR1733: outer['y']?? -> KeyError\n+            x = v              # triggers PLR1733: outer['y']?? -> KeyError\n             trace.append(('got', x))\n print('trace:', trace)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Class Attributes/Properties/Descriptors",
+      "hazard": "Replace d[k] with v omits descriptor __get__ side effects on class attribute access.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              11,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Desc.__get__\ntrace: ['start', 42]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Desc.__get__\ntrace: ['start', 42]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:19.216162176 -0400\n+++ fixed.py\t2026-10-17 17:02:19.384164171 -0400\n@@ -8,6 +8,6 @@\n trace = []\n for k, v in d.items():\n     trace.append('start')\n-    x = d[k].attr  # triggers PLR1733: would become v.attr — skips __get__ on d[k]\n+    x = v.attr  # triggers PLR1733: would become v.attr — skips __get__ on d[k]\n     trace.append(x)\n print('trace:', trace)\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Custom Mapping __getitem__ Side Effects",
+      "hazard": "d[k] invokes logging __getitem__; replacing with v omits the side effect.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              9,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "GET a\ntrace: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nGET a\ntrace: [1]\nstdout after:\ntrace: [1]"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "trace: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:19.488165407 -0400\n+++ fixed.py\t2026-10-17 17:02:19.650167331 -0400\n@@ -6,5 +6,5 @@\n trace = []\n for k, v in d.items():\n     trace.append(v)\n-    _ = d[k]  # triggers PLR1733: logs again; fix would omit log\n+    _ = v  # triggers PLR1733: logs again; fix would omit log\n print('trace:', trace)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Async Def/Await Ordering",
+      "hazard": "In async context, replacing d[k] with v alters await timing if d[k] is awaitable.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              12,
+              19
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "result: ['before', ('after', 'x')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nresult: ['before', ('after', 'x')]\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: TypeError: 'int' object can't be awaited"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'int' object can't be awaited",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:19.745168460 -0400\n+++ fixed.py\t2026-10-17 17:02:20.064172249 -0400\n@@ -9,7 +9,7 @@\n     trace = []\n     for k, v in d.items():\n         trace.append('before')\n-        x = await d[k]  # triggers PLR1733: would become await v — but v is int, not awaitable\n+        x = await v  # triggers PLR1733: would become await v — but v is int, not awaitable\n         trace.append(('after', x))\n     return trace\n import asyncio\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Pathlib vs Os.Path Behavior",
+      "hazard": "d[k] path lookup may trigger filesystem side effects (stat, symlink resolve); v does not.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              8,
+              26
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              11,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "trace: ['start', '<wd>/prog\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "trace: ['start', '<wd>/prog\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:20.313175205 -0400\n+++ fixed.py\t2026-10-17 17:02:20.481177200 -0400\n@@ -5,10 +5,10 @@\n trace = []\n for k, v in d.items():\n     trace.append('start')\n-    p = os.path.realpath(d[k])  # triggers PLR1733: follows symlink via d[k]; fix would use v (string)\n+    p = os.path.realpath(v)  # triggers PLR1733: follows symlink via d[k]; fix would use v (string)\n     trace.append(p)\n     try:\n-        os.stat(d[k])           # also triggers PLR1733 in same loop\n+        os.stat(v)           # also triggers PLR1733 in same loop\n     except FileNotFoundError as e:\n         trace.append(('stat error', e))\n print('trace:', trace)\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Loop variable reassignment after use",
+      "hazard": "Rewriting d[k] to v changes behavior if the loop variable v is reassigned later in the loop body, as the original code would re-read the current dictionary value while the fix uses the stale local var",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Lambda capture in default argument",
+      "hazard": "When d[k] is used in a default argument or lambda capture within the loop, the timing of evaluation shifts from lookup-time to loop-entry-time, potentially capturing different values if the dictionary",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Custom mapping with __getitem__ side effects",
+      "hazard": "When d is not a standard dict but a custom mapping with __getitem__ side effects (e.g., logging, state changes), replacing d[k] with v omits those effects.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1733",
+            "severity": "warning",
+            "message": "Unnecessary lookup of dictionary value by key",
+            "span": [
+              13,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\nlog: ['a']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n1\nlog: ['a']\nstdout after:\n1\nlog: []"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\nlog: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:02:26.780251901 -0400\n+++ fixed.py\t2026-10-17 17:02:26.944253843 -0400\n@@ -10,5 +10,5 @@\n \n m = Mapping()\n for k, v in m.items():\n-    print(m[k])  # triggers __getitem__, logs 'a'\n+    print(v)  # triggers __getitem__, logs 'a'\n print('log:', m.log)\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Mutable default arguments and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Inline comment on d[k] expression",
+      "hazard": "Comments attached to the d[k] expression may be lost if the autofix replaces the entire expression without preserving inline or trailing comments.",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Generator expression inside loop",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "String formatting with % and .format()",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Star-import and module-level interaction",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "PLR1733",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "100\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

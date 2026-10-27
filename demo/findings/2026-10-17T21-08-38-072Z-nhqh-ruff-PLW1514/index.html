@@ -1,0 +1,368 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLW1514 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLW1514 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-08-38-072Z-nhqh-ruff-PLW1514 · fix labelled <b>unknown</b> · 15 programs, 13 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0086</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags any call to built-in functions like `open`, `io.open`, `codecs.open`, `fileinput.input`, or `tarfile.open` when used in text mode without an explicit `encoding` argument.</p><p class="mut">Fix: Adds `encoding=&#39;utf-8&#39;` as a keyword argument to the function call, inserted before any `**kwargs` unpacking if present, otherwise appended at the end of the argument list.</p><details><summary>12 hazards</summary><ul><li>Adding `encoding=&#39;utf-8&#39;` to a binary mode call like `open(&#39;file&#39;, &#39;rb&#39;)` creates an invalid argument combination that raises `ValueError` because encoding is not allowed in binary mode.</li><li>If the call already contains an `encoding` keyword argument (e.g., via `**kwargs` that includes &#39;encoding&#39;), adding another `encoding=&#39;utf-8&#39;` results in a duplicate keyword argument error (`TypeError: got multiple values for argument &#39;encoding&#39;`).</li><li>When the file is opened in a locale-specific encoding (e.g., Windows-1252 on Western European Windows systems), forcing UTF-8 causes `UnicodeDecodeError` when reading existing non-UTF-8 encoded files.</li><li>For `tarfile.open`, adding `encoding=&#39;utf-8&#39;` is invalid because `tarfile.open` does not accept an `encoding` parameter; it raises `TypeError: unexpected keyword argument`.</li><li>In `fileinput.input`, the `encoding` parameter behaves differently—it applies to all files processed, and forcing UTF-8 may break when processing mixed-encoding input streams.</li><li>If the `open` call is shadowed by a local variable or imported alias (e.g., `local_open = open; local_open(&#39;file&#39;)`), the autofix may incorrectly modify the wrong function or fail to recognize the call as subject to the rule.</li><li>When the call uses positional arguments where the mode is passed as a variable (e.g., `open(file, mode)`), inserting `encoding=&#39;utf-8&#39;` assumes the mode is text-based, but if `mode` resolves to a binary mode at runtime, the call becomes invalid.</li><li>Adding `encoding=&#39;utf-8&#39;` may interfere with code that relies on the system default encoding for compatibility with legacy data or inter-process communication, silently corrupting data or causing downstream failures.</li><li>If the call appears within a lambda or comprehension and is modified, the autofix may inadvertently alter binding or evaluation timing if the original comment or formatting is disturbed during rewrite.</li><li>In codebases with custom `open` wrappers that expect no encoding argument (e.g., for testing mocks), injecting `encoding=&#39;utf-8&#39;` breaks the wrapper’s signature assumption, causing `TypeError` during test execution.</li><li>When the original source contains trailing comments (e.g., `open(&#39;file&#39;)  # read config`), the autofix may drop or misplace the comment due to improper reflow, especially if the edit disrupts whitespace or delimiter handling.</li><li>If the function call is part of a larger expression (e.g., `data = open(&#39;file&#39;).read()`), inserting `encoding=&#39;utf-8&#39;` changes the temporary object’s behavior, potentially causing failure if the file encoding is not UTF-8.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generators vs Lists - Encoding Affects Lazy Evaluation</td><td class="mut">Adding encoding=&#39;utf-8&#39; changes decoding behavior lazily; a generator expression that read</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Locale-Specific Encoding - Forced UTF-8 Causes Decode Error</td><td class="mut">On systems where default encoding is Windows-1252, reading a CP1252-encoded file with forc</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Class Attributes - Encoding in Descriptor Triggers Unexpected Init</td><td class="mut">The fix adds encoding during class-level file open in a descriptor, causing side effects a</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Dict Ordering - Key Depends on File Read Order</td><td class="mut">The rewritten open call changes what bytes are successfully decoded, altering which lines </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>String Formatting - % Operator on Decoded Bytes</td><td class="mut">The fix changes the decoded string from open(), which is then formatted with %; if decodin</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation Order - Side Effects in Open Args</td><td class="mut">The fix inserts encoding=&#39;utf-8&#39; as a kwarg, shifting positional args if **kwargs follows;</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Keyword-Only Args - Encoding Added Before **kwargs Changes Call Semantics</td><td class="mut">When the rule inserts encoding=&#39;utf-8&#39; before **kwargs in a function call that forwards to</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Custom open wrapper expects no encoding</td><td class="mut">Injecting encoding=&#39;utf-8&#39; breaks custom wrapper signatures expecting no encoding arg.</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>tarfile.open rejects encoding kwarg</td><td class="mut">tarfile.open does not accept encoding argument; adding it raises TypeError.</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Async generator interaction with encoding fix</td><td class="mut">Inserting encoding=&#39;utf-8&#39; in async context may affect await ordering or generator launch.</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Generator vs list: lazy evaluation affected by encoding</td><td class="mut">Adding encoding=&#39;utf-8&#39; changes decoding behavior in lazy generator expressions.</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Duplicate encoding via **kwargs</td><td class="mut">If **kwargs contains &#39;encoding&#39;, adding encoding=&#39;utf-8&#39; causes duplicate keyword error.</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Locale-specific encoding mismatch (Windows-1252)</td><td class="mut">Forcing UTF-8 on legacy encoding file causes UnicodeDecodeError.</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Exception in finally/else with rewritten open</td><td class="mut">Rewritten open affects exception handling in finally/else blocks.</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Open in larger expression: .read() on temporary</td><td class="mut">Inserting encoding=&#39;utf-8&#39; changes temporary file object behavior in expressions.</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Generators vs Lists - Encoding Affects Lazy Evaluation</summary><pre>import sys
+lines = [b&#39;\xff\xfe&#39;]
+def gen():
+    for b in lines:
+        yield b.decode(&#39;utf-16-le&#39;)
+g = gen()
+try:
+    next(g)
+except UnicodeDecodeError as e:
+    print(&#39;gen failed:&#39;, type(e).__name__, e)
+# Now simulate fixed code: open with encoding=&#39;utf-8&#39; on binary data
+try:
+    with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+        f.write(b&#39;\xff\xfe&#39;)
+    with open(&#39;test.bin&#39;, &#39;r&#39;, encoding=&#39;utf-8&#39;) as f:  # Rule triggers here
+        content = f.read()
+    print(&#39;fixed read:&#39;, repr(content))
+except Exception as e:
+    print(&#39;fixed error:&#39;, type(e).__name__, e)
+finally:
+    import os
+    try: os.remove(&#39;test.bin&#39;)
+    except: pass
+</pre></details><details id="r1-p002"><summary>r1-p002 — Locale-Specific Encoding - Forced UTF-8 Causes Decode Error</summary><pre>import sys
+# Create a file encoded in Windows-1252 (contains euro symbol \x80)
+with open(&#39;test.txt&#39;, &#39;wb&#39;) as f:
+    f.write(b&#39;Hello \x80 World&#39;)  # € in CP1252
+# Original behavior: uses system default (assumed CP1252 here)
+try:
+    with open(&#39;test.txt&#39;, &#39;r&#39;) as f:  # Rule triggers: adds encoding=&#39;utf-8&#39;
+        content = f.read()
+    print(&#39;read success:&#39;, repr(content))
+except UnicodeDecodeError as e:
+    print(&#39;read failed:&#39;, type(e).__name__, e)
+except Exception as e:
+    print(&#39;other error:&#39;, type(e).__name__, e)
+finally:
+    import os
+    try: os.remove(&#39;test.txt&#39;)
+    except: pass
+</pre></details><details id="r1-p003"><summary>r1-p003 — Class Attributes - Encoding in Descriptor Triggers Unexpected Init</summary><pre>class FileDescriptor:
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        return obj._value
+    def __set__(self, obj, value):
+        obj._value = value
+
+class DataHolder:
+    value = FileDescriptor()
+    # Rule triggers here: open in class scope
+    _log = open(&#39;log.txt&#39;, &#39;a&#39;)  # Fix adds encoding=&#39;utf-8&#39;
+    def __init__(self, v):
+        self.value = v
+        self._log.write(str(v) + &#39;\n&#39;)
+
+d = DataHolder(42)
+print(&#39;log written&#39;)
+with open(&#39;log.txt&#39;) as f:
+    print(&#39;log contents:&#39;, repr(f.read()))
+import os
+try: os.remove(&#39;log.txt&#39;)
+except: pass
+</pre></details><details id="r1-p004"><summary>r1-p004 — Dict Ordering - Key Depends on File Read Order</summary><pre>import sys
+# Create two-line file: first line valid UTF-8, second has raw byte
+with open(&#39;data.txt&#39;, &#39;wb&#39;) as f:
+    f.write(b&#39;key1\n\xff\n&#39;)
+try:
+    with open(&#39;data.txt&#39;, &#39;r&#39;) as f:  # Rule triggers: adds encoding=&#39;utf-8&#39;
+        lines = f.readlines()
+    d = {}
+    for i, line in enumerate(lines):
+        try:
+            d[f&#39;key{i}&#39;] = line.strip()
+        except:
+            pass  # Skip failed lines
+    print(&#39;dict items:&#39;, list(d.items()))
+except UnicodeDecodeError as e:
+    print(&#39;decode error:&#39;, type(e).__name__, e)
+finally:
+    import os
+    try: os.remove(&#39;data.txt&#39;)
+    except: pass
+</pre></details><details id="r1-p005"><summary>r1-p005 — String Formatting - % Operator on Decoded Bytes</summary><pre>import sys
+# Create UTF-16 LE file with BOM
+with open(&#39;msg.txt&#39;, &#39;wb&#39;) as f:
+    f.write(b&#39;\xff\feH\x00e\x00l\x00l\x00o\x00&#39;)
+try:
+    with open(&#39;msg.txt&#39;, &#39;r&#39;) as f:  # Rule triggers: adds encoding=&#39;utf-8&#39; -&gt; decodes UTF-16 as UTF-8 -&gt; garbage
+        s = f.read()
+    formatted = &#39;Message: %s&#39; % s
+    print(&#39;formatted:&#39;, formatted)
+except Exception as e:
+    print(&#39;error:&#39;, type(e).__name__, e)
+finally:
+    import os
+    try: os.remove(&#39;msg.txt&#39;)
+    except: pass
+</pre></details><details id="r1-p006"><summary>r1-p006 — Evaluation Order - Side Effects in Open Args</summary><pre>counter = 0
+def get_mode():
+    global counter
+    counter += 1
+    return &#39;r&#39;
+counter = 0
+try:
+    # Normal: open(file, get_mode()) -&gt; get_mode called once
+    with open(&#39;tmp.txt&#39;, get_mode()) as f:
+        pass
+    print(&#39;normal mode calls:&#39;, counter)
+    counter = 0
+    # After fix: if rule adds encoding as kwarg before **kwargs, but we don&#39;t have **kwargs.
+    # Instead, simulate case where open is called via *args from tuple that includes mode.
+    # Actually, better: the fix does not reorder unless **kwargs present.
+    # So create a call with **kwargs to trigger reordering.
+    def get_file():
+        global counter
+        counter += 1
+        return &#39;tmp.txt&#39;
+    def get_mode():
+        global counter
+        counter += 1
+        return &#39;r&#39;
+    counter = 0
+    args = (get_file(), get_mode())
+    kwargs = {}
+    try:
+        with open(*args, **kwargs) as f:  # Before fix: args[0], args[1]
+            pass
+        print(&#39;normal call order counters:&#39;, counter)
+        counter = 0
+        # After fix: becomes open(*args, encoding=&#39;utf-8&#39;, **kwargs)
+        # Still same order: args[0], args[1], then kwarg
+        # No change? Then hazard not met.
+        # Need case where **kwargs exists and encoding inserted before it.
+        # Let’s make kwargs non-empty.
+        def get_kw():
+            global counter
+            counter += 1
+            return {&#39;buffering&#39;: -1}
+        counter = 0
+        args = (get_file(), &#39;r&#39;)
+        kw_arg = get_kw()
+        try:
+            with open(*args, encoding=&#39;utf-8&#39;, **kw_arg) as f:  # Simulated fixed version
+                pass
+            print(&#39;fixed call order counters:&#39;, counter)
+        except Exception as e:
+            print(&#39;fixed error:&#39;, type(e).__name__, e)
+    except Exception as e:
+        print(&#39;error:&#39;, type(e).__name__, e)
+finally:
+    import os
+    try: os.remove(&#39;tmp.txt&#39;)
+    except: pass
+</pre></details><details id="r1-p007"><summary>r1-p007 — Keyword-Only Args - Encoding Added Before **kwargs Changes Call Semantics</summary><pre>def my_open(file, *, mode=&#39;r&#39;, encoding=None, **kwargs):
+    if encoding is None and &#39;b&#39; not in mode:
+        encoding = &#39;utf-8&#39;
+    return open(file, mode=mode, encoding=encoding, **kwargs)
+
+# Rule triggers on the open call inside my_open
+try:
+    with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+        f.write(&#39;hello&#39;)
+    # This call: my_open(&#39;test.txt&#39;, mode=&#39;r&#39;, buffering=-1)
+    # Before fix: open(&#39;test.txt&#39;, mode=&#39;r&#39;, buffering=-1) -&gt; encoding=None -&gt; uses default
+    # After fix: open(&#39;test.txt&#39;, mode=&#39;r&#39;, encoding=&#39;utf-8&#39;, buffering=-1) -&gt; forces utf-8
+    with my_open(&#39;test.txt&#39;, mode=&#39;r&#39;, buffering=-1) as f:
+        content = f.read()
+    print(&#39;read content:&#39;, repr(content))
+except Exception as e:
+    print(&#39;error:&#39;, type(e).__name__, e)
+finally:
+    import os
+    try: os.remove(&#39;test.txt&#39;)
+    except: pass
+</pre></details><details id="r2-p001"><summary>r2-p001 — Custom open wrapper expects no encoding</summary><pre>import os
+
+def my_open(*args, **kwargs):
+    return open(*args, **kwargs)
+
+try:
+    f = my_open(&#39;test.txt&#39;, &#39;w&#39;)
+    f.write(&#39;hi&#39;)
+    f.close()
+except TypeError as e:
+    print(&#39;TypeError:&#39;, e)
+
+with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;hello&#39;)
+
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(&#39;Content:&#39;, f.read())
+
+os.remove(&#39;test.txt&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — tarfile.open rejects encoding kwarg</summary><pre>import tarfile
+import os
+
+with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;data&#39;)
+
+with tarfile.open(&#39;test.tar&#39;, &#39;w&#39;) as tf:
+    tf.add(&#39;test.txt&#39;)
+
+try:
+    with tarfile.open(&#39;test.tar&#39;, &#39;r&#39;, encoding=&#39;utf-8&#39;) as tf:
+        pass
+except TypeError as e:
+    print(&#39;TypeError:&#39;, e)
+
+os.remove(&#39;test.txt&#39;)
+os.remove(&#39;test.tar&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Async generator interaction with encoding fix</summary><pre>import asyncio
+
+async def read_file():
+    f = open(&#39;data.txt&#39;)
+    yield f.read()
+    f.close()
+
+async def main():
+    with open(&#39;data.txt&#39;, &#39;w&#39;) as f:
+        f.write(&#39;hello&#39;)
+    gen = read_file()
+    try:
+        async for item in gen:
+            print(&#39;Yielded:&#39;, item)
+    except Exception as e:
+        print(&#39;Error:&#39;, type(e).__name__, e)
+
+asyncio.run(main())
+import os
+os.remove(&#39;data.txt&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Generator vs list: lazy evaluation affected by encoding</summary><pre>import os
+
+with open(&#39;latin.txt&#39;, &#39;wb&#39;) as f:
+    f.write(b&#39;h\xe9llo&#39;)  # &#39;héllo&#39; in latin-1
+
+# Generator expression: lazy, uses open call
+lines_gen = (line.decode(&#39;latin-1&#39;) for line in open(&#39;latin.txt&#39;, &#39;rb&#39;))
+print(&#39;Gen first:&#39;, next(lines_gen))
+
+# After fix, rule would add encoding=&#39;utf-8&#39; to open(...) above
+# But currently it&#39;s rb mode, so rule should not fire. Need text mode.
+
+os.remove(&#39;latin.txt&#39;)
+
+with open(&#39;latin.txt&#39;, &#39;w&#39;, encoding=&#39;latin-1&#39;) as f:
+    f.write(&#39;héllo&#39;)
+
+# Now rule fires on open(...) in genexpr
+lines_gen = (line for line in open(&#39;latin.txt&#39;))  # rule triggers here
+try:
+    print(&#39;Gen first (rule-affected):&#39;, next(lines_gen))
+except UnicodeDecodeError as e:
+    print(&#39;UnicodeDecodeError in gen:&#39;, e)
+
+# List version: eager
+lines_list = [line for line in open(&#39;latin.txt&#39;)]
+print(&#39;List first:&#39;, lines_list[0])
+
+os.remove(&#39;latin.txt&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Duplicate encoding via **kwargs</summary><pre>import os
+
+with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;hi&#39;)
+
+kwargs = {&#39;encoding&#39;: &#39;utf-8&#39;}
+try:
+    # Rule fires on open(&#39;test.txt&#39;) and adds encoding=&#39;utf-8&#39;
+    # But **kwargs also has encoding -&gt; duplicate
+    f = open(&#39;test.txt&#39;, **kwargs)  # This line is NOT touched by rule
+    print(&#39;Read:&#39;, f.read())
+    f.close()
+except TypeError as e:
+    print(&#39;TypeError:&#39;, e)
+
+# Now make the rule trigger on a call WITHOUT **kwargs but we simulate hazard via comment
+# Actually, to trigger rule AND have **kwargs with encoding, we need:
+# But rule only adds if no encoding present. So we need a call like open(x) + **{&#39;encoding&#39;:x}
+# That would be open(x, **{&#39;encoding&#39;:&#39;utf-8&#39;}) -&gt; rule does NOT fire because encoding present via **kwargs?
+# According to spec: rule fires only when no explicit encoding. So this is near-miss.
+# Let&#39;s do a call that rule WILL fire on, but we inject kwargs that hapen to have encoding via unpacking in a way that rule doesn&#39;t see?
+# Impossible per spec. Instead, we show what happens if fix is applied incorrectly.
+# We&#39;ll instead show a case where rule does NOT fire but user might expect it to.
+
+# For hazard: assume rule fires on open(x) and adds encoding, but caller passed **{&#39;encoding&#39;:x}
+# Not possible statically. So we simulate by having two calls.
+
+print(&#39;Skip: rule cannot fire and cause duplicate via **kwargs per spec&#39;)
+
+os.remove(&#39;test.txt&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Locale-specific encoding mismatch (Windows-1252)</summary><pre>import os
+
+# Create a file encoded in windows-1252 (cp1252)
+with open(&#39;local.txt&#39;, &#39;w&#39;, encoding=&#39;cp1252&#39;) as f:
+    f.write(&#39;caf\xe9&#39;)  # &#39;é&#39; in cp1252
+
+# Rule fires: open(&#39;local.txt&#39;) -&gt; adds encoding=&#39;utf-8&#39;
+try:
+    with open(&#39;local.txt&#39;) as f:
+        print(&#39;Read:&#39;, f.read())
+except UnicodeDecodeError as e:
+    print(&#39;UnicodeDecodeError:&#39;, e)
+
+# Correct way
+with open(&#39;local.txt&#39;, &#39;r&#39;, encoding=&#39;cp1252&#39;) as f:
+    print(&#39;Correct read:&#39;, f.read())
+
+os.remove(&#39;local.txt&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Exception in finally/else with rewritten open</summary><pre>import os
+
+with open(&#39;bad.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;broken&#39;)
+
+try:
+    f = open(&#39;bad.txt&#39;)  # rule fires: adds encoding=&#39;utf-8&#39;
+    try:
+        raise ValueError(&#39;fail&#39;)
+    finally:
+        f.close()
+        print(&#39;Finally ran&#39;)
+except ValueError as e:
+    print(&#39;Caught:&#39;, e)
+except Exception as e:
+    print(&#39;Other:&#39;, type(e).__name__, e)
+
+try:
+    with open(&#39;bad.txt&#39;) as f:
+        raise ValueError(&#39;fail&#39;)
+except ValueError as e:
+    print(&#39;With-stmt caught:&#39;, e)
+
+os.remove(&#39;bad.txt&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Open in larger expression: .read() on temporary</summary><pre>import os
+
+with open(&#39;test.txt&#39;, &#39;w&#39;, encoding=&#39;latin-1&#39;) as f:
+    f.write(&#39;h\xe9llo&#39;)  # &#39;héllo&#39; in latin-1
+
+# Rule fires on: open(&#39;test.txt&#39;) in expression below
+try:
+    data = open(&#39;test.txt&#39;).read()  # rule adds encoding=&#39;utf-8&#39; here
+    print(&#39;Data (rule-affected):&#39;, repr(data))
+except UnicodeDecodeError as e:
+    print(&#39;UnicodeDecodeError:&#39;, e)
+
+# Without fix (or correct encoding)
+with open(&#39;test.txt&#39;, &#39;r&#39;, encoding=&#39;latin-1&#39;) as f:
+    print(&#39;Correct:&#39;, repr(f.read()))
+
+os.remove(&#39;test.txt&#39;)
+</pre></details></body></html>

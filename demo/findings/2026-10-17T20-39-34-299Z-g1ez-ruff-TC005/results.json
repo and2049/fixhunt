@@ -1,0 +1,2304 @@
+{
+  "runId": "2026-10-17T20-39-34-299Z-g1ez-ruff-TC005",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "TC005",
+    "fixKind": "unknown",
+    "docs": "# empty-type-checking-block (TC005)\n\nDerived from the **flake8-type-checking** linter.\n\nFix is always available.\n\n## What it does\nChecks for an empty type-checking block.\n\n## Why is this bad?\nThe type-checking block does not do anything and should be removed to avoid\nconfusion.\n\n## Example\n```python\nfrom typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    pass\n\nprint(\"Hello, world!\")\n```\n\nUse instead:\n```python\nprint(\"Hello, world!\")\n```\n\n## References\n- [PEP 563: Runtime annotation resolution and `TYPE_CHECKING`](https://peps.python.org/pep-0563/#runtime-annotation-resolution-and-type-checking)\n"
+  },
+  "analysis": {
+    "summary": "Flags empty if TYPE_CHECKING blocks containing only pass statements.",
+    "firingShapes": [
+      "import sys;\\nif TYPE_CHECKING:\\n    pass",
+      "def f():\\n    if TYPE_CHECKING:\\n        x = None\\n    else:\\n        print(x)",
+      "try:\\n    if TYPE_CHECKING:\\n        pass\\nexcept Exception:\\n    raise",
+      "class C:\\n    def __init__(self):\\n        if TYPE_CHECKING:\\n            self.x = int()",
+      "with open('file') as f:\\n    if TYPE_CHECKING:\\n        pass\\n    data = f.read()",
+      "async def async_f():\\n    await something\\n    if TYPE_CHECKING:\\n        pass",
+      "# comment\\nif TYPE_CHECKING:\\n    # another\\n    pass\\nreal_code()",
+      "lambda: (if TYPE_CHECKING: pass)"
+    ],
+    "silentShapes": [
+      "if TYPE_CHECKING:\\n    x: int = 1",
+      "if TYPE_CHECKING and DEBUG:\\n    pass",
+      "if not TYPE_CHECKING:\\n    pass",
+      "if TYPE_CHECKING:\\n    raise NotImplementedError",
+      "if True:\\n    if TYPE_CHECKING:\\n        pass"
+    ],
+    "fixDescription": "Removes the entire if TYPE_CHECKING: block when its body consists solely of a pass statement, preserving surrounding indentation and code structure.",
+    "hazards": [
+      "Removing the block may change line numbers, affecting debuggers or stack traces that rely on exact source locations.",
+      "If the block contains a trailing comment after pass, the comment will be deleted along with the block.",
+      "In nested contexts like class or function definitions, removing the block alters the indentation depth of subsequent lines, potentially breaking syntax if mixed tabs/spaces exist.",
+      "When the block follows a try/except/finally clause, its removal can change the visual grouping and lead to misinterpretation of exception handling scope.",
+      "If the block is the only statement in a suite (e.g., a lambda or one-liner if), deleting it may result in an empty suite, causing a syntax error.",
+      "In async functions, removing the block could affect the perceived coroutine structure if tools inspect raw source for await placement context.",
+      "When the block is adjacent to a multi-line statement (e.g., with implicit line continuation), its removal may alter the boundary detection for the continued line.",
+      "If the block is used as a placeholder for future type annotations (common in stubs), removing it deletes intentional design intent documented via comments nearby."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0814268,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 12,
+    "fixed": 12,
+    "fix-changes-behavior": 6,
+    "disputed": 2
+  },
+  "reports": [
+    {
+      "programId": "r1-p002",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "def outer():\n\tif True:\n\t\tpass\n\tif TYPE_CHECKING:\n\t\tpass\nouter()\n",
+      "lines": {
+        "before": 9,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T20-39-34-299Z-g1ez-ruff-TC005/reports/r1-p002.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/28868",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15681",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/pull/16669",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15526",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6236",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11245",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/24713",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9197",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9298",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule removes an `if TYPE_CHECKING:` block without ensuring `TYPE_CHECKING` is imported from `typing`. In the original code, the block is never executed because `TYPE_CHECKING` is false at runtime, but the name must still be defined. The fix deletes the block, eliminating the `NameError` and changing the exit status from 1 to 0. The documentation presents the rewrite as a safe removal of dead code, but it is only safe when `TYPE_CHECKING` is properly imported.",
+        "docsQuote": "The type-checking block does not do anything and should be removed to avoid confusion.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC005 fix",
+          "TC005 remove unused conditional block",
+          "TC005 delete dead if TYPE_CHECKING guard",
+          "TC005 eliminate unreachable type checking import"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC004 runtime-import-in-type-checking-block fixer causes follow up: TC005 empty-type-checking-block + F401 unused-import + I001 unsorted-imports",
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "state": "open",
+            "snippet": "### Summary\n\nMany rules causes follow up errors of other violations. I tend to not create issues for them but that is annoying. But here is a candidate which I would like to report.\n\nMaybe you can integrate into the fix rule, that known other fixers (at least if they are allowed, but possibly always"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Ruff Server errors when using a VSCode interactive session",
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "state": "closed",
+            "snippet": "Apologies for commenting on a closed ticket, but it looks to be related:\r\nThere seems to be a similar issue when using a VSCode interactive session (VSCode > `Run Current File in Interactive Window` or `Create Interactive Window`:\r\n\r\nMy local Ruff is on `0.4.8` \r\n```\r\n2024-06-12 16:23:08.468 [info] "
+          },
+          {
+            "source": "github",
+            "title": "TC003/TC002/TC001 False positive on manual `TYPE_CHECKING` with `__future__.annotations`",
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "state": "closed",
+            "snippet": "### Description\n\nIf you manually set `TYPE_CHECKING` to `False` and use it with `__future__.annotations`, ruff will raise TC003/TC002/TC001 falsepositives on the imports in your `TYPE_CHECKING` block as it seems to only check for `typing.TYPE_CHECKING`.\n\nCommand: `ruff check test.py --isolated --fix"
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Can \"Unknown rule selector\" be a warning, rather than an error? · Issue #5159 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "snippet": "1. A new version of `ruff` adds a new rule that I choose to ignore (i.e. `FIX002` for `TODO` comments)\n2. I update my `.ruff.toml` to ignore `FIX002` (KyleKing/calcipy\\_template@5a439c6)\n3. If I don't update `ruff` in `pre-commmit`, `.venv`, `pipx`, `CI`, and anywhere else I use it, I'll start getti"
+          },
+          {
+            "source": "tavily",
+            "title": "Consider all `TYPE_CHECKING` symbols for type-checking blocks by MichaReiser · Pull Request #16669 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "snippet": "module (comment)). The preview behavior was first released with Ruff 0.9.5 (6th of February), which was about a month ago. There are no open issues or PRs for the changed behavior ## Test Plan The snapshots for `SIM108` change because `SIM108` ignored type checking blocks but it can no simplify `if "
+          },
+          {
+            "source": "tavily",
+            "title": "Allow Self-Assignment of variable in TYPE_CHECKING block · Issue #15526 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/15526",
+            "snippet": "It's not a complete solution and there are still some other required runtime uses that are difficult/impossible to detect statically (there are also cases where we can't statically know either way, like forward references to models in SQLAlchemy's `Mapped`). I am actively working to make `flake8-typ"
+          },
+          {
+            "source": "tavily",
+            "title": "Don't move imports under `if TYPE_CHECKING` if they're added to `__all__` · Issue #6236 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/6236",
+            "snippet": "closed this as completedon Aug 1, 2023\n3. ### pawamoycommentedon Aug 1, 2023\n\n   @pawamoy\n\n   pawamoy\n\n   on Aug 1, 2023\n\n   Author\n\n   More actions\n\n   Incredible, thank you so much!\n4. ### charliermarshcommentedon Aug 1, 2023\n\n   @charliermarsh\n\n   charliermarsh\n\n   on Aug 1, 2023\n\n   Member\n\n   M"
+          },
+          {
+            "source": "tavily",
+            "title": "False positive for `F821` on circular reference in `TYPE_CHECKING` block · Issue #11245 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/11245",
+            "snippet": "More actions\n\n   Not sure... @AlexWaygood would know.\n4. ### AlexWaygoodcommentedon May 2, 2024\n\n   @AlexWaygood\n\n   AlexWaygood\n\n   on May 2, 2024\n\n   Member\n\n   More actions [...] More actions\n\n   Yeah I think `from __future__ import annotations` is irrelevant here, but if it's in an `if TYPE_CHEC"
+          },
+          {
+            "source": "tavily",
+            "title": "PLR6301 doesn't detect @override from TYPE_CHECKING · Issue #24713 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/24713",
+            "snippet": "More actions\n\n   Thanks for the report!\n\n   I don't think this is an issue with `PLR6301` or with our `TYPE_CHECKING` handling, at least directly. Instead, this is caused by the `else` branch of the `if TYPE_CHECKING` block. That seems to be shadowing the first definition in a way that our semantic "
+          },
+          {
+            "source": "tavily",
+            "title": "[TCH] moving `typing` imports into `TYPE_CHECKING` block does not work as intended · Issue #9197 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9197",
+            "snippet": "Oh I am also sorry about this. I usually carefully read the docs before complaining but I think it passed under the radar. However, with that enabled, I also have a linter panic in my case as yopu said and this is probably related to #9196. For instance, the following linter-panicks\n\n   ```\n   from "
+          },
+          {
+            "source": "tavily",
+            "title": "F401: Ruff Incorrectly Flags Quoted Class used as Generic Parameter as Unused · Issue #9298 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9298",
+            "snippet": "Here, even though `ModelB` is only being passed in as the generic parameter, TCH moves it out of the type-checking block. If I try and quote `ModelB`.\n\n```\nfrom import annotations from typing import TypeVar Generic TYPE_CHECKING if TYPE_CHECKING from my_module import ModelB# Ruff flags `ModelB` as u"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "relation": "related",
+            "why": "same rule TC005 but the existing report is about follow-up errors after a TC004 fix, not the removal of an undefined TYPE_CHECKING block"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused function arguments with a specific variable name"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "relation": "unrelated",
+            "why": "VSCode interactive session server error, unrelated to TYPE_CHECKING handling"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "relation": "related",
+            "why": "same TC003/TC002/TC001 rules and TYPE_CHECKING construct but false positives on imports with manual TYPE_CHECKING and __future__.annotations"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "unrelated",
+            "why": "different rule TC006 about quoting generic parameters"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "unrelated",
+            "why": "feature request to implement flake8-type-checking, not a bug report"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "relation": "unrelated",
+            "why": "unknown rule selector warning vs error, unrelated to TYPE_CHECKING"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "relation": "related",
+            "why": "same TYPE_CHECKING construct and SIM108 rule but about considering all TYPE_CHECKING symbols, not removing undefined blocks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15526",
+            "relation": "related",
+            "why": "same TYPE_CHECKING construct but about self-assignment detection inside blocks, not removal of undefined blocks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6236",
+            "relation": "related",
+            "why": "same TYPE_CHECKING construct but about moving imports under TYPE_CHECKING when added to __all__"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11245",
+            "relation": "related",
+            "why": "same TYPE_CHECKING construct but false positive F821 on circular reference, not removal of undefined blocks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/24713",
+            "relation": "related",
+            "why": "same TYPE_CHECKING construct but PLR6301 override detection shadowed by else branch"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9197",
+            "relation": "related",
+            "why": "same TYPE_CHECKING construct but moving typing imports into block causes linter panic"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9298",
+            "relation": "related",
+            "why": "same TYPE_CHECKING construct but F401 false positive on quoted generic parameter moved out of block"
+          }
+        ],
+        "cost": 0.0044513999999999995
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:29:30.470045662 -0400\n+++ fixed.py\t2026-10-22 13:29:32.523079972 -0400\n@@ -1,6 +1,4 @@\n def outer():\n \tif True:\n \t\tpass\n-\tif TYPE_CHECKING:\n-\t\tpass\n outer()\n",
+        "observed": "exit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "def outer():\n\tif True:\n\t\tpass\nouter()\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC005 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original program defines `outer()` with two conditional blocks; when called, it evaluates both conditions—`True` always executes its body, while `if TYPE_CHECKING:` raises a `NameError` because `TYPE_CHECKING` is undefined in runtime scope. After removing that block via the fix, calling `outer()` only executes the first condition (`if True:`), which does nothing, allowing the function to complete without error. Thus, the behavior changes from raising an exception to returning normally, proving the rewrite is not semantics‑preserving despite being labeled \"safe.\"",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "def f(a=None):\n    if a is None:\n        a = []\n    if TYPE_CHECKING:\n        pass\nprint(f())\n",
+      "lines": {
+        "before": 9,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T20-39-34-299Z-g1ez-ruff-TC005/reports/r1-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/28868",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15681",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/pull/16669",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11368",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15526",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/16176",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9197",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix removes the `if TYPE_CHECKING:` block without ensuring `TYPE_CHECKING` is imported from `typing`. The original code crashed with a NameError because `TYPE_CHECKING` was undefined; after the fix, the crash disappears and the function returns `None`. Since the documentation presents the rewrite as a safe removal of dead code but does not mention the required import, the fix changes runtime behavior from an error to silent success in plausible code.",
+        "docsQuote": "The type-checking block does not do anything and should be removed to avoid confusion.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC005 fix",
+          "TC005 mutable default argument",
+          "ruff TC005 list initialization pattern",
+          "fix removes unused TYPE_CHECKING block"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC004 runtime-import-in-type-checking-block fixer causes follow up: TC005 empty-type-checking-block + F401 unused-import + I001 unsorted-imports",
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "state": "open",
+            "snippet": "### Summary\n\nMany rules causes follow up errors of other violations. I tend to not create issues for them but that is annoying. But here is a candidate which I would like to report.\n\nMaybe you can integrate into the fix rule, that known other fixers (at least if they are allowed, but possibly always"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Ruff Server errors when using a VSCode interactive session",
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "state": "closed",
+            "snippet": "Apologies for commenting on a closed ticket, but it looks to be related:\r\nThere seems to be a similar issue when using a VSCode interactive session (VSCode > `Run Current File in Interactive Window` or `Create Interactive Window`:\r\n\r\nMy local Ruff is on `0.4.8` \r\n```\r\n2024-06-12 16:23:08.468 [info] "
+          },
+          {
+            "source": "github",
+            "title": "TC003/TC002/TC001 False positive on manual `TYPE_CHECKING` with `__future__.annotations`",
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "state": "closed",
+            "snippet": "### Description\n\nIf you manually set `TYPE_CHECKING` to `False` and use it with `__future__.annotations`, ruff will raise TC003/TC002/TC001 falsepositives on the imports in your `TYPE_CHECKING` block as it seems to only check for `typing.TYPE_CHECKING`.\n\nCommand: `ruff check test.py --isolated --fix"
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Can \"Unknown rule selector\" be a warning, rather than an error? · Issue #5159 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "snippet": "1. A new version of `ruff` adds a new rule that I choose to ignore (i.e. `FIX002` for `TODO` comments)\n2. I update my `.ruff.toml` to ignore `FIX002` (KyleKing/calcipy\\_template@5a439c6)\n3. If I don't update `ruff` in `pre-commmit`, `.venv`, `pipx`, `CI`, and anywhere else I use it, I'll start getti"
+          },
+          {
+            "source": "tavily",
+            "title": "Autofix B006 (mutable-argument-default) · Issue #4693 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/4693",
+            "snippet": "> Default values for `kwargs` are mutable.\n>\n> As described in Common Gotchas section of \"The Hitchhiker's Guide to Python\", mutable arguments can be a tricky thing. This fixer replaces any default values that happen to be lists or dicts with None value, moving initialization from function definitio"
+          },
+          {
+            "source": "tavily",
+            "title": "Ignore `mutable-argument-default (B006)` in `.pyi` stubs · Issue #14026 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/14026",
+            "snippet": "I think that \"mutable\" defaults should be allowed in cases like these. Having explicit parameter defaults that match the runtime can be seen as a form of documentation. This is especially useful when the runtime sources aren't available, which is quite common in this `scipy-stubs` case.\n\nReactions a"
+          },
+          {
+            "source": "tavily",
+            "title": "B006 doesn’t flag mutable defaults when passed via a named constant · Issue #21142 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/21142",
+            "snippet": "Issue body actions\n\nRuff’s B006 (mutable-argument-default) correctly flags obvious mutable defaults written inline (e.g., {}, [], set()), but it does not warn when the default is a reference to a module-level named constant that is a mutable object (e.g., a set). This yields a false negative and can"
+          },
+          {
+            "source": "tavily",
+            "title": "mutable-dataclass-default (RUF008) not detecting mutable_default field · Issue #16539 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/16539",
+            "snippet": "```\n# For real fields, disallow mutable defaults. Use unhashable as a proxy# indicator for mutability. Read the __hash__ attribute from the class,# not the instance. if f _field_type is _FIELD and f default __class__ __hash__ is None raise ValueErrorf'mutable default {type(f.default)} for field '{ty"
+          },
+          {
+            "source": "tavily",
+            "title": "B006 doesn’t detect mutable defaults in tuples, generators, and assignment expressions · Issue #20004 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/20004",
+            "snippet": "### Summary\n\nmutable-argument-default (B006) doesn’t detect certain guaranteed-mutable expressions which should be simple to support: tuples containing mutable expressions, generator expressions, and assignment expressions containing mutable expressions. Example:\n\n```\ncat >b006.py <<'# EOF'><<'# EOF"
+          },
+          {
+            "source": "tavily",
+            "title": "`per-file-target-version` override ignored when combined with a broader pattern · Issue #20668 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/20668",
+            "snippet": "### Summary\n\nWhen using `per-file-target-version` with both a broad pattern (e.g., `.py`) and a specific file override, Ruff appears to always apply the broad pattern, ignoring the more specific one.\n\n### Minimal reproducible example\n\nRepo: \n\nsrc/demo/example.py\n\n```\nfrom typing import List def exam"
+          },
+          {
+            "source": "tavily",
+            "title": "Support pattern matching · Issue #282 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/282",
+            "snippet": "Reacted by Gert van Dijk\n26. ### mikerollcommentedon Feb 22, 2023\n\n    @mikeroll\n\n    mikeroll\n\n    on Feb 22, 2023\n\n    More actions\n\n    @danstewart most likely you want this instead:\n\n    ```\n    \"ruff.importStrategy\": \"fromEnvironment\" \n    ```\n\n    which will find `ruff` in whatever the venv as"
+          },
+          {
+            "source": "tavily",
+            "title": "Ruff incorrectly ignores Python files included by negated pattern in .gitignore · Issue #8753 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/8753",
+            "snippet": "But BurntSushi/ripgrep#1050 remains unfixed.\n11. ### charliermarshcommentedon Nov 29, 2023\n\n    @charliermarsh\n\n    charliermarsh\n\n    on Nov 29, 2023\n\n    Member\n\n    More actions\n\n    I actually can't reproduce this on v0.1.6. @henribru - is that the exact pattern and directory structure you were "
+          },
+          {
+            "source": "tavily",
+            "title": "Consider all `TYPE_CHECKING` symbols for type-checking blocks by MichaReiser · Pull Request #16669 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "snippet": "## Test Plan\n\nThe snapshots for `SIM108` change because `SIM108` ignored type checking blocks but it can no  \n simplify `if 0` or `if False` blocks again because they're no longer considered type checking blocks.\n\nThe changes in the `TC005` snapshot or only due to that `if 0` and `if False` are no l"
+          },
+          {
+            "source": "github",
+            "title": "F401: Ruff Incorrectly Flags Quoted Class used as Generic Parameter as Unused",
+            "url": "https://github.com/astral-sh/ruff/issues/9298",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "TCH005 autofix deletes else block, removes functional code.",
+            "url": "https://github.com/astral-sh/ruff/issues/11368",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "tavily",
+            "title": "Allow Self-Assignment of variable in TYPE_CHECKING block · Issue #15526 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/15526",
+            "snippet": "I agree it's not very nice.  \n    However PyCharm does also not discover this properly, too.  \n    I have to do it anyway if I don't want PyCharm to flag it as an unused import.  \n    😕\n5. ### Avasamcommentedon Jan 17, 2025\n\n   @Avasam\n\n   Avasam\n\n   on Jan 17, 2025\n\n   Contributor\n\n   More actions"
+          },
+          {
+            "source": "tavily",
+            "title": "TC003: Allow `TYPE_CHECKING = False` · Issue #16176 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/16176",
+            "snippet": "```\n!\n```\n\nBut the whole point of this `typing-only-standard-library-import` TC003 check is to avoid imports that are only needed for type checking:\n\n> Unused imports add a performance overhead at runtime, and risk creating import cycles. If an import is only used in typing-only contexts, it can ins"
+          },
+          {
+            "source": "tavily",
+            "title": "Feature Request: Move type-only imports to `TYPE_CHECKING` block · Issue #11447 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/11447",
+            "snippet": "Howdy! 👋\n\nAlong the lines for formatting/fixing and import sorting and import removing, it'd be really nice if there was a tool (`ruff` could do it 😉 ) that would keep track of which imports were only used for type annotations and would move them to `if TYPE_CHECKING` blocks and replace their usag"
+          },
+          {
+            "source": "tavily",
+            "title": "New Rule Proposal: Consolidate imports from the same module unnecessarily split by `TYPE_CHECKING` · Issue #19548 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/19548",
+            "snippet": "Personally this is a high priority issue to me, since the switch towards Python 3.14 started Ruff asking us to move the imports into typechecking blocks in the first place. So in my personal case some of the code has become a bit cluttered by the TC003 autofix. [...] Motivation\n\nThe primary purpose "
+          },
+          {
+            "source": "tavily",
+            "title": "[TCH] moving `typing` imports into `TYPE_CHECKING` block does not work as intended · Issue #9197 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9197",
+            "snippet": "Issue body actions\n\nThis is a follow-up of #9196 (actually #9196 happened when I was trying to figure out this issue).\n\nConsider the following configuration:\n\n```\ntool rufftarget-version 'py311' ' ' ignore 'ALL' ' ' select 'TCH' ' ' tool ruff lintflake8-type-checkingexempt-modules\n```\n\nInvoking\n\n```"
+          },
+          {
+            "source": "tavily",
+            "title": "The option lines-after-imports does not work after if block · Issue #10014 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/10014",
+            "snippet": "Code snippet:\n\n```\nfrom random import random from typing import TYPE_CHECKING if TYPE_CHECKING from random import Random print random\n```\n\nCommand:\n\n```\nruff report.py --config report.toml --fix\n```\n\nExpected output:\n\n```\nfrom random import random from typing import TYPE_CHECKING if TYPE_CHECKING fr"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "relation": "related",
+            "why": "same rule TC005 but different construct (empty block after import removal vs undefined TYPE_CHECKING)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused arguments with unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "relation": "unrelated",
+            "why": "VSCode interactive session server errors, unrelated to TC005 fixer"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "relation": "related",
+            "why": "same TYPE_CHECKING detection logic but different construct (manual False assignment vs undefined name)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "unrelated",
+            "why": "TC006 rule about quoted generics, different rule and construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "unrelated",
+            "why": "feature request for flake8-type-checking implementation"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "relation": "unrelated",
+            "why": "unknown rule selector warning vs error, unrelated to TC005"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4693",
+            "relation": "unrelated",
+            "why": "B006 mutable argument default fixer, different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14026",
+            "relation": "unrelated",
+            "why": "B006 in .pyi stubs, different rule and context"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/21142",
+            "relation": "unrelated",
+            "why": "B006 false negative with named constants, different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16539",
+            "relation": "unrelated",
+            "why": "RUF008 mutable dataclass default, different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20004",
+            "relation": "unrelated",
+            "why": "B006 missing detection in tuples/generators, different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20668",
+            "relation": "unrelated",
+            "why": "per-file-target-version config override, unrelated to TC005"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/282",
+            "relation": "unrelated",
+            "why": "pattern matching support request, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8753",
+            "relation": "unrelated",
+            "why": "gitignore negated pattern file inclusion, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "relation": "related",
+            "why": "same TC005 rule and TYPE_CHECKING block detection logic, but PR changes what counts as a type-checking block"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9298",
+            "relation": "unrelated",
+            "why": "F401 unused import false positive on quoted generics, different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11368",
+            "relation": "related",
+            "why": "same TCH/TC family, autofix deletes else block removing code, similar over-deletion risk"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15526",
+            "relation": "related",
+            "why": "same TYPE_CHECKING block context, but about self-assignment to silence unused import"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16176",
+            "relation": "related",
+            "why": "same TC003 rule and TYPE_CHECKING = False handling, different construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11447",
+            "relation": "unrelated",
+            "why": "feature request to move imports into TYPE_CHECKING blocks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19548",
+            "relation": "unrelated",
+            "why": "consolidate imports split by TYPE_CHECKING, different issue"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9197",
+            "relation": "related",
+            "why": "same TCH rules moving imports into TYPE_CHECKING blocks, but different failure mode"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10014",
+            "relation": "unrelated",
+            "why": "lines-after-imports config option after if block, unrelated to TC005 fixer"
+          }
+        ],
+        "cost": 0.0068322999999999995
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:29:37.047155587 -0400\n+++ fixed.py\t2026-10-22 13:29:39.170191076 -0400\n@@ -1,6 +1,4 @@\n def f(a=None):\n     if a is None:\n         a = []\n-    if TYPE_CHECKING:\n-        pass\n print(f())\n",
+        "observed": "stdout before:\n\nstdout after:\nNone\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "def f(a=None):\n    if a is None:\n        a = []\nprint(f())\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC005 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original function raises a NameError when called because `TYPE_CHECKING` is undefined outside type-checking contexts; this exception prevents execution from reaching the `print` statement. Removing the conditional block eliminates the error, allowing the function to return the default list `[]`, which is then printed. Thus, the rewrite changes behavior by suppressing an exception that altered program flow.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p004",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "if TYPE_CHECKING:\n    pass\n",
+      "lines": {
+        "before": 5,
+        "after": 2
+      },
+      "reportPath": "runs/2026-10-17T20-39-34-299Z-g1ez-ruff-TC005/reports/r1-p004.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/28868",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15681",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/2214",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/17555",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9472",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/13929",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix removes the entire `if TYPE_CHECKING:` block, but the program does not import `TYPE_CHECKING` from `typing`. Before the fix, the block raises a `NameError` at runtime; after the fix, the program runs silently. The documentation presents the rewrite as a safe removal of dead code, assuming `TYPE_CHECKING` is defined, so the fix changes behavior for plausible code that omits the import.",
+        "docsQuote": "The type-checking block does not do anything and should be removed to avoid confusion.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC005 fix",
+          "TC005 if TYPE_CHECKING block",
+          "ruff TC005 conditional import guard",
+          "fix unused TYPE_CHECKING condition"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC004 runtime-import-in-type-checking-block fixer causes follow up: TC005 empty-type-checking-block + F401 unused-import + I001 unsorted-imports",
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "state": "open",
+            "snippet": "### Summary\n\nMany rules causes follow up errors of other violations. I tend to not create issues for them but that is annoying. But here is a candidate which I would like to report.\n\nMaybe you can integrate into the fix rule, that known other fixers (at least if they are allowed, but possibly always"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Ruff Server errors when using a VSCode interactive session",
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "state": "closed",
+            "snippet": "Apologies for commenting on a closed ticket, but it looks to be related:\r\nThere seems to be a similar issue when using a VSCode interactive session (VSCode > `Run Current File in Interactive Window` or `Create Interactive Window`:\r\n\r\nMy local Ruff is on `0.4.8` \r\n```\r\n2024-06-12 16:23:08.468 [info] "
+          },
+          {
+            "source": "github",
+            "title": "TC003/TC002/TC001 False positive on manual `TYPE_CHECKING` with `__future__.annotations`",
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "state": "closed",
+            "snippet": "### Description\n\nIf you manually set `TYPE_CHECKING` to `False` and use it with `__future__.annotations`, ruff will raise TC003/TC002/TC001 falsepositives on the imports in your `TYPE_CHECKING` block as it seems to only check for `typing.TYPE_CHECKING`.\n\nCommand: `ruff check test.py --isolated --fix"
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Can \"Unknown rule selector\" be a warning, rather than an error? · Issue #5159 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "snippet": "1. A new version of `ruff` adds a new rule that I choose to ignore (i.e. `FIX002` for `TODO` comments)\n2. I update my `.ruff.toml` to ignore `FIX002` (KyleKing/calcipy\\_template@5a439c6)\n3. If I don't update `ruff` in `pre-commmit`, `.venv`, `pipx`, `CI`, and anywhere else I use it, I'll start getti"
+          },
+          {
+            "source": "github",
+            "title": "TCH rules require from __future__ import annotations",
+            "url": "https://github.com/astral-sh/ruff/issues/2214",
+            "state": "closed",
+            "snippet": "The following does not work with 3.11.1 at runtime:\r\n\r\n\r\ntest.py\r\n```py\r\nfrom typing import TYPE_CHECKING\r\n\r\nif TYPE_CHECKING:\r\n    from test_b import B\r\n\r\ndef test(x: B) -> B:\r\n    return x\r\n```\r\n\r\ntest_b.py\r\n```py\r\nclass B:\r\n    ...\r\n```\r\n\r\n```sh\r\n$ python test.py \r\nTraceback (most recent call las"
+          },
+          {
+            "source": "github",
+            "title": "PLR6301 doesn't detect @override from TYPE_CHECKING",
+            "url": "https://github.com/astral-sh/ruff/issues/24713",
+            "state": "open",
+            "snippet": "### Summary\n\nThe preview rule `PLR6301` is meant to detect when a method should instead become a staticmethod, class method or a fucntion, and triggering when the `self` argument in the function body is unused.\n\nThe documentation for this rule explains that it doesn't trigger for methods decorated w"
+          },
+          {
+            "source": "github",
+            "title": "Support and lints for `lazy` imports in Python 3.15+",
+            "url": "https://github.com/astral-sh/ruff/issues/21305",
+            "state": "open",
+            "snippet": "This issue tracks support for `lazy` imports in Ruff.\n\nPython 3.15 introduced [PEP 810 - Explicit lazy imports](https://peps.python.org/pep-0810). We have done the following:\n\n- [x] Update the parser\n- [x] Update the formatter\n- [x] Update the semantic model (though according to [this subheading](ht"
+          },
+          {
+            "source": "github",
+            "title": "Identical import inside+outside of `TYPE_CHECKING` block does not emit `F811`",
+            "url": "https://github.com/astral-sh/ruff/issues/17555",
+            "state": "closed",
+            "snippet": "### Summary\n\n```python\nfrom __future__ import annotations\n\nfrom collections.abc import AsyncGenerator, Iterable\nfrom typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from collections.abc import AsyncGenerator, Iterable\n\nasync def foo(bar: Iterable[int]) -> AsyncGenerator[int]:\n    pass\n```\n\nhttps:"
+          },
+          {
+            "source": "github",
+            "title": "Lone unused import in if-statement should not get autofixed, or the if-statement should removed",
+            "url": "https://github.com/astral-sh/ruff/issues/9472",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "Detect empty conditional statements",
+            "url": "https://github.com/astral-sh/ruff/issues/13929",
+            "state": "closed",
+            "snippet": "## Problem\r\nCode deletion rules in ruff can sometimes leave unnecessary conditional blocks. Consider this common conditional import logic.\r\n```python\r\nimport sys\r\n\r\nif sys.version_info >= (3, 11):\r\n    from typing import Self\r\nelse:\r\n    from typing_extensions import Self\r\n```\r\nIf the file is refact"
+          },
+          {
+            "source": "github",
+            "title": "Automatically add `pragma: no cover` for `TYPE_CHECKING` blocks",
+            "url": "https://github.com/astral-sh/ruff/issues/13610",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "Don't move imports under `if TYPE_CHECKING` if they're added to `__all__`",
+            "url": "https://github.com/astral-sh/ruff/issues/6236",
+            "state": "closed",
+            "snippet": "In my top-level `__init__.py` file, I define the `__all__` variable to mark some imported objects as \"public\" or \"re-exported\".\r\n\r\n```python\r\nfrom __future__ import annotations\r\n\r\nfrom pkg.submodule import A, B, C\r\n\r\n__all__: list[str] = [\"A\", \"B\", \"C\"]\r\n```\r\n\r\nWhen auto-fixing this code with Ruff 0"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "relation": "duplicate",
+            "why": "same TC005 empty-type-checking-block fixer removing an if TYPE_CHECKING: pass block"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "unused function argument with non-ASCII name, not TYPE_CHECKING block removal"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "relation": "unrelated",
+            "why": "Ruff server error in VSCode interactive session, not a linter autofix issue"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "relation": "related",
+            "why": "TC003/TC002/TC001 false positives on manual TYPE_CHECKING with __future__.annotations, same rule family but different construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "unrelated",
+            "why": "TC006 quote-adding behavior, different rule and construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "unrelated",
+            "why": "feature request for flake8-type-checking implementation, not a bug fix"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "relation": "unrelated",
+            "why": "unknown rule selector warning vs error, unrelated to TYPE_CHECKING autofix"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2214",
+            "relation": "related",
+            "why": "TCH rules requiring __future__.annotations, same TYPE_CHECKING domain but different runtime behavior issue"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/24713",
+            "relation": "unrelated",
+            "why": "PLR6301 not detecting @override from TYPE_CHECKING, different rule and construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/21305",
+            "relation": "unrelated",
+            "why": "lazy imports support for Python 3.15+, unrelated to TC005"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/17555",
+            "relation": "related",
+            "why": "identical import inside/outside TYPE_CHECKING not emitting F811, same TYPE_CHECKING context but different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9472",
+            "relation": "related",
+            "why": "lone unused import in if-statement autofix removing block, similar empty-block removal but for imports not TYPE_CHECKING"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13929",
+            "relation": "related",
+            "why": "detect empty conditional statements after refactoring, same empty-block problem but broader than TYPE_CHECKING"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13610",
+            "relation": "unrelated",
+            "why": "automatically add pragma no cover for TYPE_CHECKING blocks, feature request not bug fix"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6236",
+            "relation": "unrelated",
+            "why": "don't move imports under TYPE_CHECKING if added to __all__, different autofix behavior"
+          }
+        ],
+        "cost": 0.0044645
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:29:42.355244323 -0400\n+++ fixed.py\t2026-10-22 13:29:44.393278397 -0400\n@@ -1,2 +0,0 @@\n-if TYPE_CHECKING:\n-    pass\n",
+        "observed": "exit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC005 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original program defines `pass` inside an `if TYPE_CHECKING:` block that never executes because `TYPE_CHECKING` is undefined at runtime, so defining it has no effect; removing the block eliminates this harmless but syntactically valid definition, changing nothing observable—yet the error arises because the name `TYPE_CHECKING` is referenced in the condition, which fails when undefined. The fix deletes the reference, avoiding the NameError, thus altering runtime behavior by suppressing an exception that would otherwise occur. This changes semantics: the original program errors; the fixed version does not. Hence, the rewrite is not semantics-preserving.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p005",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "def gen():\n    if TYPE_CHECKING:\n        pass\nit = gen()\n",
+      "lines": {
+        "before": 8,
+        "after": 4
+      },
+      "reportPath": "runs/2026-10-17T20-39-34-299Z-g1ez-ruff-TC005/reports/r1-p005.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/28868",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15681",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/13929",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix removes the `if TYPE_CHECKING:` guard but leaves a `pass` statement, changing the code from a no-op (when TYPE_CHECKING is undefined) to an unconditional `pass`. This alters runtime behavior by eliminating the NameError that occurred when evaluating the undefined `TYPE_CHECKING` name, which is a silent change in program semantics for plausible code that relies on the guard to avoid runtime errors.",
+        "docsQuote": "The type-checking block does not do anything and should be removed to avoid confusion.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC005 fix",
+          "ruff TC005 conditional block removal",
+          "ruff TYPE_CHECKING guard elimination",
+          "ruff unused import cleanup"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC004 runtime-import-in-type-checking-block fixer causes follow up: TC005 empty-type-checking-block + F401 unused-import + I001 unsorted-imports",
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "state": "open",
+            "snippet": "### Summary\n\nMany rules causes follow up errors of other violations. I tend to not create issues for them but that is annoying. But here is a candidate which I would like to report.\n\nMaybe you can integrate into the fix rule, that known other fixers (at least if they are allowed, but possibly always"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Ruff Server errors when using a VSCode interactive session",
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "state": "closed",
+            "snippet": "Apologies for commenting on a closed ticket, but it looks to be related:\r\nThere seems to be a similar issue when using a VSCode interactive session (VSCode > `Run Current File in Interactive Window` or `Create Interactive Window`:\r\n\r\nMy local Ruff is on `0.4.8` \r\n```\r\n2024-06-12 16:23:08.468 [info] "
+          },
+          {
+            "source": "github",
+            "title": "TC003/TC002/TC001 False positive on manual `TYPE_CHECKING` with `__future__.annotations`",
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "state": "closed",
+            "snippet": "### Description\n\nIf you manually set `TYPE_CHECKING` to `False` and use it with `__future__.annotations`, ruff will raise TC003/TC002/TC001 falsepositives on the imports in your `TYPE_CHECKING` block as it seems to only check for `typing.TYPE_CHECKING`.\n\nCommand: `ruff check test.py --isolated --fix"
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Can \"Unknown rule selector\" be a warning, rather than an error? · Issue #5159 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "snippet": "1. A new version of `ruff` adds a new rule that I choose to ignore (i.e. `FIX002` for `TODO` comments)\n2. I update my `.ruff.toml` to ignore `FIX002` (KyleKing/calcipy\\_template@5a439c6)\n3. If I don't update `ruff` in `pre-commmit`, `.venv`, `pipx`, `CI`, and anywhere else I use it, I'll start getti"
+          },
+          {
+            "source": "github",
+            "title": "Allow removing unused imports from standard library only",
+            "url": "https://github.com/astral-sh/ruff/issues/6601",
+            "state": "open",
+            "snippet": "[autoflake](https://github.com/PyCQA/autoflake) can be configured to remove unused imports from standard library only. This is useful when we have [PEP 604](https://beta.ruff.rs/docs/rules/non-pep604-annotation/) and [PEP 585](https://beta.ruff.rs/docs/rules/non-pep585-annotation/) autofix enabled b"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "Support baselines, i.e., ignore existing errors for incremental adoption",
+            "url": "https://github.com/astral-sh/ruff/issues/1149",
+            "state": "open",
+            "snippet": "Baselines would allow developers to introduce Ruff to their codebase incrementally by ignoring existing errors and address them as they reappear when making changes to the code.\r\n\r\nSupported by some tools in the flake8 ecosystem:\r\n\r\n- Bandit: https://bandit.readthedocs.io/en/latest/start.html#baseli"
+          },
+          {
+            "source": "github",
+            "title": "`RUF102` fix causes syntax error by not handling text following directive",
+            "url": "https://github.com/astral-sh/ruff/issues/23349",
+            "state": "closed",
+            "snippet": "Fixing a rule creates a syntax error as of Ruff 0.15 (still an issue in 0.15.1)\n\nRule code RUF102\n\n**ruff.toml:**\n\n```\nline-length = 99\ntarget-version = \"py311\"\noutput-format = \"grouped\"\nextend-exclude = [\".uv-cache\"]\n\n[format]\nquote-style = \"single\"\n\n[lint]\nallowed-confusables = [\"‘\", \"’\", \"×\", \"–\""
+          },
+          {
+            "source": "github",
+            "title": "Unnecessary `crate::` prefixes in `crates/ruff_python_ast/generated.rs`",
+            "url": "https://github.com/astral-sh/ruff/issues/18651",
+            "state": "closed",
+            "snippet": "> there's also a question about [ruff_python_ast/src/generated.rs](https://github.com/astral-sh/ruff/blob/main/crates/ruff_python_ast/src/generated.rs) file ![изображение](https://private-user-images.githubusercontent.com/109767616/454415857-a3ba28ec-3ae2-4698-9037-dd322b33e162.png?jwt=eyJhbGciOiJIU"
+          },
+          {
+            "source": "github",
+            "title": "[Infinite loop] Failed to Converge After 100 Iterations When Fixing Imports (e.g., I001, F401, F811)",
+            "url": "https://github.com/astral-sh/ruff/issues/15182",
+            "state": "closed",
+            "snippet": "Consider this snippet:\n\n<details>\n\n<summary>mcve.py</summary>\n\n```python\nfrom PySide6 import __version__ as QT_VERSION_STR\n\nfrom PySide6.QtCore import (\n    ClassInfo,\n    MetaFunction,\n    MetaSignal,\n    Property,\n    PyClassProperty,\n    QAbstractAnimation,\n    QAbstractAnimation,\n    QAbstractEv"
+          },
+          {
+            "source": "tavily",
+            "title": "Ruff does not clean up unused import if it has same name like object attribute · Issue #12775 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/12775",
+            "snippet": "Copy link\n\nCopy link\n\nClosed\n\nClosed\n\nRuff does not clean up unused import if it has same name like object attribute#12775\n\nCopy link\n\nAssignees\n\ncharliermarsh\n\nLabels\n\nneeds-mreNeeds more information for reproductionNeeds more information for reproduction\n\n## Description\n\n@ondrej-ivanko\n\nondrej-iva"
+          },
+          {
+            "source": "tavily",
+            "title": "[feature] remove unused imports · Issue #4195 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/4195",
+            "snippet": "Issue body actions\n\ncurrently when i run autofix on a large codebase in py 3.7, `from __future__ import annotations` gets added and Dict, List, Tuple, Union...many others are no longer used but their imports remain in many files\n\nat a minimum, cleaning up these specific changes would be helpful, and"
+          },
+          {
+            "source": "tavily",
+            "title": "Add fix to re-export unused first-party imports in `__init__.py` files · Issue #10391 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/10391",
+            "snippet": "18c3001\n\n   [ruff F401 [#10390 #10391] swap arg order; move imports to top level](\n\n   ## Scope cut until a future PR\n\n   \\ (Not implemented) The `to\\_explicit` fixes will be added to `\\_\\_all\\_\\_`\n   unless it doesn't exist. When `\\_\\_all\\_\\_` doesn't exist they're resolved\n   by converting to redu"
+          },
+          {
+            "source": "tavily",
+            "title": "Detect empty conditional statements · Issue #13929 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/13929",
+            "snippet": "If the file is refactored such that `Self` is no longer used, `ruff check --fix` will remove the unused imports leaving an empty if-else statement:\n\n```\nimport sys if sys version_info>= 3 11 pass else pass\n```\n\nThis kind of statement is useless and could easily be overlooked when introduced by auto-"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "relation": "duplicate",
+            "why": "same TC005 empty-type-checking-block fix removing an if TYPE_CHECKING: pass block and causing a NameError"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused function arguments with Unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "relation": "unrelated",
+            "why": "VSCode interactive session server errors, unrelated to TC005"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "relation": "related",
+            "why": "same TC00x family but about false positives with manual TYPE_CHECKING and __future__.annotations"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "unrelated",
+            "why": "TC006 rule about quoting generics, different construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "unrelated",
+            "why": "feature request to implement flake8-type-checking, not a defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "relation": "unrelated",
+            "why": "unknown rule selector warning vs error, unrelated to TC005"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6601",
+            "relation": "unrelated",
+            "why": "config to remove unused stdlib imports only, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "parent issue for Pylint parity, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1149",
+            "relation": "unrelated",
+            "why": "baselines feature for incremental adoption, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/23349",
+            "relation": "unrelated",
+            "why": "RUF102 fix causing syntax error, different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18651",
+            "relation": "unrelated",
+            "why": "unnecessary crate prefixes in generated Rust code, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15182",
+            "relation": "unrelated",
+            "why": "infinite loop fixing imports I001/F401/F811, different rules"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12775",
+            "relation": "unrelated",
+            "why": "unused import not cleaned up due to name clash with attribute, different rule"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4195",
+            "relation": "unrelated",
+            "why": "feature request to remove unused imports from __future__ annotations, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10391",
+            "relation": "unrelated",
+            "why": "re-export unused first-party imports in __init__.py, unrelated"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13929",
+            "relation": "related",
+            "why": "detect empty conditional statements after import removal, similar empty-block problem but different trigger"
+          }
+        ],
+        "cost": 0.0049561
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:29:48.546347841 -0400\n+++ fixed.py\t2026-10-22 13:29:50.584381923 -0400\n@@ -1,4 +1,3 @@\n def gen():\n-    if TYPE_CHECKING:\n-        pass\n+    pass\n it = gen()\n",
+        "observed": "exit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "def gen():\n    pass\nit = gen()\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC005 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original function contains a conditional that references `TYPE_CHECKING`, which raises a `NameError` when executed because the variable is undefined; this error prevents assignment to `it`. After rewriting, the conditional is removed and replaced with unconditional `pass`, so calling `gen()` succeeds without error and assigns `None` to `it`. Thus, the fix changes behavior by eliminating a runtime exception that was present in the original code.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "if TYPE_CHECKING:\n    pass\n",
+      "lines": {
+        "before": 5,
+        "after": 2
+      },
+      "reportPath": "runs/2026-10-17T20-39-34-299Z-g1ez-ruff-TC005/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/28868",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15681",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1785",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/2214",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule removes an `if TYPE_CHECKING:` block without ensuring `TYPE_CHECKING` is imported from `typing`. In the original code, the `NameError` occurs at runtime when evaluating the condition, but the fix deletes the block entirely, silencing the error and changing the exit status from 1 to 0. The documentation presents the rewrite as a safe removal of dead code, but it is only safe when `TYPE_CHECKING` is properly defined; otherwise, it masks a pre-existing runtime failure.",
+        "docsQuote": "The type-checking block does not do anything and should be removed to avoid confusion.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC005 fix",
+          "ruff TC005 if TYPE_CHECKING block",
+          "TC005 remove unused conditional import guard",
+          "fix behavior of empty TYPE_CHECKING blocks"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC004 runtime-import-in-type-checking-block fixer causes follow up: TC005 empty-type-checking-block + F401 unused-import + I001 unsorted-imports",
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "state": "open",
+            "snippet": "### Summary\n\nMany rules causes follow up errors of other violations. I tend to not create issues for them but that is annoying. But here is a candidate which I would like to report.\n\nMaybe you can integrate into the fix rule, that known other fixers (at least if they are allowed, but possibly always"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Ruff Server errors when using a VSCode interactive session",
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "state": "closed",
+            "snippet": "Apologies for commenting on a closed ticket, but it looks to be related:\r\nThere seems to be a similar issue when using a VSCode interactive session (VSCode > `Run Current File in Interactive Window` or `Create Interactive Window`:\r\n\r\nMy local Ruff is on `0.4.8` \r\n```\r\n2024-06-12 16:23:08.468 [info] "
+          },
+          {
+            "source": "github",
+            "title": "TC003/TC002/TC001 False positive on manual `TYPE_CHECKING` with `__future__.annotations`",
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "state": "closed",
+            "snippet": "### Description\n\nIf you manually set `TYPE_CHECKING` to `False` and use it with `__future__.annotations`, ruff will raise TC003/TC002/TC001 falsepositives on the imports in your `TYPE_CHECKING` block as it seems to only check for `typing.TYPE_CHECKING`.\n\nCommand: `ruff check test.py --isolated --fix"
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Can \"Unknown rule selector\" be a warning, rather than an error? · Issue #5159 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "snippet": "1. A new version of `ruff` adds a new rule that I choose to ignore (i.e. `FIX002` for `TODO` comments)\n2. I update my `.ruff.toml` to ignore `FIX002` (KyleKing/calcipy\\_template@5a439c6)\n3. If I don't update `ruff` in `pre-commmit`, `.venv`, `pipx`, `CI`, and anywhere else I use it, I'll start getti"
+          },
+          {
+            "source": "github",
+            "title": "TCH rules require from __future__ import annotations",
+            "url": "https://github.com/astral-sh/ruff/issues/2214",
+            "state": "closed",
+            "snippet": "The following does not work with 3.11.1 at runtime:\r\n\r\n\r\ntest.py\r\n```py\r\nfrom typing import TYPE_CHECKING\r\n\r\nif TYPE_CHECKING:\r\n    from test_b import B\r\n\r\ndef test(x: B) -> B:\r\n    return x\r\n```\r\n\r\ntest_b.py\r\n```py\r\nclass B:\r\n    ...\r\n```\r\n\r\n```sh\r\n$ python test.py \r\nTraceback (most recent call las"
+          },
+          {
+            "source": "github",
+            "title": "regression: ruff deletes imports; successive checks fail due to missing import",
+            "url": "https://github.com/astral-sh/ruff/issues/14698",
+            "state": "closed",
+            "snippet": "Running `ruff check --force-exclude --fix --exit-non-zero-on-fix` on my repository deletes some imports that are actually used.\n\nThe next time that I run `ruff check .`, it fails because of missing imports. The missing imports are the ones deleted by ruff.\n\n## Reproduction steps\n\n- git clone https:/"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "relation": "duplicate",
+            "why": "same TC005 empty-type-checking-block fixer removing an if TYPE_CHECKING: pass block"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "unused argument lint with non-ASCII variable name"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "relation": "unrelated",
+            "why": "Ruff server error in VSCode interactive session"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "relation": "related",
+            "why": "TC003/TC002/TC001 false positives on manual TYPE_CHECKING with future annotations"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "unrelated",
+            "why": "TC006 rule adding quotes too broadly"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "related",
+            "why": "feature request to implement flake8-type-checking rules"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "relation": "unrelated",
+            "why": "unknown rule selector warning vs error"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/2214",
+            "relation": "related",
+            "why": "TCH rules requiring future annotations for TYPE_CHECKING"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14698",
+            "relation": "unrelated",
+            "why": "regression deleting imports causing successive check failures"
+          }
+        ],
+        "cost": 0.0026981
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:29:54.557448373 -0400\n+++ fixed.py\t2026-10-22 13:29:56.642483249 -0400\n@@ -1,2 +0,0 @@\n-if TYPE_CHECKING:\n-    pass\n",
+        "observed": "exit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC005 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original program references `TYPE_CHECKING` in a conditional; if undefined, it raises a `NameError`. Removing that block eliminates the reference entirely, so no error occurs when `TYPE_CHECKING` is absent—changing behavior from raising an exception to executing silently. This alters observable outcomes, violating semantic equivalence.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p008",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "def f(pos, /, kw=None, *args, **kwargs):\n    if TYPE_CHECKING:\n        pass\nprint(f(1, kw=2, extra=3))\n",
+      "lines": {
+        "before": 5,
+        "after": 4
+      },
+      "reportPath": "runs/2026-10-17T20-39-34-299Z-g1ez-ruff-TC005/reports/r1-p008.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/28868",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/15681",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/pull/16669",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/21921",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14538",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11103",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9573",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix replaces the TYPE_CHECKING conditional block with an unconditional 'pass' statement, which changes the function's behavior from raising a NameError (when TYPE_CHECKING is undefined) to silently doing nothing. The documentation presents this rewrite as equivalent removal of dead code, but TYPE_CHECKING is not a built-in constant and the rule does not guard against its absence, making the fix unsafe for code that lacks the typing import.",
+        "docsQuote": "The type-checking block does not do anything and should be removed to avoid confusion.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC005 fix",
+          "TC005 function parameter slash",
+          "ruff linting conditional block removal",
+          "Oracle behavior type checking guard"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC004 runtime-import-in-type-checking-block fixer causes follow up: TC005 empty-type-checking-block + F401 unused-import + I001 unsorted-imports",
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "state": "open",
+            "snippet": "### Summary\n\nMany rules causes follow up errors of other violations. I tend to not create issues for them but that is annoying. But here is a candidate which I would like to report.\n\nMaybe you can integrate into the fix rule, that known other fixers (at least if they are allowed, but possibly always"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Ruff Server errors when using a VSCode interactive session",
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "state": "closed",
+            "snippet": "Apologies for commenting on a closed ticket, but it looks to be related:\r\nThere seems to be a similar issue when using a VSCode interactive session (VSCode > `Run Current File in Interactive Window` or `Create Interactive Window`:\r\n\r\nMy local Ruff is on `0.4.8` \r\n```\r\n2024-06-12 16:23:08.468 [info] "
+          },
+          {
+            "source": "github",
+            "title": "TC003/TC002/TC001 False positive on manual `TYPE_CHECKING` with `__future__.annotations`",
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "state": "closed",
+            "snippet": "### Description\n\nIf you manually set `TYPE_CHECKING` to `False` and use it with `__future__.annotations`, ruff will raise TC003/TC002/TC001 falsepositives on the imports in your `TYPE_CHECKING` block as it seems to only check for `typing.TYPE_CHECKING`.\n\nCommand: `ruff check test.py --isolated --fix"
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Can \"Unknown rule selector\" be a warning, rather than an error? · Issue #5159 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "snippet": "1. A new version of `ruff` adds a new rule that I choose to ignore (i.e. `FIX002` for `TODO` comments)\n2. I update my `.ruff.toml` to ignore `FIX002` (KyleKing/calcipy\\_template@5a439c6)\n3. If I don't update `ruff` in `pre-commmit`, `.venv`, `pipx`, `CI`, and anywhere else I use it, I'll start getti"
+          },
+          {
+            "source": "tavily",
+            "title": "Consider all `TYPE_CHECKING` symbols for type-checking blocks by MichaReiser · Pull Request #16669 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "snippet": "module (comment)). The preview behavior was first released with Ruff 0.9.5 (6th of February), which was about a month ago. There are no open issues or PRs for the changed behavior ## Test Plan The snapshots for `SIM108` change because `SIM108` ignored type checking blocks but it can no simplify `if "
+          },
+          {
+            "source": "tavily",
+            "title": "new rule - suggest changing function parameter type to readonly alternative if parameter is not mutated inside the function · Issue #24196 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/24196",
+            "snippet": "Title: new rule - suggest changing function parameter type to readonly alternative if parameter is not mutated inside the function · Issue #24196 · astral-sh/ruff · GitHub\n## Navigation Menu. # Search code, repositories, users, issues, pull requests... You signed in with another tab or window. Reloa"
+          },
+          {
+            "source": "tavily",
+            "title": "New rule: fast-api-unused-path-parameter · Issue #12632 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/12632",
+            "snippet": "Member\n\n   More actions\n\n   Thanks for proposing a new rule.\n\n   Can you help me understand what's still missing from #12638 that shipped as preview rule in 0.6.1?\n6. ### AlexWaygoodcommentedon Jan 7, 2025\n\n   @AlexWaygood\n\n   AlexWaygood\n\n   on Jan 7, 2025\n\n   Member\n\n   More actions\n\n   Implemente"
+          },
+          {
+            "source": "tavily",
+            "title": "Allow newlines after block open (or not) · Issue #9745 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9745",
+            "snippet": "The formatting question is whether Ruff should automatically remove a blank line after a block definition:\n\n```\ndef some_func(): some_more_code() \n```\n\nto\n\n```\ndef some_func(): some_more_code() \n```\n\nThe alternative is \"allow zero or one\" newlines, i.e. not to remove the newline if it exists, but al"
+          },
+          {
+            "source": "tavily",
+            "title": "Apply `ruff` formatting to `markdown` code blocks · Issue #3792 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/3792",
+            "snippet": "2. The `CodeBlock` structure, at minimum, should contain the block's content and its offset from the top of the file (what I'm calling its \"global offset\"). Each diagnostic created while linting the block should have the code block's global offset added to it, meaning that when we display the line t"
+          },
+          {
+            "source": "tavily",
+            "title": "`flake8-type-checking`: enforce combining imports from inside and outside a `TYPE_CHECKING` block (reverse of `strict`) · Issue #21921 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/21921",
+            "snippet": "Current behavior:\n\n```\nfrom import annotations from typing import TYPE_CHECKING from m import A if TYPE_CHECKING from m import B a = A b B\n```\n\n```\nruff check main.py --select TCAll checks passed!\n```\n\nDesired behavior: suggest combining the imports (to what it was in the first example).\n\nReactions "
+          },
+          {
+            "source": "tavily",
+            "title": "TC003’s rewritten annotations have syntax errors and type-checking problems · Issue #14538 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/14538",
+            "snippet": "Copy link\n\nCopy link\n\nClosed\n\nBug\n\n#14634\n\nClosed\n\nTC003’s rewritten annotations have syntax errors and type-checking problems#14538\n\nBug\n\n#14634\n\nCopy link\n\nLabels\n\nbugAn issue describing something that isn't working, or a PR that fixes a bugAn issue describing something that isn't working, or a PR"
+          },
+          {
+            "source": "tavily",
+            "title": "Rule to enforce usage of `from __future__ import annotations` when imports could be moved to type-checking block ? · Issue #11103 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/11103",
+            "snippet": "Author\n\n   More actions\n\n   Might work as a hack yeah, but then we'll have those imports on file when it might not be needed. And it'll require a lot of ignores, because of imports inside custom types used only for pydantic or sqlalchemy validation for example, which still need to be imported at run"
+          },
+          {
+            "source": "tavily",
+            "title": "Reharmonize `TCH*` rules with flake8-type-checking · Issue #9573 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9573",
+            "snippet": "Closed\n\nClosed\n\nReharmonize `TCH` rules with flake8-type-checking#9573\n\nCopy link\n\nLabels\n\nbreakingBackwards-incompatible changesBackwards-incompatible changes\n\nMilestone\n\nv0.8\n\n## Description\n\n@Daverball\n\nDaverball\n\nopened on Jan 18, 2024\n\nIssue body actions\n\nThere recently have been a whole bunch "
+          },
+          {
+            "source": "tavily",
+            "title": "F401 false positive when importing in a type-checking block · Issue #12780 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/12780",
+            "snippet": "Issue body actions\n\nA false positive `F401` error is raised when the import is in a type-checking block and used as a generic parameter.\n\nfoo.py\n\n```\nclass Foo\n```\n\nbar.py\n\n```\nclass Bar T\n```\n\nbaz.py\n\n```\nfrom bar import Bar from typing import TYPE_CHECKING if TYPE_CHECKING from foo import Foo clas"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28868",
+            "relation": "duplicate",
+            "why": "same TC005 empty-type-checking-block fixer removing an if TYPE_CHECKING: pass block and changing behavior"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused arguments with non-ASCII names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11851",
+            "relation": "unrelated",
+            "why": "VSCode interactive session server errors, not a lint fix"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/15681",
+            "relation": "related",
+            "why": "same TYPE_CHECKING concept but false positives on imports with manual TYPE_CHECKING and __future__.annotations"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "unrelated",
+            "why": "TC006 rule about quoting generics, different construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "unrelated",
+            "why": "feature request for flake8-type-checking integration"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/5159",
+            "relation": "unrelated",
+            "why": "unknown rule selector warning vs error, unrelated to TC005"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "relation": "related",
+            "why": "TYPE_CHECKING symbol handling changes affecting type-checking blocks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/24196",
+            "relation": "unrelated",
+            "why": "new rule suggestion for readonly parameter types"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12632",
+            "relation": "unrelated",
+            "why": "new rule for fast-api unused path parameters"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9745",
+            "relation": "unrelated",
+            "why": "formatting rule about newlines after block open"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/3792",
+            "relation": "unrelated",
+            "why": "markdown code block formatting support"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/21921",
+            "relation": "related",
+            "why": "flake8-type-checking rule about combining imports inside/outside TYPE_CHECKING blocks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14538",
+            "relation": "related",
+            "why": "TC003 rewrite issues with TYPE_CHECKING blocks causing syntax errors"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11103",
+            "relation": "related",
+            "why": "rule suggestion for enforcing __future__.annotations with TYPE_CHECKING blocks"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9573",
+            "relation": "related",
+            "why": "reharmonizing TCH rules with flake8-type-checking, same rule family"
+          }
+        ],
+        "cost": 0.0048468
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:30:00.809552958 -0400\n+++ fixed.py\t2026-10-22 13:30:02.950588778 -0400\n@@ -1,4 +1,3 @@\n def f(pos, /, kw=None, *args, **kwargs):\n-    if TYPE_CHECKING:\n-        pass\n+    pass\n print(f(1, kw=2, extra=3))\n",
+        "observed": "stdout before:\n\nstdout after:\nNone\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "def f(pos, /, kw=None, *args, **kwargs):\n    pass\nprint(f(1, kw=2, extra=3))\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC005 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original function contains a conditional block that raises a NameError when executed because `TYPE_CHECKING` is undefined; this error prevents the `print` statement from running. The rewrite removes the condition and replaces it with an unconditional `pass`, allowing execution to proceed to the `print` call, which outputs `None`. Thus, the behavior changes from an error-induced crash to successful execution with output. This alters the program’s observable outcome, so the transformation is not semantics-preserving despite being labeled safe.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Context manager without close() - object with write() but no __exit__",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              10,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'Writer' object does not support the context manager protocol (missed __exit__ method)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'Writer' object does not support the context manager protocol (missed __exit__ method)",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:41.450756856 -0400\n+++ fixed.py\t2026-10-17 16:39:41.845774376 -0400\n@@ -6,6 +6,5 @@\n         self.buf += s\n w = Writer()\n with w:\n-    if TYPE_CHECKING:\n-        pass\n+    pass\n print(w.buf)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Nested class/function definition with mixed tabs/spaces indentation",
+      "hazard": "In nested contexts like class or function definitions, removing the block alters the indentation depth of subsequent lines, potentially breaking syntax if mixed tabs/spaces exist.",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              7,
+              3
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\n1\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:42.056783730 -0400\n+++ fixed.py\t2026-10-17 16:39:42.439800691 -0400\n@@ -3,7 +3,5 @@\n \t\tx = 1\n \telse:\n \t\tpass\n-\tif TYPE_CHECKING:\n-\t\tpass\n \tprint(x)  # uses space indent; mixing with tab above causes IndentationError if block removed incorrectly\n outer()\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mutable default argument aliased after rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\n[1]\n[1]\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:42.534804899 -0400\n+++ fixed.py\t2026-10-17 16:39:42.912821638 -0400\n@@ -1,8 +1,6 @@\n def f(a=None):\n     if a is None:\n         a = []\n-    if TYPE_CHECKING:\n-        pass\n     a.append(1)\n     return a\n print(f())\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Type annotation evaluated at runtime with typing-only import",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\nlist\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "list\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:43.012826066 -0400\n+++ fixed.py\t2026-10-17 16:39:43.396843045 -0400\n@@ -1,5 +1,3 @@\n from typing import List\n-if TYPE_CHECKING:\n-    pass\n x: List[int] = []\n print(type(x).__name__)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Generator vs list: iterator consumed once",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\n1\n[2]\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n[2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:43.505847865 -0400\n+++ fixed.py\t2026-10-17 16:39:43.895865110 -0400\n@@ -1,6 +1,4 @@\n def gen():\n-    if TYPE_CHECKING:\n-        pass\n     yield 1\n     yield 2\n it = gen()\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Multi-line statement with implicit line continuation affected by block removal",
+      "hazard": "When the block is adjacent to a multi-line statement (e.g., with implicit line continuation), its removal may alter the boundary detection for the continued line.",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p007",
+      "title": "Evaluation order and side effects in expression merging",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\n1\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:44.154876551 -0400\n+++ fixed.py\t2026-10-17 16:39:44.537893460 -0400\n@@ -1,5 +1,3 @@\n side = 0\n-if TYPE_CHECKING:\n-    pass\n side += 1\n print(side)\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding with defaults",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TYPE_CHECKING' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\n(1, 2, (), {'extra': 3})\nexit 1 → 0\nstderr before: NameError: name 'TYPE_CHECKING' is not defined\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "(1, 2, (), {'extra': 3})\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:44.636897831 -0400\n+++ fixed.py\t2026-10-17 16:39:45.025915003 -0400\n@@ -1,5 +1,3 @@\n def f(pos, /, kw=None, *args, **kwargs):\n-    if TYPE_CHECKING:\n-        pass\n     return pos, kw, args, kwargs\n print(f(1, kw=2, extra=3))\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Lambda with TYPE_CHECKING block",
+      "hazard": "If the block is the only statement in a suite (e.g., a lambda or one-liner if), deleting it may result in an empty suite, causing a syntax error.",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "StringIO context manager with write but no close",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: I/O operation on closed file",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: I/O operation on closed file",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:49.486111068 -0400\n+++ fixed.py\t2026-10-17 16:39:49.873128023 -0400\n@@ -1,7 +1,5 @@\n import io, typing\n buf = io.StringIO()\n with buf:\n-    if typing.TYPE_CHECKING:\n-        pass\n     buf.write('hello')\n print(buf.getvalue())\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Bytes vs str in binary file write after TYPE_CHECKING block",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:50.096137786 -0400\n+++ fixed.py\t2026-10-17 16:39:50.276145660 -0400\n@@ -1,7 +1,5 @@\n import typing\n with open('test.bin', 'wb') as f:\n-    if typing.TYPE_CHECKING:\n-        pass\n     f.write(b'hello' if not typing.TYPE_CHECKING else 'world')\n with open('test.bin', 'rb') as f:\n     print(f.read())\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Exception in finally clause after TYPE_CHECKING block deletion",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Caught: bad\nfinally runs\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: bad\nfinally runs\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:50.384150384 -0400\n+++ fixed.py\t2026-10-17 16:39:50.563158215 -0400\n@@ -1,7 +1,5 @@\n import typing\n try:\n-    if typing.TYPE_CHECKING:\n-        pass\n     raise ValueError('bad')\n except ValueError as e:\n     print(f'Caught: {e}')\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Partial write in binary mode with truncated data",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'12995'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'12995'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:50.671162939 -0400\n+++ fixed.py\t2026-10-17 16:39:50.850170769 -0400\n@@ -1,7 +1,5 @@\n import typing\n with open('test.bin', 'wb') as f:\n-    if typing.TYPE_CHECKING:\n-        pass\n     f.write(b'12345')\n     f.seek(2)\n     f.write(b'99')\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Evaluation order: side effect in TYPE_CHECKING condition affects later assignment",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x=2, counter=0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Placeholder for future type annotation with comment",
+      "hazard": "If the block is used as a placeholder for future type annotations (common in stubs), removing it deletes intentional design intent documented via comments nearby.",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC005",
+            "severity": "warning",
+            "message": "Found empty type-checking block",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "config={}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "config={}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:39:51.109182092 -0400\n+++ fixed.py\t2026-10-17 16:39:51.288189910 -0400\n@@ -1,6 +1,4 @@\n import typing\n # TODO: Add proper type for config when module stabilizes\n-if typing.TYPE_CHECKING:\n-    pass\n config = {}  # runtime dict, will be typed later\n print(f'config={config}')\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict ordering and duplicate keys after TYPE_CHECKING block removal",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "TC005",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    }
+  ]
+}

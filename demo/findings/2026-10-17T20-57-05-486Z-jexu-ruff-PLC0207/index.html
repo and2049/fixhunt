@@ -1,0 +1,158 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLC0207 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLC0207 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-57-05-486Z-jexu-ruff-PLC0207 · fix labelled <b>unknown</b> · 16 programs, 8 fired, 7 fixed, 0 oracle-backed finding(s) · model cost $0.0029</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags str.split() or str.rsplit() calls used immediately after indexing [0] or [-1] when no maxsplit=1 argument is present.</p><p class="mut">Fix: Adds maxsplit=1 as a keyword argument to the split or rsplit call; if positional arguments exist, inserts maxsplit=1 as the second positional argument after the separator (or as the first if no separator is given).</p><details><summary>10 hazards</summary><ul><li>If the call uses *args, inserting maxsplit=1 may cause a duplicate keyword argument error when *args unpacks a value for maxsplit.</li><li>If the call uses **kwargs, inserting maxsplit=1 may cause a duplicate keyword argument error if **kwargs already contains maxsplit.</li><li>If the separator argument is a variable that evaluates to None, adding maxsplit=1 as a second positional argument changes the call from split(None) to split(None, 1), which alters behavior (split(None) splits on whitespace, split(None, 1) splits on whitespace at most once).</li><li>If the call has no separator and uses split(), adding maxsplit=1 as a positional argument changes split() to split(None, 1), altering behavior from splitting on whitespace to splitting on whitespace at most once.</li><li>If the call uses split(&#39;&#39;) with an empty separator, adding maxsplit=1 is invalid and raises ValueError because empty separators are not allowed, though the original call would have already raised this error—however, the fix may change the error context or timing if the call was guarded.</li><li>If the call is part of a larger expression where the split result is used elsewhere (e.g., assigned to a variable then indexed), the fix only applies to the indexed use and may miss optimizing other uses, but this is not a behavioral change—however, the rule only triggers on direct indexing, so indirect uses are not fired on.</li><li>If the call appears in a lambda or comprehension and the fix introduces a keyword argument that conflicts with a parameter name in the surrounding scope, it could cause a binding conflict (e.g., split(maxsplit=1) where maxsplit is a lambda parameter).</li><li>If the call is inside a try-except block and the fix changes the exception type (e.g., from TypeError due to duplicate keyword to ValueError), the except handler may not catch it.</li><li>If the call is commented out or dead code, the fix still applies but may be unnecessary; however, this does not change behavior.</li><li>If the call uses keyword arguments for sep or maxsplit already, the fix may incorrectly insert a duplicate (though the rule avoids this by checking for existing maxsplit).</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Keyword-only, positional-only, *args/**kwargs</td><td class="mut">Testing interaction with function signatures that restrict argument kinds.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Empty separator value error propagation</td><td class="mut">Split on empty string always raises ValueError; fixing should preserve that.</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span></td><td>Generator consumption and iterator state</td><td class="mut">Ensuring iterator is not prematurely consumed by split-side effects.</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Dead code elimination safety</td><td class="mut">Verifying that lint fixes do not alter behavior of unreachable code.</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Separator None alters splitting semantics</td><td class="mut">Adding maxsplit=1 as positional arg changes split(None) -&gt; split(None,1).</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Runtime type annotation evaluation</td><td class="mut">Annotations using string literals or forward refs must not break under fix.</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>Non-file context manager with write()</td><td class="mut">Objects mimicking partial file interface should not break split logic.</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Exception handling and finally clauses</td><td class="mut">Ensuring rewritten code does not interfere with exception propagation or cleanup.</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>comments and docstrings</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>int/float/bool coercion</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>bytes vs str</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>keyword-only, positional-only, *args/**kwargs</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>*args causing duplicate keyword</td><td class="mut">If the call uses *args, inserting maxsplit=1 may cause a duplicate keyword argument error </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>separator None alters semantics</td><td class="mut">If the separator argument is a variable that evaluates to None, adding maxsplit=1 as a sec</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span></td><td>star-imports, module-level side effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>pathlib vs os.path</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Keyword-only, positional-only, *args/**kwargs</summary><pre>def f(*, sep=None):
+    return &#39;a b&#39;.rsplit(sep)[0]
+f()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:16.243291557 -0400
++++ fixed.py	2026-10-17 16:57:16.413293913 -0400
+@@ -1,3 +1,3 @@
+ def f(*, sep=None):
+<span class="del">-    return &#39;a b&#39;.rsplit(sep)[0]</span>
+<span class="add">+    return &#39;a b&#39;.split(sep, maxsplit=1)[0]</span>
+ f()
+</pre></details><details id="r1-p002"><summary>r1-p002 — Empty separator value error propagation</summary><pre>try:
+    &#39;&#39;.split(&#39;&#39;)[0]
+except ValueError as e:
+    print(type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:16.508295231 -0400
++++ fixed.py	2026-10-17 16:57:16.668297449 -0400
+@@ -1,4 +1,4 @@
+ try:
+<span class="del">-    &#39;&#39;.split(&#39;&#39;)[0]</span>
+<span class="add">+    &#39;&#39;.split(&#39;&#39;, maxsplit=1)[0]</span>
+ except ValueError as e:
+     print(type(e).__name__, str(e))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Generator consumption and iterator state</summary><pre>def gen():
+    yield &#39;a b&#39;
+g = gen()
+for _ in g:
+    pass
+print(&#39;generator exhausted&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Dead code elimination safety</summary><pre>if False:
+    &#39;x y&#39;.split()[0]
+print(&#39;unreachable code ignored&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:16.901300679 -0400
++++ fixed.py	2026-10-17 16:57:17.065302952 -0400
+@@ -1,3 +1,3 @@
+ if False:
+<span class="del">-    &#39;x y&#39;.split()[0]</span>
+<span class="add">+    &#39;x y&#39;.split(maxsplit=1)[0]</span>
+ print(&#39;unreachable code ignored&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Separator None alters splitting semantics</summary><pre>s = &#39;a b c&#39;
+print(s.split(None)[0], s.split(None, 1)[0])
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:17.162304296 -0400
++++ fixed.py	2026-10-17 16:57:17.322306513 -0400
+@@ -1,2 +1,2 @@
+ s = &#39;a b c&#39;
+<span class="del">-print(s.split(None)[0], s.split(None, 1)[0])</span>
+<span class="add">+print(s.split(None, maxsplit=1)[0], s.split(None, 1)[0])</span>
+</pre></details><details id="r1-p006"><summary>r1-p006 — Runtime type annotation evaluation</summary><pre>def f() -&gt; &#39;list[str]&#39;:
+    return &#39;x y&#39;.split()
+print(f()[0])
+</pre></details><details id="r1-p007"><summary>r1-p007 — Non-file context manager with write()</summary><pre>class W:
+    def write(self, s): pass
+    def __enter__(self): return self
+    def __exit__(self, *a): pass
+with W():
+    pass
+print(&#39;context manager used&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exception handling and finally clauses</summary><pre>try:
+    result = &#39;&#39;.split(&#39;&#39;)[0]
+except ValueError as e:
+    print(&#39;caught:&#39;, type(e).__name__)
+finally:
+    print(&#39;cleanup&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:17.692311639 -0400
++++ fixed.py	2026-10-17 16:57:17.862313995 -0400
+@@ -1,5 +1,5 @@
+ try:
+<span class="del">-    result = &#39;&#39;.split(&#39;&#39;)[0]</span>
+<span class="add">+    result = &#39;&#39;.split(&#39;&#39;, maxsplit=1)[0]</span>
+ except ValueError as e:
+     print(&#39;caught:&#39;, type(e).__name__)
+ finally:
+</pre></details><details id="r2-p001"><summary>r2-p001 — comments and docstrings</summary><pre>def f():
+    &quot;&quot;&quot;Process input.&quot;&quot;&quot;
+    s = &#39;a b c&#39;
+    # keep first word
+    first = s.split()[0]  # inline comment
+    print(first)
+f()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:24.768409450 -0400
++++ fixed.py	2026-10-17 16:57:24.937411781 -0400
+@@ -2,6 +2,6 @@
+     &quot;&quot;&quot;Process input.&quot;&quot;&quot;
+     s = &#39;a b c&#39;
+     # keep first word
+<span class="del">-    first = s.split()[0]  # inline comment</span>
+<span class="add">+    first = s.split(maxsplit=1)[0]  # inline comment</span>
+     print(first)
+ f()
+</pre></details><details id="r2-p002"><summary>r2-p002 — int/float/bool coercion</summary><pre>from decimal import Decimal
+s = &#39;3.14 2.71&#39;
+parts = s.split()
+a = int(parts[0])  # truncate
+b = float(parts[1])  # keep
+c = Decimal(parts[0]) / Decimal(parts[1])
+print(a, b, round(c, 2))
+</pre></details><details id="r2-p003"><summary>r2-p003 — bytes vs str</summary><pre>b = b&#39;hello\nworld\n&#39;
+first_line = b.split(b&#39;\n&#39;)[0].decode()
+with open(&#39;out.txt&#39;, &#39;w&#39;) as f:
+    f.write(first_line)
+import os
+os.remove(&#39;out.txt&#39;)
+print(first_line)
+</pre></details><details id="r2-p004"><summary>r2-p004 — keyword-only, positional-only, *args/**kwargs</summary><pre>def splitter(s, sep=None, /, *, maxsplit=-1):  # positional-only sep, keyword-only maxsplit
+    return s.split(sep, maxsplit)
+result = splitter(&#39;a b c&#39;, None)[0]  # rule triggers on split() inside
+print(result)
+</pre></details><details id="r2-p005"><summary>r2-p005 — *args causing duplicate keyword</summary><pre>def call_split(*args):
+    s = &#39;x y z&#39;
+    return s.split(*args)[0]  # rule sees split(*args)[0]
+try:
+    print(call_split())          # -&gt; &#39;x&#39;
+    print(call_split(&#39; &#39;, 1))    # -&gt; split(&#39; &#39;, 1, 1) -&gt; TypeError
+    print(call_split(maxsplit=1))# -&gt; split(None, maxsplit=1, maxsplit=1) -&gt; TypeError
+except TypeError as e:
+    print(&#39;TypeError:&#39;, e)
+</pre></details><details id="r2-p006"><summary>r2-p006 — separator None alters semantics</summary><pre>sep = None
+text = &#39;  a   b  c &#39;
+parts = text.split(sep)[0]  # rule triggers: split(None)[0]
+print(repr(parts))  # &#39;&#39; before fix, &#39;  a&#39; after fix
+</pre><pre class="diff">--- orig.py	2026-10-17 16:57:25.836424176 -0400
++++ fixed.py	2026-10-17 16:57:25.997426395 -0400
+@@ -1,4 +1,4 @@
+ sep = None
+ text = &#39;  a   b  c &#39;
+<span class="del">-parts = text.split(sep)[0]  # rule triggers: split(None)[0]</span>
+<span class="add">+parts = text.split(sep, maxsplit=1)[0]  # rule triggers: split(None)[0]</span>
+ print(repr(parts))  # &#39;&#39; before fix, &#39;  a&#39; after fix
+</pre></details><details id="r2-p007"><summary>r2-p007 — star-imports, module-level side effects</summary><pre># This hazard concerns module-level behavior; the rule does not fire here.
+# We include a split but it&#39;s not indexed, so expect_trigger=False.
+s = &#39;hello world&#39;
+print(s.split())  # no indexing -&gt; rule silent
+</pre></details><details id="r2-p008"><summary>r2-p008 — pathlib vs os.path</summary><pre>import os
+open(&#39;test_file&#39;, &#39;w&#39;).close()
+try:
+    p = os.path.abspath(&#39;./test_file&#39;)
+    name = p.split(&#39;/&#39;)[-1][:4]  # rule triggers on split(&#39;/&#39;)
+    print(name)
+finally:
+    os.remove(&#39;test_file&#39;)
+</pre></details></body></html>

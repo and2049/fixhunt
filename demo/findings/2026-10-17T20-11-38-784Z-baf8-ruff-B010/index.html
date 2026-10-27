@@ -1,0 +1,360 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff B010 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff B010 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-11-38-784Z-baf8-ruff-B010 · fix labelled <b>unknown</b> · 16 programs, 14 fired, 13 fixed, 0 oracle-backed finding(s) · model cost $0.0061</p>
+<div class="card"><b>Rule analysis</b><p>Flags setattr() calls where the attribute name argument is a literal string.</p><p class="mut">Fix: Rewrites setattr(obj, &quot;attr&quot;, value) to obj.attr = value, preserving the target object, attribute name literal, and value expression exactly.</p><details><summary>11 hazards</summary><ul><li>Rewriting setattr(obj, &quot;ſ&quot;, 1) to obj.ſ = 1 changes behavior because Python normalizes identifiers in attribute access via NFKC, turning &quot;ſ&quot; into &quot;s&quot;.</li><li>If the setattr call contains inline comments (e.g., setattr(x, &quot;a&quot;, 1  # comment)), the autofix may drop them since the rewritten assignment cannot preserve arbitrary comment placement.</li><li>When the target object is a complex expression like setattr(f()[0], &quot;a&quot;, 1), rewriting to f()[0].a = 1 may change evaluation order or side effects if f() has mutable state.</li><li>If the attribute name literal is not a valid Python identifier (e.g., setattr(obj, &quot;123&quot;, 1)), the rewrite obj.123 = 1 is a syntax error.</li><li>Rewriting setattr(obj, &quot;__builtins__&quot;, value) to obj.__builtins__ = value may violate module-level immutability expectations or trigger unintended name mangling in classes.</li><li>In code relying on dynamic attribute names via setattr, replacing with direct assignment may break frameworks that intercept setattr via __setattr__ but not direct attribute assignment.</li><li>If the value expression contains side effects (e.g., setattr(obj, &quot;a&quot;, print(&quot;side&quot;) or 1)), moving it into an assignment does not change evaluation timing, but refactoring tools might reorder expressions unsafely in broader contexts.</li><li>When used in nested scopes like setattr(lambda: obj, &quot;a&quot;, 1), the rewrite (lambda: obj).a = 1 may fail if the lambda’s return value is not assignable due to expression context restrictions.</li><li>Rewriting setattr(klass, &quot;ClsAttr&quot;, 42) to klass.ClsAttr = 42 inside a function may create an attribute on the class object at runtime where the original intended a local or closure variable due to mis-scoping.</li><li>If the target object is a property returning a non-setattr-compatible object (e.g., a read-only proxy), the assignment may succeed where setattr would have raised an AttributeError due to __setattr__ overrides.</li><li>In multi-target assignments like setattr(a, &quot;x&quot;, setattr(b, &quot;y&quot;, 1)), the autofix may produce invalid syntax or altered semantics due to broken expression chaining.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Exception handling after rewrite</td><td class="mut">Exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation order with side-effecting target</td><td class="mut">When the target object is a complex expression like setattr(f()[0], &quot;a&quot;, 1), rewriting to </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Mis-scoped attribute creation on class</td><td class="mut">Rewriting setattr(klass, &quot;ClsAttr&quot;, 42) to klass.ClsAttr = 42 inside a function may create</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Builtins override via attribute assignment</td><td class="mut">Rewriting setattr(obj, &quot;__builtins__&quot;, value) to obj.__builtins__ = value may violate modu</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Value expression with side effects</td><td class="mut">If the value expression contains side effects (e.g., setattr(obj, &quot;a&quot;, print(&quot;side&quot;) or 1)</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Chained setattr in assignment</td><td class="mut">In multi-target assignments like setattr(a, &quot;x&quot;, setattr(b, &quot;y&quot;, 1)), the autofix may prod</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>File write truncation and partial writes</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Truthiness and equality distinctions</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Property returns read-only proxy blocking assignment</td><td class="mut">If the target object is a property returning a non-setattr-compatible object (e.g., a read</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Binary mode file write with str vs bytes confusion</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Text mode file write truncation and partial write with newline translation</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Float precision loss in assignment vs setattr context</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Star-import shadowing __all__ and triggering attribute write to module</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable default argument aliasing after rewrite</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Inline comment lost during autofix rewrite</td><td class="mut">If the setattr call contains inline comments (e.g., setattr(x, &quot;a&quot;, 1  # comment)), the au</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side effect in value expression: print during setattr vs assignment</td><td class="mut">If the value expression contains side effects (e.g., setattr(obj, &quot;a&quot;, print(&quot;side&quot;) or 1)</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Exception handling after rewrite</summary><pre>def f():
+    try:
+        x = []
+        setattr(x, &#39;append&#39;, lambda v: (_ for _ in ()).throw(ValueError(&#39;bad&#39;)))
+        x.append(1)
+    except ValueError as e:
+        print(&#39;caught&#39;, e)
+    else:
+        print(&#39;no exc&#39;)
+    finally:
+        print(&#39;finally&#39;)
+f()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:51.039178352 -0400
++++ fixed.py	2026-10-17 16:11:51.423168980 -0400
+@@ -1,7 +1,7 @@
+ def f():
+     try:
+         x = []
+<span class="del">-        setattr(x, &#39;append&#39;, lambda v: (_ for _ in ()).throw(ValueError(&#39;bad&#39;)))</span>
+<span class="add">+        x.append = lambda v: (_ for _ in ()).throw(ValueError(&#39;bad&#39;))</span>
+         x.append(1)
+     except ValueError as e:
+         print(&#39;caught&#39;, e)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Evaluation order with side-effecting target</summary><pre>state = []
+def f():
+    state.append(len(state))
+    return [0, 0]
+setattr(f(), &#39;a&#39;, 99)
+print(&#39;state:&#39;, state)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:51.623164099 -0400
++++ fixed.py	2026-10-17 16:11:52.026154265 -0400
+@@ -2,5 +2,5 @@
+ def f():
+     state.append(len(state))
+     return [0, 0]
+<span class="del">-setattr(f(), &#39;a&#39;, 99)</span>
+<span class="add">+f().a = 99</span>
+ print(&#39;state:&#39;, state)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Mis-scoped attribute creation on class</summary><pre>def outer():
+    ClsAttr = 1
+    class C: pass
+    def inner():
+        setattr(C, &#39;ClsAttr&#39;, 42)
+        print(&#39;local ClsAttr:&#39;, ClsAttr)
+        print(&#39;C.ClsAttr:&#39;, C.ClsAttr)
+    inner()
+outer()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:52.226149395 -0400
++++ fixed.py	2026-10-17 16:11:52.372145840 -0400
+@@ -2,7 +2,7 @@
+     ClsAttr = 1
+     class C: pass
+     def inner():
+<span class="del">-        setattr(C, &#39;ClsAttr&#39;, 42)</span>
+<span class="add">+        C.ClsAttr = 42</span>
+         print(&#39;local ClsAttr:&#39;, ClsAttr)
+         print(&#39;C.ClsAttr:&#39;, C.ClsAttr)
+     inner()
+</pre></details><details id="r1-p004"><summary>r1-p004 — Builtins override via attribute assignment</summary><pre>class ModLike:
+    pass
+m = ModLike()
+setattr(m, &#39;__builtins__&#39;, {&#39;len&#39;: lambda x: 42})
+print(&#39;m.__builtins__[&quot;len&quot;]([1,2,3]):&#39;, m.__builtins__[&#39;len&#39;]([1,2,3]))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:52.452143892 -0400
++++ fixed.py	2026-10-17 16:11:52.612139996 -0400
+@@ -1,5 +1,5 @@
+ class ModLike:
+     pass
+ m = ModLike()
+<span class="del">-setattr(m, &#39;__builtins__&#39;, {&#39;len&#39;: lambda x: 42})</span>
+<span class="add">+m.__builtins__ = {&#39;len&#39;: lambda x: 42}</span>
+ print(&#39;m.__builtins__[&quot;len&quot;]([1,2,3]):&#39;, m.__builtins__[&#39;len&#39;]([1,2,3]))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Value expression with side effects</summary><pre>log = []
+def side():
+    log.append(&#39;side&#39;)
+    return 1
+obj = type(&#39;O&#39;, (), {})()
+setattr(obj, &#39;a&#39;, side() or 0)
+print(&#39;log:&#39;, log)
+print(&#39;obj.a:&#39;, obj.a)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:52.704137756 -0400
++++ fixed.py	2026-10-17 16:11:52.862133908 -0400
+@@ -3,6 +3,6 @@
+     log.append(&#39;side&#39;)
+     return 1
+ obj = type(&#39;O&#39;, (), {})()
+<span class="del">-setattr(obj, &#39;a&#39;, side() or 0)</span>
+<span class="add">+obj.a = side() or 0</span>
+ print(&#39;log:&#39;, log)
+ print(&#39;obj.a:&#39;, obj.a)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Chained setattr in assignment</summary><pre>class A: pass
+class B: pass
+a = A()
+b = B()
+result = setattr(a, &#39;x&#39;, setattr(b, &#39;y&#39;, 1))
+print(&#39;a.x:&#39;, a.x)
+print(&#39;b.y:&#39;, b.y)
+print(&#39;result:&#39;, result)
+</pre></details><details id="r1-p007"><summary>r1-p007 — File write truncation and partial writes</summary><pre>with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    setattr(f, &#39;write&#39;, lambda data: f.__write__(data.upper()))
+    f.write(&#39;hi&#39;)
+with open(&#39;test.txt&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;test.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:53.109127900 -0400
++++ fixed.py	2026-10-17 16:11:53.535117550 -0400
+@@ -1,5 +1,5 @@
+ with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+<span class="del">-    setattr(f, &#39;write&#39;, lambda data: f.__write__(data.upper()))</span>
+<span class="add">+    f.write = lambda data: f.__write__(data.upper())</span>
+     f.write(&#39;hi&#39;)
+ with open(&#39;test.txt&#39;) as f:
+     print(f.read())
+</pre></details><details id="r1-p008"><summary>r1-p008 — Truthiness and equality distinctions</summary><pre>class X:
+    def __bool__(self): return False
+    def __len__(self): return 1
+obj = type(&#39;O&#39;, (), {})()
+setattr(obj, &#39;flag&#39;, X())
+if obj.flag:
+    print(&#39;true&#39;)
+else:
+    print(&#39;false but len=&#39;, len(obj.flag))
+print(&#39;obj.flag is False:&#39;, obj.flag is False)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:53.752112278 -0400
++++ fixed.py	2026-10-17 16:11:53.914108342 -0400
+@@ -2,7 +2,7 @@
+     def __bool__(self): return False
+     def __len__(self): return 1
+ obj = type(&#39;O&#39;, (), {})()
+<span class="del">-setattr(obj, &#39;flag&#39;, X())</span>
+<span class="add">+obj.flag = X()</span>
+ if obj.flag:
+     print(&#39;true&#39;)
+ else:
+</pre></details><details id="r2-p001"><summary>r2-p001 — Property returns read-only proxy blocking assignment</summary><pre>class ReadOnlyProxy:
+    def __setattr__(self, name, value):
+        raise AttributeError(&#39;read-only&#39;)
+
+class Obj:
+    @property
+    def p(self):
+        return ReadOnlyProxy()
+
+obj = Obj()
+try:
+    setattr(obj.p, &#39;x&#39;, 1)
+except AttributeError as e:
+    print(&#39;setattr error:&#39;, type(e).__name__, &#39;:&#39;, e)
+else:
+    print(&#39;setattr succeeded&#39;)
+
+try:
+    obj.p.x = 1  # rewritten by autofix
+except AttributeError as e:
+    print(&#39;assignment error:&#39;, type(e).__name__, &#39;:&#39;, e)
+else:
+    print(&#39;assignment succeeded&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:12:15.983585807 -0400
++++ fixed.py	2026-10-17 16:12:16.143582116 -0400
+@@ -9,7 +9,7 @@
+ 
+ obj = Obj()
+ try:
+<span class="del">-    setattr(obj.p, &#39;x&#39;, 1)</span>
+<span class="add">+    obj.p.x = 1</span>
+ except AttributeError as e:
+     print(&#39;setattr error:&#39;, type(e).__name__, &#39;:&#39;, e)
+ else:
+</pre></details><details id="r2-p002"><summary>r2-p002 — Binary mode file write with str vs bytes confusion</summary><pre>f = open(&#39;test.bin&#39;, &#39;wb&#39;)
+try:
+    setattr(f, &#39;mode&#39;, &#39;wb&#39;)  # rule triggers
+    f.write(b&#39;hello&#39;)
+    pos = f.tell()
+    print(&#39;position after write:&#39;, pos)
+except Exception as e:
+    print(&#39;error during setattr/write:&#39;, type(e).__name__, &#39;:&#39;, e)
+f.close()
+
+f2 = open(&#39;test.bin&#39;, &#39;rb&#39;)
+print(&#39;file content:&#39;, f2.read())
+f2.close()
+import os
+os.remove(&#39;test.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:12:16.242579833 -0400
++++ fixed.py	2026-10-17 16:12:16.395576304 -0400
+@@ -1,6 +1,6 @@
+ f = open(&#39;test.bin&#39;, &#39;wb&#39;)
+ try:
+<span class="del">-    setattr(f, &#39;mode&#39;, &#39;wb&#39;)  # rule triggers</span>
+<span class="add">+    f.mode = &#39;wb&#39;  # rule triggers</span>
+     f.write(b&#39;hello&#39;)
+     pos = f.tell()
+     print(&#39;position after write:&#39;, pos)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Text mode file write truncation and partial write with newline translation</summary><pre>f = open(&#39;test.txt&#39;, &#39;w&#39;)
+try:
+    setattr(f, &#39;encoding&#39;, &#39;utf-8&#39;)
+except: pass
+f.write(&#39;line1\n&#39;)
+f.write(&#39;line2&#39;)  # no newline yet
+pos = f.tell()
+f.close()
+print(&#39;position before close:&#39;, pos)
+
+f = open(&#39;test.txt&#39;, &#39;r&#39;)
+content = f.read()
+f.close()
+print(&#39;content repr:&#39;, repr(content))
+import os
+os.remove(&#39;test.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:12:16.490574114 -0400
++++ fixed.py	2026-10-17 16:12:16.647570493 -0400
+@@ -1,6 +1,6 @@
+ f = open(&#39;test.txt&#39;, &#39;w&#39;)
+ try:
+<span class="del">-    setattr(f, &#39;encoding&#39;, &#39;utf-8&#39;)</span>
+<span class="add">+    f.encoding = &#39;utf-8&#39;</span>
+ except: pass
+ f.write(&#39;line1\n&#39;)
+ f.write(&#39;line2&#39;)  # no newline yet
+</pre></details><details id="r2-p004"><summary>r2-p004 — Float precision loss in assignment vs setattr context</summary><pre>val = 0.1 + 0.2
+setattr_obj = type(&#39;Obj&#39;, (), {})()
+setattr(setattr_obj, &#39;num&#39;, val)
+print(&#39;setattr num:&#39;, repr(setattr_obj.num))
+
+obj = type(&#39;Obj&#39;, (), {})()
+obj.num = val  # rewritten by autofix
+print(&#39;assignment num:&#39;, repr(obj.num))
+
+# Show difference in formatting
+print(&#39;equal?&#39;, setattr_obj.num == obj.num)
+print(&#39;hex(setattr):&#39;, hex(float.fromhex(repr(setattr_obj.num).replace(&#39;0.&#39;, &#39;0x&#39;)) if setattr_obj.num != 0 else &#39;0x0&#39;))
+print(&#39;hex(assign):&#39;, hex(float.fromhex(repr(obj.num).replace(&#39;0.&#39;, &#39;0x&#39;)) if obj.num != 0 else &#39;0x0&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:12:16.748568164 -0400
++++ fixed.py	2026-10-17 16:12:17.161558648 -0400
+@@ -1,6 +1,6 @@
+ val = 0.1 + 0.2
+ setattr_obj = type(&#39;Obj&#39;, (), {})()
+<span class="del">-setattr(setattr_obj, &#39;num&#39;, val)</span>
+<span class="add">+setattr_obj.num = val</span>
+ print(&#39;setattr num:&#39;, repr(setattr_obj.num))
+ 
+ obj = type(&#39;Obj&#39;, (), {})()
+</pre></details><details id="r2-p005"><summary>r2-p005 — Star-import shadowing __all__ and triggering attribute write to module</summary><pre># This file: mod.py
+__all__ = [&#39;public&#39;]
+private = 42
+public = 88
+# End mod.py
+
+import os
+os.system(&#39;python3 -c &quot;\n__all__ = [\&quot;public\&quot;]\nprivate = 42\npublic = 88\n&quot; &gt; mod.py&#39;)
+
+from mod import *  # imports only public
+print(&#39;after star-import: public=&#39;, public, &#39;private exists?&#39;, &#39;private&#39; in dir())
+
+# Now simulate: setattr(mod, &#39;__all__&#39;, [&#39;private&#39;]) triggers rule
+import mod
+setattr(mod, &#39;__all__&#39;, [&#39;private&#39;])  # rule fires
+print(&#39;after setattr __all__:&#39;, mod.__all__)
+
+# Now star-import again: should import private
+from mod import *
+print(&#39;after second star-import: public=&#39;, public, &#39;private=&#39;, private if &#39;private&#39; in locals() else &#39;not imported&#39;)
+os.remove(&#39;mod.py&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:12:17.385553494 -0400
++++ fixed.py	2026-10-17 16:12:18.063537898 -0400
+@@ -12,7 +12,7 @@
+ 
+ # Now simulate: setattr(mod, &#39;__all__&#39;, [&#39;private&#39;]) triggers rule
+ import mod
+<span class="del">-setattr(mod, &#39;__all__&#39;, [&#39;private&#39;])  # rule fires</span>
+<span class="add">+mod.__all__ = [&#39;private&#39;]  # rule fires</span>
+ print(&#39;after setattr __all__:&#39;, mod.__all__)
+ 
+ # Now star-import again: should import private
+</pre></details><details id="r2-p006"><summary>r2-p006 — Mutable default argument aliasing after rewrite</summary><pre>def f(x, lst=[]):
+    setattr(x, &#39;data&#39;, lst)  # rule triggers
+    return lst
+
+a = type(&#39;A&#39;, (), {})()
+b = type(&#39;B&#39;, (), {})()
+
+l1 = f(a)
+l1.append(1)
+l2 = f(b)
+print(&#39;After first call: f(a) returned&#39;, l1, &#39;f(b) returned&#39;, l2)
+print(&#39;Are they the same object?&#39;, l1 is l2)
+
+# Now with autofix: obj.data = lst
+# Same behavior, but we trace via id
+def f2(x, lst=[]):
+    x.data = lst  # rewritten
+    return lst
+
+l3 = f2(type(&#39;A2&#39;, (), {})())
+l3.append(2)
+l4 = f2(type(&#39;B2&#39;, (), {})())
+print(&#39;After rewrite: f2(a2) returned&#39;, l3, &#39;f2(b2) returned&#39;, l4)
+print(&#39;Are they the same object?&#39;, l3 is l4)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:12:18.427529541 -0400
++++ fixed.py	2026-10-17 16:12:18.592525754 -0400
+@@ -1,5 +1,5 @@
+ def f(x, lst=[]):
+<span class="del">-    setattr(x, &#39;data&#39;, lst)  # rule triggers</span>
+<span class="add">+    x.data = lst  # rule triggers</span>
+     return lst
+ 
+ a = type(&#39;A&#39;, (), {})()
+</pre></details><details id="r2-p007"><summary>r2-p007 — Inline comment lost during autofix rewrite</summary><pre>flags = 0
+# Simulate: setattr modifies flags based on commented value
+if False:  # placeholder for comment-sensitive logic
+    pass
+else:
+    # This comment must be preserved in spirit
+    obj = type(&#39;Obj&#39;, (), {})()
+    setattr(obj, &#39;flag&#39;, 1  # set bit 0
+          )  # extra space
+    print(&#39;flag after setattr:&#39;, obj.flag)
+
+    # After autofix: obj.flag = 1  # set bit 0
+    #          ) becomes invalid → comment lost or syntax error
+    # We simulate by doing assignment and checking if comment logic would break
+    obj2 = type(&#39;Obj&#39;, (), {})()
+    obj2.flag = 1  # set bit 0
+    print(&#39;flag after assignment:&#39;, obj2.flag)
+    print(&#39;Comments preserved in output? Yes — but linter drops them silently.&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Side effect in value expression: print during setattr vs assignment</summary><pre>ref = []
+def side_effect():
+    ref.append(&#39;called&#39;)
+    return 99
+
+obj = type(&#39;Obj&#39;, (), {})()
+result = setattr(obj, &#39;attr&#39;, side_effect() or 1)  # rule triggers
+print(&#39;setattr result:&#39;, result, &#39;ref:&#39;, ref)
+print(&#39;obj.attr:&#39;, obj.attr)
+
+ref.clear()
+obj2 = type(&#39;Obj&#39;, (), {})()
+result2 = obj2.attr = side_effect() or 1  # rewritten
+print(&#39;assignment result:&#39;, result2, &#39;ref:&#39;, ref)
+print(&#39;obj2.attr:&#39;, obj2.attr)
+print(&#39;Same side-effect timing?&#39;, len(ref) == 1 and ref[0] == &#39;called&#39;)
+</pre></details></body></html>

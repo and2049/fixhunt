@@ -1,0 +1,33 @@
+{
+  "summary": "Flags calls to sum() used to flatten lists of lists by providing [] as the start argument.",
+  "firingShapes": [
+    "sum([[1, 2], [3]], [])",
+    "sum(a + b for a, b in zip(x, y), [])",
+    "sum(map(list, nested), [])",
+    "sum([x[i:i+2] for i in range(0, len(x), 2)], [])",
+    "sum(([k, v] for k, v in d.items()), [])",
+    "sum([[]] * n, [])",
+    "sum(get_lists(), [])",
+    "sum(data.values(), [])"
+  ],
+  "silentShapes": [
+    "sum([1, 2, 3])",
+    "sum(range(10))",
+    "sum(d.values())",
+    "sum(i for i in range(10) if i % 2 == 0)",
+    "total = 0; total = sum(nums, total)"
+  ],
+  "fixDescription": "Rewrites sum(lists, []) as [*sublist for sublist in lists] on Python 3.15+, otherwise as functools.reduce(operator.iadd, lists, []) after importing functools and operator if needed.",
+  "hazards": [
+    "The rewrite accepts any iterable of iterables, whereas sum required actual lists, potentially changing behavior if non-list iterables are passed.",
+    "If the original sum call appeared in a context where its TypeError on non-list inputs was being caught and handled, the rewrite may silently succeed and alter control flow.",
+    "The fix may reorder evaluation: sum evaluates left-to-right with immediate accumulation, while the reduce form also evaluates left-to-right but via operator.iadd calls, which could differ if list concatenation had side effects (though unlikely for built-in lists).",
+    "On Python 3.15+, the starred form [*sublist for sublist in lists] creates the list via a comprehension, which may have different performance characteristics but identical results for list inputs.",
+    "If the variable name 'lists' is reused or shadowed in the surrounding scope, the fix’s comprehension or reduce expression could capture a different binding than the original sum call intended.",
+    "The fix may drop inline or trailing comments attached to the sum call line, as the rewrite replaces the entire expression and may not preserve comment tokens.",
+    "If the sum call was part of a larger expression (e.g., inside a function argument or conditional), the fix’s insertion of import statements (for reduce form) could affect module-level state or trigger side effects at import time.",
+    "Using functools.reduce(operator.iadd, ...) assumes the elements support in-place addition via __iadd__; for lists this works, but if the iterables were custom sequences with unusual __iadd__ behavior, the result might diverge from sum’s repeated __add__ usage.",
+    "In rare cases where the start value [] was not a literal but a variable, the fix incorrectly hardcodes [], altering behavior if that variable was mutated elsewhere or intended to be dynamic.",
+    "If the code relied on the quadratic behavior of sum for timing or testing purposes, the rewrite changes performance characteristics, potentially breaking time-sensitive logic."
+  ]
+}

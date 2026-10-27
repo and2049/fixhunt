@@ -1,0 +1,103 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/noUselessUndefinedInitialization — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/noUselessUndefinedInitialization <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T19-31-04-008Z-biome-complexity_noUselessUndefinedInitialization · fix labelled <b>safe</b> · 8 programs, 3 fired, 3 fixed, 0 oracle-backed finding(s) · model cost $0.0010</p>
+<div class="card"><b>Rule analysis</b><p></p><p class="mut">Fix: </p><details><summary>0 hazards</summary><ul></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span></td><td>Temporal Dead Zone - let redeclaration without initializer</td><td class="mut">temporal dead zone: let/const accessed before declaration after code is hoisted or reorder</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span></td><td>__proto__ assignment effects object identity</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Async function captures unitialized binding across await</td><td class="mut">async/await, promise ordering, generators and yield position</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Break from labeled block skips re-initialization</td><td class="mut">label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Sparse array created by accessing unset indices in loop</td><td class="mut">sparse arrays, holes, Array(n) vs [n], array-likes</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Template literal coercion depends on undefined vs absent binding</td><td class="mut">numeric/string coercion: + vs template literal, String(x) vs ${x}, Symbol, BigInt, objects</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>Sloppy mode this binding in function called via undefined property</td><td class="mut">strict vs sloppy mode semantics (this, octal, duplicate params, with)</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span></td><td>Exception thrown in initializer expression masked by fix</td><td class="mut">exceptions thrown inside the code the fix removes or rewrites</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Temporal Dead Zone - let redeclaration without initializer</summary><pre>function test() {
+  try {
+    return a;
+  } catch (e) {
+    console.log(e.name);
+  }
+  let a;
+}
+test();
+</pre></details><details id="r1-p002"><summary>r1-p002 — __proto__ assignment effects object identity</summary><pre>let obj = {};
+obj.__proto__ = {toString: () =&gt; &#39;changed&#39;};
+console.log(obj.toString());
+</pre></details><details id="r1-p003"><summary>r1-p003 — Async function captures unitialized binding across await</summary><pre>async function main() {
+  let x;
+  const p = Promise.resolve().then(() =&gt; console.log(typeof x));
+  x = 42;
+  await p;
+}
+main();
+</pre></details><details id="r1-p004"><summary>r1-p004 — Break from labeled block skips re-initialization</summary><pre>outer:
+for (let i = 0;;) {
+  let counter = undefined;
+  if (i === 0) break outer;
+  counter = 1;
+  i++;
+}
+console.log(typeof counter); // ReferenceError if fix removes declaration
+</pre><pre class="diff">--- orig.js	2026-10-17 15:31:10.474344740 -0400
++++ fixed.js	2026-10-17 15:31:10.736358785 -0400
+@@ -1,6 +1,6 @@
+ outer:
+ for (let i = 0;;) {
+<span class="del">-  let counter = undefined;</span>
+<span class="add">+  let counter ;</span>
+   if (i === 0) break outer;
+   counter = 1;
+   i++;
+</pre></details><details id="r1-p005"><summary>r1-p005 — Sparse array created by accessing unset indices in loop</summary><pre>function test() {
+  const arr = [];
+  for (let i = 0; i &lt; 3; i++) {
+    let val = undefined;
+    if (i !== 1) arr[i] = val;
+  }
+  console.log(arr.length, arr[1]);
+}
+test();
+</pre><pre class="diff">--- orig.js	2026-10-17 15:31:10.894367255 -0400
++++ fixed.js	2026-10-17 15:31:11.159381412 -0400
+@@ -1,7 +1,7 @@
+ function test() {
+   const arr = [];
+   for (let i = 0; i &lt; 3; i++) {
+<span class="del">-    let val = undefined;</span>
+<span class="add">+    let val ;</span>
+     if (i !== 1) arr[i] = val;
+   }
+   console.log(arr.length, arr[1]);
+</pre></details><details id="r1-p006"><summary>r1-p006 — Template literal coercion depends on undefined vs absent binding</summary><pre>function show() {
+  let msg = undefined;
+  return `${msg}`;
+}
+console.log(show());
+</pre><pre class="diff">--- orig.js	2026-10-17 15:31:11.321390046 -0400
++++ fixed.js	2026-10-17 15:31:11.588404276 -0400
+@@ -1,5 +1,5 @@
+ function show() {
+<span class="del">-  let msg = undefined;</span>
+<span class="add">+  let msg ;</span>
+   return `${msg}`;
+ }
+ console.log(show());
+</pre></details><details id="r1-p007"><summary>r1-p007 — Sloppy mode this binding in function called via undefined property</summary><pre>function f() {
+  console.log(this === global);
+}
+const o = {m: f};
+(o.m || o.n)(); // calls f with this=global due to [[Get]] returning undefined
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exception thrown in initializer expression masked by fix</summary><pre>function bad() {
+  throw new Error(&#39;init fail&#39;);
+}
+try {
+  let x = bad();
+} catch (e) {
+  console.log(e.message);
+}
+</pre></details></body></html>

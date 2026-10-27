@@ -1,0 +1,645 @@
+{
+  "runId": "2026-10-17T20-47-13-524Z-2url-ruff-PERF102",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PERF102",
+    "fixKind": "unknown",
+    "docs": "# incorrect-dict-iterator (PERF102)\n\nDerived from the **Perflint** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `dict.items()` that discard either the key or the value\nwhen iterating over the dictionary.\n\n## Why is this bad?\nIf you only need the keys or values of a dictionary, you should use\n`dict.keys()` or `dict.values()` respectively, instead of `dict.items()`.\nThese specialized methods are more efficient than `dict.items()`, as they\navoid allocating tuples for every item in the dictionary. They also\ncommunicate the intent of the code more clearly.\n\nNote that, as with all `perflint` rules, this is only intended as a\nmicro-optimization, and will have a negligible impact on performance in\nmost cases.\n\n## Example\n```python\nobj = {\"a\": 1, \"b\": 2}\nfor key, value in obj.items():\n    print(value)\n```\n\nUse instead:\n```python\nobj = {\"a\": 1, \"b\": 2}\nfor value in obj.values():\n    print(value)\n```\n\n## Fix safety\nThe fix does not perform any type analysis and, as such, may suggest an\nincorrect fix if the object in question does not duck-type as a mapping\n(e.g., if it is missing a `.keys()` or `.values()` method, or if those\nmethods behave differently than they do on standard mapping types).\n"
+  },
+  "analysis": {
+    "summary": "Flags dict.items() iteration where either loop variable is unused.",
+    "firingShapes": [
+      "for k, v in d.items(): pass",
+      "for _, val in d.items(): pass",
+      "for key, _ in d.items(): pass",
+      "for x, y in d.items(): print(y)",
+      "for a, b in d.items(): print(a)",
+      "for i, j in d.items(): if i: pass",
+      "for m, n in d.items(): n += 1",
+      "for u, v in d.items(): v = 0"
+    ],
+    "silentShapes": [
+      "for k, v in d.items(): print(k, v)",
+      "for key in d.keys(): pass",
+      "for val in d.values(): pass",
+      "for item in d.items(): pass",
+      "for k, v in d.items(): if k: print(v)"
+    ],
+    "fixDescription": "Replace dict.items() with dict.keys() when only the key is used, or dict.values() when only the value is used, preserving the used loop variable and loop body.",
+    "hazards": [
+      "Rewriting 'for k, v in d.items(): ...' to 'for k in d.keys(): ...' changes behavior if 'v' is referenced later in the function due to lingering binding.",
+      "If the loop variable prefixed with '_' is actually used (e.g., via locals() or eval), replacing .items() with .values() removes the key binding, breaking access.",
+      "When the dictionary is a non-standard mapping (e.g., a custom class without .keys()/.values()), the rewrite causes AttributeError.",
+      "If .items(), .keys(), or .values() are overridden with custom logic (e.g., logging or filtering), the rewrite alters side effects.",
+      "In nested scopes, replacing .items() with .keys()/.values() may inadvertently capture outer-scope variables if the loop variable name shadows them.",
+      "If the loop body contains 'del v' or similar, removing the binding via .values() causes UnboundLocalError.",
+      "The rewrite may disrupt debugging or tracing tools that rely on the frame locals containing both key and value variables.",
+      "If the dictionary iteration is modified during iteration (e.g., adding/removing keys), .items(), .keys(), and .values() behave differently under mutation, altering which items are visited."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0029433000000000003,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 10,
+    "fixed": 0,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Outer scope shadowing",
+      "hazard": "In nested scopes, replacing .items() with .keys()/.values() may inadvertently capture outer-scope variables if the loop variable name shadows them.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the keys of a dict use the `keys()` method",
+            "span": [
+              3,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Comments and docstrings",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the keys of a dict use the `keys()` method",
+            "span": [
+              3,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "k\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "k\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Type annotations evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the keys of a dict use the `keys()` method",
+            "span": [
+              4,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable default arguments and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the keys of a dict use the `keys()` method",
+            "span": [
+              2,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "{1: 0}\n{}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "{1: 0}\n{}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Debugging/tracing tools",
+      "hazard": "The rewrite may disrupt debugging or tracing tools that rely on the frame locals containing both key and value variables.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Parameter kinds and defaults",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the keys of a dict use the `keys()` method",
+            "span": [
+              2,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "['x']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['x']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Iterators consumed once",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "abdone",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Bytes vs str encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the keys of a dict use the `keys()` method",
+            "span": [
+              5,
+              19
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "01",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "01",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Non-standard mapping lacks .keys()/.values()",
+      "hazard": "When the dictionary is a non-standard mapping (e.g., a custom class without .keys()/.values()), the rewrite causes AttributeError.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the keys of a dict use the `keys()` method",
+            "span": [
+              8,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a\nb\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a\nb\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Mutation during iteration changes visited items",
+      "hazard": "If the dictionary iteration is modified during iteration (e.g., adding/removing keys), .items(), .keys(), and .values() behave differently under mutation, altering which items are visited.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "RuntimeError: dictionary changed size during iteration",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "File mode truncation with partial write",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "'helloworld'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "del v in loop body causes UnboundLocalError after rewrite",
+      "hazard": "If the loop body contains 'del v' or similar, removing the binding via .values() causes UnboundLocalError.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the values of a dict use the `values()` method",
+            "span": [
+              2,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n2\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n2\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Overridden .items/.keys/.values with side effects",
+      "hazard": "If .items(), .keys(), or .values() are overridden with custom logic (e.g., logging or filtering), the rewrite alters side effects.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "items\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Lingering binding of unused variable after rewrite",
+      "hazard": "Rewriting 'for k, v in d.items(): ...' to 'for k in d.keys(): ...' changes behavior if 'v' is referenced later in the function due to lingering binding.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the values of a dict use the `values()` method",
+            "span": [
+              3,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1\nNone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\nNone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Frame locals missing value variable breaks debugger",
+      "hazard": "The rewrite may disrupt debugging or tracing tools that rely on the frame locals containing both key and value variables.",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Bytes vs str encoding mismatch in write",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PERF102",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PERF102",
+            "severity": "warning",
+            "message": "When using only the values of a dict use the `values()` method",
+            "span": [
+              2,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "b'helloworld'\n",
+          "stderr1": "ModuleNotFoundError: No module named 'nosuchmodule'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'helloworld'\n",
+          "stderr1": "ModuleNotFoundError: No module named 'nosuchmodule'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

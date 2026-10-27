@@ -1,0 +1,592 @@
+{
+  "runId": "2026-10-17T20-11-40-944Z-to91-biome-complexity_useArrowFunction",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/useArrowFunction",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useArrowFunction\n- Fix: safe\n- Default severity: warn\n- Available from version: 1.0.0\n- Diagnostic category: lint/complexity/useArrowFunction\n- This rule is recommended\n\nDescription\n\n Use arrow functions over function expressions.\n\n An arrow function expression is a compact alternative to a regular function expression,\n with an important distinction:\n `this` is not bound to the arrow function. It inherits `this` from its parent scope.\n\n This rule proposes turning all function expressions that are not generators (`function*`) and don't use `this` into arrow functions.\n\n This rule does not modify top-level function declarations ([discuss here](https://github.com/biomejs/biome/discussions/7108)).\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n const z = function() {\n     return 0;\n }\n ```\n\n ```js,expect_diagnostic\n const delegatedFetch = async function(url) {\n     return await fetch(url);\n }\n ```\n\nValid\n\n ```js\n const f = function() {\n     return this.prop;\n }\n ```\n\n Named function expressions are ignored:\n\n ```js\n const z = function z() {\n     return 0;\n }\n ```\n\n Functions that reference the [arguments\n object](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/arguments)\n are ignored because the arguments object is not available to arrow\n functions.\n\n ```js\n const q = function () {\n     return arguments[0];\n }\n ```\n\n Function expressions that declare the type of `this` are  also ignored:\n\n ```ts\n const z = function(this: A): number {\n     return 0;\n }\n ```\n\nSee Also\n\n - [useConsistentFunctionStyle](https://biomejs.dev/linter/rules/use-consistent-function-style)\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags function expressions without 'this' usage, generator markers, named identifiers, arguments references, or explicit 'this' type annotations.",
+    "firingShapes": [
+      "const x = function() { return 1; };",
+      "let y = function(a, b) { return a + b; };",
+      "var z = function() { if (true) return 0; };",
+      "obj.method = function() { return 'hello'; };",
+      "[].map(function(item) { return item * 2; });",
+      "setTimeout(function() { console.log('tick'); }, 100);",
+      "new Promise(function(resolve) { resolve(42); });",
+      "return function() { return true; };"
+    ],
+    "silentShapes": [
+      "const x = function() { return this.value; };",
+      "const y = function* gen() { yield 1; };",
+      "const z = function namedFunc() { return 5; };",
+      "const w = function() { return arguments[0]; };",
+      "const v = function(this: MyType) { return 42; };"
+    ],
+    "fixDescription": "Replaces each flagged function expression with an arrow function having the same parameters and function body, preserving formatting and comments where possible.",
+    "hazards": [
+      "Rewriting a function used as a constructor with 'new' changes behavior because arrow functions cannot be instantiated and will throw TypeError.",
+      "If the function expression appears before its variable declaration due to hoisting, replacing it with an arrow function creates a temporal dead zone error when accessed earlier.",
+      "When the function is referenced via arguments.callee (e.g., for recursion), the arrow function lacks this property, breaking self-reference.",
+      "If the function expression is wrapped in parentheses and immediately invoked, the arrow function may parse differently due to precedence, causing syntax errors.",
+      "In sequences like '0, function(){}', replacing with arrow function alters comma operator evaluation if the arrow function is misparsed.",
+      "If the function expression is a label target (e.g., 'label: function(){}'), the arrow function cannot be labeled, causing a syntax error.",
+      "When the function expression is a method in an object literal and the object is used in a super() call, the arrow function's lexical this breaks method inheritance.",
+      "If the function expression contains a trailing comment on the closing brace, the autofix may drop it during transformation.",
+      "In TypeScript, if the function expression has a return type annotation like 'function(): number', removing it breaks type checking.",
+      "If the function expression is part of a larger destructuring pattern, the rewrite may disrupt indentation or alignment, hiding syntax errors."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0027795,
+  "summary": {
+    "programs": 16,
+    "invalid": 5,
+    "fired": 9,
+    "fixed": 9,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hoisting Temporal Dead Zone",
+      "hazard": "If the function expression appears before its variable declaration due to hoisting, replacing it with an arrow function creates a temporal dead zone error when accessed earlier.",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "TypeError: f is not a function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: f is not a function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:50.385194347 -0400\n+++ fixed.js\t2026-10-17 16:11:50.662187572 -0400\n@@ -1,5 +1,5 @@\n function test() {\n   try { f(); } catch (e) { console.log(e.name + ': ' + e.message); }\n-  var f = function() { return 42; };\n+  var f = () => 42;\n }\n test();\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Strict vs Sloppy Mode Semantics",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Parenthesized IIFE Precedence",
+      "hazard": "If the function expression is wrapped in parentheses and immediately invoked, the arrow function may parse differently due to precedence, causing syntax errors.",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          },
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:51.054177986 -0400\n+++ fixed.js\t2026-10-17 16:11:51.308171787 -0400\n@@ -1,3 +1 @@\n-(function () {\n-  return (function(x) { return x * 2; })(5);\n-})();\n+(() => ((x) => x * 2)(5))();\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Sparse Arrays and Holes",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "20,,60\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "20,,60\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:51.457168151 -0400\n+++ fixed.js\t2026-10-17 16:11:51.727161561 -0400\n@@ -1,5 +1,5 @@\n const arr = Array(3);\n arr[0] = 10;\n arr[2] = 30;\n-const result = arr.map(function(v) { return v === undefined ? -1 : v * 2; });\n+const result = arr.map((v) => v === undefined ? -1 : v * 2);\n console.log(result.join(','));\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Block-Scoped Function Declarations",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-11-40-944Z-to91-biome-complexity_useArrowFunction/r1-p005/orig.js:5\n    let f = function() { return x + 1; };\n        ^\n\nSyntaxError: Identifier 'f' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Name Collisions Across Scopes After Move",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          },
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          },
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "inner\ninner\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "inner\ninner\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:51.923156778 -0400\n+++ fixed.js\t2026-10-17 16:11:52.170150759 -0400\n@@ -1,6 +1,6 @@\n-let f = function() { return 'outer'; };\n+let f = () => 'outer';\n {\n-  let f = function() { return 'inner'; };\n+  let f = () => 'inner';\n   console.log(f()); // inner\n-  console.log((function() { return f(); })()); // outer\n+  console.log((() => f())()); // outer\n }\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Label/Break/Continue Control Flow",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-11-40-944Z-to91-biome-complexity_useArrowFunction/r1-p007/orig.js:4\n      if (true) break outer;\n                      ^^^^^\n\nSyntaxError: Undefined label 'outer'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Temporal Dead Zone After Hoisting/Reordering",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'f' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'f' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:52.377145718 -0400\n+++ fixed.js\t2026-10-17 16:11:52.620139801 -0400\n@@ -1,5 +1,5 @@\n function test() {\n   console.log(typeof f);\n-  let f = function() { return 42; };\n+  let f = () => 42;\n }\n test();\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "TypeScript return type annotation lost",
+      "hazard": "In TypeScript, if the function expression has a return type annotation like 'function(): number', removing it breaks type checking.",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-11-40-944Z-to91-biome-complexity_useArrowFunction/r2-p001/orig.js:2\nconst f = function(): number {\n                    ^\n\nSyntaxError: Unexpected token ':'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p002",
+      "title": "Destructuring pattern indentation disruption",
+      "hazard": "If the function expression is part of a larger destructuring pattern, the rewrite may disrupt indentation or alignment, hiding syntax errors.",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-11-40-944Z-to91-biome-complexity_useArrowFunction/r2-p002/orig.js:3\n  { b: function() { return 1; } }\n       ^^^^^^^^^^^^^^^^^^^^^^^^\n\nSyntaxError: Invalid destructuring assignment target\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Comma operator evaluation altered",
+      "hazard": "In sequences like '0, function(){}', replacing with arrow function alters comma operator evaluation if the arrow function is misparsed.",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:58.647994050 -0400\n+++ fixed.js\t2026-10-17 16:11:58.923987419 -0400\n@@ -1,3 +1,3 @@\n let result = 0,\n-  value = (0, function() { return 5; })();\n+  value = (0, () => 5)();\n console.log(result, value);\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Label/break/continue with finally and early return",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-11-40-944Z-to91-biome-complexity_useArrowFunction/r2-p004/orig.js:4\n      if (true) break outer;\n                      ^^^^^\n\nSyntaxError: Undefined label 'outer'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p005",
+      "title": "arguments.callee recursion broken",
+      "hazard": "When the function is referenced via arguments.callee (e.g., for recursion), the arrow function lacks this property, breaking self-reference.",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError 'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "null/undefined distinction with optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "empty\nempty\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "empty\nempty\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:59.360976941 -0400\n+++ fixed.js\t2026-10-17 16:11:59.632970422 -0400\n@@ -1,7 +1,5 @@\n const obj = { prop: null };\n-const getValue = function() {\n-  return obj.prop?.length ?? 'empty';\n-};\n+const getValue = () => obj.prop?.length ?? 'empty';\n console.log(getValue());\n obj.prop = undefined;\n console.log(getValue());\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "ASI with leading paren on next line",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          },
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:11:59.794966539 -0400\n+++ fixed.js\t2026-10-17 16:12:00.070959927 -0400\n@@ -1,8 +1,6 @@\n let x = 1\n-const f = function() {\n-  return x++\n-}()\n-;(function(){\n+const f = (() => x++)()\n+;(()=> {\n   x = 10\n })()\n console.log(x)\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Exception thrown inside rewritten function",
+      "hazard": "exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "complexity/useArrowFunction",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useArrowFunction",
+            "severity": "warning",
+            "message": "This function expression can be turned into an arrow function.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Error intentional\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Error intentional\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:12:00.240955862 -0400\n+++ fixed.js\t2026-10-17 16:12:00.504949549 -0400\n@@ -1,4 +1,4 @@\n-const risky = function() {\n+const risky = () => {\n   throw new Error('intentional');\n };\n try {\n"
+      }
+    }
+  ]
+}

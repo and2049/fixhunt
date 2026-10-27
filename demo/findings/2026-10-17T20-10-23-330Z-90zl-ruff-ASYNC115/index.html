@@ -1,0 +1,336 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff ASYNC115 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff ASYNC115 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-10-23-330Z-90zl-ruff-ASYNC115 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 11 fixed, 0 oracle-backed finding(s) · model cost $0.0046</p>
+<div class="card"><b>Rule analysis</b><p>Flags calls to trio.sleep(0) or anyio.sleep(0) and suggests replacing them with explicit checkpoint functions.</p><p class="mut">Fix: Replace trio.sleep(0) with trio.lowlevel.checkpoint() and anyio.sleep(0) with anyio.checkpoint(), preserving the await keyword and surrounding expression structure.</p><details><summary>12 hazards</summary><ul><li>If trio or anyio is imported as an alias (e.g., import trio as t), the fix may incorrectly reference trio.lowlevel.checkpoint instead of the aliased module, causing AttributeError.</li><li>If trio.sleep or anyio.sleep is shadowed by a local variable or function, the fix will replace the wrong symbol, leading to incorrect behavior or NameError.</li><li>If the call is part of a larger expression (e.g., f(trio.sleep(0))), replacing only the call may break argument ordering or introduce syntax errors if not handled contextually.</li><li>If the sleep call appears in a default argument or lambda, moving the checkpoint call may alter evaluation timing or scope, especially if closure variables are involved.</li><li>If the module trio.lowlevel or anyio is not imported, the fix may introduce a NameError unless the import is added, which the autofix may not do.</li><li>If there are comments inside the call parentheses (e.g., trio.sleep(  # comment
+ 0 )), the fix may drop them, violating user intent even if semantically equivalent.</li><li>If the code uses from trio import sleep, the fix cannot safely rewrite to trio.lowlevel.checkpoint without knowing the original import form, risking incorrect module references.</li><li>If the code is in a string or comment (e.g., docstring or # await trio.sleep(0)), the tool might incorrectly flag and modify it, breaking documentation or introducing invalid code.</li><li>If the sleep function is accessed via getattr or dynamic lookup (e.g., getattr(trio, &#39;sleep&#39;)(0)), the fix cannot apply safely as it assumes a direct attribute access.</li><li>If the code runs under a mock or test patch where trio.sleep is replaced, the fix may bypass the mock and call the real checkpoint, altering test behavior.</li><li>If the expression uses keyword arguments like trio.sleep(delay=0), the fix may fail to match or incorrectly rewrite, especially if mixed with positional args.</li><li>If the file has encoding issues or non-standard whitespace, the autofix may misidentify the boundaries of the expression, leading to malformed replacement.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Encoding and Whitespace Boundary Misidentification</td><td class="mut">If the file has encoding issues or non-standard whitespace, the autofix may misidentify th</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>File Modes and Truncation Partial Writes</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Import Alias Misreference</td><td class="mut">If trio or anyio is imported as an alias (e.g., import trio as t), the fix may incorrectly</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Mock Patch Bypass</td><td class="mut">If the code runs under a mock or test patch where trio.sleep is replaced, the fix may bypa</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation Order and Side Effects</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>String or Comment False Positive</td><td class="mut">If the code is in a string or comment (e.g., docstring or # await trio.sleep(0)), the tool</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Missing Module Import NameError</td><td class="mut">If the module trio.lowlevel or anyio is not imported, the fix may introduce a NameError un</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Int/Float/Bool Coercion Edge Cases</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword argument usage</td><td class="mut">If the expression uses keyword arguments like trio.sleep(delay=0), the fix may fail to mat</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Parameter forwarding with defaults</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Import alias mismatch</td><td class="mut">If trio or anyio is imported as an alias (e.g., import trio as t), the fix may incorrectly</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>From import prevents safe rewrite</td><td class="mut">If the code uses from trio import sleep, the fix cannot safely rewrite to trio.lowlevel.ch</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Comment inside parentheses</td><td class="mut">If there are comments inside the call parentheses (e.g., trio.sleep(  # comment\n 0 )), th</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>Dynamic attribute access via getattr</td><td class="mut">If the sleep function is accessed via getattr or dynamic lookup (e.g., getattr(trio, &#39;slee</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Missing lowlevel import</td><td class="mut">If the module trio.lowlevel or anyio is not imported, the fix may introduce a NameError un</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Comments on removed/moved code</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Encoding and Whitespace Boundary Misidentification</summary><pre># -*- coding: utf-8 -*-
+import trio
+async def main():
+    x = 0
+    y = [
+        await 	 trio.sleep( 0 )  # tab and space after comma
+        if False else None,
+    ]
+    print(&#39;y[0]:&#39;, y[0])
+try:
+    import asyncio
+    asyncio.run(main())
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:39.206082574 -0400
++++ fixed.py	2026-10-17 16:10:39.646069961 -0400
+@@ -1,9 +1,10 @@
+ # -*- coding: utf-8 -*-
+ import trio
+<span class="add">+import trio.lowlevel</span>
+ async def main():
+     x = 0
+     y = [
+<span class="del">-        await 	 trio.sleep( 0 )  # tab and space after comma</span>
+<span class="add">+        await 	 trio.lowlevel.checkpoint()  # tab and space after comma</span>
+         if False else None,
+     ]
+     print(&#39;y[0]:&#39;, y[0])
+</pre></details><details id="r1-p002"><summary>r1-p002 — File Modes and Truncation Partial Writes</summary><pre>import trio
+async def main():
+    with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+        try:
+            f.write(b&#39;before&#39;)
+            await trio.sleep(0)
+            f.write(b&#39;after&#39;)
+        except Exception as e:
+            print(f&#39;{type(e).__name__}: {e}&#39;)
+        finally:
+            f.seek(0)
+            print(&#39;read:&#39;, f.read())
+import asyncio
+import os
+asyncio.run(main())
+os.remove(&#39;test.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:39.844064285 -0400
++++ fixed.py	2026-10-17 16:10:40.253052577 -0400
+@@ -1,9 +1,10 @@
+ import trio
+<span class="add">+import trio.lowlevel</span>
+ async def main():
+     with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+         try:
+             f.write(b&#39;before&#39;)
+<span class="del">-            await trio.sleep(0)</span>
+<span class="add">+            await trio.lowlevel.checkpoint()</span>
+             f.write(b&#39;after&#39;)
+         except Exception as e:
+             print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Import Alias Misreference</summary><pre>import trio as t
+import anyio as a
+async def main():
+    await t.sleep(0)
+    await a.sleep(0)
+    print(&#39;both checkpoints passed&#39;)
+try:
+    import asyncio
+    asyncio.run(main())
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:40.468046427 -0400
++++ fixed.py	2026-10-17 16:10:40.844035672 -0400
+@@ -1,8 +1,10 @@
+ import trio as t
+ import anyio as a
+<span class="add">+import trio.lowlevel</span>
+<span class="add">+import anyio.lowlevel</span>
+ async def main():
+<span class="del">-    await t.sleep(0)</span>
+<span class="del">-    await a.sleep(0)</span>
+<span class="add">+    await trio.lowlevel.checkpoint()</span>
+<span class="add">+    await anyio.lowlevel.checkpoint()</span>
+     print(&#39;both checkpoints passed&#39;)
+ try:
+     import asyncio
+</pre></details><details id="r1-p004"><summary>r1-p004 — Mock Patch Bypass</summary><pre>import trio
+from unittest.mock import patch
+async def main():
+    with patch(&#39;trio.sleep&#39;, return_value=&#39;mocked&#39;):
+        result = await trio.sleep(0)
+        print(&#39;result:&#39;, repr(result))
+try:
+    import asyncio
+    asyncio.run(main())
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:41.071029184 -0400
++++ fixed.py	2026-10-17 16:10:41.454018253 -0400
+@@ -1,8 +1,9 @@
+ import trio
+ from unittest.mock import patch
+<span class="add">+import trio.lowlevel</span>
+ async def main():
+     with patch(&#39;trio.sleep&#39;, return_value=&#39;mocked&#39;):
+<span class="del">-        result = await trio.sleep(0)</span>
+<span class="add">+        result = await trio.lowlevel.checkpoint()</span>
+         print(&#39;result:&#39;, repr(result))
+ try:
+     import asyncio
+</pre></details><details id="r1-p005"><summary>r1-p005 — Evaluation Order and Side Effects</summary><pre>import trio
+counter = 0
+async def inc():
+    global counter
+    counter += 1
+    return counter
+async def main():
+    global counter
+    counter = 0
+    results = []
+    for i in range(2):
+        val = inc()
+        await trio.sleep(0)
+        results.append((val, counter))
+    print(&#39;results:&#39;, results)
+try:
+    import asyncio
+    asyncio.run(main())
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:41.684011689 -0400
++++ fixed.py	2026-10-17 16:10:42.099999823 -0400
+@@ -1,4 +1,5 @@
+ import trio
+<span class="add">+import trio.lowlevel</span>
+ counter = 0
+ async def inc():
+     global counter
+@@ -10,7 +11,7 @@
+     results = []
+     for i in range(2):
+         val = inc()
+<span class="del">-        await trio.sleep(0)</span>
+<span class="add">+        await trio.lowlevel.checkpoint()</span>
+         results.append((val, counter))
+     print(&#39;results:&#39;, results)
+ try:
+</pre></details><details id="r1-p006"><summary>r1-p006 — String or Comment False Positive</summary><pre>import trio
+async def main():
+    &quot;&quot;&quot;This is a docstring with await trio.sleep(0) inside.&quot;&quot;&quot;
+    s = &#39;not await trio.sleep(0)&#39;
+    # await trio.sleep(0)  # this is a comment
+    await trio.sleep(0)  # real call
+    print(&#39;slept&#39;)
+try:
+    import asyncio
+    asyncio.run(main())
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:42.326993359 -0400
++++ fixed.py	2026-10-17 16:10:42.736981683 -0400
+@@ -1,9 +1,10 @@
+ import trio
+<span class="add">+import trio.lowlevel</span>
+ async def main():
+     &quot;&quot;&quot;This is a docstring with await trio.sleep(0) inside.&quot;&quot;&quot;
+     s = &#39;not await trio.sleep(0)&#39;
+     # await trio.sleep(0)  # this is a comment
+<span class="del">-    await trio.sleep(0)  # real call</span>
+<span class="add">+    await trio.lowlevel.checkpoint()  # real call</span>
+     print(&#39;slept&#39;)
+ try:
+     import asyncio
+</pre></details><details id="r1-p007"><summary>r1-p007 — Missing Module Import NameError</summary><pre>import trio
+# trio.lowlevel not imported
+async def main():
+    await trio.sleep(0)  # should become trio.lowlevel.checkpoint()
+    print(&#39;checkpoint passed&#39;)
+try:
+    import asyncio
+    asyncio.run(main())
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:42.955975447 -0400
++++ fixed.py	2026-10-17 16:10:43.341964477 -0400
+@@ -1,7 +1,8 @@
+ import trio
+<span class="add">+import trio.lowlevel</span>
+ # trio.lowlevel not imported
+ async def main():
+<span class="del">-    await trio.sleep(0)  # should become trio.lowlevel.checkpoint()</span>
+<span class="add">+    await trio.lowlevel.checkpoint()  # should become trio.lowlevel.checkpoint()</span>
+     print(&#39;checkpoint passed&#39;)
+ try:
+     import asyncio
+</pre></details><details id="r1-p008"><summary>r1-p008 — Int/Float/Bool Coercion Edge Cases</summary><pre>import trio
+from decimal import Decimal
+async def main():
+    vals = [0, 0.0, False, Decimal(&#39;0&#39;), 0//1, (lambda: 0)()]
+    for v in vals:
+        try:
+            await trio.sleep(v)
+            print(f&#39;{v!r}: slept&#39;)
+        except Exception as e:
+            print(f&#39;{v!r}: {type(e).__name__}: {e}&#39;)
+try:
+    import asyncio
+    asyncio.run(main())
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Keyword argument usage</summary><pre>import trio
+async def main():
+    delay_val = 0
+    await trio.sleep(delay=delay_val)
+    print(&#39;keyword ok&#39;)
+await trio.run(main())
+</pre></details><details id="r2-p002"><summary>r2-p002 — Parameter forwarding with defaults</summary><pre>import trio
+async def wrapper(*args, **kwargs):
+    return await trio.sleep(*args, **kwargs)
+async def main():
+    result = await wrapper(0)
+    print(&#39;forwarded:&#39;, result)
+async def posonly(/, delay):
+    return await trio.sleep(delay)
+async def main2():
+    r = await posonly(0)
+    print(&#39;posonly:&#39;, r)
+async def kwonly(*, delay):
+    return await trio.sleep(delay)
+async def main3():
+    r = await kwonly(delay=0)
+    print(&#39;kwonly:&#39;, r)
+asyncio.run(main())
+asyncio.run(main2())
+asyncio.run(main3())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Import alias mismatch</summary><pre>import trio as t
+async def main():
+    await t.sleep(0)
+    print(&#39;aliased ok&#39;)
+trio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:49.311795906 -0400
++++ fixed.py	2026-10-17 16:10:49.681785532 -0400
+@@ -1,5 +1,6 @@
+ import trio as t
+<span class="add">+import trio.lowlevel</span>
+ async def main():
+<span class="del">-    await t.sleep(0)</span>
+<span class="add">+    await trio.lowlevel.checkpoint()</span>
+     print(&#39;aliased ok&#39;)
+ trio.run(main())
+</pre></details><details id="r2-p004"><summary>r2-p004 — From import prevents safe rewrite</summary><pre>from trio import sleep
+async def main():
+    await sleep(0)
+    print(&#39;from import ok&#39;)
+trio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:49.878780008 -0400
++++ fixed.py	2026-10-17 16:10:50.261769286 -0400
+@@ -1,5 +1,6 @@
+ from trio import sleep
+<span class="add">+import trio.lowlevel</span>
+ async def main():
+<span class="del">-    await sleep(0)</span>
+<span class="add">+    await trio.lowlevel.checkpoint()</span>
+     print(&#39;from import ok&#39;)
+ trio.run(main())
+</pre></details><details id="r2-p005"><summary>r2-p005 — Comment inside parentheses</summary><pre>import trio
+async def main():
+    await trio.sleep(
+        0  # zero delay
+    )
+    print(&#39;comment preserved&#39;)
+trio.run(main())
+</pre></details><details id="r2-p006"><summary>r2-p006 — Dynamic attribute access via getattr</summary><pre>import trio
+async def main():
+    sleep_fn = getattr(trio, &#39;sleep&#39;)
+    await sleep_fn(0)
+    print(&#39;getattr ok&#39;)
+trio.run(main())
+</pre></details><details id="r2-p007"><summary>r2-p007 — Missing lowlevel import</summary><pre>import trio
+async def main():
+    await trio.sleep(0)
+    print(&#39;before checkpoint&#39;)
+    await trio.lowlevel.checkpoint()  # This line will fail if not imported
+    print(&#39;after checkpoint&#39;)
+trio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:51.177743671 -0400
++++ fixed.py	2026-10-17 16:10:51.537733622 -0400
+@@ -1,6 +1,7 @@
+ import trio
+<span class="add">+import trio.lowlevel</span>
+ async def main():
+<span class="del">-    await trio.sleep(0)</span>
+<span class="add">+    await trio.lowlevel.checkpoint()</span>
+     print(&#39;before checkpoint&#39;)
+     await trio.lowlevel.checkpoint()  # This line will fail if not imported
+     print(&#39;after checkpoint&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Comments on removed/moved code</summary><pre>import trio
+# This is a comment before
+async def main():
+    # Comment before await
+    await trio.sleep(0)  # Inline comment
+    # Comment after await
+    print(&#39;done&#39;)
+# Comment after function
+trio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:10:51.747727760 -0400
++++ fixed.py	2026-10-17 16:10:52.121717328 -0400
+@@ -1,8 +1,9 @@
+ import trio
+<span class="add">+import trio.lowlevel</span>
+ # This is a comment before
+ async def main():
+     # Comment before await
+<span class="del">-    await trio.sleep(0)  # Inline comment</span>
+<span class="add">+    await trio.lowlevel.checkpoint()  # Inline comment</span>
+     # Comment after await
+     print(&#39;done&#39;)
+ # Comment after function
+</pre></details></body></html>

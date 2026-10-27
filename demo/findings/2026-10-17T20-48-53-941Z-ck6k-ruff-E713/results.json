@@ -1,0 +1,718 @@
+{
+  "runId": "2026-10-17T20-48-53-941Z-ck6k-ruff-E713",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "E713",
+    "fixKind": "unknown",
+    "docs": "# not-in-test (E713)\n\nDerived from the **pycodestyle** linter.\n\nFix is always available.\n\n## What it does\nChecks for membership tests using `not {element} in {collection}`.\n\n## Why is this bad?\nTesting membership with `{element} not in {collection}` is more readable.\n\n## Example\n```python\nZ = not X in Y\nif not X.B in Y:\n    pass\n```\n\nUse instead:\n```python\nZ = X not in Y\nif X.B not in Y:\n    pass\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags uses of 'not' before a containment test like 'not x in y', suggesting to rewrite as 'x not in y'.",
+    "firingShapes": [
+      "Z = not X in Y",
+      "if not X.B in Y:",
+      "while not func() in lst:",
+      "return not val in mapping",
+      "assert not item in container",
+      "lambda: not x in y",
+      "[not i in data for i in range(5)]",
+      "def f(): return not a in b"
+    ],
+    "silentShapes": [
+      "X not in Y",
+      "not (X in Y)",
+      "if not (X in Y):",
+      "not getattr(X, 'B') in Y",
+      "not []"
+    ],
+    "fixDescription": "Rewrites 'not {element} in {collection}' to '{element} not in {collection}' by moving 'not' after the element and before 'in'.",
+    "hazards": [
+      "If the element expression has side effects (e.g., a function call), moving 'not' changes nothing since the element is still evaluated once.",
+      "If the collection expression has side effects, it is still evaluated once after the rewrite, preserving order.",
+      "In a lambda, the rewrite preserves behavior as the element expression is unchanged.",
+      "In a list comprehension, the rewrite does not alter iteration or evaluation of the element expression.",
+      "If 'not' is part of a larger expression like 'not x in y or z', the rewrite only applies to the 'not x in y' subexpression due to operator precedence, but the autofix may incorrectly rewrite only that part if not parenthesized.",
+      "If the code contains a trailing comment on the same line, the autofix may not preserve it depending on implementation.",
+      "If 'in' is overridden as an attribute (e.g., x.in), the syntax 'x in y' would already be invalid, so the rule does not fire.",
+      "If the element is a tuple unpacking like 'not a, b in c', it is a SyntaxError and the rule does not fire.",
+      "If the code uses 'not' as a variable name (e.g., not = 5; not x in y), it is invalid syntax and the rule does not fire.",
+      "If the containment test is inside a string or comment, the rule does not fire as it is not executed code."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034593,
+  "summary": {
+    "programs": 16,
+    "invalid": 5,
+    "fired": 10,
+    "fixed": 10,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Walrus operator interaction",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              5,
+              68
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ys: [1] result: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ys: [1] result: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:10.057103774 -0400\n+++ fixed.py\t2026-10-17 16:49:10.342109732 -0400\n@@ -2,7 +2,7 @@\n     xs = []\n     ys = []\n     # Rule triggers on: not (val := x) in xs\n-    f = lambda: [(ys.append(val), val)[1] for x in range(3) if not (val := x) in xs]\n+    f = lambda: [(ys.append(val), val)[1] for x in range(3) if (val := x) not in xs]\n     xs.extend([0, 2])\n     result = f()\n     print('ys:', ys, 'result:', result)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Lambda preservation",
+      "hazard": "In a lambda, the rewrite preserves behavior as the element expression is unchanged.",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              3,
+              19
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "lambda(0): True\nlambda(2): False\nlist comp: [True, False, False, False]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "lambda(0): True\nlambda(2): False\nlist comp: [True, False, False, False]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:10.438111739 -0400\n+++ fixed.py\t2026-10-17 16:49:10.607115273 -0400\n@@ -1,6 +1,6 @@\n lst = [1, 2, 3]\n # Rule triggers on: not x in lst\n-f = lambda x: not x in lst\n+f = lambda x: x not in lst\n print('lambda(0):', f(0))\n print('lambda(2):', f(2))\n print('list comp:', [f(i) for i in range(4)])\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mutable default and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a: [1, 2] b: [1, 2] c: [1, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a: [1, 2] b: [1, 2] c: [1, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:10.712117468 -0400\n+++ fixed.py\t2026-10-17 16:49:10.875120876 -0400\n@@ -1,6 +1,6 @@\n def f(x, container=[]):\n     # Rule triggers on: not x in container\n-    if not x in container:\n+    if x not in container:\n         container.append(x)\n     return container.copy()\n a = f(1)\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Shadowed builtins",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p005",
+      "title": "List comprehension iteration",
+      "hazard": "In a list comprehension, the rewrite does not alter iteration or evaluation of the element expression.",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              9,
+              48
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: gen() takes 0 positional arguments but 1 was given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: gen() takes 0 positional arguments but 1 was given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:11.116125912 -0400\n+++ fixed.py\t2026-10-17 16:49:11.491133743 -0400\n@@ -6,5 +6,5 @@\n     side_effects.append(counter)\n     return counter * 10\n # Rule triggers on: not i in [10, 30, 50]\n-result = [i for i in map(gen, range(5)) if not i in [10, 30, 50]]\n+result = [i for i in map(gen, range(5)) if i not in [10, 30, 50]]\n print('counter:', counter, 'side_effects:', side_effects, 'result:', result)\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Type annotation runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: 5 y: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Tuple unpacking syntax error",
+      "hazard": "If the element is a tuple unpacking like 'not a, b in c', it is a SyntaxError and the rule does not fire.",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              9,
+              22
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "normal: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "normal: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:11.852141283 -0400\n+++ fixed.py\t2026-10-17 16:49:12.019144770 -0400\n@@ -6,4 +6,4 @@\n except SyntaxError as e:\n     print('SyntaxError:', type(e).__name__, '-', str(e))\n # Valid contrast\n-print('normal:', not 1 in [1, 2, 3])\n+print('normal:', 1 not in [1, 2, 3])\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Class vs instance attributes",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              14,
+              18
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              21,
+              38
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              23,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Before:\nprop accessed\nnot a.prop in a.shared: True\nAfter append:\nprop accessed\nnot a.prop in a.shared: False\nprop accessed\nlambda: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before:\nprop accessed\nnot a.prop in a.shared: True\nAfter append:\nprop accessed\nnot a.prop in a.shared: False\nprop accessed\nlambda: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:12.123146940 -0400\n+++ fixed.py\t2026-10-17 16:49:12.286150340 -0400\n@@ -11,14 +11,14 @@\n # Rule triggers on: not a.prop in a.shared\n print('Before:')\n try:\n-    result = not a.prop in a.shared\n+    result = a.prop not in a.shared\n     print('not a.prop in a.shared:', result)\n except Exception as e:\n     print(type(e).__name__, str(e))\n # Change shared after eval\n a.shared.append(99)\n print('After append:')\n-print('not a.prop in a.shared:', not a.prop in a.shared)\n+print('not a.prop in a.shared:', a.prop not in a.shared)\n # Trigger again via lambda to show rewrite would not change behavior\n-f = lambda: not a.prop in a.shared\n+f = lambda: a.prop not in a.shared\n print('lambda:', f())\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "List comprehension iteration unaffected",
+      "hazard": "list comprehension iteration (the rewrite does not alter iteration or evaluation)",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              4,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[0, 0, 0]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[0, 0, 0]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:20.019311040 -0400\n+++ fixed.py\t2026-10-17 16:49:20.184314453 -0400\n@@ -1,6 +1,6 @@\n results = []\n for i in range(3):\n     # Build inner list via comprehension\n-    inner = [not j in [0, 1, 2] for j in range(i+1)]\n+    inner = [j not in [0, 1, 2] for j in range(i+1)]\n     results.append(sum(inner))\n print(results)\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "String formatting edge cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              4,
+              19
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              5,
+              23
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              6,
+              14
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              7,
+              16
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\nTrue\nTrue\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\nTrue\nTrue\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:20.281316459 -0400\n+++ fixed.py\t2026-10-17 16:49:20.442319790 -0400\n@@ -1,7 +1,7 @@\n x = 5\n y = [1, 2, 3]\n # Rule does not trigger: embedded in expressions\n-print('%d' % (not x in y))\n-print('{}'.format(not x in y))\n-print(f'{not x in y}')\n-print(repr(not x in y))\n+print('%d' % (x not in y))\n+print('{}'.format(x not in y))\n+print(f'{x not in y}')\n+print(repr(x not in y))\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Class vs instance attributes, descriptors, properties",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              8,
+              11
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              9,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\nprop called\nFalse\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\nprop called\nFalse\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:20.542321858 -0400\n+++ fixed.py\t2026-10-17 16:49:20.715325437 -0400\n@@ -5,6 +5,6 @@\n         print('prop called')\n         return [3]\n a = A()\n-print(not 1 in a.attr)  # triggers\n-print(not 3 in a.prop)  # triggers\n+print(1 not in a.attr)  # triggers\n+print(3 not in a.prop)  # triggers\n print(a.attr)\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              6,
+              11
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              7,
+              11
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              9,
+              11
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "E713",
+            "severity": "warning",
+            "message": "Test for membership should be `not in`",
+            "span": [
+              10,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "False\nTrue\nFalse\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\nTrue\nFalse\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:49:20.817327546 -0400\n+++ fixed.py\t2026-10-17 16:49:20.981330939 -0400\n@@ -3,8 +3,8 @@\n     def __hash__(self): return hash(self.v)\n     def __eq__(self, other): return self.v == other.v\n s = {BadHash(1), BadHash(1), BadHash(2)}  # dedup by hash/eq\n-print(not BadHash(1) in s)\n-print(not BadHash(3) in s)\n+print(BadHash(1) not in s)\n+print(BadHash(3) not in s)\n d = {BadHash(1): 'a', BadHash(2): 'b'}\n-print(not BadHash(1) in d)\n-print(not BadHash(3) in d)\n+print(BadHash(1) not in d)\n+print(BadHash(3) not in d)\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Shadowed builtins and names redefined later",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p006",
+      "title": "Element expression has side effects",
+      "hazard": "if the element expression has side effects (e.g., a function call), moving 'not' changes nothing since the element is still evaluated once.",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Collection expression has side effects",
+      "hazard": "if the collection expression has side effects, it is still evaluated once after the rewrite, preserving order.",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "'not' as a variable name",
+      "hazard": "if the code uses 'not' as a variable name (e.g., not = 5; not x in y), it is invalid syntax and the rule does not fire.",
+      "rule": "E713",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    }
+  ]
+}

@@ -1,0 +1,1414 @@
+{
+  "runId": "2026-10-17T20-41-40-602Z-mapj-ruff-TC006",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "TC006",
+    "fixKind": "unknown",
+    "docs": "# runtime-cast-value (TC006)\n\nDerived from the **flake8-type-checking** linter.\n\nFix is always available.\n\n## What it does\nChecks for unquoted type expressions in `typing.cast()` calls.\n\n## Why is this bad?\nThis rule helps enforce a consistent style across your codebase.\n\nIt's often necessary to quote the first argument passed to `cast()`,\nas type expressions can involve forward references, or references\nto symbols which are only imported in `typing.TYPE_CHECKING` blocks.\nThis can lead to a visual inconsistency across different `cast()` calls,\nwhere some type expressions are quoted but others are not. By enabling\nthis rule, you ensure that all type expressions passed to `cast()` are\nquoted, enforcing stylistic consistency across all of your `cast()` calls.\n\nIn some cases where `cast()` is used in a hot loop, this rule may also\nhelp avoid overhead from repeatedly evaluating complex type expressions at\nruntime.\n\n## Example\n```python\nfrom typing import cast\n\nx = cast(dict[str, int], foo)\n```\n\nUse instead:\n```python\nfrom typing import cast\n\nx = cast(\"dict[str, int]\", foo)\n```\n\n## Fix safety\nThis fix is safe as long as the type expression doesn't span multiple\nlines and includes comments on any of the lines apart from the last one.\n"
+  },
+  "analysis": {
+    "summary": "The rule flags unquoted type expressions in typing.cast() calls.",
+    "firingShapes": [
+      "x = cast(list[int], y)",
+      "z = cast(Dict[str, Any], w)",
+      "a = cast(Union[Foo, Bar], b)",
+      "result = cast(tuple[int, str, float], value)",
+      "obj = cast(MyGeneric[T], something)",
+      "func(cast(set[bytes], data))",
+      "return cast(Optional[List[int]], maybe_list)",
+      "value = cast(Literal['a', 'b', 'c'], token)"
+    ],
+    "silentShapes": [
+      "x = cast('list[int]', y)",
+      "z = cast(\"Dict[str, Any]\", w)",
+      "a = cast(r\"Union[Foo, Bar]\", b)"
+    ],
+    "fixDescription": "Wrap the first argument of typing.cast() in double quotes if it is not already a string literal, preserving whitespace and formatting.",
+    "hazards": [
+      "If the first argument is a variable name (e.g., cast(T, x)), quoting it changes it from a type reference to a string literal, causing a runtime error when the type checker expects a type but receives a string.",
+      "If the first attribute is a class or type imported locally (not from typing), quoting it prevents actual type resolution at runtime, breaking isinstance or issubclass checks that might rely on the cast target.",
+      "If the type expression spans multiple lines (even without comments), the autofix may incorrectly quote only the first line or fail to preserve line breaks, resulting in a syntax error.",
+      "If the first argument contains a comment on any line except the last, the fix may be applied incorrectly or omitted by Ruff due to its safety condition, but if forced, could comment out part of the type expression.",
+      "If the cast call uses keyword arguments like cast(typ=MyType, val=x), the autofix may not recognize the structure and either misapply quotes or fail to fire, leading to inconsistent fixes.",
+      "If the type expression contains a forward reference that is only resolved during TYPE_CHECKING, quoting it is correct, but if the same expression appears in a runtime context elsewhere, the inconsistency may mask circular import issues.",
+      "If the type expression is a string literal already but uses single quotes (e.g., cast('int', x)), the rule may not fire (depending on configuration), but if it did and the fix added outer quotes, it would produce a malformed nested string like cast(''int'', x).",
+      "If the code relies on the type expression being evaluated for side effects (e.g., a function call that returns a type), quoting it prevents execution, removing those side effects and potentially altering program state.",
+      "If the cast is inside a lambda or comprehension and the type expression references a loop variable, quoting it changes the meaning from a dynamic type lookup to a static string, breaking intended behavior.",
+      "If the type expression uses the | union operator (Python 3.10+) like cast(int | str, x), quoting it is necessary for forward compatibility, but if the code is run on Python <3.10, the unquoted version would already fail, so the fix doesn't introduce new breakage but assumes the target environment supports the syntax.",
+      "If the first argument is a tuple or other container mistakenly used as a type (e.g., cast((int, str), x)), quoting it hides the fact that it's not a valid type annotation, delaying detection of a logical error until type checking fails."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.038701299999999994,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 14,
+    "fixed": 14,
+    "fix-changes-behavior": 2
+  },
+  "reports": [
+    {
+      "programId": "r1-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "from typing import cast, List\ndef main():\n    y = cast(T, x)  # Should be cast(str, x)\n    T = list  # Now T is the lambda\n    try:\n        print('z:', z)\n    except Exception as e:\n        print('Error after redefinition:', type(e).__name__, str(e))\nif __name__ == '__main__':\n    main()\n",
+      "lines": {
+        "before": 20,
+        "after": 10
+      },
+      "reportPath": "runs/2026-10-17T20-41-40-602Z-mapj-ruff-TC006/reports/r1-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/19596",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14676",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/20237",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule quotes the first argument of typing.cast() to enforce stylistic consistency, but the program uses a forward reference (T is assigned later). Quoting 'T' changes the runtime semantics: before the fix, the UnboundLocalError occurred because T was referenced before assignment; after the fix, the quoted string 'T' is passed, so the cast succeeds but x is undefined, causing a NameError. The documentation's safety condition does not cover forward references, making this a real bug in the fix.",
+        "docsQuote": "This fix is safe as long as the type expression doesn't span multiple lines and includes comments on any of the lines apart from the last one.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC006 fix",
+          "ruff TC006 cast undefined variable",
+          "ruff TC006 cast string literal conversion",
+          "ruff TC006 cast forward reference handling"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC006 fix creates quoted type expressions with escape sequences",
+            "url": "https://github.com/astral-sh/ruff/issues/22131",
+            "state": "open",
+            "snippet": "### Summary\n\nThe fix for [`runtime-cast-value` (TC006)](https://docs.astral.sh/ruff/rules/runtime-cast-value/) can introduce an escape sequence into a quoted type expression, which ty rejects. The typing spec is not clear whether this is allowed but I’d expect Ruff to agree with ty. Example ([Ruff]("
+          },
+          {
+            "source": "github",
+            "title": "[flake8-type-checking] Missing rules, autofix strategies, overlapping rules and more",
+            "url": "https://github.com/astral-sh/ruff/issues/13208",
+            "state": "open",
+            "snippet": "Hey, I'm one of the maintainers for flake8-type-checking and I really like some of the decisions ruff has made when implementing these rules, especially at a time where the implementation of the flake8 plugin was still a lot more naïve and reported tons of false positives. Since then however, the fl"
+          },
+          {
+            "source": "github",
+            "title": "UP045 doesn't trigger inside of `cast`",
+            "url": "https://github.com/astral-sh/ruff/issues/20096",
+            "state": "closed",
+            "snippet": "### Summary\n\nWhen running UP045 it doesn't seem to trigger on types within `cast` which when paired with TC006 leads to inconsistent representations.\n\nVersions\n```console\n$ ruff --version\nruff 0.12.10\n$ python --version\nPython 3.11.13e\n```\n\nCLI Command\n```console\n$ ruff check --select TC006,UP045,I "
+          },
+          {
+            "source": "github",
+            "title": "EM101 false positive",
+            "url": "https://github.com/astral-sh/ruff/issues/19596",
+            "state": "closed",
+            "snippet": "### Summary\n\n<https://play.ruff.rs/a6f026e4-bf4e-487f-89f2-dbfb25d991ac>\n\n```py\nimport typing\n\nraise typing.cast(\"Exception\", None)\n```\n\nThe fix for EM101 is applied.\n\nwhich becomes:\n```py\nimport typing\n\nmsg = \"Exception\"\nraise typing.cast(msg, None)\n```\n\nthen the fix for `TC006` is applied.\n\nwhich "
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop when fixing file with `cast` and format strings",
+            "url": "https://github.com/astral-sh/ruff/issues/16037",
+            "state": "closed",
+            "snippet": "### Description\n\n```\nruff 0.9.5+2240 (a29009e4e 2025-02-07)\n```\n\n\ncommand\n```\nruff_normal check problematic_file.py --select ALL --preview --output-format concise --no-cache --fix --unsafe-fixes --isolated\n```\nfreeze ruff in\n```\nDownloading source file /home/runner/work/Automated-Fuzzer/Automated-Fu"
+          },
+          {
+            "source": "github",
+            "title": "unnecessary-literal-union (PYI030) can remove comments without being marked as unsafe",
+            "url": "https://github.com/astral-sh/ruff/issues/16317",
+            "state": "closed",
+            "snippet": "### Description\n\nReproduction:\n```py\nfrom typing import Literal\n\n_: (\n    # First group\n    Literal[\"a\", \"b\"]\n    # Second group\n    | Literal[\"c\", \"d\"]\n)\n```\n\nBecomes:\n```py\nfrom typing import Literal\n\n_: (\n    # First group\n    Literal[\"a\", \"b\", \"c\", \"d\"]\n)\n```\n\nWhat I'd expect:\n```py\nfrom typing "
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Reharmonize `TCH*` rules with flake8-type-checking · Issue #9573 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9573",
+            "snippet": "Ruff independently added one of the rules which is slated to be added to `flake8-type-checking` in the next release as TC010 (string union syntax), whereas in Ruff the rule is TCH006.\n\nConsidering there's no longer a naming conflict in the `TC` range (tryceratops kindly changed its code to match ruf"
+          },
+          {
+            "source": "tavily",
+            "title": "Checking file with rule TC006 cause panic · Issue #14554 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/14554",
+            "snippet": "#14634\n\nClosed\n\nChecking file with rule TC006 cause panic#14554\n\n#14634\n\nCopy link\n\nLabels\n\nbugAn issue describing something that isn't working, or a PR that fixes a bugAn issue describing something that isn't working, or a PR that fixes a bug\n\n## Description\n\n@qarmin\n\nqarmin\n\nopened on Nov 23, 2024"
+          },
+          {
+            "source": "tavily",
+            "title": "TC006 (runtime-cast-value) shouldn't trigger with `annotations` · Issue #20237 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/20237",
+            "snippet": "```\n   from import annotations import typing if typing TYPE_CHECKING from collections import Counter typing cast Counter 123\n   ```\n\n   ```\n   >\"/tmp/tmp.4i5jouRHcG/try.py\" \" \" in<> 'Counter' ' '\n   ```\n\n   Reacted by Alex Waygood\n\n   Reacted by Gabriel\n\n   Reacted by Gabriel\n5. ### Kilo59commentedo"
+          },
+          {
+            "source": "tavily",
+            "title": "Variable named \"time\" incorrectly marked as \"Undefined name\" (F821) in Jupyter notebook · Issue #376 · astral-sh/ruff-vscode · GitHub",
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/376",
+            "snippet": "Minimal example to reproduce:\n\nFirst cell\n\n```\ntime = \"hi\" \n```\n\n(this is not marked)\n\nSecond cell\n\n```\ntest = time + \" hello\" \n```\n\n(here \"time\" is marked)\n\nrelevant settings: [...] @charliermarsh\n\n   charliermarsh\n\n   on Jan 2, 2024\n\n   Member\n\n   More actions\n\n   I believe this is the same as ast"
+          },
+          {
+            "source": "tavily",
+            "title": "F841 \"Undefined name\" false positive in exception-nested-closure · Issue #6878 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/6878",
+            "snippet": "```\n% ruff t.py t.py:3:21: F841 [] Local variable `e` is assigned to but never used t.py:4:13: F821 Undefined name `e` Found 2 errors. [] 1 potentially fixable with the --fix option. \n```\n\nEdit: To note that since this is \"fixable\", allowing ruff to fix will break the code by removing the `as e`\n\nRe"
+          },
+          {
+            "source": "tavily",
+            "title": "F821 Undefined name for variables loaded with notebook %store magic · Issue #25807 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/25807",
+            "snippet": "Technically, `%store -r non_existent_variable` prints a warning message but does not raise an error - so it is true that a variable name could still be undefined after running this magic command... But I'd argue that from a linter's perspective we could just assume the name exists and has Unknown ty"
+          },
+          {
+            "source": "tavily",
+            "title": "False undefined name (F821) and remove quotes from type annotation (UP037) when string is expected · Issue #20716 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/20716",
+            "snippet": "The second form is more natural in my opinion, since it doesn't restrict me to a specific unit, and clearly indicates that the variable `y` represents distance and any units of distance (For example: meters, kilometers, parsecs, etc) are valid. However, `ruff` isn't happy about this code. With the d"
+          },
+          {
+            "source": "tavily",
+            "title": "Format breaks f-string with literal strings inside (versions 0.3.0 and 0.3.1) · Issue #10273 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/10273",
+            "snippet": "``` [...] ``` [...] My `pyproject.toml` has little configuration for the formater:"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/22131",
+            "relation": "unrelated",
+            "why": "Existing report is about escape sequences inside quoted type expressions; new finding is about quoting a forward reference that is later redefined."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13208",
+            "relation": "unrelated",
+            "why": "Existing report is a meta-issue about missing rules and overlapping rules; new finding is a concrete autofix behavior change."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20096",
+            "relation": "unrelated",
+            "why": "Existing report is about UP045 not triggering inside cast; new finding is about TC006 quoting a forward reference."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19596",
+            "relation": "related",
+            "why": "Both involve TC006 autofix on cast, but existing report concerns EM101 interaction and string literal type, while new finding concerns forward reference redefinition."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16037",
+            "relation": "unrelated",
+            "why": "Existing report is about infinite loop with format strings; new finding is a single autofix changing runtime behavior."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16317",
+            "relation": "unrelated",
+            "why": "Existing report is about PYI030 removing comments; new finding is about TC006 quoting a forward reference."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "related",
+            "why": "Both involve TC006 adding quotes, but existing report is about over-broad quoting in general, while new finding is specifically about quoting a forward reference that gets redefined."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "unrelated",
+            "why": "Existing report is about implementing flake8-type-checking; new finding is a specific TC006 autofix defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9573",
+            "relation": "unrelated",
+            "why": "Existing report is about harmonizing TCH* rule naming; new finding is a TC006 autofix behavior change."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14554",
+            "relation": "unrelated",
+            "why": "Existing report is about a panic/crash when checking with TC006; new finding is about incorrect autofix behavior."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20237",
+            "relation": "related",
+            "why": "Both involve TC006 and forward references, but existing report is about false positive with from __future__ import annotations, while new finding is about quoting a forward reference that is later redefined to a different value."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff-vscode/issues/376",
+            "relation": "unrelated",
+            "why": "Existing report is about F821 false positive in Jupyter notebooks; new finding is about TC006 autofix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6878",
+            "relation": "unrelated",
+            "why": "Existing report is about F821/F841 in exception-nested-closure; new finding is about TC006 autofix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25807",
+            "relation": "unrelated",
+            "why": "Existing report is about F821 with notebook %store magic; new finding is about TC006 autofix."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20716",
+            "relation": "unrelated",
+            "why": "Existing report is about F821 and UP037 with string type expectations; new finding is about TC006 quoting a forward reference."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/10273",
+            "relation": "unrelated",
+            "why": "Existing report is about formatter breaking f-strings; new finding is about TC006 autofix."
+          }
+        ],
+        "cost": 0.0054819
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:30:08.893688223 -0400\n+++ fixed.py\t2026-10-22 13:30:10.964722882 -0400\n@@ -1,6 +1,6 @@\n from typing import cast, List\n def main():\n-    y = cast(T, x)  # Should be cast(str, x)\n+    y = cast('T', x)  # Should be cast(str, x)\n     T = list  # Now T is the lambda\n     try:\n         print('z:', z)\n",
+        "observed": "stderr before: UnboundLocalError: cannot access local variable 'T' where it is not associated with a value\nstderr after: NameError: name 'x' is not defined",
+        "before": {
+          "stdout": "",
+          "stderr1": "UnboundLocalError: cannot access local variable 'T' where it is not associated with a value",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "NameError: name 'x' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "from typing import cast, List\ndef main():\n    y = cast('T', x)  # Should be cast(str, x)\n    T = list  # Now T is the lambda\n    try:\n        print('z:', z)\n    except Exception as e:\n        print('Error after redefinition:', type(e).__name__, str(e))\nif __name__ == '__main__':\n    main()\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC006 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original uses `cast(T, x)` where `T` refers to the later assignment `T = list`, so `T` resolves to the built-in `list`. After rewriting, `'T'` becomes a string literal passed as the first argument to `cast`, changing its meaning entirely—now interpreted as a type annotation for `str`? Actually `cast('T', x)` treats `'T'` as a forward reference string, but since no such type exists in scope, it fails during type checking or runtime depending on context; however here the immediate difference is that `x` remains undefined in both, but the error shifts because the first argument’s evaluation changes: originally `T` is looked up (failing later due to `x`), while now `'T'` is a constant, so the lookup of `x` happens first and fails earlier with `NameError`. Thus the fix alters runtime behavior by changing what expression is evaluated for the type argument, making it not semantics-preserving.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "import typing\ny = typing.cast(MyType, [x])  # Rule triggers: MyType is not a string\n",
+      "lines": {
+        "before": 8,
+        "after": 2
+      },
+      "reportPath": "runs/2026-10-17T20-41-40-602Z-mapj-ruff-TC006/reports/r2-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/13208",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/20096",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/19596",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/16037",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14676",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/1785",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9573",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14554",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/26625",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/20237",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/4939",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/6650",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/pull/16669",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18502",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix quotes the type expression 'MyType', changing it from a runtime-evaluated expression to a forward-reference string. This alters the evaluation order: originally 'MyType' was evaluated first (causing NameError on 'MyType'), but after the fix the second argument '[x]' is evaluated first (causing NameError on 'x'). The documentation only mentions safety regarding multi-line expressions and comments, not evaluation order changes, making this a silent behavior change in plausible code.",
+        "docsQuote": "This fix is safe as long as the type expression doesn't span multiple lines and includes comments on any of the lines apart from the last one.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "TC006 fix",
+          "typing cast first argument type annotation",
+          "ruff tc006 casting non-string literal",
+          "fix behavior quote string in cast"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "TC006 fix creates quoted type expressions with escape sequences",
+            "url": "https://github.com/astral-sh/ruff/issues/22131",
+            "state": "open",
+            "snippet": "### Summary\n\nThe fix for [`runtime-cast-value` (TC006)](https://docs.astral.sh/ruff/rules/runtime-cast-value/) can introduce an escape sequence into a quoted type expression, which ty rejects. The typing spec is not clear whether this is allowed but I’d expect Ruff to agree with ty. Example ([Ruff]("
+          },
+          {
+            "source": "github",
+            "title": "[flake8-type-checking] Missing rules, autofix strategies, overlapping rules and more",
+            "url": "https://github.com/astral-sh/ruff/issues/13208",
+            "state": "open",
+            "snippet": "Hey, I'm one of the maintainers for flake8-type-checking and I really like some of the decisions ruff has made when implementing these rules, especially at a time where the implementation of the flake8 plugin was still a lot more naïve and reported tons of false positives. Since then however, the fl"
+          },
+          {
+            "source": "github",
+            "title": "UP045 doesn't trigger inside of `cast`",
+            "url": "https://github.com/astral-sh/ruff/issues/20096",
+            "state": "closed",
+            "snippet": "### Summary\n\nWhen running UP045 it doesn't seem to trigger on types within `cast` which when paired with TC006 leads to inconsistent representations.\n\nVersions\n```console\n$ ruff --version\nruff 0.12.10\n$ python --version\nPython 3.11.13e\n```\n\nCLI Command\n```console\n$ ruff check --select TC006,UP045,I "
+          },
+          {
+            "source": "github",
+            "title": "EM101 false positive",
+            "url": "https://github.com/astral-sh/ruff/issues/19596",
+            "state": "closed",
+            "snippet": "### Summary\n\n<https://play.ruff.rs/a6f026e4-bf4e-487f-89f2-dbfb25d991ac>\n\n```py\nimport typing\n\nraise typing.cast(\"Exception\", None)\n```\n\nThe fix for EM101 is applied.\n\nwhich becomes:\n```py\nimport typing\n\nmsg = \"Exception\"\nraise typing.cast(msg, None)\n```\n\nthen the fix for `TC006` is applied.\n\nwhich "
+          },
+          {
+            "source": "github",
+            "title": "Infinite loop when fixing file with `cast` and format strings",
+            "url": "https://github.com/astral-sh/ruff/issues/16037",
+            "state": "closed",
+            "snippet": "### Description\n\n```\nruff 0.9.5+2240 (a29009e4e 2025-02-07)\n```\n\n\ncommand\n```\nruff_normal check problematic_file.py --select ALL --preview --output-format concise --no-cache --fix --unsafe-fixes --isolated\n```\nfreeze ruff in\n```\nDownloading source file /home/runner/work/Automated-Fuzzer/Automated-Fu"
+          },
+          {
+            "source": "github",
+            "title": "unnecessary-literal-union (PYI030) can remove comments without being marked as unsafe",
+            "url": "https://github.com/astral-sh/ruff/issues/16317",
+            "state": "closed",
+            "snippet": "### Description\n\nReproduction:\n```py\nfrom typing import Literal\n\n_: (\n    # First group\n    Literal[\"a\", \"b\"]\n    # Second group\n    | Literal[\"c\", \"d\"]\n)\n```\n\nBecomes:\n```py\nfrom typing import Literal\n\n_: (\n    # First group\n    Literal[\"a\", \"b\", \"c\", \"d\"]\n)\n```\n\nWhat I'd expect:\n```py\nfrom typing "
+          },
+          {
+            "source": "github",
+            "title": "`TC006` in `0.8.1` is too broad",
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "state": "closed",
+            "snippet": "I was surprised by some of these *\"fixes\"* adding quotes\n\nThe reasoning in [why-is-this-bad](https://docs.astral.sh/ruff/rules/runtime-cast-value/#why-is-this-bad) makes me think the concern is regarding parameterizing a generic, or maybe time spent by `ruff`/ a type checker to see if the symbol is "
+          },
+          {
+            "source": "github",
+            "title": "Implement flake8-type-checking",
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "state": "closed",
+            "snippet": "It's a useful tool for determining which imports aren't run-time required, reducing import time. Thanks!"
+          },
+          {
+            "source": "tavily",
+            "title": "Reharmonize `TCH*` rules with flake8-type-checking · Issue #9573 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9573",
+            "snippet": "Ruff independently added one of the rules which is slated to be added to `flake8-type-checking` in the next release as TC010 (string union syntax), whereas in Ruff the rule is TCH006.\n\nConsidering there's no longer a naming conflict in the `TC` range (tryceratops kindly changed its code to match ruf"
+          },
+          {
+            "source": "tavily",
+            "title": "Checking file with rule TC006 cause panic · Issue #14554 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/14554",
+            "snippet": "#14634\n\nClosed\n\nChecking file with rule TC006 cause panic#14554\n\n#14634\n\nCopy link\n\nLabels\n\nbugAn issue describing something that isn't working, or a PR that fixes a bugAn issue describing something that isn't working, or a PR that fixes a bug\n\n## Description\n\n@qarmin\n\nqarmin\n\nopened on Nov 23, 2024"
+          },
+          {
+            "source": "github",
+            "title": "Improve support for arbitrary functions accepting `TypeForm` arguments",
+            "url": "https://github.com/astral-sh/ruff/issues/26625",
+            "state": "open",
+            "snippet": "With the acceptance and implementation of PEP 747 in mypy and being no longer locked behind a feature-flag as of mypy 2.2 we can expect usage of `TypeForm` to increase, which includes functions that don't necessarily use the argument at runtime like `typing.cast`.\n\nAs a result there will be custom f"
+          },
+          {
+            "source": "github",
+            "title": "Ruleset Suggestion: wemake-python-styleguide",
+            "url": "https://github.com/astral-sh/ruff/issues/3845",
+            "state": "open",
+            "snippet": "`wemake-python-styleguide` is a Flake8-based style guide that depends on many other Flake8 plugins (AFAICT all implemented by Ruff), but it also ships [lots of custom Flake8 rules](https://wemake-python-styleguide.readthedocs.io/en/latest/pages/usage/violations/index.html). Is there an interest to i"
+          },
+          {
+            "source": "github",
+            "title": "TC006 (runtime-cast-value) shouldn't trigger with `annotations`",
+            "url": "https://github.com/astral-sh/ruff/issues/20237",
+            "state": "closed",
+            "snippet": "### Summary\n\nTC006 forces the use of quotes strings around casts types even when `from __future__ import annotations` is imported.\n\nThe explanation of the rule doesn't apply when using a postponed annotations.\nhttps://docs.astral.sh/ruff/rules/runtime-cast-value/\n```md\n# runtime-cast-value (TC006)\n\n"
+          },
+          {
+            "source": "github",
+            "title": "[red-knot] Test setup utilities",
+            "url": "https://github.com/astral-sh/ruff/issues/13789",
+            "state": "closed",
+            "snippet": "This recently came up in a [discussion](https://github.com/astral-sh/ruff/pull/13758#discussion_r1800874483). A lot of red-knot tests require some form of \"setup\" in the sense that they create variables of a particular type. This is not always straightforward. For example, to create a variable of ty"
+          },
+          {
+            "source": "github",
+            "title": "[bug] F401 false positive for imports inside functions",
+            "url": "https://github.com/astral-sh/ruff/issues/4939",
+            "state": "closed",
+            "snippet": "Contrived example, but ruff 0.0.271 flags the below import inside of `fn` with F401 (unused import) and auto-deletes it, but this results in a runtime error when you execute the code, because the first argument to `cast` doesn't get a deferred annotation like a function parameter:\r\n\r\n```\r\nfrom __fut"
+          },
+          {
+            "source": "github",
+            "title": "[Autofix error] My File: test/distributed/elastic/rendezvous/etcd_rendezvous_backend_test.py",
+            "url": "https://github.com/astral-sh/ruff/issues/4203",
+            "state": "closed",
+            "snippet": "**ruff version 0.0.264 (ruff --version)**\r\n## command(Powershell)\r\n```powershell\r\nruff check --select=ALL --fix --isolated .\\etcd_rendezvous_backend_test.py\r\n```\r\n----------\r\nThe source is a Python file from PyTorch, but it is not the original file (with a different hash value).\r\nThe original file c"
+          },
+          {
+            "source": "tavily",
+            "title": "Feature request: TCH003 - divide typing-only imports from typing module · Issue #6650 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/6650",
+            "snippet": "```\nfrom import annotations from typing import TYPE_CHECKING cast # cast stays up here if TYPE_CHECKING from typing import Any TypeGuard# type-checking only types go down here def is_a_thing obj Any -> TypeGuard object return cast object obj\n```\n\nbut for me at least, this would save quite a few foll"
+          },
+          {
+            "source": "tavily",
+            "title": "Confine PEP 695 type annotation rewrites (`UP040`) to non-runtime contexts · Issue #6434 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/6434",
+            "snippet": "import typing # valid x typing TypeAlias = int print isinstance 1 x # valid x typing TypeAlias = int | str print isinstance 1 x # valid x typing TypeAlias = typing Union int str print isinstance 1 x # not valid x typing TypeAlias = list int print isinstance 1 2 x # not valid x typing TypeAlias = typ"
+          },
+          {
+            "source": "tavily",
+            "title": "[ty] Allow `Self` in `ClassVar` type annotation by MatthewMckee4 · Pull Request #23362 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/23362",
+            "snippet": "found `` + - sympy/solvers/tests/test_pde.py:201:16: error[invalid-argument-type] Argument to function `__new__` is incorrect: Expected `(Unknown | str, /) -> Unknown`, found `` - + sympy/solvers/tests/test_pde.py:201:16: error[invalid-argument-type] Argument to function `__new__` is incorrect: Expe"
+          },
+          {
+            "source": "tavily",
+            "title": "`RUF031`: Ignore unparenthesized tuples in subscripts when the subscript is obviously a type annotation or type alias by AlexWaygood · Pull Request #12762 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/12762",
+            "snippet": "This PR fixes most of those cases. Unfortunately it doesn't fix cases like this, where it's ambiguous whether the variable is a type alias or not:\n\n```\nimport typing X = typing Callable str int bool # RUF031 here\n```\n\nFaced with this, however, users have a fairly simple workaround: make it explicit "
+          },
+          {
+            "source": "tavily",
+            "title": "`ParamSpec` suppresses the return type annotation in E731 fix · Issue #20097 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/20097",
+            "snippet": "Title: `ParamSpec` suppresses the return type annotation in E731 fix · Issue #20097 · astral-sh/ruff · GitHub\n## Navigation Menu. You signed in with another tab or window. Reload to refresh your session. You switched accounts on another tab or window. ### Uh oh! There was an error while loading. * N"
+          },
+          {
+            "source": "tavily",
+            "title": "Consider all `TYPE_CHECKING` symbols for type-checking blocks by MichaReiser · Pull Request #16669 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "snippet": "(`UP038`) (#16681) [`flake8-type-checking`] Stabilize `runtime-cast-value` (`TC006`) (#16637) ... [...] range for `redundant-open-mode` (`UP015`) (#16672) Consider all `TYPE_CHECKING` symbols for type-checking blocks (#16669) [`pep8-naming`]: Ignore methods decorated with `@typing.override` (`invali"
+          },
+          {
+            "source": "github",
+            "title": "Add autofix that adds `from __future__ import annotations` only when it would be useful",
+            "url": "https://github.com/astral-sh/ruff/issues/18502",
+            "state": "open",
+            "snippet": "### Summary\n\nSeveral of Ruff's rules will be more aggressive in the diagnostics and autofixes they emit if `from __future__ import annotations` is enabled in the file:\n- [`UP035`](https://docs.astral.sh/ruff/rules/deprecated-import/)\n- [`UP045`](https://docs.astral.sh/ruff/rules/non-pep604-annotatio"
+          },
+          {
+            "source": "tavily",
+            "title": "Feature request: Allow Configurable Quote Styling for f-Strings in Python 3.12+ · Issue #14118 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/14118",
+            "snippet": "Future-Proofing: Considering that pre-3.12 versions of Python will reach end-of-life after October 2027, updating the default behavior now helps future-proof codebases and reduces the need for later adjustments. [...] ## Additional context\n\nI understand that changing the default behavior may have im"
+          },
+          {
+            "source": "tavily",
+            "title": "Improve backport friendliness of quotes in Python 3.12 f-string placeholders · Issue #11056 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/11056",
+            "snippet": "Reacted by Michael Scott Asato Cuthbert\n16. ### MichaReisercommentedon Oct 20, 2024\n\n    @MichaReiser\n\n    MichaReiser\n\n    on Oct 20, 2024\n\n    Member\n\n    More actions\n\n    The exception to the above behavior should be if flipping the quotes reduces the number of necessary escapes: [...] I'm hesit"
+          },
+          {
+            "source": "tavily",
+            "title": "Implicit concatenated string formatting · Issue #9457 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/9457",
+            "snippet": "I don't mind if this proposal becomes the default behavior or is behind a config option, but imo the argument of reversibility is not that much of a blocker, for two main reasons: [...] ```\n    $ cat x.py print(\"a\" \"b\") print(\"a\" r\"b\") print(\"a\\n\" r\"b\\n\") print(r\"a\\n\" r\"b\\n\") $ ruff check --extend-s"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/22131",
+            "relation": "unrelated",
+            "why": "Existing report is about escape sequences inside quoted type expressions, while the new finding shows a simple non-string identifier being quoted."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13208",
+            "relation": "related",
+            "why": "Broad meta-issue about missing rules and overlapping rules for flake8-type-checking, which includes TC006 behavior."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20096",
+            "relation": "related",
+            "why": "Discusses UP045 not triggering inside cast, which interacts with TC006 fixes on the same construct."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/19596",
+            "relation": "related",
+            "why": "Shows a chain of fixes (EM101 then TC006) on cast expressions, same rule but different trigger scenario."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16037",
+            "relation": "related",
+            "why": "Infinite loop when fixing cast with format strings, same rule TC006 but different construct causing loop."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/16317",
+            "relation": "unrelated",
+            "why": "About PYI030 removing comments in literal unions, completely different rule and construct."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14676",
+            "relation": "related",
+            "why": "TC006 being too broad and adding quotes unnecessarily, same rule but broader scope than this specific case."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/1785",
+            "relation": "related",
+            "why": "Original feature request to implement flake8-type-checking rules including TC006."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9573",
+            "relation": "related",
+            "why": "About harmonizing TCH/TC rules with flake8-type-checking, includes TC006 scope."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14554",
+            "relation": "related",
+            "why": "TC006 causing a panic/crash, same rule but different failure mode (crash vs behavior change)."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/26625",
+            "relation": "related",
+            "why": "About TypeForm support for functions like typing.cast, same construct but forward-looking feature request."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/3845",
+            "relation": "unrelated",
+            "why": "Ruleset suggestion for wemake-python-styleguide, not about TC006 defect."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20237",
+            "relation": "related",
+            "why": "TC006 shouldn't trigger with from __future__ import annotations, same rule but different context (postponed evaluation)."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/13789",
+            "relation": "unrelated",
+            "why": "Test setup utilities for red-knot, not about TC006 behavior."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4939",
+            "relation": "related",
+            "why": "F401 false positive deleting import needed for cast at runtime, same construct (cast) but different rule interaction."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/4203",
+            "relation": "unrelated",
+            "why": "Autofix error on a specific PyTorch test file, no details linking to TC006 cast behavior."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6650",
+            "relation": "related",
+            "why": "Feature request about TYPE_CHECKING blocks and cast imports, same module context."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/6434",
+            "relation": "unrelated",
+            "why": "About UP040 PEP 695 rewrites confined to non-runtime contexts, different rule."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/23362",
+            "relation": "unrelated",
+            "why": "PR about ty allowing Self in ClassVar, unrelated to TC006 cast fixes."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/12762",
+            "relation": "unrelated",
+            "why": "PR about RUF031 ignoring unparenthesized tuples in subscripts, different rule."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/20097",
+            "relation": "unrelated",
+            "why": "ParamSpec suppressing return type in E731 fix, different rule and construct."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/pull/16669",
+            "relation": "related",
+            "why": "PR stabilizing runtime-cast-value (TC006) among other things, directly addresses the rule."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18502",
+            "relation": "related",
+            "why": "About adding future annotations import to help rules like TC006, same rule ecosystem."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14118",
+            "relation": "unrelated",
+            "why": "Feature request for configurable quote styling in f-strings, unrelated to TC006."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11056",
+            "relation": "unrelated",
+            "why": "About backport friendliness of quotes in f-string placeholders, different context."
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9457",
+            "relation": "unrelated",
+            "why": "Implicit concatenated string formatting, unrelated to TC006 cast behavior."
+          }
+        ],
+        "cost": 0.0078623
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:31:17.911844536 -0400\n+++ fixed.py\t2026-10-22 13:31:20.063880632 -0400\n@@ -1,2 +1,2 @@\n import typing\n-y = typing.cast(MyType, [x])  # Rule triggers: MyType is not a string\n+y = typing.cast(\"MyType\", [x])  # Rule triggers: MyType is not a string\n",
+        "observed": "stderr before: NameError: name 'MyType' is not defined\nstderr after: NameError: name 'x' is not defined",
+        "before": {
+          "stdout": "",
+          "stderr1": "NameError: name 'MyType' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "NameError: name 'x' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "import typing\ny = typing.cast(\"MyType\", [x])  # Rule triggers: MyType is not a string\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select TC006 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original expression `typing.cast(MyType, [x])` uses the variable `MyType`, which must be defined in scope; if it isn’t, Python raises a `NameError`. After rewriting to `\"MyType\"`, the first argument becomes a literal string, so the cast succeeds syntactically but still attempts to evaluate `[x]`, requiring `x` to be defined—hence the error shifts from missing `MyType` to missing `x`. Since `cast` expects either a type object or a forward-reference string (used only during static analysis), replacing a required runtime identifier with a string changes when and how names are resolved, altering observable behavior despite preserving the annotation’s intent for type checkers. This violates semantic equivalence because execution now fails on a different undefined name.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Variable as type expression",
+      "hazard": "If the first argument is a variable name (e.g., cast(T, x)), quoting it changes it from a type reference to a string literal, causing a runtime error when the type checker expects a type but receives ",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              7,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Before fix: 3\nError in isinstance: TypeError Subscripted generics cannot be used with class and instance checks\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before fix: 3\nError in isinstance: TypeError Subscripted generics cannot be used with class and instance checks\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:02.145379343 -0400\n+++ fixed.py\t2026-10-17 16:42:02.330385991 -0400\n@@ -4,7 +4,7 @@\n     x = [1, 2, 3]\n     try:\n         # This should work: T is a type\n-        y = cast(T, x)\n+        y = cast('T', x)\n         print('Before fix:', len(y))\n     except Exception as e:\n         print('Error before fix:', type(e).__name__, str(e))\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Multiline type expression",
+      "hazard": "If the type expression spans multiple lines (even without comments), the autofix may incorrectly quote only the first line or fail to preserve line breaks, resulting in a syntax error.",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              12,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Success: [1, 2]\nBroken form would fail to parse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Success: [1, 2]\nBroken form would fail to parse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:02.436389801 -0400\n+++ fixed.py\t2026-10-17 16:42:02.624396557 -0400\n@@ -9,7 +9,7 @@\n     try:\n         # This cast has a multiline first argument\n         result = cast(\n-            MyType,\n+            'MyType',\n             data\n         )\n         print('Success:', result['a'])\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Shadowed builtins and redefined names",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              7,
+              14
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              13,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "UnboundLocalError: cannot access local variable 'T' where it is not associated with a value",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\nAfter cast: HELLO\nstderr before: UnboundLocalError: cannot access local variable 'T' where it is not associated with a value\nstderr after: UnboundLocalError: cannot access local variable 'list' where it is not associated with a value"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "After cast: HELLO\n",
+          "stderr1": "UnboundLocalError: cannot access local variable 'list' where it is not associated with a value",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:02.732400438 -0400\n+++ fixed.py\t2026-10-17 16:42:03.133414842 -0400\n@@ -4,13 +4,13 @@\n def main():\n     x = 'hello'\n     # First use: T refers to shadowed list (which is str)\n-    y = cast(T, x)  # Should be cast(str, x)\n+    y = cast('T', x)  # Should be cast(str, x)\n     print('After cast:', y.upper() if isinstance(y, str) else 'fail')\n     # Later, redefine list back to builtin\n     del list  # Restore builtin\n     list = lambda x: x  # Redefine as identity\n     T = list  # Now T is the lambda\n-    z = cast(T, x)  # cast(lambda, x) -> invalid type\n+    z = cast('T', x)  # cast(lambda, x) -> invalid type\n     try:\n         # This won't fail at runtime, but type checker will complain\n         print('z:', z)\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Async def/await ordering",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              9,
+              15
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Collected: [0, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Collected: [0, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:03.355422809 -0400\n+++ fixed.py\t2026-10-17 16:42:03.678434400 -0400\n@@ -6,7 +6,7 @@\n async def main():\n     # cast in async context\n     g = gen()\n-    ag = cast(AsyncIterator[int], g)  # Rule fires here\n+    ag = cast('AsyncIterator[int]', g)  # Rule fires here\n     try:\n         result = []\n         async for item in ag:\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Keyword arguments in cast",
+      "hazard": "If the cast call uses keyword arguments like cast(typ=MyType, val=x), the autofix may not recognize the structure and either misapply quotes or fail to fire, leading to inconsistent fixes.",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              5,
+              18
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              12,
+              22
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              19,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Length via keyword: 3\nSecond call: [4, 5]\nVia var: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Length via keyword: 3\nSecond call: [4, 5]\nVia var: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:03.856440788 -0400\n+++ fixed.py\t2026-10-17 16:42:04.048447675 -0400\n@@ -2,21 +2,21 @@\n def main():\n     x = [1, 2, 3]\n     # Keyword form: should trigger rule on typ=\n-    y = cast(typ=List[int], val=x)\n+    y = cast(typ='List[int]', val=x)\n     print('Length via keyword:', len(y))\n     # After fix: autofix might not recognize keyword args and do nothing\n     # Or worse, quote the first positional arg (which doesn't exist)\n     # Simulate bad fix: if it tried to quote 'typ' or messed up keywords\n     try:\n         # This is safe: keyword args are preserved\n-        z = cast(typ=List[int], val=[4, 5])\n+        z = cast(typ='List[int]', val=[4, 5])\n         print('Second call:', z)\n     except Exception as e:\n         print('Error in keyword cast:', type(e).__name__, str(e))\n     # To show dependency: if we change List[int] to a var, and fix breaks\n     T = List[int]\n     # Rule should fire on typ=T\n-    w = cast(typ=T, val=x)\n+    w = cast(typ='T', val=x)\n     print('Via var:', len(w))\n if __name__ == '__main__':\n     main()\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Tuple mistaken for type",
+      "hazard": "If the first argument is a tuple or other container mistakenly used as a type (e.g., cast((int, str), x)), quoting it hides the fact that it's not a valid type annotation, delaying detection of a logi",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              7,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Cast result: (1, 'hello') <class 'tuple'>\nisinstance check failed\nEval succeeded: (<class 'int'>, <class 'str'>)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Cast result: (1, 'hello') <class 'tuple'>\nisinstance check failed\nEval succeeded: (<class 'int'>, <class 'str'>)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:04.163451796 -0400\n+++ fixed.py\t2026-10-17 16:42:04.347458390 -0400\n@@ -4,7 +4,7 @@\n     x = (1, 'hello')\n     # This is wrong: (int, str) is a tuple, not a type\n     # Rule TC006 should fire because it's unquoted\n-    y = cast((int, str), x)  # Expect trigger: first arg is tuple literal\n+    y = cast('int, str', x)  # Expect trigger: first arg is tuple literal\n     print('Cast result:', y, type(y))\n     # At runtime, this succeeds because cast ignores the type argument\n     # But if we later try to use (int, str) as a type in isinstance, it fails\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Single quotes already used",
+      "hazard": "If the type expression is a string literal already but uses single quotes (e.g., cast('int', x)), the rule may not fire (depending on configuration), but if it did and the fix added outer quotes, it w",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Value: 42 <class 'int'>\nSingle-quoted cast worked as expected\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Comments and docstrings attached",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              6,
+              19
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Total: 6\nComment preservation affects readability, not runtime\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Total: 6\nComment preservation affects readability, not runtime\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:04.617468065 -0400\n+++ fixed.py\t2026-10-17 16:42:04.798474551 -0400\n@@ -3,7 +3,7 @@\n def process(items):\n     \"\"\"Process a list of integers.\"\"\"\n     # Cast with trailing comment\n-    result = cast(List[int], items)  # Ensure it's ints\n+    result = cast('List[int]', items)  # Ensure it's ints\n     # Another comment\n     total = 0\n     for x in result:\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Context manager with __enter__ returning non-self",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              9,
+              25
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:10.848690314 -0400\n+++ fixed.py\t2026-10-17 16:42:11.033696885 -0400\n@@ -6,6 +6,6 @@\n         pass\n def f():\n     with Ctx() as c:\n-        x = typing.cast(list[int], [c])\n+        x = typing.cast(\"list[int]\", [c])\n         return sum(x)\n print(f())\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Float division and rounding with cast",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              6,
+              23
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "3.33 3.33 3.3333333333333335\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3.33 3.33 3.3333333333333335\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:11.163701496 -0400\n+++ fixed.py\t2026-10-17 16:42:11.340707775 -0400\n@@ -3,7 +3,7 @@\n def g():\n     a = 10\n     b = 3\n-    res = typing.cast(float, a / b)\n+    res = typing.cast('float', a / b)\n     rounded = round(res, 2)\n     d = Decimal(str(res))\n     print(f'{res:.2f}', rounded, d)\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Forward reference in TYPE_CHECKING vs runtime",
+      "hazard": "If the type expression contains a forward reference that is only resolved during TYPE_CHECKING, quoting it is correct, but if the same expression appears in a runtime context elsewhere, the inconsiste",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              7,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'MyType' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\n5\nexit 1 → 0\nstderr before: NameError: name 'MyType' is not defined\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:11.448711607 -0400\n+++ fixed.py\t2026-10-17 16:42:11.865726400 -0400\n@@ -4,5 +4,5 @@\n     from typing import List\n     MyType = List[int]\n x = 5\n-y = typing.cast(MyType, [x])  # Rule triggers: MyType is not a string\n+y = typing.cast(\"MyType\", [x])  # Rule triggers: MyType is not a string\n print(sum(y))\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Union using | operator in cast",
+      "hazard": "If the type expression uses the | union operator (Python 3.10+) like cast(int | str, x), quoting it is necessary for forward compatibility, but if the code is run on Python <3.10, the unquoted version",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              3,
+              24
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "123\nabc\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "123\nabc\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:11.976730337 -0400\n+++ fixed.py\t2026-10-17 16:42:12.156736715 -0400\n@@ -1,5 +1,5 @@\n import typing\n def h(x):\n-    return typing.cast(int | str, x)\n+    return typing.cast('int | str', x)\n print(h(123))\n print(h('abc'))\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "F-string nested quotes in cast argument",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              4,
+              23
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:12.267740647 -0400\n+++ fixed.py\t2026-10-17 16:42:12.448747059 -0400\n@@ -1,6 +1,6 @@\n import typing\n def i():\n     name = 'Bob'\n-    val = typing.cast(list[int], [len(f'{name!r}')])\n+    val = typing.cast('list[int]', [len(f'{name!r}')])\n     return sum(val)\n print(i())\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Cast with inline comment after argument",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              3,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:12.549750637 -0400\n+++ fixed.py\t2026-10-17 16:42:12.732757119 -0400\n@@ -1,4 +1,4 @@\n import typing\n j = 7\n-k = typing.cast(list[int], [j])  # This is a list of one int\n+k = typing.cast(\"list[int]\", [j])  # This is a list of one int\n print(k[0] + 1)\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Single-quoted string literal already in cast",
+      "hazard": "If the type expression is a string literal already but uses single quotes (e.g., cast('int', x)), the rule may not fire (depending on configuration), but if it did and the fix added outer quotes, it w",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p008",
+      "title": "Mutable default argument and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "TC006",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC006",
+            "severity": "warning",
+            "message": "Add quotes to type expression in `typing.cast()`",
+            "span": [
+              5,
+              26
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[0]\n[0]\n[0]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[0]\n[0]\n[0]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:42:12.995766436 -0400\n+++ fixed.py\t2026-10-17 16:42:13.176772839 -0400\n@@ -2,7 +2,7 @@\n def bad(l=None):\n     if l is None:\n         l = []\n-    l.append(typing.cast(int, len(l)))\n+    l.append(typing.cast(\"int\", len(l)))\n     return l\n print(bad())\n print(bad())\n"
+      }
+    }
+  ]
+}

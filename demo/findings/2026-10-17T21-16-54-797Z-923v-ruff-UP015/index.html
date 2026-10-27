@@ -1,0 +1,450 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP015 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP015 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-16-54-797Z-923v-ruff-UP015 · fix labelled <b>unknown</b> · 16 programs, 13 fired, 13 fixed, 0 oracle-backed finding(s) · model cost $0.0043</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant &#39;r&#39; mode argument in calls to built-in open().</p><p class="mut">Fix: Removes the second argument when it is exactly the string literal &#39;r&#39; (single or double quoted).</p><details><summary>8 hazards</summary><ul><li>Rewriting open(variable, &#39;r&#39;) may change behavior if variable is not a string but evaluates to a string at runtime, as the static analysis assumes the argument is the mode.</li><li>If open is imported via &#39;from io import open&#39; or overridden in scope, removing the argument may call a different function with different defaults.</li><li>In Python 2, &#39;r&#39; mode behaves differently regarding Unicode, so removal could change decoding behavior in hybrid environments.</li><li>If the call uses keyword arguments like open(file=file, mode=&#39;r&#39;), the tool may not fire, but if it did incorrectly, removing the mode could break if other keyword arguments depend on its presence.</li><li>If the mode argument is a variable named &#39;r&#39; in scope (e.g., r = &#39;wb&#39;; open(f, r)), the tool should not fire, but a buggy implementation might mistake it for the literal &#39;r&#39;.</li><li>If the open call is inside a lambda or comprehension evaluated later, removing the mode does not change behavior, but if the mode were dynamically constructed, static removal is unsafe.</li><li>If the file argument is omitted and relies on positional inference (e.g., open(mode=&#39;r&#39;)), the shape doesn&#39;t match the rule, but a faulty fix could break argument positioning.</li><li>Comments attached to the mode argument (e.g., open(f, &#39;r&#39;  # comment)) may be lost if the rewrite does not preserve trailing comments.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only, positional-only, *args/**kwargs forwarding</td><td class="mut">Removing &#39;r&#39; breaks forwarding wrappers that rely on exact signature matching.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Python 2 Unicode decode behavior</td><td class="mut">In Python 2, omitting &#39;r&#39; could silently switch to platform-dependent default encoding, al</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>File modes and truncation, partial writes</td><td class="mut">Rewriting open(f, &#39;r&#39;) to open(f) in a loop that reopens for append could silently truncat</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default arguments and aliasing</td><td class="mut">If the mode argument is a mutable default (e.g., a list), removing &#39;r&#39; could expose aliasi</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus, comprehensions, late binding in closures</td><td class="mut">Rewriting open(f, &#39;r&#39;) inside a comprehension with walrus could break late-binding capture</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes vs str, encoding and newline handling</td><td class="mut">Removing &#39;r&#39; in a binary context (where &#39;r&#39; is incorrect) could mask a bug; but if the rul</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>Variable named &#39;r&#39; in scope (near-miss)</td><td class="mut">If a variable `r` holds a mode like &#39;wb&#39;, the rule should not fire, but a buggy linter mig</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Comments and docstrings attached to the removed code</td><td class="mut">If a comment explains why &#39;r&#39; is used (e.g., for clarity), removing it could delete meanin</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>String formatting edge case: % operator with unquoted placeholder</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>File modes and truncation: repeated open in append mode loop</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Keyword arguments: mode=&#39;r&#39; with other keywords that depend on its presence</td><td class="mut">If the call uses keyword arguments like open(file=file, mode=&#39;r&#39;), the tool may not fire, </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Runtime type annotations: open in annotation evaluated at runtime</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Exception handling: finally clause depends on file being opened for reading</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus in list comprehension: late binding captures loop variable</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Comment explaining why &#39;r&#39; is used: clarity lost if removed</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Dict ordering and duplicate keys: mode affects file position in concurrent writes</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Keyword-only, positional-only, *args/**kwargs forwarding</summary><pre>def wrapper(*a, **kw):
+    return open(*a, **kw)
+def forward(f, m=&#39;r&#39;):
+    return wrapper(f, mode=m)  # open(f, &#39;r&#39;) -&gt; trigger
+res = forward(&#39;tmp.txt&#39;)
+res.write(&#39;x&#39;)
+res.close()
+with open(&#39;tmp.txt&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;tmp.txt&#39;)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Python 2 Unicode decode behavior</summary><pre># This hazard only manifests under Python 2.
+# We simulate the divergence by showing what Python 2 would do.
+try:
+    u = b&#39;\xc3\xa9&#39;.decode(&#39;utf-8&#39;)  # é
+    with open(&#39;tmp.txt&#39;, &#39;wb&#39;) as f:
+        f.write(u.encode(&#39;utf-8&#39;))
+    with open(&#39;tmp.txt&#39;, &#39;r&#39;) as f:  # trigger in Py2, but we suppress fire
+        data = f.read()
+    print(&#39;Read:&#39;, repr(data))
+except Exception as e:
+    print(type(e).__name__, e)
+import os; os.remove(&#39;tmp.txt&#39;) if &#39;tmp.txt&#39; in locals() else None
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:04.464169595 -0400
++++ fixed.py	2026-10-17 17:17:04.633158993 -0400
+@@ -4,7 +4,7 @@
+     u = b&#39;\xc3\xa9&#39;.decode(&#39;utf-8&#39;)  # é
+     with open(&#39;tmp.txt&#39;, &#39;wb&#39;) as f:
+         f.write(u.encode(&#39;utf-8&#39;))
+<span class="del">-    with open(&#39;tmp.txt&#39;, &#39;r&#39;) as f:  # trigger in Py2, but we suppress fire</span>
+<span class="add">+    with open(&#39;tmp.txt&#39;) as f:  # trigger in Py2, but we suppress fire</span>
+         data = f.read()
+     print(&#39;Read:&#39;, repr(data))
+ except Exception as e:
+</pre></details><details id="r1-p003"><summary>r1-p003 — File modes and truncation, partial writes</summary><pre>for i in range(2):
+    with open(&#39;log.txt&#39;, &#39;r&#39;) as f:  # trigger
+        f.seek(0, 2)
+        f.write(str(i) + &#39;\n&#39;)
+    with open(&#39;log.txt&#39;) as f:
+        print(f.read(), end=&#39;&#39;)
+import os; os.remove(&#39;log.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:04.736152531 -0400
++++ fixed.py	2026-10-17 17:17:05.158126077 -0400
+@@ -1,5 +1,5 @@
+ for i in range(2):
+<span class="del">-    with open(&#39;log.txt&#39;, &#39;r&#39;) as f:  # trigger</span>
+<span class="add">+    with open(&#39;log.txt&#39;) as f:  # trigger</span>
+         f.seek(0, 2)
+         f.write(str(i) + &#39;\n&#39;)
+     with open(&#39;log.txt&#39;) as f:
+</pre></details><details id="r1-p004"><summary>r1-p004 — Mutable default arguments and aliasing</summary><pre>def log(msg, modes=[&#39;r&#39;]):
+    with open(&#39;log.txt&#39;, modes[0]) as f:  # trigger: modes[0] is &#39;r&#39;
+        f.write(msg + &#39;\n&#39;)
+    modes.append(&#39;a&#39;)  # mutate default
+log(&#39;first&#39;)
+log(&#39;second&#39;)
+with open(&#39;log.txt&#39;) as f:
+    print(f.read(), end=&#39;&#39;)
+import os; os.remove(&#39;log.txt&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Walrus, comprehensions, late binding in closures</summary><pre>funs = []
+for i in range(2):
+    if (f := open(f&#39;tmp{i}.txt&#39;, &#39;r&#39;)) is not None:  # trigger
+        funs.append(lambda: f.read())
+        f.close()
+    else:
+        funs.append(lambda: &#39;failed&#39;)
+print([g() for g in funs])
+import os; [os.remove(f&#39;tmp{i}.txt&#39;) for i in range(2)]
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:05.744089383 -0400
++++ fixed.py	2026-10-17 17:17:06.135064914 -0400
+@@ -1,6 +1,6 @@
+ funs = []
+ for i in range(2):
+<span class="del">-    if (f := open(f&#39;tmp{i}.txt&#39;, &#39;r&#39;)) is not None:  # trigger</span>
+<span class="add">+    if (f := open(f&#39;tmp{i}.txt&#39;)) is not None:  # trigger</span>
+         funs.append(lambda: f.read())
+         f.close()
+     else:
+</pre></details><details id="r1-p006"><summary>r1-p006 — Bytes vs str, encoding and newline handling</summary><pre>name = b&#39;file.txt&#39;
+with open(name, &#39;r&#39;) as f:  # trigger: name is bytes, but mode &#39;r&#39; still valid in Py3
+    print(type(f.read()))
+import os; os.remove(&#39;file.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:06.351051414 -0400
++++ fixed.py	2026-10-17 17:17:06.743026912 -0400
+@@ -1,4 +1,4 @@
+ name = b&#39;file.txt&#39;
+<span class="del">-with open(name, &#39;r&#39;) as f:  # trigger: name is bytes, but mode &#39;r&#39; still valid in Py3</span>
+<span class="add">+with open(name) as f:  # trigger: name is bytes, but mode &#39;r&#39; still valid in Py3</span>
+     print(type(f.read()))
+ import os; os.remove(&#39;file.txt&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Variable named &#39;r&#39; in scope (near-miss)</summary><pre>r = &#39;wb&#39;
+with open(&#39;out.bin&#39;, r) as f:  # should NOT trigger
+    f.write(b&#39;hello&#39;)
+with open(&#39;out.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;out.bin&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Comments and docstrings attached to the removed code</summary><pre>def read_config(path):
+    &quot;&quot;&quot;Read config file in text mode.&quot;&quot;&quot;
+    return open(path, &#39;r&#39;)  # explicit for clarity - trigger
+with read_config(&#39;cfg.txt&#39;) as f:
+    print(f.read())
+with open(&#39;cfg.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;enabled=True&#39;)
+import os; os.remove(&#39;cfg.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:07.090005233 -0400
++++ fixed.py	2026-10-17 17:17:07.496979840 -0400
+@@ -1,6 +1,6 @@
+ def read_config(path):
+     &quot;&quot;&quot;Read config file in text mode.&quot;&quot;&quot;
+<span class="del">-    return open(path, &#39;r&#39;)  # explicit for clarity - trigger</span>
+<span class="add">+    return open(path)  # explicit for clarity - trigger</span>
+ with read_config(&#39;cfg.txt&#39;) as f:
+     print(f.read())
+ with open(&#39;cfg.txt&#39;, &#39;w&#39;) as f:
+</pre></details><details id="r2-p001"><summary>r2-p001 — String formatting edge case: % operator with unquoted placeholder</summary><pre>def main():
+    path = &#39;data.txt&#39;
+    # Use % formatting: relies on exact string &#39;r&#39; being present
+    cmd = &quot;open(&#39;%s&#39;, &#39;r&#39;)&quot; % path
+    exec(cmd)
+    f = open(path, &#39;r&#39;)
+    f.write(&#39;hello\n&#39;)
+    f.close()
+    f = open(path, &#39;r&#39;)
+    print(f.read().strip())
+    f.close()
+    import os
+    os.remove(path)
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:18.234316375 -0400
++++ fixed.py	2026-10-17 17:17:18.636291790 -0400
+@@ -3,10 +3,10 @@
+     # Use % formatting: relies on exact string &#39;r&#39; being present
+     cmd = &quot;open(&#39;%s&#39;, &#39;r&#39;)&quot; % path
+     exec(cmd)
+<span class="del">-    f = open(path, &#39;r&#39;)</span>
+<span class="add">+    f = open(path)</span>
+     f.write(&#39;hello\n&#39;)
+     f.close()
+<span class="del">-    f = open(path, &#39;r&#39;)</span>
+<span class="add">+    f = open(path)</span>
+     print(f.read().strip())
+     f.close()
+     import os
+</pre></details><details id="r2-p002"><summary>r2-p002 — File modes and truncation: repeated open in append mode loop</summary><pre>def main():
+    path = &#39;log.txt&#39;
+    open(path, &#39;w&#39;).close()  # clear file
+    for i in range(3):
+        # This open should trigger UP015; removing &#39;r&#39; breaks intent
+        f = open(path, &#39;r&#39;)
+        f.close()
+        # Now append: depends on file not being truncated by mistaken &#39;r&#39; removal
+        with open(path, &#39;a&#39;) as f:
+            f.write(str(i) + &#39;\n&#39;)
+    with open(path, &#39;r&#39;) as f:
+        lines = f.readlines()
+    print(&#39;&#39;.join(lines).strip())
+    import os
+    os.remove(path)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:18.845279009 -0400
++++ fixed.py	2026-10-17 17:17:19.015268614 -0400
+@@ -3,12 +3,12 @@
+     open(path, &#39;w&#39;).close()  # clear file
+     for i in range(3):
+         # This open should trigger UP015; removing &#39;r&#39; breaks intent
+<span class="del">-        f = open(path, &#39;r&#39;)</span>
+<span class="add">+        f = open(path)</span>
+         f.close()
+         # Now append: depends on file not being truncated by mistaken &#39;r&#39; removal
+         with open(path, &#39;a&#39;) as f:
+             f.write(str(i) + &#39;\n&#39;)
+<span class="del">-    with open(path, &#39;r&#39;) as f:</span>
+<span class="add">+    with open(path) as f:</span>
+         lines = f.readlines()
+     print(&#39;&#39;.join(lines).strip())
+     import os
+</pre></details><details id="r2-p003"><summary>r2-p003 — Keyword arguments: mode=&#39;r&#39; with other keywords that depend on its presence</summary><pre>def main():
+    path = &#39;test.txt&#39;
+    # Simulate a broken fix: if UP015 incorrectly fired on keywords,
+    # removing mode=&#39;r&#39; would leave only open(file=path), which defaults to &#39;r&#39;
+    # But we test that the rule does NOT fire here (expect_trigger=false)
+    # So we show what happens if it did fire incorrectly.
+    # We cannot simulate the incorrect fix, but we can show dependency:
+    # Suppose other code relies on mode being explicitly passed.
+    def wrapper(**kwargs):
+        return open(**kwargs)
+    # This call has mode=&#39;r&#39; explicitly; if stripped, still works in Py3
+    # But to make it break, we imagine a scenario where mode is used for validation
+    try:
+        f = wrapper(file=path, mode=&#39;r&#39;)
+        f.write(&#39;test\n&#39;)
+        f.close()
+        f = open(path, &#39;r&#39;)
+        print(f.read().strip())
+        f.close()
+    except Exception as e:
+        print(type(e).__name__, str(e))
+    import os
+    os.remove(path)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:19.116262448 -0400
++++ fixed.py	2026-10-17 17:17:19.289251887 -0400
+@@ -14,7 +14,7 @@
+         f = wrapper(file=path, mode=&#39;r&#39;)
+         f.write(&#39;test\n&#39;)
+         f.close()
+<span class="del">-        f = open(path, &#39;r&#39;)</span>
+<span class="add">+        f = open(path)</span>
+         print(f.read().strip())
+         f.close()
+     except Exception as e:
+</pre></details><details id="r2-p004"><summary>r2-p004 — Runtime type annotations: open in annotation evaluated at runtime</summary><pre>def get_mode():
+    return &#39;r&#39;
+
+def main():
+    path = &#39;annot.txt&#39;
+    # Annotation uses open(...) in a default arg — evaluated at definition time
+    def func(file=open(path, get_mode())):
+        # This line triggers UP015: open(path, get_mode()) -&gt; open(path)
+        # But get_mode() returns &#39;r&#39;, so removing it changes nothing?
+        # Wait: we need the call to have literal &#39;r&#39;.
+        # Redefine:
+        pass
+    # Instead: put the literal &#39;r&#39; in a default that is evaluated
+    def func2(file=open(path, &#39;r&#39;)):
+        return file
+    # The rule fires on the default argument: open(path, &#39;r&#39;) -&gt; open(path)
+    # In Py3, same behavior.
+    # To make it matter: suppose we rely on the file object being opened at def time
+    try:
+        f = func2()
+        f.write(&#39;hello\n&#39;)
+        f.close()
+        f = open(path, &#39;r&#39;)
+        print(f.read().strip())
+        f.close()
+    except Exception as e:
+        print(type(e).__name__, str(e))
+    import os
+    os.remove(path)
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:19.405244806 -0400
++++ fixed.py	2026-10-17 17:17:19.815219777 -0400
+@@ -11,7 +11,7 @@
+         # Redefine:
+         pass
+     # Instead: put the literal &#39;r&#39; in a default that is evaluated
+<span class="del">-    def func2(file=open(path, &#39;r&#39;)):</span>
+<span class="add">+    def func2(file=open(path)):</span>
+         return file
+     # The rule fires on the default argument: open(path, &#39;r&#39;) -&gt; open(path)
+     # In Py3, same behavior.
+@@ -20,7 +20,7 @@
+         f = func2()
+         f.write(&#39;hello\n&#39;)
+         f.close()
+<span class="del">-        f = open(path, &#39;r&#39;)</span>
+<span class="add">+        f = open(path)</span>
+         print(f.read().strip())
+         f.close()
+     except Exception as e:
+</pre></details><details id="r2-p005"><summary>r2-p005 — Exception handling: finally clause depends on file being opened for reading</summary><pre>def main():
+    path = &#39;exc.txt&#39;
+    try:
+        # This open triggers UP015; if &#39;r&#39; removed, still opens for reading in Py3
+        # But we make it so that if the mode were wrong, an error occurs
+        # We can&#39;t make &#39;r&#39; removal cause error in Py3, so simulate dependency:
+        # Suppose we check that the mode was &#39;r&#39; via introspection (not possible)
+        # Instead: make the open call part of a resource that must be read-only
+        f = open(path, &#39;r&#39;)
+        raise ValueError(&#39;simulated error&#39;)
+    except ValueError as e:
+        print(&#39;Caught:&#39;, type(e).__name__, str(e))
+    finally:
+        # If the file was opened for writing by mistake, this would fail
+        # But since we only ever open for &#39;r&#39;, and fix doesn&#39;t change that,
+        # we need a different approach.
+        # Let&#39;s make the open call happen twice: once in try, once in finally
+        try:
+            f = open(path, &#39;r&#39;)  # triggers UP015
+            f.write(&#39;should fail&#39;)  # will raise UnsupportedOperation
+        except Exception as inner:
+            print(&#39;Inner error:&#39;, type(inner).__name__, str(inner))
+        finally:
+            if &#39;f&#39; in locals():
+                f.close()
+    # Cleanup
+    import os
+    if os.path.exists(path):
+        os.remove(path)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:20.053205255 -0400
++++ fixed.py	2026-10-17 17:17:20.216195322 -0400
+@@ -6,7 +6,7 @@
+         # We can&#39;t make &#39;r&#39; removal cause error in Py3, so simulate dependency:
+         # Suppose we check that the mode was &#39;r&#39; via introspection (not possible)
+         # Instead: make the open call part of a resource that must be read-only
+<span class="del">-        f = open(path, &#39;r&#39;)</span>
+<span class="add">+        f = open(path)</span>
+         raise ValueError(&#39;simulated error&#39;)
+     except ValueError as e:
+         print(&#39;Caught:&#39;, type(e).__name__, str(e))
+@@ -16,7 +16,7 @@
+         # we need a different approach.
+         # Let&#39;s make the open call happen twice: once in try, once in finally
+         try:
+<span class="del">-            f = open(path, &#39;r&#39;)  # triggers UP015</span>
+<span class="add">+            f = open(path)  # triggers UP015</span>
+             f.write(&#39;should fail&#39;)  # will raise UnsupportedOperation
+         except Exception as inner:
+             print(&#39;Inner error:&#39;, type(inner).__name__, str(inner))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Walrus in list comprehension: late binding captures loop variable</summary><pre>def main():
+    paths = [&#39;a.txt&#39;, &#39;b.txt&#39;, &#39;c.txt&#39;]
+    # Walrus assigns f in comprehension; each iteration rebinds f
+    # If UP015 fires on open(path, &#39;r&#39;), it becomes open(path)
+    # Still same behavior in Py3, but we make the mode matter for cleanup
+    results = [(f := open(p, &#39;r&#39;)).read() for p in paths]
+    for f in [open(p, &#39;r&#39;) for p in paths]:  # dummy to show we need to close
+        pass
+    # Actually close the files from walrus
+    for f in [open(p, &#39;r&#39;) for p in paths]:  # reopen to show values
+        print(f.read().strip())
+        f.close()
+    # Write files first
+    for i, p in enumerate(paths):
+        open(p, &#39;w&#39;).write(str(i))
+    # Now run the comprehension
+    results = [(f := open(p, &#39;r&#39;)).read() for p in paths]
+    print(&#39;Results:&#39;, [r.strip() for r in results])
+    for f in [open(p, &#39;r&#39;) for p in paths]:  # close all
+        f.close()
+    import os
+    for p in paths:
+        os.remove(p)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:20.321188924 -0400
++++ fixed.py	2026-10-17 17:17:20.486178870 -0400
+@@ -3,20 +3,20 @@
+     # Walrus assigns f in comprehension; each iteration rebinds f
+     # If UP015 fires on open(path, &#39;r&#39;), it becomes open(path)
+     # Still same behavior in Py3, but we make the mode matter for cleanup
+<span class="del">-    results = [(f := open(p, &#39;r&#39;)).read() for p in paths]</span>
+<span class="del">-    for f in [open(p, &#39;r&#39;) for p in paths]:  # dummy to show we need to close</span>
+<span class="add">+    results = [(f := open(p)).read() for p in paths]</span>
+<span class="add">+    for f in [open(p) for p in paths]:  # dummy to show we need to close</span>
+         pass
+     # Actually close the files from walrus
+<span class="del">-    for f in [open(p, &#39;r&#39;) for p in paths]:  # reopen to show values</span>
+<span class="add">+    for f in [open(p) for p in paths]:  # reopen to show values</span>
+         print(f.read().strip())
+         f.close()
+     # Write files first
+     for i, p in enumerate(paths):
+         open(p, &#39;w&#39;).write(str(i))
+     # Now run the comprehension
+<span class="del">-    results = [(f := open(p, &#39;r&#39;)).read() for p in paths]</span>
+<span class="add">+    results = [(f := open(p)).read() for p in paths]</span>
+     print(&#39;Results:&#39;, [r.strip() for r in results])
+<span class="del">-    for f in [open(p, &#39;r&#39;) for p in paths]:  # close all</span>
+<span class="add">+    for f in [open(p) for p in paths]:  # close all</span>
+         f.close()
+     import os
+     for p in paths:
+</pre></details><details id="r2-p007"><summary>r2-p007 — Comment explaining why &#39;r&#39; is used: clarity lost if removed</summary><pre>def main():
+    path = &#39;comment.txt&#39;
+    # We explicitly use &#39;r&#39; to make clear we intend to read, not write
+    # Even though default is &#39;r&#39;, this comment documents intent
+    f = open(path, &#39;r&#39;)  # Intent: read-only access
+    f.write(&#39;hello\n&#39;)
+    f.close()
+    f = open(path, &#39;r&#39;)
+    print(f.read().strip())
+    f.close()
+    import os
+    os.remove(path)
+if __name__ == &#39;__main__&#39;:
+    main()
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:20.586172777 -0400
++++ fixed.py	2026-10-17 17:17:20.996147793 -0400
+@@ -2,10 +2,10 @@
+     path = &#39;comment.txt&#39;
+     # We explicitly use &#39;r&#39; to make clear we intend to read, not write
+     # Even though default is &#39;r&#39;, this comment documents intent
+<span class="del">-    f = open(path, &#39;r&#39;)  # Intent: read-only access</span>
+<span class="add">+    f = open(path)  # Intent: read-only access</span>
+     f.write(&#39;hello\n&#39;)
+     f.close()
+<span class="del">-    f = open(path, &#39;r&#39;)</span>
+<span class="add">+    f = open(path)</span>
+     print(f.read().strip())
+     f.close()
+     import os
+</pre></details><details id="r2-p008"><summary>r2-p008 — Dict ordering and duplicate keys: mode affects file position in concurrent writes</summary><pre>def main():
+    path = &#39;dict.txt&#39;
+    # Two processes writing to same file; we simulate with sequential opens
+    # First, write as &#39;w&#39; to clear
+    open(path, &#39;w&#39;).write(&#39;&#39;)
+    # Now, multiple opens for reading: if UP015 fires and removes &#39;r&#39;, still safe
+    # But we make it so that the number of open calls affects file position
+    # via side effect in dict construction
+    logs = []
+    for i in range(3):
+        f = open(path, &#39;r&#39;)  # triggers UP015
+        logs.append({&#39;time&#39;: i, &#39;mode&#39;: f.mode})
+        f.close()
+    # Now append data: each write depends on file not being truncated
+    for i in range(3):
+        with open(path, &#39;a&#39;) as f:
+            f.write(f&#39;log{i}\n&#39;)
+    with open(path, &#39;r&#39;) as f:
+        content = f.read()
+    print(&#39;Logs:&#39;, logs)
+    print(&#39;File content:&#39;, repr(content.strip()))
+    import os
+    os.remove(path)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:21.220134168 -0400
++++ fixed.py	2026-10-17 17:17:21.385124132 -0400
+@@ -8,14 +8,14 @@
+     # via side effect in dict construction
+     logs = []
+     for i in range(3):
+<span class="del">-        f = open(path, &#39;r&#39;)  # triggers UP015</span>
+<span class="add">+        f = open(path)  # triggers UP015</span>
+         logs.append({&#39;time&#39;: i, &#39;mode&#39;: f.mode})
+         f.close()
+     # Now append data: each write depends on file not being truncated
+     for i in range(3):
+         with open(path, &#39;a&#39;) as f:
+             f.write(f&#39;log{i}\n&#39;)
+<span class="del">-    with open(path, &#39;r&#39;) as f:</span>
+<span class="add">+    with open(path) as f:</span>
+         content = f.read()
+     print(&#39;Logs:&#39;, logs)
+     print(&#39;File content:&#39;, repr(content.strip()))
+</pre></details></body></html>

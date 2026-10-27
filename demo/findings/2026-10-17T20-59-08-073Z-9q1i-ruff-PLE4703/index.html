@@ -1,0 +1,154 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLE4703 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLE4703 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-59-08-073Z-9q1i-ruff-PLE4703 · fix labelled <b>unknown</b> · 16 programs, 8 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0056</p>
+<div class="card"><b>Rule analysis</b><p>Flags loops where a set is directly modified via methods like add(), remove(), discard(), pop(), clear(), or update() while iterating over that same set.</p><p class="mut">Fix: Rewrites the for-loop header from &#39;for var in set_var:&#39; to &#39;for var in set_var.copy():&#39;, leaving the loop body unchanged.</p><details><summary>8 hazards</summary><ul><li>The rewrite evaluates set_var.copy() at loop start, so if set_var is reassigned before the loop begins, the original code would iterate over the reassigned set while the fix iterates over a copy of the original set, changing which elements are processed.</li><li>If set_var is a property or item access (e.g., obj.attr or arr[i]), the fix evaluates it once for the copy, whereas the original re-evaluates it on each iteration, potentially iterating over a different object if the property/item changes during looping.</li><li>When the set variable is aliased (another name refers to the same set), modifications via the alias in the loop body affect the original set, but the fix iterates over a snapshot, so the loop may terminate earlier or later than in the original code.</li><li>If the loop body contains a break, continue, or return statement, the fix may execute fewer iterations than the original would have before the error, altering side effects that depend on the number of iterations.</li><li>Any expressions in the loop header beyond the set variable (e.g., in a nested loop or complex target list) are not adjusted by the fix, so malformed headers could become invalid or change meaning after rewriting.</li><li>The fix does not preserve trailing comments on the for line; they are dropped because the entire header is replaced.</li><li>If the set variable is used in a comprehension or lambda within the loop body that captures the variable by reference, the fix’s use of a copy may cause those inner functions to see a different set than the original code would have.</li><li>When the set is empty, the fix still evaluates .copy() (producing an empty set), which is behaviorally equivalent, but if .copy() is overridden in a subclass to have side effects, those side effects occur where none existed before.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Reassignment Before Loop</td><td class="mut">If `set_var` is reassigned before the loop starts, evaluating `.copy()` too early causes i</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Non-file Context Manager</td><td class="mut">Using .copy() inside a non-file cm still locks snapshot; mutation proceeds fine but semant</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Complex Loop Header</td><td class="mut">Nested loop variables or destructuring targets are not copied, breaking semantics when mut</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Lambda Capture in Body</td><td class="mut">.copy() freezes the set; lambdas inside body capture the copy, not the mutating original.</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span></td><td>Text Encoding Edge Case</td><td class="mut">Writing strings vs bytes differs; .copy() doesn&#39;t affect I/O but deterministic trace requi</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Generator Consumption</td><td class="mut">Iterating a generator once exhausts it; .copy() creates eager snapshot but underlying muta</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>String Formatting</td><td class="mut">%s, .format(), f-strings all resolve values at runtime; copying the iterated set doesn&#39;t c</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Mutable Default Aliasing</td><td class="mut">Loop variable aliased as default arg; .copy() breaks identity causing default to bind to s</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>bytes vs str encoding</td><td class="mut">text/binary mode confusion affecting set mutation safety during iteration</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>type annotations runtime eval</td><td class="mut">typing-only import causing NameError at runtime when annotation is evaluated</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>non-file context manager</td><td class="mut">object with write() but no close() used in with statement</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>exceptions in rewritten code</td><td class="mut">exception inside loop body triggering finally/else interaction</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>custom truthiness</td><td class="mut">__bool__ and __len__ affecting loop entry and set mutation safety</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>reassignment before loop</td><td class="mut">set_var reassigned before loop, so .copy() uses old value but loop iterates over new set</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>async def await ordering</td><td class="mut">async iteration over set with mutation inside awaited coroutine</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>evaluation order side effects</td><td class="mut">set var appears in multiple places, copy() evaluates once but original may change</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Reassignment Before Loop</summary><pre>S = {1}
+S = {2}
+print(&#39;start:&#39;, S)
+for x in S:
+    S.add(99)
+    break
+print(&#39;end:&#39;, sorted(S))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Non-file Context Manager</summary><pre>class CM:
+    def __enter__(self): return self
+    def __exit__(self, *exc):
+        if hasattr(self, &#39;seen&#39;) and 99 in self.seen:
+            raise ValueError(&#39;99 seen&#39;)
+with CM() as cm:
+    s = {1, 2}
+    cm.seen = set()
+    for x in s:
+        cm.seen.add(x)
+        s.add(99)
+print(&#39;ok&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Complex Loop Header</summary><pre>s = {(1, 2), (3, 4)}
+for (a, b) in s:
+    s.clear()
+    print(a + b)
+break
+</pre></details><details id="r1-p004"><summary>r1-p004 — Lambda Capture in Body</summary><pre>s = {1}
+fns = []
+for x in s:
+    fns.append(lambda: x in s)
+    s.add(2)
+print([f() for f in fns])
+</pre></details><details id="r1-p005"><summary>r1-p005 — Text Encoding Edge Case</summary><pre>data = {&#39;α&#39;, &#39;β&#39;}
+open(&#39;tmp.txt&#39;, &#39;w&#39;, encoding=&#39;utf-8&#39;).write(&#39;&#39;.join(sorted(data)))
+with open(&#39;tmp.txt&#39;, &#39;r&#39;, encoding=&#39;utf-8&#39;) as f:
+    content = f.read()
+import os; os.remove(&#39;tmp.txt&#39;)
+print(repr(content))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Generator Consumption</summary><pre>def gen():
+    yield from {1, 2}
+g = gen()
+s = set(g)
+for x in s:
+    s.discard(x)
+print(len(s))
+</pre></details><details id="r1-p007"><summary>r1-p007 — String Formatting</summary><pre>s = {1}
+for x in s:
+    s.add(2)
+    print(f&#39;{x}:{%d}&#39; % len(s))
+break
+</pre></details><details id="r1-p008"><summary>r1-p008 — Mutable Default Aliasing</summary><pre>s = {1}
+def f(x, seen=s):
+    seen.add(99)
+    return len(seen)
+for x in s:
+    print(f(x))
+    s.clear()
+break
+</pre></details><details id="r2-p001"><summary>r2-p001 — bytes vs str encoding</summary><pre>data = b&#39;hello world&#39;
+s = {ord(c) for c in data.decode()}
+for x in s:
+    try:
+        s.add(len(data))
+    except RuntimeError as e:
+        print(&#39;RuntimeError:&#39;, type(e).__name__, str(e))
+print(&#39;final s:&#39;, sorted(s))
+</pre></details><details id="r2-p002"><summary>r2-p002 — type annotations runtime eval</summary><pre>from typing import List
+s: List[int] = [1, 2]
+try:
+    for x in s:
+        s.append(3)
+except NameError as e:
+    print(&#39;NameError:&#39;, type(e).__name__, str(e))
+print(&#39;s:&#39;, s)
+</pre></details><details id="r2-p003"><summary>r2-p003 — non-file context manager</summary><pre>class Buffer:
+    def __init__(self):
+        self.data = []
+    def write(self, x):
+        self.data.append(x)
+buf = Buffer()
+s = {1, 2}
+with buf:
+    for x in s:
+        buf.write(x)
+        s.add(3)
+print(&#39;buffer:&#39;, buf.data)
+print(&#39;set:&#39;, s)
+</pre></details><details id="r2-p004"><summary>r2-p004 — exceptions in rewritten code</summary><pre>s = {1, 2}
+try:
+    for x in s:
+        if x == 1:
+            raise ValueError(&#39;bad&#39;)
+        s.discard(x)
+except ValueError as e:
+    print(&#39;ValueError:&#39;, type(e).__name__, str(e))
+else:
+    print(&#39;no exception&#39;)
+finally:
+    print(&#39;final set:&#39;, s)
+</pre></details><details id="r2-p005"><summary>r2-p005 — custom truthiness</summary><pre>class SetLike:
+    def __init__(self):
+        self._data = {1, 2}
+    def __iter__(self):
+        return iter(self._data)
+    def __bool__(self):
+        return len(self._data) &gt; 0
+    def __len__(self):
+        return len(self._data)
+    def discard(self, x):
+        self._data.discard(x)
+s = SetLike()
+for x in s:
+    s.discard(x)
+print(&#39;remaining:&#39;, list(s._data))
+</pre></details><details id="r2-p006"><summary>r2-p006 — reassignment before loop</summary><pre>s = {1, 2}
+s = {3, 4}
+for x in s:
+    print(&#39;x:&#39;, x)
+    s.add(5)
+print(&#39;final s:&#39;, sorted(s))
+</pre></details><details id="r2-p007"><summary>r2-p007 — async def await ordering</summary><pre>async def worker(s):
+    for x in s:
+        await asyncio.sleep(0)
+        s.add(x + 10)
+async def main():
+    s = {1, 2}
+    await worker(s)
+    print(&#39;result:&#39;, sorted(s))
+asyncio.run(main())
+</pre></details><details id="r2-p008"><summary>r2-p008 — evaluation order side effects</summary><pre>def get_set():
+    print(&#39;get_set called&#39;)
+    return {1, 2}
+s = get_set()
+for x in s:
+    print(&#39;x:&#39;, x)
+    s.clear()
+print(&#39;final s:&#39;, s)
+</pre></details></body></html>

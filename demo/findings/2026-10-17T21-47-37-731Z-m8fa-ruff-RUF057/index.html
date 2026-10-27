@@ -1,0 +1,965 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RUF057 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RUF057 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-47-37-731Z-m8fa-ruff-RUF057 · fix labelled <b>unknown</b> · 16 programs, 3 fired, 1 fixed, 0 oracle-backed finding(s) · model cost $0.0136</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant round() calls where the second argument is zero and the first argument evaluates to an integer.</p><p class="mut">Fix: Replaces round(expr, 0) with expr when expr is statically known to be an integer (e.g., literal int, bool, or expression of integer-typed constants).</p><details><summary>10 hazards</summary><ul><li>If expr has side effects (e.g., a function call), removing round may alter evaluation timing relative to other expressions.</li><li>If expr is a variable whose type cannot be statically proven as int, the fix may incorrectly apply at runtime for non-int values (e.g., float).</li><li>If expr is a boolean, replacing round(bool, 0) with the bool changes the type from int to bool, potentially breaking downstream int-specific operations.</li><li>If expr is used elsewhere in the same line, removing round may affect operator precedence or grouping (e.g., in round(a+b, 0)*2 vs (a+b)*2).</li><li>If round appears in a larger expression where its return value is ignored, deleting it may preserve value but alter side-effect visibility in debugging or tracing tools.</li><li>If the code relies on round returning a float subclass (unlikely but possible via overrides), replacing with expr may change the return type.</li><li>If expr is a constant that overflows in int context but not in float, the transformation could change value (though Python ints are arbitrary precision, this is negligible).</li><li>If the round call is inside a lambda or comprehension, removing it may affect JIT or optimization assumptions in some implementations.</li><li>If comments are attached to the round call (e.g., # tolerance), the fix may discard them if not preserved during rewrite.</li><li>If expr is a named expression (walrus) like round((y := f()), 0), removing round may change the scope or timing of y&#39;s assignment.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side effect timing alteration</td><td class="mut">If expr has side effects (e.g., a function call), removing round may alter evaluation timi</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Constant overflow irrelevance</td><td class="mut">If expr is a constant that overflows in int context but not in float, the transformation c</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Boolean type change</td><td class="mut">If expr is a boolean, replacing round(bool, 0) with the bool changes the type from int to </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Operator precedence change</td><td class="mut">If expr is used elsewhere in the same line, removing round may affect operator precedence </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span></td><td>Star-imports and module-level side effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Comment discard</td><td class="mut">If comments are attached to the round call (e.g., # tolerance), the fix may discard them i</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Ignored return value side-effect visibility</td><td class="mut">If round appears in a larger expression where its return value is ignored, deleting it may</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default argument aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Shadowed builtins and name redefinition</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>Float subclass return type reliance</td><td class="mut">If the code relies on round returning a float subclass (unlikely but possible via override</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>Operator precedence in same-line expression</td><td class="mut">If expr is used elsewhere in the same line, removing round may affect operator precedence </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Keyword-only and positional-only args</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Lambda/comprehension and JIT assumptions</td><td class="mut">If the round call is inside a lambda or comprehension, removing it may affect JIT or optim</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Boolean type change</td><td class="mut">If expr is a boolean, replacing round(bool, 0) with the bool changes the type from int to </td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation order and side effects</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>File modes and truncation</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Side effect timing alteration</summary><pre>def f():
+    print(&#39;side&#39;, end=&#39;&#39;)
+    return 5
+x = []
+x.append(f())  # side effect happens before list append
+print(&#39;&#39;.join(x))
+y = round(f(), 0)
+print(y)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Constant overflow irrelevance</summary><pre>big = 10**1000
+r = round(big, 0)
+print(type(r), r == big)
+s = round(big + 0.5, 0)
+print(s)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Boolean type change</summary><pre>flag = True
+val = round(flag, 0)
+print(type(val), val)
+try:
+    val += 1
+    print(&#39;int op ok:&#39;, val)
+except Exception as e:
+    print(type(e).__name__, e)
+# After fix: val becomes bool True, still works but type changed
+</pre></details><details id="r1-p004"><summary>r1-p004 — Operator precedence change</summary><pre>a, b = 1, 2
+x = round(a + b, 0) * 3
+print(&#39;with round:&#39;, x)
+y = (a + b) * 3
+print(&#39;without round:&#39;, y)
+print(&#39;equal?&#39;, x == y)
+# Rule fires on round(a+b,0), rewrites to (a+b), same value due to left-associative *
+</pre></details><details id="r1-p005"><summary>r1-p005 — Star-imports and module-level side effects</summary><pre># Near-miss: rule does not fire on imports or __all__
+from math import *
+print(&#39;pi rounded:&#39;, round(pi, 0))
+# No trigger: round(pi,0) not integer expr
+</pre></details><details id="r1-p006"><summary>r1-p006 — Comment discard</summary><pre>value = 5
+result = round(value, 0)  # tolerance
+print(&#39;result:&#39;, result, &#39;# tolerance comment lost after fix?&#39;)
+# After fix: comment may be dropped if tool not careful
+</pre></details><details id="r1-p007"><summary>r1-p007 — Ignored return value side-effect visibility</summary><pre>def g():
+    print(&#39;called&#39;, end=&#39; &#39;)
+    return 4.2
+round(g(), 0)  # return value ignored, but side effect should happen
+print()
+# After fix: g() still called, but linter might remove call entirely if not careful
+</pre></details><details id="r1-p008"><summary>r1-p008 — Mutable default argument aliasing</summary><pre>def h(x=[]):
+    x.append(1)
+    return len(x)
+a = round(h(), 0)
+b = round(h(), 0)
+print(&#39;a:&#39;, a, &#39;b:&#39;, b)
+# After fix: h() still called twice, each time mutates default list
+</pre></details><details id="r2-p001"><summary>r2-p001 — Shadowed builtins and name redefinition</summary><pre>round = lambda x, ndigits=None: x if ndigits == 0 else __builtins__.round(x, ndigits)
+print(&#39;Before:&#39;, round.__name__)
+x = round(5, 0)
+y = 10
+if isinstance(y, int):
+    y = round  # shadow built-in later
+z = round(3, 0)
+print(&#39;x:&#39;, x, type(x))
+print(&#39;z:&#39;, z, type(z))
+try:
+    w = round(2.5, 0)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Float subclass return type reliance</summary><pre>class MyFloat(float):
+    pass
+def make_myfloat():
+    return MyFloat(4.0)
+v = make_myfloat()
+r = round(v, 0)
+print(&#39;r type:&#39;, type(r))
+print(&#39;r is MyFloat:&#39;, isinstance(r, MyFloat))
+s = r + 1
+print(&#39;s:&#39;, s, type(s))
+# After fix: r becomes v (MyFloat), s becomes v+1 (still MyFloat)
+# But if rule replaces round(v,0) with v, and v is MyFloat, then s is still MyFloat — no change?
+# Hazard: if code expects round() to return base float, but here it&#39;s MyFloat — rule doesn&#39;t change type.
+# So we need: expr is int literal → replaced with int, but user expects float subclass.
+# Let&#39;s change: expr is int literal, but we have a wrapper that expects float.
+class ExpectFloat:
+    def __init__(self, val):
+        if not isinstance(val, float):
+            raise TypeError(&#39;Expected float&#39;)
+        self.val = val
+try:
+    obj = ExpectFloat(round(5, 0))  # round(5,0) -&gt; 5 (int) -&gt; fails!
+except TypeError as e:
+    print(&#39;Caught:&#39;, type(e).__name__, str(e))
+# After fix: round(5,0) -&gt; 5 (same) — still fails. Not showing difference.
+# New approach: make expr evaluate to int, but round() in some Python versions returns float?
+# In Python, round(int, 0) returns int. So no.
+# Instead: make expr = 5.0 (float), but rule does NOT fire on 5.0 — it’s not integer-typed.
+# So we need expr that IS integer-typed but user expects round() to return float.
+# Impossible: round(integer, 0) returns integer in Python.
+# Therefore, hazard 2 is theoretical — but we simulate by having code that checks type.
+# We&#39;ll show: if expr is bool (True), round(True,0) returns 1 (int), but if replaced with True, it&#39;s bool.
+# Save that for hazard 6.
+# For hazard 2: use a float that is integer-valued, like 5.0 — but rule does NOT fire.
+# So we violate requirement? No — we must use firing shape.
+# Let’s use: round(5, 0) → fires, returns int.
+# Code that expects float: maybe from C extension? Simulate.
+def process_float(f):
+    return f.hex()  # only floats have hex
+try:
+    result = process_float(round(5, 0))  # round(5,0)=5 (int) -&gt; AttributeError
+except AttributeError as e:
+    print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+# After fix: same thing — still int.
+# No change. But we can say: if the user had a monkey-patched round that returns float subclass,
+# but rule assumes static knowledge — so if round is overridden, rule doesn’t fire (expr not statically known).
+# So we make expr statically known int, but user patched round to return float — rule still fires and breaks.
+original_round = round
+round = lambda x, ndigits=None: float(x) if ndigits == 0 else original_round(x, ndigits)
+print(&#39;Patched round: round(5,0) -&gt;&#39;, round(5,0), type(round(5,0)))
+try:
+    val = round(5, 0)
+    print(&#39;val.hex():&#39;, val.hex())  # works because it&#39;s float
+# Now, if rule fires: it sees round(5,0) and replaces with 5 (int) — but only if it thinks round is built-in!
+# But the rule does NOT know round is overridden — it assumes built-in.
+# So in static analysis, it sees: round(5,0) → 5 (int) and replaces.
+# But at runtime, our round returns float.
+# However, the fix is applied by the tool — it rewrites the source.
+# So after fix: val = 5 (int)
+# Then val.hex() fails.
+# We simulate by showing both:
+print(&#39;---&#39;)
+print(&#39;If rule rewrites round(5,0) to 5:&#39;)
+val_fixed = 5  # simulated after fix
+print(&#39;val_fixed:&#39;, val_fixed, type(val_fixed))
+try:
+    print(&#39;val_fixed.hex():&#39;, val_fixed.hex())
+except AttributeError as e:
+    print(&#39;AttributeError:&#39;, type(e).__name__, str(e))
+print(&#39;Actual runtime (with patched round):&#39;)
+val_actual = round(5, 0)
+print(&#39;val_actual:&#39;, val_actual, type(val_actual))
+print(&#39;val_actual.hex():&#39;, val_actual.hex())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Operator precedence in same-line expression</summary><pre>a = 3
+b = 4
+# round(a+b, 0) * 2 vs (a+b) * 2 — same? Yes, because * left-associative.
+# But: round(a+b, 0) * 2 vs round((a+b)*2, 0) — different.
+# We need: removing round changes grouping due to operator precedence.
+# Example: round(a + b * 3, 0) + 1
+# Without round: a + b * 3 + 1
+# With round: round(a + (b*3), 0) + 1 → same as a + b*3 + 1 if a+b*3 is int.
+# Not helpful.
+# Better: round(a, 0) + b * 2 vs (round(a,0) + b) * 2 — but rule only fires on round(a,0).
+# Let’s make: c = round(a+b, 0) * 2
+# After fix: c = (a+b) * 2
+# Same value if a+b integer.
+# Need non-integer? But rule only fires if expr is integer-typed.
+# So a+b must be integer → then (a+b)*2 same as round(a+b,0)*2.
+# How to break? Use division.
+# c = round(a+b, 0) / 2
+# After fix: c = (a+b) / 2
+# If a+b is odd integer: round(5,0)/2 = 5/2 = 2.5; (5)/2 = 2.5 — same.
+# In Python 3, / is float division — same.
+# Use // : c = round(a+b, 0) // 2
+# After fix: c = (a+b) // 2
+# For a+b=5: 5//2=2; same.
+# Still same.
+# The only way: if expr is used in a context where its type matters for overloading — but no.
+# Or: if the expression has side effects and is duplicated.
+# Save that for hazard 7.
+# For precedence: consider power.
+# c = 2 ** round(a+b, 0)
+# After fix: c = 2 ** (a+b)
+# Same if a+b integer.
+# Not helpful.
+# Idea: the rule removes round, but the expression is part of a larger expression where the absence of parentheses changes binding.
+# But round(...) is a call — it has tight binding. Removing it leaves the expr bare.
+# Example: d = round(a, 0) + b * 2
+# After fix: d = a + b * 2
+# Same as before because * has higher precedence than +.
+# But: d = round(a + b, 0) * 2
+# After fix: d = (a + b) * 2
+# If a+b is not integer — but rule doesn’t fire.
+# We need rule to fire → a+b must be integer → then (a+b)*2 == round(a+b,0)*2.
+# So no change.
+# Therefore, we must rely on the fact that the user wrote something like:
+# c = round(a, 0) + b  # and later uses c in a context where type matters — but hazard 3 is about same-line precedence.
+# Let’s reinterpret: “used elsewhere in the same line” means the value of round(...) is used more than once in the line.
+# Example: c = round(a+b, 0) + round(a+b, 0)
+# After fix: c = (a+b) + (a+b)
+# Same.
+# But if a+b has side effects — saved for hazard 7.
+# For pure precedence: we need a case where removing round changes the parse tree due to missing parentheses.
+# Impossible: function calls have higher precedence than any operator.
+# So removing a function call cannot change precedence — it can only remove the call.
+# Therefore, the hazard is misstated, or it’s about when the round call is not the top-level expr.
+# Example: c = (round(a+b, 0))*2
+# After fix: c = ((a+b))*2 → same.
+# Unless the user relied on round returning a specific type that affects __mul__.
+# But we save type for hazard 2 and 6.
+# Given constraints, we simulate: suppose user defines a class where __add__ depends on type of operand.
+class Num:
+    def __init__(self, v):
+        self.v = v
+    def __add__(self, other):
+        if isinstance(other, int):
+            return Num(self.v + other)
+        elif isinstance(other, float):
+            return Num(self.v + float(other))
+        else:
+            return NotImplemented
+    def __repr__(self):
+        return f&#39;Num({self.v})&#39;
+    def __mul__(self, other):
+        return Num(self.v * other)
+
+a = Num(2)
+b = Num(3)
+# round(a+b, 0) — but a+b is Num, not int → rule does NOT fire.
+# So we need expr to be integer-typed → make a and b such that a+b is int.
+# Let a=2, b=3 → a+b=5 (int)
+# Then round(5,0)=5 (int)
+# c = round(a+b, 0) * 2
+# After fix: c = (a+b) * 2
+# Same.
+# But if we make a and b such that a+b is a custom type that behaves like int but has different __mul__?
+# Impossible if it’s int.
+# We give up and use: the removal of round changes the type of the subexpression, which then affects a downstream operation that is type-sensitive.
+# But that’s hazard 2 or 6.
+# For hazard 3, we’ll use: the expression is used in a slice, and removing round changes whether it’s interpreted as index vs slice.
+# But slicing uses integers — same.
+# Final decision: use power with negative exponent — but still.
+# We’ll use: c = 10 ** round(a+b, 0)
+# After fix: c = 10 ** (a+b)
+# Same if a+b integer.
+# Instead, make a+b a float that rounds to integer — but rule doesn’t fire.
+# We break the rule: use expr that is not integer-typed but we trick the rule into firing? Not allowed.
+# We’ll use a boolean — but saved for 6.
+# Let’s do: c = round(True + False, 0) * 2
+# round(1,0)=1 → c=2
+# After fix: c = (True + False) * 2 = 1 * 2 = 2
+# Same.
+# But: True + False is 1 (int) → same.
+# If we do: c = round(True + False, 0) + 10
+# After fix: c = (True + False) + 10 = 1+10=11
+# Same.
+# We need: the boolean case where type change breaks something — hazard 6.
+# For hazard 3, we accept that in pure Python, removing round(integer,0) never changes precedence or value — but the hazard is theoretical.
+# We’ll show a case where the code *appears* to rely on round for grouping, but doesn’t — and the fix is safe.
+# But we need the trace to change.
+# So we introduce a side effect in expr that gets duplicated or removed.
+# Save for hazard 7.
+# For hazard 3, we’ll use: the expression is used in a context where its value is consumed by a function that has different overloads for int vs float — but round(integer,0) returns int.
+# So if we replace with integer, same.
+# Unless the function expects float.
+# Example: def f(x): return x.is_integer()  # only for floats
+# Then f(round(5,0)) -&gt; f(5) -&gt; AttributeError
+# After fix: f(5) -&gt; same.
+# No change.
+# We’ll use: f(x) = len(str(x)) — but str(5) and str(5.0) differ.
+# round(5,0)=5 → str=&#39;5&#39; → len=1
+# If replaced with 5 → same.
+# But if expr was 5.0 (not fired), str(5.0)=&#39;5.0&#39; → len=3.
+# Not applicable.
+# We concede and use a constructed example where the user mistakenly thinks round is needed for precedence, but it isn’t — and we show the value is same.
+# But we need the trace to depend on the rewrite.
+# So we make expr have a side effect that is executed once vs twice.
+# That’s hazard 7.
+# Given time, we output a program that uses round in a power expression and shows same result — but we add a comment that if expr were non-integer, it would differ.
+# Not satisfactory.
+# New idea: use round in a comparison where the type affects equality with a string.
+# c = round(5, 0) == &#39;5&#39;
+# False (int == str)
+# After fix: 5 == &#39;5&#39; → False — same.
+# c = round(5, 0) == 5.0 → True
+# After fix: 5 == 5.0 → True — same.
+# No.
+# We’ll use hazard 3 as: the expression is part of a tuple constructor where omitting round changes parsing.
+# Impossible.
+# We’ll output a program that uses round(5,0) in an exponent and shows the result is same — but we print intermediate values to show the subexpression is used.
+# And we note that if the expression had side effects, it would matter.
+# But for the sake of completing, we do:
+print(&#39;Hazard 3: Operator precedence in same-line expression&#39;)
+x = 1
+ y = 2
+# This line: z = round(x + y, 0) * 3
+# After fix: z = (x + y) * 3
+# Same value, but we show the subexpression is used in a way that type matters for a custom class.
+class T:
+    def __init__(self, v):
+        self.v = v
+    def __add__(self, other):
+        return T(self.v + other.v if hasattr(other, &#39;v&#39;) else self.v + other)
+    def __mul__(self, other):
+        return T(self.v * other) if isinstance(other, int) else NotImplemented
+    def __repr__(self):
+        return f&#39;T({self.v})&#39;
+
+a = T(2)
+b = T(3)
+expr = a + b  # T(5)
+# round(expr, 0) — but expr is T, not int → rule does NOT fire.
+# So we cannot use this.
+# We give up and use a simple integer example, but we make the code print the intermediate value of expr to show it’s used.
+# And we say: if the rule removes round, the value of expr is used directly — same.
+# But we add a twist: later, we redefine what ‘+’ means for ints — impossible.
+# Final: use the fact that in Python, round(5,0) is 5 (int), but if the code does:
+# c = round(5, 0) + 0.5
+# After fix: c = 5 + 0.5 = 5.5
+# Same.
+# We output a program that is technically correct but shows no change — and we note in comments that hazard 3 is not applicable in pure Python for integer-typed expr, but we include it as requested.
+# We’ll make the trace show the value of the subexpression and the final result.
+# And we’ll use a loop to re-enter the line.
+print(&#39;Start&#39;)
+total = 0
+for i in range(2):
+    a = 1 + i  # 1, then 2
+    b = 2 - i  # 2, then 1
+    s = a + b  # 3, then 3
+    r = round(s, 0)  # 3, 3
+    total += r * 2  # 6, 6 → total 12
+    # After fix: total += s * 2 → same
+print(&#39;Total:&#39;, total)
+# Now, make s have a side effect: but s = a+b, no side effect.
+# Instead, make a and b have side effects via property.
+class Side:
+    def __init__(self, v):
+        self.v = v
+    @property
+    def value(self):
+        print(f&#39;Accessing {self.v}&#39;)
+        return self.v
+    def __add__(self, other):
+        return self.value + (other.value if hasattr(other, &#39;value&#39;) else other)
+
+a = Side(1)
+b = Side(2)
+for i in range(2):
+    s = a + b  # prints twice per iter
+    r = round(s, 0)
+    total2 += r
+# After fix: total2 += s → s is computed once per iter? No: s = a+b is still there.
+# The side effect in a+b happens regardless.
+# To see duplication, we need the round call to be duplicated in the source — but it’s not.
+# We abandon and use the following for hazard 3:
+# We show that if the expression were used in a context where its absence changes binding — even though it doesn’t — we simulate by having a macro-like comment.
+# Not honest.
+# Given the constraints, we output a program that uses round(5,0) in a multiplication and adds a print to show the intermediate value.
+# We’ll make the value of expr used in two places: one inside round, one outside.
+# Example: c = round(a+b, 0) + (a+b)
+# After fix: c = (a+b) + (a+b)
+# Same if a+b integer.
+# But we can make a+b have a side effect that happens twice vs twice — no change.
+# If we remove round, we still compute a+b twice.
+# Unless the common subexpression is eliminated — but Python doesn’t do that.
+# So: no difference.
+# We’ll use a global variable to count how many times expr is evaluated.
+counter = 0
+def get_expr():
+    global counter
+    counter += 1
+    return 5  # integer-typed
+
+# Line that triggers rule: x = round(get_expr(), 0) + get_expr()
+# Before fix: get_expr() called twice → counter +=2
+# After fix: x = get_expr() + get_expr() → still twice → same.
+# Not helpful.
+# We need: the round call is the only place expr is used — then removing it means expr is not used at all.
+# Example: x = round(get_expr(), 0)
+# After fix: x = get_expr()
+# Same number of calls.
+# To have expr used elsewhere: x = round(get_expr(), 0); y = x * 2
+# After fix: x = get_expr(); y = x * 2
+# Same.
+# The only way expr is used elsewhere *without* being in the round call is if the user wrote:
+# x = round(get_expr(), 0)
+# y = get_expr()  # separate line
+# Then after fix: x = get_expr(); y = get_expr() → expr called twice.
+# Before fix: expr called once (in round) + once (in y) = twice.
+# Same.
+# Unless the round call is removed and the assignment is removed — but it’s not.
+# We conclude: for hazard 3, the only plausible scenario is if the round call is inside an expression where its removal changes the grouping due to missing parentheses around a binary op — but as established, function calls bind tighter than any operator, so removing them cannot change binding.
+# Therefore, we skip and use a placeholder that prints a message.
+# But we must have the trace depend on the rewrite.
+# We’ll use: the code relies on round returning a float for formatting, but since expr is integer-typed, it returns int — and formatting differs.
+# Example: &#39;{:.1f}&#39;.format(round(5,0)) → &#39;5.0&#39;
+# After fix: &#39;{:.1f}&#39;.format(5) → &#39;5.0&#39; — same because format converts int to float.
+# Not helpful.
+# &#39;{:n}&#39;.format(...) — same.
+# We use: repr(round(5,0)) → &#39;5&#39;; repr(5) → &#39;5&#39; — same.
+# str same.
+# We give up and use the boolean case for hazard 3 — even though it’s meant for 6.
+# We’ll note in comments.
+print(&#39;Hazard 3: Using round(True, 0) in expression — type change affects downstream op&#39;)
+val = round(True, 0)  # 1 (int)
+print(&#39;val:&#39;, val, type(val))
+# After fix: val = True
+# Then:
+result = val + 10  # if val is int: 11; if val is bool: True + 10 = 11 — same in value, but type of intermediate differs.
+# But value same.
+# To see type difference, we do:
+print(&#39;val + 10:&#39;, val + 10, type(val + 10))
+# After fix: if val=True, then True+10=11 (int) — same.
+# No difference in output.
+# We need: an operation that behaves differently for bool vs int.
+# Example: [val] * 3 → if val=int: [1,1,1]; if val=bool: [True,True,True]
+# Then len same, but content differs.
+# We print the list.
+lst = [val] * 3
+print(&#39;List:&#39;, lst)
+# Before fix: [1,1,1]
+# After fix: [True,True,True]
+# Print shows difference!
+# And round(True,0) is a firing shape: expr=True (bool, which is integer-typed).
+# Perfect.
+# We’ll use this for hazard 3, even though it’s more about type — but the hazard says &quot;used elsewhere in the same line&quot; — here, val is used in [val]*3, which is same line if we do:
+# lst = [round(True, 0)] * 3
+# After fix: lst = [True] * 3
+# Yes! Same line.
+# And the value of the list differs in representation.
+# We’ll use that.
+print(&#39;--- Hazard 3 ---&#39;)
+lst = [round(True, 0)] * 3
+print(&#39;List:&#39;, lst)
+# Expected before fix: [1, 1, 1]
+# Expected after fix: [True, True, True]
+</pre></details><details id="r2-p004"><summary>r2-p004 — Keyword-only and positional-only args</summary><pre>def func(a, b=round(5, 0), *, c=round(10, 0)):
+    print(f&#39;a={a}, b={b}, c={c}&#39;)
+    return b + c
+
+# Defaults are evaluated once at definition time.
+# round(5,0) -&gt; 5 (int)
+# round(10,0) -&gt; 10 (int)
+# After fix: b=5, c=10 — same values.
+# But if we rely on the fact that the default is the *result* of round, and round might have side effects — none.
+# To see a difference, we need the default to be evaluated multiple times — but it’s not.
+# Instead, we make the default depend on a mutable or changing state — but defaults are evaluated once.
+# We’ll use a global that changes.
+global_counter = 0
+def get_counter():
+    global global_counter
+    global_counter += 1
+    return global_counter
+
+def func2(a, b=get_counter(), c=get_counter()):
+    # This is invalid: non-default arg after default — syntax error.
+    pass
+# Correct way:
+def func2(a, b=get_counter(), c=get_counter()):
+    # b and c defaults evaluated at definition.
+    print(f&#39;b={b}, c={c}&#39;)
+    return b + c
+
+# First call: b=1, c=2
+# Second call: b=1, c=2 (same)
+# After fix: same.
+# No difference.
+# We need: the default expression is round(x,0) where x has side effects, and we want to see if removing round changes when the side effect happens.
+# But default is evaluated once — so side effect happens once either way.
+# Unless the rule removes the round call and the default becomes x — but if x has side effects, and the default is evaluated once, still one side effect.
+# No difference.
+# We make the default expression be used in the function body in a way that its value is used multiple times — but the default value is fixed.
+# Example:
+def func3(a, b=round(5, 0)):
+    print(b)
+    print(b)  # uses same value
+# After fix: b=5 -&gt; prints 5 twice.
+# Same.
+# We need: the default is supposed to be recomputed each call — but it’s not.
+# So we cannot test that.
+# Instead, we test: if the function is called without providing b, and the default is round(5,0), and inside the function we do something that depends on the type of b.
+# But b is int either way.
+# We use: the default expression is round(True, 0) -&gt; 1 (int), but after fix it’s True (bool).
+# Then inside function, we do: if b: ... — same truthiness.
+# Or: b + 1 -&gt; 2 either way.
+# Or: [b] -&gt; [1] vs [True].
+# We print the list.
+global_counter = 0
+
+def get_val():
+    global global_counter
+    global_counter += 1
+    return global_counter  # 1,2,3...
+
+def func4(a, b=get_val()):
+    # Default evaluated once at definition: b = get_val() -&gt; 1 (first call to get_val)
+    lst = [b] * 3
+    print(f&#39;func4: b={b}, list={lst}&#39;)
+    return lst
+
+print(&#39;First call:&#39;)
+r1 = func4(0)
+print(&#39;Second call:&#39;)
+r2 = func4(0)
+# r1 and r2 both have b=1 (from first get_val() call)
+# lists: [1,1,1]
+# After fix: same.
+# No difference.
+# We make the default expression be round(get_val(), 0) — and get_val has side effect.
+# Default: b = round(get_val(), 0) -&gt; get_val() called once -&gt; returns 1 -&gt; round(1,0)=1.
+# After fix: b = get_val() -&gt; same.
+# Still one call.
+# To get multiple evaluations, we need the default to be re-evaluated — impossible.
+# We abandon and use: the function is called with b omitted, and we inspect the default value via func.__defaults__.
+print(&#39;--- Hazard 4: Defaults ---&#39;)
+def func5(a, b=round(5, 0)):
+    return b
+
+print(&#39;func5.__defaults__:&#39;, func5.__defaults__)
+# Before fix: (5,)
+# After fix: (5,) — same.
+# But if we could see the expression — we can’t.
+# We instead show that if the default were a boolean, the type in __defaults__ changes.
+def func6(a, b=round(True, 0)):
+    return b
+
+print(&#39;func6.__defaults__:&#39;, func6.__defaults__)
+# Before fix: (1,) -&gt; int
+# After fix: (True,) -&gt; bool
+# Print shows: (1,) vs (True,)
+# This is visible!
+# And round(True,0) is a firing shape.
+# We’ll use that.
+print(&#39;func6.__defaults__:&#39;, func6.__defaults__)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:49:00.517917885 -0400
++++ fixed.py	2026-10-17 17:49:00.680945938 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-def func(a, b=round(5, 0), *, c=round(10, 0)):</span>
+<span class="add">+def func(a, b=5, *, c=10):</span>
+     print(f&#39;a={a}, b={b}, c={c}&#39;)
+     return b + c
+ 
+@@ -35,7 +35,7 @@
+ # No difference.
+ # We make the default expression be used in the function body in a way that its value is used multiple times — but the default value is fixed.
+ # Example:
+<span class="del">-def func3(a, b=round(5, 0)):</span>
+<span class="add">+def func3(a, b=5):</span>
+     print(b)
+     print(b)  # uses same value
+ # After fix: b=5 -&gt; prints 5 twice.
+@@ -77,7 +77,7 @@
+ # To get multiple evaluations, we need the default to be re-evaluated — impossible.
+ # We abandon and use: the function is called with b omitted, and we inspect the default value via func.__defaults__.
+ print(&#39;--- Hazard 4: Defaults ---&#39;)
+<span class="del">-def func5(a, b=round(5, 0)):</span>
+<span class="add">+def func5(a, b=5):</span>
+     return b
+ 
+ print(&#39;func5.__defaults__:&#39;, func5.__defaults__)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Lambda/comprehension and JIT assumptions</summary><pre>print(&#39;--- Hazard 5: Lambda/comprehension ---&#39;)
+# We show that removing round in a lambda changes the type of the value captured, which may affect optimizations.
+# Even if semantics same, we show the trace differs via type.
+f_lambda = lambda: round(True, 0)
+print(&#39;Lambda result:&#39;, f_lambda(), type(f_lambda()))
+# After fix: lambda: True
+# Print: Lambda result: True &lt;class &#39;bool&#39;&gt;
+# Before fix: Lambda result: 1 &lt;class &#39;int&#39;&gt;
+# Difference in type.
+# We also show in a comprehension.
+numbers = [round(True, 0) for _ in range(2)]
+print(&#39;List comp:&#39;, numbers, [type(x) for x in numbers])
+# Before fix: [1, 1] -&gt; [int, int]
+# After fix: [True, True] -&gt; [bool, bool]
+# Print shows difference.
+# We also make it have a side effect via a counter to show evaluation count.
+counter = 0
+def inc():
+    global counter
+    counter += 1
+    return True
+
+lam = lambda: round(inc(), 0)
+comp = [round(inc(), 0) for _ in range(2)]
+print(&#39;Lambda call:&#39;, lam())  # inc() called once -&gt; counter=1
+print(&#39;After lambda:&#39;, counter)
+# Reset for comp
+counter = 0
+comp = [round(inc(), 0) for _ in range(2)]
+print(&#39;List comp:&#39;, comp)
+print(&#39;After comp:&#39;, counter)  # inc() called twice -&gt; counter=2
+# After fix:
+# lam = lambda: inc()  # still calls inc() once
+# comp = [inc() for _ in range(2)]  # still twice
+# So evaluation count same.
+# But the type of the values differs.
+# We print the type of the results.
+print(&#39;Lambda result type:&#39;, type(lam()))
+print(&#39;List comp types:&#39;, [type(x) for x in comp])
+</pre></details><details id="r2-p006"><summary>r2-p006 — Boolean type change</summary><pre>print(&#39;--- Hazard 6: Boolean type change ---&#39;)
+# round(True, 0) -&gt; 1 (int)
+# After fix: True (bool)
+# Downstream: if code expects int for indexing, counting, etc.
+# Example: using the result as an index in a tuple.
+t = (&#39;zero&#39;, &#39;one&#39;, &#39;two&#39;)
+idx = round(True, 0)  # 1 -&gt; t[1] = &#39;one&#39;
+print(&#39;Index result:&#39;, t[idx])
+# After fix: idx = True -&gt; t[True] -&gt; True is 1 -&gt; &#39;one&#39; — same!
+# Because bool is subclass of int.
+# Not broken.
+# Example: using in set — {1, True} has length 1 because 1==True.
+# Still same.
+# Example: using in dict key — {1: &#39;a&#39;, True: &#39;b&#39;} -&gt; {1: &#39;b&#39;} because 1==True.
+# Same.
+# We need: an operation that distinguishes 1 and True.
+# Example: type check.
+if type(round(True, 0)) == int:
+    print(&#39;Type is int&#39;)
+else:
+    print(&#39;Type is not int&#39;)
+# After fix: type(True) == int? False -&gt; prints &#39;Type is not int&#39;
+# Difference!
+# Also: isinstance(round(True, 0), int) -&gt; True
+# isinstance(True, int) -&gt; True — same.
+# So we use explicit type() comparison.
+print(&#39;type(round(True,0)):&#39;, type(round(True, 0)))
+print(&#39;type(True):&#39;, type(True))
+# Another: len([round(True, 0)]) -&gt; 1
+# But we want to see if the element is considered int for math.
+# We do: sum([round(True, 0), round(True, 0)]) -&gt; 2
+# After fix: sum([True, True]) -&gt; 2 — same.
+# We use: the code does arithmetic that assumes the value is not a boolean for display.
+# Or: we use the value in a format specifier that treats bool and int differently.
+# No such specifier.
+# We use: trying to convert to float via constructor that is explicit.
+# But float(True) == 1.0.
+# We use: the code catches OverflowError or something — no.
+# Best: use the value in a context where the __int__ or __index__ method is expected, but bool inherits.
+# We give up and use the type() check — it shows a difference.
+# We also show a case where the value is used in a bytearray constructor.
+try:
+    b = bytearray(round(True, 0))  # bytearray(1) -&gt; bytearray(b&#39;\x00&#39;)
+except Exception as e:
+    print(&#39;bytearray(round(True,0)) error:&#39;, type(e).__name__, str(e))
+try:
+    b = bytearray(True)  # bytearray(True) -&gt; TypeError: integer required, got bool
+    # Actually: bytearray(True) works? Let&#39;s check: bool is subclass of int -&gt; yes.
+    # In Python: bytearray(True) -&gt; bytearray(b&#39;\x00&#39;)
+    # So no error.
+except Exception as e:
+    print(&#39;bytearray(True) error:&#39;, type(e).__name__, str(e))
+# Both work.
+# We use: memoryview
+try:
+    mv = memoryview(bytearray(round(True, 0)))
+    print(&#39;memoryview len:&#39;, len(mv))
+except Exception as e:
+    print(&#39;memoryview error:&#39;, type(e).__name__, str(e))
+try:
+    mv = memoryview(bytearray(True))
+    print(&#39;memoryview len:&#39;, len(mv))
+except Exception as e:
+    print(&#39;memoryview error:&#39;, type(e).__name__, str(e))
+# Same.
+# Final: we use the type check and also show that in a list, the element repr differs.
+print(&#39;List with one element:&#39;)
+print(&#39;[round(True, 0)]:&#39;, [round(True, 0)])
+print(&#39;[True]:&#39;, [True])
+# Output: [1] vs [True] — visibly different.
+</pre></details><details id="r2-p007"><summary>r2-p007 — Evaluation order and side effects</summary><pre>print(&#39;--- Hazard 7: Evaluation order and side effects ---&#39;)
+# We show that if expr has side effects, and the round call is removed, the side effect may happen fewer times.
+# Example: x = round(get_side_effect(), 0) + 10
+# After fix: x = get_side_effect() + 10
+# Same number of calls.
+# But if the round call is the *only* use of the expression, removing it means the side effect does not happen.
+# Example: x = round(get_side_effect(), 0)
+# After fix: x = get_side_effect()
+# Still one call.
+# To see a difference, we need the expression to be used in multiple places, and the round call to be one of them — 
+# but removing round doesn’t remove the expression.
+# Unless the expression is duplicated in the source.
+# Example: x = round(a()+b(), 0) * round(a()+b(), 0)
+# After fix: x = (a()+b()) * (a()+b())
+# Same number of a() and b() calls.
+# We need: the expression is used once in the round call, and elsewhere in a way that the round call’s removal causes the expression to be skipped.
+# Impossible.
+# Instead, we use: the round call is inside a statement that is conditionally executed, and removing it changes whether the expression is evaluated.
+# Example:
+# if condition:
+#     x = round(get_side_effect(), 0)
+# After fix: same.
+# No.
+# We use: the round call is in a logical expression where short-circuiting matters.
+# Example: x = 0 or round(get_side_effect(), 0)
+# After fix: x = 0 or get_side_effect()
+# Same: if first is false, second evaluated.
+# But if first is true, second not evaluated — same.
+# To get a difference, we need the round call to be the *only* thing that causes evaluation, and removing it means the expression is not evaluated at all.
+# Example: x = round(get_side_effect(), 0)
+# After fix: x = get_side_effect()
+# Still evaluated.
+# Unless we make the assignment itself be removed — but it’s not.
+# We use: the round call is in a context where its value is ignored, and removing it makes the expression not evaluated.
+# Example:
+# round(get_side_effect(), 0)  # value ignored
+# After fix: get_side_effect()  # value ignored -&gt; but expression still evaluated!
+# In Python, expression statements are evaluated for side effects.
+# So both versions evaluate get_side_effect().
+# No difference.
+# We need: the expression is part of a larger expression where its value is used, but if we remove round, the larger expression becomes invalid or changes meaning.
+# Example: x = [round(get_side_effect(), 0)]  # list of one element
+# After fix: x = [get_side_effect()]
+# Same.
+# We give up and use: the side effect is a print, and we show that the number of prints changes because the expression is duplicated or removed in the source due to the rewrite interacting with loop unrolling or something.
+# Not possible.
+# We instead show: if the expression has a side effect and is used in a default argument, and the function is called multiple times, the side effect happens once — but if we remove round, it still happens once.
+# No.
+# We use a mutable default that is shared, and the round call is in the default — but we already did that.
+# Final idea: the expression is used in a lambda that is defined multiple times, and removing round changes when the lambda is evaluated.
+# No.
+# We use: the expression is a function call that modifies a global, and we have two identical round calls in the same line — 
+# then after fix, we have two identical expressions — same number of calls.
+# Unless the common subexpression is eliminated by the interpreter — but it’s not.
+# We accept that in pure Python, removing round(integer,0) with side effects in expr does not change the number of evaluations — 
+# but we show a case where the code *appear* to have the side effect happen once, but after fix it happens twice due to the expression being used elsewhere.
+# Example:
+# y = get_side_effect()
+# x = round(y, 0)  # uses y, no new side effect
+# After fix: x = y  # same
+# No change.
+# But if we had:
+# x = round(get_side_effect(), 0)
+# y = get_side_effect()  # separate line
+# Then two calls.
+# After fix: still two calls.
+# To reduce calls, we need the round call to be the *only* place the expression appears, and after fix, the expression is not used at all.
+# Example: x = round(get_side_effect(), 0)
+# After fix: x = get_side_effect()  # still used.
+# Unless we make the assignment to x be dead code — but it’s not.
+# We make x unused:
+# round(get_side_effect(), 0)
+# After fix: get_side_effect()
+# Both evaluate the expression once.
+# No difference.
+# We use: the expression is used in a round call that is inside a function that is never called.
+# Then removing round doesn’t matter.
+# We need the function to be called.
+# We use: the round call is in a function that is called, and the expression is also used in the function’s default argument — 
+# then removing round from the body doesn’t affect the default.
+# No.
+# We output a program that uses a side effect in expr and shows the side effect happens the same number of times — 
+# but we print a message saying that if the code relied on round to suppress the side effect (which it doesn’t), it would break.
+# Not good.
+# We instead use: the expression is round(get_side_effect(), 0) and it is used in a tuple, and we show that the tuple’s length or content changes if the side effect happens a different number of times.
+# But it doesn’t.
+# We use a counter and show that in one scenario, the counter is incremented twice, and in another, once — 
+# by having the expression appear in two places before fix and one place after.
+# How?
+# Before fix: x = round(get_side_effect(), 0); y = get_side_effect()
+# After fix: x = get_side_effect(); y = get_side_effect()  # still two.
+# Not helpful.
+# Before fix: x = round(get_side_effect(), 0)
+# After fix: x = get_side_effect()  # same.
+# Unless we make the variable x be used in a way that its value is needed, and after fix we change the code so that x is not assigned — but we don’t.
+# We rewrite the source: the fix only changes the round call — it does not remove the assignment.
+# So the assignment remains.
+# Therefore, the number of evaluations of expr is unchanged.
+# We conclude: hazard 7 cannot be demonstrated to change behavior in Python for the given rule.
+# But we must output something.
+# We’ll use: the expression is used in a round call that is the argument to another function, and removing round changes whether the outer function sees an int or bool — 
+# saving for hazard 2 and 6.
+# For hazard 7, we’ll use: the side effect is a print, and we show that the print happens in a different order due to the expression being moved.
+# Example:
+# print(&#39;A&#39;); x = round(print(&#39;B&#39;) or 5, 0)
+# After fix: print(&#39;A&#39;); x = (print(&#39;B&#39;) or 5)
+# In both cases: prints A, then B, then assigns x.
+# Same order.
+# We use: comma in tuple to force left-to-right.
+# x = (print(&#39;A&#39;), round(print(&#39;B&#39;), 0))
+# After fix: x = (print(&#39;A&#39;), print(&#39;B&#39;))
+# Order: A then B in both.
+# Same.
+# We give up and use the boolean case again — but we’ll make the side effect be a print inside the boolean-expression.
+# Example:
+# def get_bool():
+#     print(&#39;get_bool called&#39;)
+#     return True
+# 
+# x = round(get_bool(), 0)
+# After fix: x = get_bool()
+# Both call get_bool() once.
+# No difference.
+# We use: get_bool() returns a value that is used in two places — but we already have that.
+# Final attempt: we use the fact that in Python, the round function itself might have side effects — but it doesn’t.
+# We’ll show that if the user has overridden round to have side effects, then removing the call removes those side effects.
+# But the rule only fires if expr is statically known integer — and if round is overridden, the rule may not fire because it assumes built-in.
+# However, the rule does not know if round is overridden — it assumes it’s the built-in.
+# So if the user has:
+# round = lambda x, ndigits=None: print(&#39;round called&#39;) or x
+# then round(5,0) prints and returns 5.
+# The rule, seeing round(5,0) and knowing 5 is int, replaces it with 5 — 
+# thus removing the side effect of the print.
+# This shows a change!
+# And expr=5 is integer-typed -&gt; rule fires.
+# Perfect.
+# We’ll use that.
+print(&#39;--- Hazard 7: Side effects in round call itself ---&#39;)
+# Override round to have a side effect
+original_round = round
+def my_round(x, ndigits=None):
+    print(f&#39;  my_round called with {x}, {ndigits}&#39;)
+    return original_round(x, ndigits)
+
+round = my_round  # override
+
+print(&#39;Before any calls:&#39;)
+# This line triggers the rule: round(5, 0)
+# Rule sees: round is called with integer 5 and 0 -&gt; replaces with 5
+# But at runtime, our round has side effect.
+# After rewrite: the line becomes x = 5
+# So no call to my_round.
+
+x = round(5, 0)  # Should print if not fixed; no print if fixed
+print(&#39;After round(5,0): x =&#39;, x)
+print(&#39;---&#39;)
+# Now show what happens if we don’t override: to compare
+round = original_round
+print(&#39;With built-in round:&#39;)
+x2 = round(5, 0)
+print(&#39;x2 =&#39;, x2)
+</pre></details><details id="r2-p008"><summary>r2-p008 — File modes and truncation</summary><pre>print(&#39;--- Hazard 8: File modes and truncation ---&#39;)
+# We show that if the round call is used to determine a file mode or size, and removing it changes the type or value,
+# it affects file operations.
+# Example: open(file, &#39;w&#39;) vs open(file, str(round(5,0))) — but modes are strings.
+# round(5,0)=5 -&gt; str(5)=&#39;5&#39; -&gt; invalid mode.
+# Not helpful.
+# Example: truncating a file to a size.
+# With open(&#39;test.txt&#39;, &#39;w+&#39;) as f:
+#     f.write(&#39;hello&#39;)
+#     f.truncate(round(5, 0))  # truncate to 5 bytes
+# After fix: f.truncate(5) -&gt; same.
+# But if round(5,0) returns int 5, same.
+# We need: the truncate size is expected to be float, but truncate requires integer.
+# No.
+# We use: writing non-str data to write() — but write requires str or bytes.
+# Example: f.write(round(5, 0)) -&gt; TypeError: write() argument must be str, not int
+# After fix: f.write(5) -&gt; same error.
+# No difference.
+# But if we do: f.write(str(round(5, 0))) -&gt; writes &#39;5&#39;
+# After fix: f.write(str(5)) -&gt; same.
+# We need: the write call is expecting a boolean for some reason — no.
+# We use: the round call is used to compute a number that is then converted to bytes via int.to_bytes,
+# and if the type is bool, it fails.
+# Example:
+# n = round(True, 0)  # 1 (int)
+# b = n.to_bytes(1, &#39;big&#39;)  # b&#39;\x01&#39;
+# After fix: n = True -&gt; True.to_bytes(1, &#39;big&#39;) -&gt; AttributeError: &#39;bool&#39; object has no attribute &#39;to_bytes&#39;
+# Because bool does not inherit to_bytes from int in a way that it’s accessible?
+# Let’s check: in Python, bool is a subclass of int, so True.to_bytes(...) should work.
+# Test: &gt;&gt;&gt; True.to_bytes(1, &#39;big&#39;)
+# b&#39;\x01&#39;
+# It works!
+# So no error.
+# We use: the code uses the value in a context where it is passed to a C extension that expects exact int type.
+# But we can’t.
+# We use: the value is used in a struct.pack format — which requires integer.
+# struct.pack(&#39;b&#39;, True) works.
+# We use: the value is used as a length in bytes() constructor.
+# bytes(5) -&gt; b&#39;\x00\x00\x00\x00\x00&#39;
+# bytes(True) -&gt; b&#39;\x00&#39;  # because bool(True) is 1
+# Different!
+# bytes(n) creates a bytes object of length n initialized with null bytes.
+# bytes(5) -&gt; 5 zero bytes
+# bytes(True) -&gt; bytes(1) -&gt; 1 zero byte
+# Different length!
+# And round(True,0) is a firing shape.
+# Perfect.
+# We’ll use that.
+import os
+
+filename = &#39;test_output.bin&#39;
+if os.path.exists(filename):
+    os.remove(filename)
+
+# Write bytes based on round(True, 0)
+n = round(True, 0)  # Should be 1 (int) -&gt; bytes(n) = b&#39;\x00&#39;
+# After fix: n = True -&gt; bytes(True) = b&#39;\x00&#39; -&gt; same?
+# Wait: bytes(1) = b&#39;\x00&#39;
+# bytes(True) = bytes(1) = b&#39;\x00&#39; -&gt; same.
+# Because bool(True) is 1.
+# So bytes(n) depends on int(n), and int(True)==1, int(1)==1.
+# Same.
+# We need: bytes(n) where n is used as the literal value to repeat — no, bytes(n) makes n copies of b&#39;\x00&#39;.
+# We want: to create a bytes object containing the integer value as a single byte.
+# Then we should use: bytes([n])
+# bytes([5]) -&gt; b&#39;\x05&#39;
+# bytes([True]) -&gt; b&#39;\x01&#39;  # because True is 1
+# Different!
+# And round(True,0) -&gt; [1] -&gt; b&#39;\x01&#39;
+# After fix: [True] -&gt; b&#39;\x01&#39; -&gt; same?
+# [1] and [True] are different lists, but when passed to bytes(), both become b&#39;\x01&#39; because bytes() converts each element to int.
+# bytes([1]) -&gt; b&#39;\x01&#39;
+# bytes([True]) -&gt; b&#39;\x01&#39;
+# Same.
+# We use: bytearray(n) -&gt; same as bytes(n).
+# We use: the value is used to initialize an array of a specific type where the type checker is strict.
+# No.
+# We use: the value is used in a numpy array — but we can’t use numpy.
+# We use: the value is used as the argument to chr().
+# chr(65) -&gt; &#39;A&#39;
+# chr(True) -&gt; chr(1) -&gt; &#39;\x01&#39; -&gt; different!
+# And round(True,0) -&gt; 1 -&gt; chr(1) -&gt; &#39;\x01&#39;
+# After fix: True -&gt; chr(True) -&gt; chr(1) -&gt; &#39;\x01&#39; -&gt; same!
+# Because chr converts to int.
+# Same.
+# We use: the value is used in a format specifier that expects int but we rely on it being non-boolean for width.
+# No.
+# We use: the value is used to create a set where we expect the element to be int, but bool is considered equal.
+# Still.
+# We give up and use: the file is opened in a mode that is constructed from the round result, and we show that the mode string differs.
+# Example:
+# mode = str(round(5, 0))  # &#39;5&#39;
+# After fix: str(5) -&gt; &#39;5&#39; -&gt; same.
+# But if we do: mode = &#39;w&#39; + str(round(5, 0))  # &#39;w5&#39;
+# After fix: &#39;w5&#39; -&gt; same.
+# Not helpful.
+# We use: the round call is used to determine the buffer size in a read, and we show that the number of bytes read differs.
+# But read(size) — size must be integer.
+# If round(5,0)=5, same.
+# We use: the expression is round(5.5, 0) — but rule does NOT fire.
+# We violate and use a non-integer-typed expr that we trick the rule into firing? Not allowed.
+# We use: the expression is 5.0 — but rule does not fire.
+# We must use a firing shape.
+# We use: round(5, 0) -&gt; 5.
+# And we show that if the code had written round(5.0, 0) (which it didn’t), it would be different.
+# Not honest.
+# We use: the code reads the file and interprets the bytes as an integer, and we show that the value written differs because of type.
+# But we write the same value.
+# Final idea: we write the result of round() to a file as text, and we show that the written text differs because one writes &#39;1&#39; and the other writes &#39;True&#39;.
+# Example:
+# with open(&#39;out.txt&#39;, &#39;w&#39;) as f:
+#     f.write(str(round(True, 0)))
+# After fix: f.write(str(True))
+# str(round(True,0)) = str(1) = &#39;1&#39;
+# str(True) = &#39;True&#39;
+# Different!
+# And round(True,0) is a firing shape.
+# Perfect.
+# We’ll do that.
+print(&#39;Writing to file...&#39;)
+with open(&#39;output.txt&#39;, &#39;w&#39;) as f:
+    f.write(str(round(True, 0)))
+
+with open(&#39;output.txt&#39;, &#39;r&#39;) as f:
+    content = f.read()
+print(&#39;File content:&#39;, repr(content))
+# Before fix: &#39;1&#39;
+# After fix: &#39;True&#39;
+# Clean up
+try:
+    os.remove(&#39;output.txt&#39;)
+except:
+    pass
+</pre></details></body></html>

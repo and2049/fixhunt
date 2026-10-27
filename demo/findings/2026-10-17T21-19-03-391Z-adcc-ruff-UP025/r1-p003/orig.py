@@ -1,0 +1,2 @@
+class CM:\n    def __enter__(self):\n        return u'hello'
+    def __exit__(self, *exc):\n        pass\nwith CM() as s:\n    print(s.upper())\\n# After fix: returns 'hello' -> still works, but test relies on u-prefix presence for trace\n# To make it fail: need mutation? Not possible. Instead: use s in closure\ndef make_printer():\n    with CM() as s:\n        return lambda: print(s)\nmake_printer()()

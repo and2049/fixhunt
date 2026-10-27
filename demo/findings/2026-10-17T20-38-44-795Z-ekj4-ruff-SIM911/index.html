@@ -1,0 +1,312 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff SIM911 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff SIM911 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-38-44-795Z-ekj4-ruff-SIM911 · fix labelled <b>unknown</b> · 16 programs, 8 fired, 6 fixed, 1 oracle-backed finding(s) · model cost $0.0150</p>
+<div class="card"><b>Rule analysis</b><p>Flags usage of `zip(dict.keys(), dict.values())` when iterating over both simultaneously.</p><p class="mut">Fix: Replace `zip(expr.keys(), expr.values())` with `expr.items()`, where `expr` is the same dictionary expression in both calls.</p><details><summary>10 hazards</summary><ul><li>If `expr` has side effects (e.g., a function call), evaluating it twice in the original vs once in the fix changes behavior.</li><li>If `expr` is mutated between the `.keys()` and `.values()` calls, the zip may see inconsistent state while `.items()` sees a snapshot.</li><li>If `expr` is not a dict but a subclass with overridden `.keys()` or `.values()` that return non-corresponding iterables, the zip may pair incorrectly while `.items()` is correct.</li><li>If `.keys()` or `.values()` returns a custom iterator with state that affects iteration (e.g., depends on prior calls), replacing with `.items()` alters execution.</li><li>If the expression uses a walrus operator (e.g., `zip((d:=func()).keys(), (d:=func()).values())`), the fix would lose reassignment and break scoping.</li><li>If the code relies on the order of evaluation (e.g., `.keys()` has a side effect that must happen before `.values()`), the fix may reverse or eliminate ordering expectations.</li><li>If `expr` is a variable that gets rebound between the two attribute accesses (e.g., due to concurrency or descriptor magic), the fix uses a single consistent value while the original may see two different ones.</li><li>If the original code contains inline comments within the zip expression (e.g., `zip(d.keys() # comment, d.values())`), the fix may drop or misplace them during rewrite.</li><li>If `expr` is a property that returns a different dict on each access, the original zips keys from one dict with values from another, while the fix uses items from a single dict (possibly inconsistent).</li><li>If `expr` is `None` or an object that raises AttributeError on `.keys()` or `.values()` only under certain conditions (e.g., due to `__getattr__`), the fix may trigger the error earlier/later or not at all.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix replaces `zip(d.keys(), d.values())` with `d.items()`, but `zip` returns a reusable iterator while `dict.items()` returns a view that can be iterated multiple times. In the program, `zipped` is iterated once in the for-loop and then again in `list(zipped)`, so the original prints an empty list (iterator exhausted) while the fixed version prints the items again, changing the observable output.">judge: real · high</span> String Formatting Edge Cases<p class="mut">The fix replaces `zip(d.keys(), d.values())` with `d.items()`, but `zip` returns a reusable iterator while `dict.items()` returns a view that can be iterated multiple times. In the program, `zipped` is iterated once in the for-loop and then again in `list(zipped)`, so the original prints an empty list (iterator exhausted) while the fixed version prints the items again, changing the observable output.</p>
+<h2>Minimized program (13→5 lines)</h2><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+zipped = zip(d.keys(), d.values())
+for k, v in zipped:
+    s = f&#39;{k!r}:{v!r}&#39;
+print(repr(list(zipped)))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:38:58.621792777 -0400
++++ fixed.py	2026-10-17 16:38:58.785800554 -0400
+@@ -1,5 +1,5 @@
+ d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+<span class="del">-zipped = zip(d.keys(), d.values())</span>
+<span class="add">+zipped = d.items()</span>
+ for k, v in zipped:
+     s = f&#39;{k!r}:{v!r}&#39;
+     print(s)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+&#39;a&#39;:1
+&#39;b&#39;:2
+&#39;a&#39;:1
+&#39;b&#39;:2
+[]
+[(&#39;a&#39;, 1), (&#39;b&#39;, 2)]
+stdout after:
+&#39;a&#39;:1
+&#39;b&#39;:2
+&#39;a&#39;:1
+&#39;b&#39;:2
+[(&#39;a&#39;, 1), (&#39;b&#39;, 2)]
+[(&#39;a&#39;, 1), (&#39;b&#39;, 2)]</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18775">astral-sh/ruff/issues/18775</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18778">astral-sh/ruff/issues/18778</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18776">astral-sh/ruff/issues/18776</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/11125">astral-sh/ruff/issues/11125</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9319">astral-sh/ruff/issues/9319</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18777">astral-sh/ruff/issues/18777</a> · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Truthiness of Custom Bool/Len</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Dict Ordering &amp; Duplicates</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Inline Comments in Zip Expression</td><td class="mut">If the original code contains inline comments within the zip expression, the fix may drop </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Order of Evaluation Side Effects</td><td class="mut">If the code relies on the order of evaluation (e.g., `.keys()` has a side effect that must</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Conditional AttributeError via __getattr__</td><td class="mut">If `expr` is `None` or an object that raises AttributeError on `.keys()` or `.values()` on</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>String Formatting Edge Cases</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Custom Iterator State in Keys/Values</td><td class="mut">If `.keys()` or `.values()` returns a custom iterator with state that affects iteration (e</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes vs Str Encoding</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>String Formatting Edge Cases</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes vs Str Encoding Newline Handling</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side Effect in Expr Evaluation</td><td class="mut">If `expr` has side effects (e.g., a function call), evaluating it twice in the original vs</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable Default Arguments and Aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Type Annotations Evaluated at Runtime</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Inline Comments in Zip Expression</td><td class="mut">If the original code contains inline comments within the zip expression (e.g., `zip(d.keys</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Variable Rebound Between Attribute Accesses</td><td class="mut">If `expr` is a variable that gets rebound between the two attribute accesses (e.g., due to</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Async Def/Await Ordering Async Generators</td><td class="mut">async def/await ordering, async generators</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Truthiness of Custom Bool/Len</summary><pre>class D:
+    def __init__(self, n):
+        self.n = n
+    def keys(self):
+        return range(self.n)
+    def values(self):
+        return range(self.n)
+    def items(self):
+        return [(i, i) for i in range(self.n)]
+    def __bool__(self):
+        return self.n &gt; 0
+    def __len__(self):
+        return self.n
+
+d = D(2)
+print(&#39;Before:&#39;, bool(d))
+trace = []
+for k, v in zip(d.keys(), d.values()):
+    trace.append((k, v))
+print(&#39;Zip result:&#39;, trace)
+d.n = 0
+print(&#39;After zero:&#39;, bool(d))
+try:
+    for k, v in zip(d.keys(), d.values()):
+        pass
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Dict Ordering &amp; Duplicates</summary><pre>class K:
+    def __init__(self, v):
+        self.v = v
+    def __hash__(self):
+        return hash(self.v)
+    def __eq__(self, other):
+        return isinstance(other, K) and self.v == other.v
+
+d = {K(1): &#39;a&#39;, K(1): &#39;b&#39;, K(2): &#39;c&#39;}  # duplicate key
+print(&#39;Dict:&#39;, d)
+trace_keys = list(d.keys())
+trace_vals = list(d.values())
+trace_items = list(d.items())
+print(&#39;Keys:&#39;, [k.v for k in trace_keys])
+print(&#39;Values:&#39;, trace_vals)
+print(&#39;Items:&#39;, [(k.v, v) for k, v in trace_items])
+zipped = list(zip(d.keys(), d.values()))
+print(&#39;Zipped:&#39;, [(k.v, v) for k, v in zipped])
+if zipped != list(d.items()):
+    print(&#39;MISMATCH&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Inline Comments in Zip Expression</summary><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+# This comment should stay
+result = list(zip(d.keys()  # keys comment
+                 , d.values()))  # values comment
+print(&#39;Result:&#39;, result)
+# After fix, comments may be lost
+print(&#39;Expected:&#39;, list(d.items()))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Order of Evaluation Side Effects</summary><pre>state = []
+class DictLike:
+    def keys(self):
+        state.append(&#39;keys&#39;)
+        return {&#39;x&#39;: 1}.keys()
+    def values(self):
+        state.append(&#39;values&#39;)
+        return {&#39;x&#39;: 1}.values()
+    def items(self):
+        state.append(&#39;items&#39;)
+        return {&#39;x&#39;: 1}.items()
+
+d = DictLike()
+print(&#39;State before:&#39;, state)
+_ = list(zip(d.keys(), d.values()))  # keys() then values()
+print(&#39;State after zip:&#39;, state)
+state.clear()
+_ = list(d.items())  # items() call
+print(&#39;State after items:&#39;, state)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Conditional AttributeError via __getattr__</summary><pre>class MaybeDict:
+    def __init__(self, fail_on_keys=False):
+        self.fail_on_keys = fail_on_keys
+        self._data = {&#39;a&#39;: 1}
+    def __getattr__(self, name):
+        if name == &#39;keys&#39; and self.fail_on_keys:
+            raise AttributeError(&#39;keys failed&#39;)
+        if name == &#39;values&#39;:
+            return self._data.values()
+        if name == &#39;items&#39;:
+            return self._data.items()
+        raise AttributeError(name)
+
+obj = MaybeDict(fail_on_keys=True)
+print(&#39;Testing zip...&#39;)
+try:
+    list(zip(obj.keys(), obj.values()))
+except AttributeError as e:
+    print(&#39;Zip error:&#39;, str(e))
+obj2 = MaybeDict(fail_on_keys=False)
+print(&#39;Testing items...&#39;)
+try:
+    list(obj2.items())
+except AttributeError as e:
+    print(&#39;Items error:&#39;, str(e))
+</pre></details><details id="r1-p006"><summary>r1-p006 — String Formatting Edge Cases</summary><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+zipped = zip(d.keys(), d.values())
+for k, v in zipped:
+    s = f&#39;{k!r}:{v!r}&#39;
+    print(s)
+# After fix, same output expected
+items = d.items()
+for k, v in items:
+    s = &#39;{!r}:{!r}&#39;.format(k, v)
+    print(s)
+# Test repr vs str
+print(repr(list(zipped)))
+print(str(list(items)))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:38:58.621792777 -0400
++++ fixed.py	2026-10-17 16:38:58.785800554 -0400
+@@ -1,5 +1,5 @@
+ d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+<span class="del">-zipped = zip(d.keys(), d.values())</span>
+<span class="add">+zipped = d.items()</span>
+ for k, v in zipped:
+     s = f&#39;{k!r}:{v!r}&#39;
+     print(s)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Custom Iterator State in Keys/Values</summary><pre>class CounterIter:
+    def __init__(self, data):
+        self.data = data
+        self.count = 0
+    def __iter__(self):
+        return self
+    def __next__(self):
+        if self.count &gt;= len(self.data):
+            raise StopIteration
+        result = self.data[self.count]
+        self.count += 1
+        return result
+
+class DictLike:
+    def __init__(self):
+        self._keys = [&#39;a&#39;, &#39;b&#39;]
+        self._vals = [1, 2]
+    def keys(self):
+        return CounterIter(self._keys)
+    def values(self):
+        return CounterIter(self._vals)
+    def items(self):
+        return zip(self._keys, self._vals)
+
+d = DictLike()
+print(&#39;First zip:&#39;, list(zip(d.keys(), d.values())))
+print(&#39;Second zip:&#39;, list(zip(d.keys(), d.values())))  # exhausted
+print(&#39;Items:&#39;, list(d.items()))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Bytes vs Str Encoding</summary><pre>d = {b&#39;a\nb&#39;: b&#39;1\n2&#39;, b&#39;c&#39;: b&#39;3&#39;}
+zipped = list(zip(d.keys(), d.values()))
+for k, v in zipped:
+    print(repr(k), repr(v))
+# Simulate text processing
+try:
+    for k, v in d.items():
+        print(k.decode(), v.decode())
+except Exception as e:
+    print(&#39;Decode error:&#39;, type(e).__name__, str(e))
+# Test newline handling
+with open(&#39;test.txt&#39;, &#39;wb&#39;) as f:
+    for k, v in d.items():
+        f.write(k + b&#39;:&#39; + v + b&#39;\n&#39;)
+with open(&#39;test.txt&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;test.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:38:59.017811553 -0400
++++ fixed.py	2026-10-17 16:38:59.180819270 -0400
+@@ -1,5 +1,5 @@
+ d = {b&#39;a\nb&#39;: b&#39;1\n2&#39;, b&#39;c&#39;: b&#39;3&#39;}
+<span class="del">-zipped = list(zip(d.keys(), d.values()))</span>
+<span class="add">+zipped = list(d.items())</span>
+ for k, v in zipped:
+     print(repr(k), repr(v))
+ # Simulate text processing
+</pre></details><details id="r2-p001"><summary>r2-p001 — String Formatting Edge Cases</summary><pre>d = {&#39;k&#39;: &#39;%\n&#39;, &#39;v&#39;: &#39;\t&#39;}
+k, v = zip(d.keys(), d.values())
+s = &#39;&#39;.join(f&#39;{a!r}:{b!r}&#39; for a, b in k)
+print(s)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:03.757035241 -0400
++++ fixed.py	2026-10-17 16:39:04.156054002 -0400
+@@ -1,4 +1,4 @@
+ d = {&#39;k&#39;: &#39;%\n&#39;, &#39;v&#39;: &#39;\t&#39;}
+<span class="del">-k, v = zip(d.keys(), d.values())</span>
+<span class="add">+k, v = d.items()</span>
+ s = &#39;&#39;.join(f&#39;{a!r}:{b!r}&#39; for a, b in k)
+ print(s)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Bytes vs Str Encoding Newline Handling</summary><pre>d = {&#39;a&#39;: b&#39;hello\nworld&#39;, &#39;b&#39;: b&#39;foo\r\nbar&#39;}
+pairs = list(zip(d.keys(), d.values()))
+for k, v in pairs:
+    print(k.decode(), v.decode().replace(&#39;\n&#39;, &#39;\\n&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:04.367063913 -0400
++++ fixed.py	2026-10-17 16:39:04.751081951 -0400
+@@ -1,4 +1,4 @@
+ d = {&#39;a&#39;: b&#39;hello\nworld&#39;, &#39;b&#39;: b&#39;foo\r\nbar&#39;}
+<span class="del">-pairs = list(zip(d.keys(), d.values()))</span>
+<span class="add">+pairs = list(d.items())</span>
+ for k, v in pairs:
+     print(k.decode(), v.decode().replace(&#39;\n&#39;, &#39;\\n&#39;))
+</pre></details><details id="r2-p003"><summary>r2-p003 — Side Effect in Expr Evaluation</summary><pre>calls = []
+def get_dict():
+    calls.append(len(calls))
+    return {&#39;x&#39;: 1, &#39;y&#39;: 2}
+k, v = zip(get_dict().keys(), get_dict().values())
+print(list(k), list(v), calls)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Mutable Default Arguments and Aliasing</summary><pre>def f(d={&#39;a&#39;: 1, &#39;b&#39;: 2}):
+    pairs = list(zip(d.keys(), d.values()))
+    d[&#39;c&#39;] = 3
+    return pairs
+print(f())
+print(f({&#39;x&#39;: 9}))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Type Annotations Evaluated at Runtime</summary><pre>from typing import Dict, Any
+D: Dict[str, int] = {&#39;a&#39;: 1}
+ann = D.__annotations__ if hasattr(D, &#39;__annotations__&#39;) else {}
+k, v = zip(D.keys(), D.values())
+print(list(k), list(v), ann)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:05.223104106 -0400
++++ fixed.py	2026-10-17 16:39:05.607122116 -0400
+@@ -1,5 +1,5 @@
+ from typing import Dict, Any
+ D: Dict[str, int] = {&#39;a&#39;: 1}
+ ann = D.__annotations__ if hasattr(D, &#39;__annotations__&#39;) else {}
+<span class="del">-k, v = zip(D.keys(), D.values())</span>
+<span class="add">+k, v = D.items()</span>
+ print(list(k), list(v), ann)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Inline Comments in Zip Expression</summary><pre>d = {&#39;x&#39;: 1, &#39;y&#39;: 2}
+k, v = zip(d.keys()  # comment
+          , d.values())
+print(list(k), list(v))
+</pre></details><details id="r2-p007"><summary>r2-p007 — Variable Rebound Between Attribute Accesses</summary><pre>class DictHolder:
+    def __init__(self):
+        self.d = {&#39;a&#39;: 1}
+    @property
+    def keys(self):
+        return self.d.keys()
+    @property
+    def values(self):
+        self.d = {&#39;b&#39;: 2}
+        return self.d.values()
+h = DictHolder()
+k, v = zip(h.keys, h.values)
+print(list(k), list(v))
+</pre></details><details id="r2-p008"><summary>r2-p008 — Async Def/Await Ordering Async Generators</summary><pre>async def gen():
+    d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+    for k, v in zip(d.keys(), d.values()):
+        yield k, v
+import asyncio
+async def main():
+    result = [pair async for pair in gen()]
+    print(result)
+asyncio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:06.347156796 -0400
++++ fixed.py	2026-10-17 16:39:06.619169533 -0400
+@@ -1,6 +1,6 @@
+ async def gen():
+     d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+<span class="del">-    for k, v in zip(d.keys(), d.values()):</span>
+<span class="add">+    for k, v in d.items():</span>
+         yield k, v
+ import asyncio
+ async def main():
+</pre></details></body></html>

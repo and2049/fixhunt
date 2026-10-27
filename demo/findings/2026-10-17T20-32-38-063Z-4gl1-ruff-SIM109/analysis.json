@@ -1,0 +1,33 @@
+{
+  "summary": "Flags repeated equality checks against different literals/variables using '==' chained by 'or'/'and'.",
+  "firingShapes": [
+    "a == b or a == c",
+    "a == b and a == c",
+    "a == b or a == c or a == d",
+    "a == b and a == c and a == d",
+    "a != b or a != c",
+    "a != b and a != c",
+    "(a == b or a == c) and d",
+    "d and (a == b or a == c)"
+  ],
+  "silentShapes": [
+    "a == b or c == d",
+    "a == b and c == d",
+    "a == b or a",
+    "a is b or a is c",
+    "len(a) == len(b) or len(a) == len(c)"
+  ],
+  "fixDescription": "Rewrites a chain of equality (or inequality) comparisons of the same left-hand operand with 'or' (or 'and') into a single membership test using 'in' (or 'not in') with a tuple of the right-hand operands, preserving the original grouping and surrounding expression structure.",
+  "hazards": [
+    "If any right-hand operand in the original chain has side effects (e.g., a function call), the rewrite may reduce the number of evaluations, altering program state.",
+    "When the chain is mixed with other operators (e.g., 'a == x or b or a == y'), the fix may reorder operands, moving a stray operand like 'b' to after the 'in' expression, changing evaluation order.",
+    "If the left-hand operand is used elsewhere in the expression outside the equality chain (e.g., '(a == x or a == y) and a'), the fix may duplicate its evaluation via the 'in' operation, potentially causing side effects or inconsistent values if 'a' is mutable or impure.",
+    "In nested expressions like 'f(a == x or a == y)', the rewrite changes when 'a' is evaluated relative to the function call 'f', possibly affecting argument evaluation order.",
+    "If the left-hand operand is a property or attribute access (e.g., 'obj.prop == x or obj.prop == y'), the fix may increase the number of attribute lookups, which could differ if '__getattr__' or '__getattribute__' has side effects.",
+    "When the equality chain appears in a lambda or comprehension (e.g., '[z for z in data if a == x or a == y]'), the fix alters how many times 'a' is accessed per iteration, impacting performance and side effects.",
+    "If the right-hand operands include mutable objects and the tuple is used in a context where identity matters (e.g., 'is' checks later), the rewrite creates a new tuple object, potentially breaking identity-based logic.",
+    "Comments attached to individual comparison tokens (e.g., 'a == x  # comment\n  or a == y') may be lost or misplaced during the rewrite, as the autofix operates on the AST and does not preserve comment spacing or attachment.",
+    "In rare cases involving custom '__eq__' methods that depend on global state or call counts, reducing the number of equality checks from N to 1 via tuple membership can alter behavior if the method has side effects or relies on invocation frequency.",
+    "If the expression is part of a larger boolean context where short-circuiting matters (e.g., 'a == x or expensive() and a == y'), the fix may break short-circuit evaluation by evaluating all right-hand operands via tuple construction before the 'in' check, removing early exits."
+  ]
+}

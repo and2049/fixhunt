@@ -1,0 +1,73 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP043 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP043 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-26-26-009Z-r0jp-ruff-UP043 · fix labelled <b>unknown</b> · 8 programs, 0 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0018</p>
+<div class="card"><b>Rule analysis</b><p>Flags explicit default type arguments (`None`) for `Generator` and `AsyncGenerator` when they match the defaults introduced in Python 3.13.</p><p class="mut">Fix: Removes trailing type arguments that are exactly `None` for the second and/or third parameters of `Generator`, and the second parameter of `AsyncGenerator`, when they match the default values introduced in Python 3.13.</p><details><summary>8 hazards</summary><ul><li>Rewriting `Generator[T, None, None]` to `Generator[T]` changes meaning if the code targets Python &lt;3.13 where defaults are not applied.</li><li>If the annotation contains an inline comment (e.g., `Generator[int, None, None  # comment]`), the fix may drop the comment, altering documentation.</li><li>In a string annotation like `&quot;Generator[int, None, None]&quot;`, the fix does not apply, but if incorrectly applied, it would corrupt the string.</li><li>If `None` is imported under an alias (e.g., `from types import NoneType as None`), the fixer might not recognize it as the default, leading to unsafe removal.</li><li>When used in a union like `Union[Generator[int, None, None], str]`, removing the `None`s could change the union&#39;s structure if relied upon for overload resolution.</li><li>In a forward reference evaluated later (e.g., in `TYPE_CHECKING` blocks), the rewritten form may resolve differently if the target scope lacks the updated built-in generics.</li><li>If the code uses a custom subclass of `Generator` that overrides `__class_getitem__`, the fix assumes standard library semantics and may be incorrect.</li><li>When the annotation is part of a larger expression (e.g., in a `Callable[[], Generator[int, None, None]]`), the fix only applies to the nested annotation and must not disturb the outer structure.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exception handling with Generator return annotation</td><td class="mut">Exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Dict ordering and hashability with Generator annotation</td><td class="mut">Dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Forward reference in TYPE_CHECKING block</td><td class="mut">In a forward reference evaluated later (e.g., in `TYPE_CHECKING` blocks), the rewritten fo</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only args with Generator annotation</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>None imported as alias affecting recognition</td><td class="mut">If `None` is imported under an alias (e.g., `from types import NoneType as None`), the fix</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Union type relying on explicit None for overload resolution</td><td class="mut">When used in a union like `Union[Generator[int, None, None], str]`, removing the `None`s c</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Runtime evaluation of Generator annotation</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Truthiness and identity checks with Generator in bool context</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Exception handling with Generator return annotation</summary><pre>def f() -&gt; Generator[int, None, None]:
+    try:
+        raise ValueError(&#39;test&#39;)
+    except ValueError as e:
+        yield 1
+    else:
+        yield 2
+    finally:
+        yield 3
+gen = f()
+print(list(gen))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Dict ordering and hashability with Generator annotation</summary><pre>class Key:
+    def __init__(self, v): self.v = v
+    def __hash__(self): return hash(self.v)
+    def __eq__(self, other): return isinstance(other, Key) and self.v == other.v
+def g() -&gt; Generator[tuple[Key, int], None, None]:
+    yield (Key(1), 10)
+    yield (Key(2), 20)
+d = dict(g())
+print(list(d.items()))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Forward reference in TYPE_CHECKING block</summary><pre>from typing import TYPE_CHECKING, Generator
+if TYPE_CHECKING:
+    x: Generator[int, None, None]
+else:
+    x = (i for i in range(3))
+print(type(x).__name__)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Keyword-only args with Generator annotation</summary><pre>def f(*, g: Generator[int, None, None] = (i for i in [1])):
+    return sum(g)
+print(f())
+</pre></details><details id="r1-p005"><summary>r1-p005 — None imported as alias affecting recognition</summary><pre>from types import NoneType as None
+def f() -&gt; Generator[int, None, None]:
+    yield 1
+gen = f()
+print(next(gen))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Union type relying on explicit None for overload resolution</summary><pre>from typing import Union, Generator
+def process(x: Union[Generator[int, None, None], str]):
+    if isinstance(x, str):
+        return x.upper()
+    return list(x)
+print(process((i for i in [2])))
+print(process(&#39;hello&#39;))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Runtime evaluation of Generator annotation</summary><pre>import typing
+t = typing.get_type_hints(lambda: None).__annotations__
+def f() -&gt; Generator[int, None, None]: pass
+t2 = typing.get_type_hints(f).__annotations__[&#39;return&#39;]
+print(str(t2))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Truthiness and identity checks with Generator in bool context</summary><pre>class MyGen:
+    def __bool__(self): return False
+    def __len__(self): return 0
+def f() -&gt; Generator[MyGen, None, None]:
+    yield MyGen()
+g = f()
+print(bool(g))
+print(g is None)
+</pre></details></body></html>

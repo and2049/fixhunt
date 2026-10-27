@@ -1,0 +1,285 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RUF017 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RUF017 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-38-53-735Z-6uly-ruff-RUF017 · fix labelled <b>unknown</b> · 16 programs, 11 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0062</p>
+<div class="card"><b>Rule analysis</b><p>Flags calls to sum() used to flatten lists of lists by providing [] as the start argument.</p><p class="mut">Fix: Rewrites sum(lists, []) as [*sublist for sublist in lists] on Python 3.15+, otherwise as functools.reduce(operator.iadd, lists, []) after importing functools and operator if needed.</p><details><summary>10 hazards</summary><ul><li>The rewrite accepts any iterable of iterables, whereas sum required actual lists, potentially changing behavior if non-list iterables are passed.</li><li>If the original sum call appeared in a context where its TypeError on non-list inputs was being caught and handled, the rewrite may silently succeed and alter control flow.</li><li>The fix may reorder evaluation: sum evaluates left-to-right with immediate accumulation, while the reduce form also evaluates left-to-right but via operator.iadd calls, which could differ if list concatenation had side effects (though unlikely for built-in lists).</li><li>On Python 3.15+, the starred form [*sublist for sublist in lists] creates the list via a comprehension, which may have different performance characteristics but identical results for list inputs.</li><li>If the variable name &#39;lists&#39; is reused or shadowed in the surrounding scope, the fix’s comprehension or reduce expression could capture a different binding than the original sum call intended.</li><li>The fix may drop inline or trailing comments attached to the sum call line, as the rewrite replaces the entire expression and may not preserve comment tokens.</li><li>If the sum call was part of a larger expression (e.g., inside a function argument or conditional), the fix’s insertion of import statements (for reduce form) could affect module-level state or trigger side effects at import time.</li><li>Using functools.reduce(operator.iadd, ...) assumes the elements support in-place addition via __iadd__; for lists this works, but if the iterables were custom sequences with unusual __iadd__ behavior, the result might diverge from sum’s repeated __add__ usage.</li><li>In rare cases where the start value [] was not a literal but a variable, the fix incorrectly hardcodes [], altering behavior if that variable was mutated elsewhere or intended to be dynamic.</li><li>If the code relied on the quadratic behavior of sum for timing or testing purposes, the rewrite changes performance characteristics, potentially breaking time-sensitive logic.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation Order Side Effect</td><td class="mut">The fix may reorder evaluation: sum evaluates left-to-right with immediate accumulation, w</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Star Imports and Module State</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Non-List Iterables</td><td class="mut">The rewrite accepts any iterable of iterables, whereas sum required actual lists, potentia</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Custom __iadd__ vs __add__</td><td class="mut">Using functools.reduce(operator.iadd, ...) assumes the elements support in-place addition </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Import-Time Side Effects in Expression</td><td class="mut">If the sum call was part of a larger expression (e.g., inside a function argument or condi</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>String Formatting Edge Cases</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>Keyword-Only and Args Forwarding</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Generator Consumption</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Type annotation evaluation with forward reference</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>F-string with escaped braces and quote nesting</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>Binary file write with partial truncation</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Variable shadowing of &#39;lists&#39; in nested scope</td><td class="mut">If the variable name &#39;lists&#39; is reused or shadowed in the surrounding scope, the fix’s com</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Trailing comment on sum call line lost in fix</td><td class="mut">The fix may drop inline or trailing comments attached to the sum call line, as the rewrite</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Custom sequence with __iadd__ vs __add__ divergence</td><td class="mut">Using functools.reduce(operator.iadd, ...) assumes the elements support in-place addition </td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Sum call inside function argument triggering module-level import</td><td class="mut">If the sum call was part of a larger expression (e.g., inside a function argument or condi</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Bytes vs str in sum with binary mode interaction</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Evaluation Order Side Effect</summary><pre>class LogList(list):
+    def __init__(self, data, name):
+        super().__init__(data)
+        self.name = name
+    def __add__(self, other):
+        print(f&#39;add {self.name} + {getattr(other, &quot;name&quot;, &quot;?&quot;)}&#39;)
+        return super().__add__(other)
+    def __iadd__(self, other):
+        print(f&#39;iadd {self.name} += {getattr(other, &quot;name&quot;, &quot;?&quot;)}&#39;)
+        return super().__iadd__(other)
+
+lst1 = LogList([1], &#39;A&#39;)
+lst2 = LogList([2], &#39;B&#39;)
+lst3 = LogList([3], &#39;C&#39;)
+print(&#39;sum:&#39;)
+result = sum([lst1, lst2, lst3], [])
+print(&#39;reduce-like:&#39;)
+# Manual reduce for comparison
+from functools import reduce
+import operator
+result2 = reduce(operator.iadd, [lst1, lst2, lst3], [])
+print(&#39;Results equal:&#39;, result == result2)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Star Imports and Module State</summary><pre># Simulate a module with side effects on import
+import sys
+if &#39;hazard_mod&#39; not in sys.modules:
+    exec(&quot;&quot;&quot;
+# hazard_mod.py
+_side_effect = []
+def register(x):
+    _side_effect.append(x)
+    return x
+__all__ = [&#39;register&#39;]
+&quot;&quot;&quot;, {&#39;__name__&#39;: &#39;hazard_mod&#39;})
+    sys.modules[&#39;hazard_mod&#39;] = sys.modules.get(&#39;hazard_mod&#39;, type(&#39;hazard_mod&#39;, (), {}))
+    hazard_mod = sys.modules[&#39;hazard_mod&#39;]
+    hazard_mod._side_effect = []
+    hazard_mod.register = lambda x: (hazard_mod._side_effect.append(x), x)[1]
+    hazard_mod.__all__ = [&#39;register&#39;]
+
+from hazard_mod import *  # star-import
+
+lists = [[1], [2], [3]]
+print(&#39;Before sum:&#39;, hazard_mod._side_effect)
+result = sum(lists, [])
+print(&#39;After sum:&#39;, hazard_mod._side_effect)
+print(&#39;Result:&#39;, result)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Non-List Iterables</summary><pre>def gen_lists():
+    yield [1, 2]
+    yield (3, 4)  # tuple, not list
+    yield {5, 6}  # set, not list
+
+print(&#39;Input:&#39;)
+for item in gen_lists():
+    print(f&#39;  {item} ({type(item).__name__})&#39;)
+
+try:
+    result = sum(gen_lists(), [])
+    print(&#39;sum result:&#39;, result, type(result))
+except Exception as e:
+    print(&#39;sum error:&#39;, type(e).__name__, str(e))
+
+# Reset generator
+print(&#39;\nReduce form:&#39;)
+from functools import reduce
+import operator
+result2 = reduce(operator.iadd, gen_lists(), [])
+print(&#39;reduce result:&#39;, result2, type(result2))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Custom __iadd__ vs __add__</summary><pre>class WeirdSeq:
+    def __init__(self, data, label):
+        self.data = list(data)
+        self.label = label
+    def __add__(self, other):
+        # Always returns a fresh list, ignores self
+        return list(getattr(other, &#39;data&#39;, [])) if hasattr(other, &#39;data&#39;) else list(other)
+    def __iadd__(self, other):
+        # Mutates self to be a copy of other
+        self.data.clear()
+        self.data.extend(getattr(other, &#39;data&#39;, []) if hasattr(other, &#39;data&#39;) else other)
+        return self
+    def __iter__(self):
+        return iter(self.data)
+    def __repr__(self):
+        return f&#39;WeirdSeq({self.data}, {self.label})&#39;
+
+a = WeirdSeq([1, 2], &#39;a&#39;)
+b = WeirdSeq([3, 4], &#39;b&#39;)
+c = WeirdSeq([5, 6], &#39;c&#39;)
+
+print(&#39;Initial:&#39;, a, b, c)
+print(&#39;\nUsing sum:&#39;)
+try:
+    s = sum([a, b, c], WeirdSeq([], &#39;start&#39;))
+    print(&#39;Result:&#39;, s)
+    print(&#39;a,b,c after:&#39;, a, b, c)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, e)
+
+# Reset
+a = WeirdSeq([1, 2], &#39;a&#39;)
+b = WeirdSeq([3, 4], &#39;b&#39;)
+c = WeirdSeq([5, 6], &#39;c&#39;)
+print(&#39;\nUsing reduce:&#39;)
+from functools import reduce
+import operator
+try:
+    r = reduce(operator.iadd, [a, b, c], WeirdSeq([], &#39;start&#39;))
+    print(&#39;Result:&#39;, r)
+    print(&#39;a,b,c after:&#39;, a, b, c)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, e)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Import-Time Side Effects in Expression</summary><pre>import sys
+
+# Track if hazardous module is imported
+import_side_effects = []
+
+# Simulate importing a module with side effects
+if &#39;effect_mod&#39; not in sys.modules:
+    mod = type(&#39;effect_mod&#39;, (), {})
+    mod._import_log = []
+    def init_side():
+        mod._import_log.append(&#39;initialized&#39;)
+        return 42
+    mod.CONSTANT = init_side()
+    sys.modules[&#39;effect_mod&#39;] = mod
+
+effect_mod = sys.modules[&#39;effect_mod&#39;]
+
+def get_lists():
+    # Trigger import of effect_mod when called
+    _ = effect_mod.CONSTANT  # access to trigger if not already
+    return [[1], [2]]
+
+print(&#39;Before call:&#39;, effect_mod._import_log)
+try:
+    # This sum call will trigger the fix -&gt; add imports -&gt; but we simulate
+    # that the fix would insert imports HERE, which could cause side effects
+    result = sum(get_lists(), [])
+    print(&#39;After sum:&#39;, effect_mod._import_log)
+    print(&#39;Result:&#39;, result)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, e)
+</pre></details><details id="r1-p006"><summary>r1-p006 — String Formatting Edge Cases</summary><pre>lists = [[&#39;a&#39;, &#39;b&#39;], [&#39;c&#39;, &#39;d&#39;]]
+flattened = sum(lists, [])
+print(&#39;Flattened:&#39;, flattened)
+
+# Test various formatting
+s = &#39;&#39;.join(flattened)
+print(&#39;%% formatting:&#39;, &#39;%s&#39; % s)
+print(&#39;.format():&#39;, &#39;{}&#39;.format(s))
+print(&#39;f-string:&#39;, f&#39;{s}&#39;)
+print(&#39;repr:&#39;, repr(s))
+
+# Nested quotes in f-string
+quote_test = f&#39;He said &quot;{&#39;&#39;.join(flattened)}&quot;&#39; 
+print(&#39;Nested quote f-string:&#39;, quote_test)
+
+# Format with special chars
+try:
+    formatted = &#39;{!r:{}}&#39;.format(s, 10)
+    print(&#39;Format spec:&#39;, formatted)
+except Exception as e:
+    print(&#39;Format error:&#39;, type(e).__name__, e)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Keyword-Only and Args Forwarding</summary><pre>default_val = []
+def append_to_lists(*args, source=default_val, , **kwargs):
+    # Note: invalid syntax - fix below
+    pass
+
+# Correct version:
+def process_data(*arrays, source=None, , **opts):
+    if source is None:
+        source = []
+    flattened = sum(arrays, source)
+    opts.setdefault(&#39;processed&#39;, True)
+    return flattened, opts
+
+# Hazard: default_val mutable
+print(&#39;Initial default_val:&#39;, id(default_val))
+result1, opts1 = process_data([1, 2], [3, 4])
+print(&#39;After first call:&#39;, id(default_val), default_val)
+result2, opts2 = process_data([5, 6])
+print(&#39;After second call:&#39;, id(default_val), default_val)
+print(&#39;Results:&#39;, result1, result2)
+print(&#39;Opts:&#39;, opts1, opts2)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Generator Consumption</summary><pre>def make_gen():
+    print(&#39;  Generator started&#39;)
+    for i in range(3):
+        print(f&#39;  Yielding [{i}, {i+1}]&#39;)
+        yield [i, i+1]
+    print(&#39;  Generator ended&#39;)
+
+print(&#39;First sum:&#39;)
+gen = make_gen()
+result1 = sum(gen, [])
+print(&#39;Result:&#39;, result1)
+
+print(&#39;\nSecond sum (same generator):&#39;)
+gen2 = make_gen()  # new generator
+result2 = sum(gen2, [])
+print(&#39;Result:&#39;, result2)
+
+print(&#39;\nManual reduce for comparison:&#39;)
+from functools import reduce
+import operator
+gen3 = make_gen()
+result3 = reduce(operator.iadd, gen3, [])
+print(&#39;Reduce result:&#39;, result3)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Type annotation evaluation with forward reference</summary><pre>from __future__ import annotations
+
+def process_lists(lists):
+    return sum(lists, [])  # flatten list of int pairs
+
+pairs: list[tuple[int, int]] = [(1, 2), (3, 4)]
+result = process_lists(pairs)
+print(result)
+</pre></details><details id="r2-p002"><summary>r2-p002 — F-string with escaped braces and quote nesting</summary><pre>data = [[1], [2, 3]]
+flattened = sum(data, [])  # {{ flattened }}
+print(f&quot;Result: {flattened}&quot;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Binary file write with partial truncation</summary><pre>import os
+if os.path.exists(&#39;test.bin&#39;):
+    os.remove(&#39;test.bin&#39;)
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    chunks = [b&#39;hello&#39;, b&#39; &#39;, b&#39;world&#39;]
+    written = sum(chunks, b&#39;&#39;)  # flatten byte chunks
+    f.write(written)
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+if os.path.exists(&#39;test.bin&#39;):
+    os.remove(&#39;test.bin&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Variable shadowing of &#39;lists&#39; in nested scope</summary><pre>lists = [[1, 2], [3, 4]]
+result1 = sum(lists, [])  # outer lists
+for lists in [[5, 6]]:  # shadows outer lists
+    result2 = sum(lists, [])  # inner lists
+print(result1, result2)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Trailing comment on sum call line lost in fix</summary><pre>data = [[1, 2], [3]]
+flat = sum(data, [])  # flatten for printing
+print(flat)  # should be [1,2,3]
+</pre></details><details id="r2-p006"><summary>r2-p006 — Custom sequence with __iadd__ vs __add__ divergence</summary><pre>class Vec:
+    def __init__(self, x):
+        self.x = x
+    def __add__(self, other):
+        return Vec(self.x + other.x)
+    def __iadd__(self, other):
+        self.x += other.x * 2  # different behavior!
+        return self
+    def __repr__(self):
+        return f&#39;Vec({self.x})&#39;
+
+items = [Vec(1), Vec(2)]
+start = Vec(0)
+result_sum = sum(items, start)  # uses __add__
+# After fix: reduce(iadd, items, start) uses __iadd__
+print(&#39;sum result:&#39;, result_sum)
+print(&#39;start after sum:&#39;, start)  # start mutated if iadd used
+</pre></details><details id="r2-p007"><summary>r2-p007 — Sum call inside function argument triggering module-level import</summary><pre>def consume(x):
+    print(&#39;consumed:&#39;, x)
+
+# Trigger functools.reduce import via sum fix
+consume(sum([[1], [2]], []))  # should print [1, 2]
+print(&#39;done&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Bytes vs str in sum with binary mode interaction</summary><pre>chunks = [b&#39;ab&#39;, b&#39;cd&#39;]
+result = sum(chunks, b&#39;&#39;)  # bytes concatenation
+print(&#39;bytes result:&#39;, result)
+try:
+    sum([[1, 2]], &#39;&#39;)  # mixing list and str start - should fail
+except TypeError as e:
+    print(&#39;error:&#39;, type(e).__name__, str(e))
+</pre></details></body></html>

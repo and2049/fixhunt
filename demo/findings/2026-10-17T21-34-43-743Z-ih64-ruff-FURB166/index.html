@@ -1,0 +1,319 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB166 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB166 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-34-43-743Z-ih64-ruff-FURB166 · fix labelled <b>unknown</b> · 16 programs, 15 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0056</p>
+<div class="card"><b>Rule analysis</b><p>Flags calls to int() where a string slice removes a numeric prefix (0b/0o/0x) and passes an explicit base matching that prefix.</p><p class="mut">Fix: Replaces int(expr[2:], base) with int(expr, 0) when expr starts with &#39;0b&#39;, &#39;0o&#39;, or &#39;0x&#39; and base is 2, 8, or 16 respectively.</p><details><summary>10 hazards</summary><ul><li>If expr has side effects (e.g., a function call), evaluating it once in int(expr, 0) vs twice in the original (startswith and slice) changes behavior.</li><li>If expr is overwritten between the startswith check and the int call in the original code, the fix uses a stale value.</li><li>When expr is not a string (e.g., int or None), int(expr, 0) raises TypeError while the original may have raised AttributeError on startswith, altering error type.</li><li>If expr is a string but shorter than 2 characters, expr[2:] is empty and int(&#39;&#39;, base) raises ValueError, whereas int(expr, 0) may raise ValueError for invalid literal, differing in error message or timing.</li><li>If expr contains whitespace after the prefix (e.g., &#39;0x FF&#39;), the slice removes only the prefix leaving &#39; FF&#39; which int(..., 16) accepts, but int(&#39;0x FF&#39;, 0) fails due to the space.</li><li>If expr is exactly the prefix (e.g., &#39;0x&#39;), the slice yields &#39;&#39; and int(&#39;&#39;, 16) raises ValueError, while int(&#39;0x&#39;, 0) also raises ValueError but the fix may be applied incorrectly if the startswith guard is missing.</li><li>If the code relies on the slice operation to return a substring for other uses (e.g., assigned to a variable), removing the slice breaks that dependency.</li><li>If the int call is inside a lambda or comprehension where expr changes per iteration, hoisting expr evaluation once vs per iteration alters behavior.</li><li>If expr is a bytes object, expr[2:] works but expr may not have startswith, causing AttributeError in the original; the fix would incorrectly apply and raise AttributeError on bytes for startswith.</li><li>If expr is a memoryview or array slice, expr[2:] has different semantics than passing expr to int with base 0, leading to type errors or incorrect parsing.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Generators vs Lists - Lazy Evaluation Hazard</td><td class="mut">Rewriting consumes generator twice due to shared expression after merge, while list would </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Context Manager Write-Only Object</td><td class="mut">Object with .write() but no .close() used as context manager fails when fix introduces dou</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Bytes Object StartsWith AttributeError</td><td class="mut">expr is bytes: expr[2:] works but expr.startswith(&#39;0b&#39;) raises AttributeError; fix would i</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Memoryview Slice Semantics Change</td><td class="mut">expr is memoryview: expr[2:] creates a new memoryview, but int(expr, 0) tries to parse the</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Slice Used Elsewhere - Breaking Dependency</td><td class="mut">expr[2:] is assigned to a variable and used later; removing the slice breaks that dependen</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Bytes vs Str Encoding and Newlines</td><td class="mut">expr is bytes containing newline; int(expr, 0) interprets ASCII correctly but slice+differ</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>String Formatting Edge Cases</td><td class="mut">expr involves % formatting or f-string where slice changes meaning vs base 0 interpretatio</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation Order and Side Effects</td><td class="mut">expr contains a function call with side effects; merging duplicates the call (if slice had</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Walrus operator captures original expression before rewrite</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Slice result reused after int conversion</td><td class="mut">If the code relies on the slice operation to return a substring for other uses (e.g., assi</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>File write with sliced string used for mode</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Mutable default captures slice result across calls</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Lambda in loop captures changing slice per iteration</td><td class="mut">If the int call is inside a lambda or comprehension where expr changes per iteration, hois</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Async generator yields sliced values over time</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Short string slice yields empty string; int(&#39;&#39;, 2) vs int(&#39;0&#39;, 0)</td><td class="mut">If expr is a string but shorter than 2 characters, expr[2:] is empty and int(&#39;&#39;, base) rai</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Dict comprehension keys depend on slice side effect</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Generators vs Lists - Lazy Evaluation Hazard</summary><pre>def gen():
+    yield from [&#39;0b1010&#39;, &#39;0b1111&#39;]
+g = gen()
+vals = []
+for s in g:
+    v = int(s[2:], 2)
+    vals.append(v)
+    if len(vals) == 1:
+        # Second pass over same generator - now exhausted
+        second = [int(x[2:], 2) for x in g]
+print(&#39;First pass:&#39;, vals)
+print(&#39;Second pass:&#39;, second)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Context Manager Write-Only Object</summary><pre>class Writer:
+    def __init__(self):
+        self.buf = &#39;&#39;
+    def write(self, data):
+        self.buf += str(data)
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+w = Writer()
+with w as f:
+    f.write(int(&#39;0b1010&#39;, 2))
+# Fix would merge: int(&#39;0b1010&#39;[2:], 2) -&gt; int(&#39;0b1010&#39;, 0) but only if rule fired here
+# But we need the rule to fire on a slice version
+with w as f:
+    f.write(int(&#39;0b1010&#39;[2:], 2))  # Rule fires here
+print(&#39;Writer buffer:&#39;, repr(w.buf))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Bytes Object StartsWith AttributeError</summary><pre>b = b&#39;0b1010&#39;
+try:
+    result = int(b[2:], 2)  # Works: b&#39;1010&#39; -&gt; 10
+    print(&#39;Slice result:&#39;, result)
+except Exception as e:
+    print(&#39;Slice error:&#39;, type(e).__name__, str(e))
+try:
+    # This is what the fix would do: int(b, 0) -&gt; but first checks b.startswith? No, fix doesn&#39;t check.
+    # Actually fix replaces int(expr[2:], base) with int(expr, 0) unconditionally when triggered.
+    # So if rule fires, it would generate int(b, 0) which for b&#39;0b1010&#39; works!
+    # Wait: hazard says fix would incorrectly apply and raise AttributeError on bytes for startswith.
+    # But the fix doesn&#39;t use startswith! It&#39;s the rule that checks startswith to fire.
+    # Correction: hazard is misstated. Actual hazard: rule uses startswith to decide to fire,
+    # but if expr is bytes, expr.startswith exists (bytes have it). So no AttributeError.
+    # Rethink: maybe user meant: if someone writes int(expr[2:], 2) and expr is bytes,
+    # and they *also* have a separate startswith check elsewhere that breaks.
+    # But per spec: hazard says &quot;the fix would incorrectly apply and raise AttributeError on bytes for startswith&quot;
+    # This seems impossible because fix doesn&#39;t call startswith.
+    # Let&#39;s assume hazard means: the rule&#39;s condition (expr.startswith) fails on bytes? No, bytes have startswith.
+    # Alternative interpretation: perhaps in some contexts expr is memoryview of bytes? No.
+    # I&#39;ll simulate: suppose code has a guard that uses startswith, and fix removes slice but guard remains.
+    # But spec says: only change is the int() call.
+    # Given confusion, I&#39;ll make a version where using int(b, 0) on b&#39;0b1010&#39; works, but if it were b&#39;0x10&#39; and base 16...
+    # Actually int(b&#39;0b1010&#39;, 0) works fine.
+    # Let&#39;s instead trigger on a case where int(expr, 0) would fail but slice works.
+    # Example: expr = b&#39;0b2&#39; (invalid for base 0? No, b&#39;0b2&#39; -&gt; int(b&#39;0b2&#39;,0) = ValueError)
+    # But slice: b&#39;0b2&#39;[2:] = b&#39;2&#39;, int(b&#39;2&#39;,2) = ValueError too.
+    # Not helpful.
+    # New idea: expr is bytes, but we want to show that after fix, the bytes object is used elsewhere
+    # and mutation or reuse fails.
+    # Give up and use: show that fix would break if expr had no startswith, but since bytes do, make a custom class.
+    class ByteLike:
+        def __getitem__(self, key):
+            return b&#39;1010&#39;
+        # No startswith
+    expr = ByteLike()
+    try:
+        # Original: int(expr[2:], 2) -&gt; int(b&#39;1010&#39;,2)=10
+        result = int(expr[2:], 2)
+        print(&#39;Original works:&#39;, result)
+    except Exception as e:
+        print(&#39;Original error:&#39;, type(e).__name__, str(e))
+    try:
+        # What fix would produce: int(expr, 0) -&gt; but expr has no startswith? Rule wouldn&#39;t fire!
+        # So to make rule fire, we need to trick it.
+        # Impossible without modifying expr.
+        # Instead, let&#39;s accept that hazard is flawed and show that for actual bytes,
+        # the fix works but changes semantics if bytes are reused.
+        b = b&#39;0b1010&#39;
+        # Save slice for later use
+        sl = b[2:]
+        v1 = int(sl, 2)
+        # Now if rule fired, it would replace int(b[2:],2) with int(b,0)
+        # but we still have sl = b[2:] used below
+        v2 = int(sl, 10)  # different base
+        print(&#39;With slice saved:&#39;, v1, v2)
+        # After fix, sl would still be b[2:] but the int call changed - no effect on sl
+        # So no hazard.
+        print(&#39;No issue demonstrated&#39;)
+    except Exception as e:
+        print(&#39;Error:&#39;, type(e).__name__, str(e))
+except Exception as e:
+    print(&#39;Outer error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Memoryview Slice Semantics Change</summary><pre>import array
+arr = array.array(&#39;B&#39;, [48, 98, 49, 48, 49, 50])  # b&#39;0b1010&#39;
+mv = memoryview(arr)
+print(&#39;Original memoryview:&#39;, mv.tobytes())
+try:
+    sliced = mv[2:]  # memoryview of b&#39;1010&#39;
+    # int() on memoryview? No, we need to convert to bytes first typically
+    # But original code: int(mv[2:], 2) -&gt; this will fail because memoryview not string/bytes
+    result = int(mv[2:], 2)
+    print(&#39;Slice result:&#39;, result)
+except Exception as e:
+    print(&#39;Original error:&#39;, type(e).__name__, str(e))
+try:
+    # What fix would produce: int(mv, 0) -&gt; also fails, same error
+    result2 = int(mv, 0)
+    print(&#39;Fixed result:&#39;, result2)
+except Exception as e:
+    print(&#39;Fixed error:&#39;, type(e).__name__, str(e))
+# To see difference, we need a case where mv[2:] works but mv doesn&#39;t with base 0
+# But both fail similarly.
+# Instead: suppose we have a function that expects to receive the slice for other use
+def process(data):
+    return data.tobytes()
+slice_val = mv[2:]
+processed = process(slice_val)
+print(&#39;Slice processed:&#39;, processed)
+# If rule fired, we&#39;d lose the slice assignment above? No, the slice is still computed.
+# Unless we inline: process(mv[2:]) becomes process(mv) after fix? No.
+# Only the int() call changes.
+# So make the int() call&#39;s result used in process
+try:
+    val = int(mv[2:], 2)
+    processed_val = process(mv[2:])  # slice reused
+    print(&#39;Val and processed:&#39;, val, processed_val)
+except Exception as e:
+    print(&#39;Error in reuse:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Slice Used Elsewhere - Breaking Dependency</summary><pre>s = &#39;0b1010&#39;
+part = s[2:]  # This is used below
+try:
+    num = int(part, 2)  # Original form - rule does NOT fire here because no [2:] in int() call
+    # We need the rule to fire, so make it:
+    num = int(s[2:], 2)  # Rule fires
+    part = s[2:]  # Still executed
+    print(&#39;Num:&#39;, num, &#39;Part:&#39;, part)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+# After fix: int(s[2:], 2) becomes int(s, 0)
+# But part = s[2:] is still there, so no break.
+# To make it break, we need the slice to be inside the int() and nowhere else.
+# But hazard says: &quot;if the code relies on the slice operation to return a substring for other uses&quot;
+# So we must use the slice result elsewhere.
+# Suppose:
+part = s[2:]
+num = int(part, 2)  # No slice in int -&gt; rule silent
+# Not triggering.
+# Make it:
+num = int(s[2:], 2)
+part = s[2:]  # Dependency
+print(&#39;Num:&#39;, num, &#39;Part:&#39;, part)
+# After fix: becomes
+# num = int(s, 0)
+# part = s[2:]
+# Still works.
+# Unless part is used before being defined? No.
+# Idea: if s is modified between slice and use.
+# But fix doesn&#39;t move the slice.
+# Final attempt: make the slice have side effects via property.
+class SliceStr:
+    def __init__(self, s):
+        self.s = s
+    def __getitem__(self, self, key):
+        print(&#39;Slice called&#39;)
+        return self.s[key]
+    def startswith(self, prefix):
+        return self.s.startswith(prefix)
+s = SliceStr(&#39;0b1010&#39;)
+part = None
+try:
+    num = int(s[2:], 2)  # Triggers slice, rule fires
+    part = s[2:]  # Second slice
+    print(&#39;Num:&#39;, num, &#39;Part set:&#39;, part)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+print(&#39;Part final:&#39;, part)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Bytes vs Str Encoding and Newlines</summary><pre>s = b&#39;0b1010\n&#39;
+try:
+    # Original: int(s[2:], 2) -&gt; slices to b&#39;1010\n&#39; -&gt; invalid for base 2
+    result = int(s[2:], 2)
+    print(&#39;Slice result:&#39;, result)
+except Exception as e:
+    print(&#39;Slice error:&#39;, type(e).__name__, str(e))
+try:
+    # Fix would produce: int(s, 0) -&gt; b&#39;0b1010\n&#39; -&gt; int ignores trailing whitespace? Yes, in Python.
+    result2 = int(s, 0)
+    print(&#39;Fixed result:&#39;, result2)
+except Exception as e:
+    print(&#39;Fixed error:&#39;, type(e).__name__, str(e))
+# Show difference: if we remove newline first
+s_clean = b&#39;0b1010&#39;
+slice_clean = int(s_clean[2:], 2)
+fixed_clean = int(s_clean, 0)
+print(&#39;Clean slice:&#39;, slice_clean, &#39;fixed:&#39;, fixed_clean)
+# Now with str version for comparison
+s_str = &#39;0b1010\n&#39;
+try:
+    r1 = int(s_str[2:], 2)
+    print(&#39;Str slice:&#39;, r1)
+except Exception as e:
+    print(&#39;Str slice error:&#39;, type(e).__name__, str(e))
+try:
+    r2 = int(s_str, 0)
+    print(&#39;Str fixed:&#39;, r2)
+except Exception as e:
+    print(&#39;Str fixed error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p007"><summary>r1-p007 — String Formatting Edge Cases</summary><pre>val = 10
+s = f&#39;0b{val:04x}&#39;  # &#39;0b000a&#39;
+try:
+    # Original: int(s[2:], 2) -&gt; int(&#39;000a&#39;, 2) -&gt; invalid
+    result = int(s[2:], 2)
+    print(&#39;Fmt slice result:&#39;, result)
+except Exception as e:
+    print(&#39;Fmt slice error:&#39;, type(e).__name__, str(e))
+try:
+    # Fix: int(s, 0) -&gt; int(&#39;0b000a&#39;, 0) -&gt; 10
+    result2 = int(s, 0)
+    print(&#39;Fmt fixed result:&#39;, result2)
+except Exception as e:
+    print(&#39;Fmt fixed error:&#39;, type(e).__name__, str(e))
+# Now with % formatting
+s2 = &#39;0b%04x&#39; % val
+try:
+    r1 = int(s2[2:], 2)
+    print(&#39;%% slice:&#39;, r1)
+except Exception as e:
+    print(&#39;%% slice error:&#39;, type(e).__name__, str(e))
+try:
+    r2 = int(s2, 0)
+    print(&#39;%% fixed:&#39;, r2)
+except Exception as e:
+    print(&#39;%% fixed error:&#39;, type(e).__name__, str(e))
+# Show that slice gives different error than fixed
+print(&#39;Slice was invalid base 2, fixed works&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Evaluation Order and Side Effects</summary><pre>counter = 0
+
+def get_binary_string():
+    global counter
+    counter += 1
+    return f&#39;0b{counter:04b}&#39;  # Returns &#39;0b0001&#39;, &#39;0b0002&#39;, etc.
+
+# First call
+s1 = get_binary_string()
+print(&#39;After s1, counter:&#39;, counter)
+try:
+    # Rule fires: int(s1[2:], 2)
+    val1 = int(s1[2:], 2)
+    print(&#39;Val1:&#39;, val1, &#39;Counter after int:&#39;, counter)
+except Exception as e:
+    print(&#39;Error1:&#39;, type(e).__name__, str(e))
+
+# Second call - should be different if side effects duplicated
+s2 = get_binary_string()
+print(&#39;After s2, counter:&#39;, counter)
+try:
+    # If fix were applied: int(s2, 0) - but only one call to get_binary_string for s2
+    val2 = int(s2, 0)
+    print(&#39;Val2:&#39;, val2, &#39;Counter after int:&#39;, counter)
+except Exception as e:
+    print(&#39;Error2:&#39;, type(e).__name__, str(e))
+print(&#39;Final counter:&#39;, counter)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Walrus operator captures original expression before rewrite</summary><pre>results = []
+for i in range(2):
+    s = f&#39;0b{i}&#39;
+    if (val := int(s[2:], 2)) is not None:
+        results.append(val)
+print(results)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Slice result reused after int conversion</summary><pre>s = &#39;0b101&#39;
+sliced = s[2:]
+n = int(sliced, 2)
+print(f&#39;int={n}, sliced={sliced}&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — File write with sliced string used for mode</summary><pre>s = &#39;0b10&#39;
+with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    f.write(str(int(s[2:], 2)))
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+</pre></details><details id="r2-p004"><summary>r2-p004 — Mutable default captures slice result across calls</summary><pre>def f(s, lst=[]):
+    lst.append(int(s[2:], 2))
+    return lst
+print(f(&#39;0b1&#39;))
+print(f(&#39;0b10&#39;))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Lambda in loop captures changing slice per iteration</summary><pre>funcs = []
+for prefix in [&#39;0b0&#39;, &#39;0b1&#39;]:
+    funcs.append(lambda: int(prefix[2:], 2))
+print([f() for f in funcs])
+</pre></details><details id="r2-p006"><summary>r2-p006 — Async generator yields sliced values over time</summary><pre>async def gen():
+    for s in [&#39;0b1&#39;, &#39;0b10&#39;]:
+        yield int(s[2:], 2)
+async def main():
+    result = [x async for x in gen()]
+    print(result)
+import asyncio
+asyncio.run(main())
+</pre></details><details id="r2-p007"><summary>r2-p007 — Short string slice yields empty string; int(&#39;&#39;, 2) vs int(&#39;0&#39;, 0)</summary><pre>for s in [&#39;0&#39;, &#39;0b&#39;]:
+    try:
+        print(int(s[2:], 2))
+    except ValueError as e:
+        print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Dict comprehension keys depend on slice side effect</summary><pre>d = {int(s[2:], 2): s for s in [&#39;0b1&#39;, &#39;0b10&#39;]}
+print(d)
+</pre></details></body></html>

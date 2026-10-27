@@ -1,0 +1,365 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP004 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP004 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-10-12-626Z-z2ng-ruff-UP004 · fix labelled <b>unknown</b> · 16 programs, 14 fired, 14 fixed, 1 oracle-backed finding(s) · model cost $0.0163</p>
+<div class="card"><b>Rule analysis</b><p>Flags class definitions that explicitly inherit from object, which is redundant in Python 3.</p><p class="mut">Fix: Removes &#39;object&#39; from the base class list; if object is the only base, the entire inheritance list is deleted leaving just &#39;class Name:&#39;; if object is among multiple bases, it is stripped out while preserving order and spacing of remaining bases.</p><details><summary>8 hazards</summary><ul><li>Rewriting &#39;class C(object, Mixin): pass&#39; to &#39;class C(Mixin): pass&#39; changes the method resolution order (MRO) if Mixin defines methods also present in later bases, altering which method is called via super().</li><li>If a class uses a metaclass via &#39;__metaclass__&#39; attribute (Python 2) or &#39;__classcell__&#39; in nested scopes, removing &#39;object&#39; may affect class creation semantics in edge cases involving class cell closure capture.</li><li>In rare cases where &#39;object&#39; is used as a placeholder for a dynamically assigned base via metaprogramming (e.g., class decorators that inspect bases), removing it breaks the decorator&#39;s assumption about the base list.</li><li>If the class definition contains a trailing comment after the colon (e.g., &#39;class Foo(object):  # comment&#39;), the autofix may drop the comment when reformatting the line, violating comment preservation safety.</li><li>When &#39;object&#39; is the first base and followed by a newline-indented block, removing it may cause the linter/formatter to reindent the block incorrectly if the tool does not preserve whitespace exactly, altering readability though not semantics.</li><li>In code that relies on the string representation of the class&#39;s bases (e.g., for serialization or debugging), removing &#39;object&#39; changes the output of __bases__, potentially breaking introspection-dependent logic.</li><li>If a class is defined inside a function and uses &#39;object&#39; to avoid a name conflict with a local variable named &#39;object&#39;, removing it could cause unintended binding (though this is extremely unlikely and non-standard).</li><li>When using Python 2 compatibility layers like &#39;six&#39; or &#39;future&#39;, some code may rely on explicit &#39;object&#39; inheritance to trigger new-style class behavior; removing it in Py2 would break the code, but the rule only applies in Py3+ contexts—still, if the file is run under Py2 due to misconfiguration, the fix introduces a regression.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p003"><b>r1-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The original class `C(object, Mixin, Base)` is invalid in Python 3 because `object` must not appear alongside other bases in the MRO; the linter&#39;s fix removes `object`, which makes the class definition valid and changes the program from crashing with a TypeError to running successfully. This is a silent behavior change in plausible code where the fix alters program correctness, so it should not be considered safe.">judge: real · high</span> Method Resolution Order Change<p class="mut">The original class `C(object, Mixin, Base)` is invalid in Python 3 because `object` must not appear alongside other bases in the MRO; the linter&#39;s fix removes `object`, which makes the class definition valid and changes the program from crashing with a TypeError to running successfully. This is a silent behavior change in plausible code where the fix alters program correctness, so it should not be considered safe.</p>
+<h2>Minimized program (14→9 lines)</h2><pre>class Mixin:
+    def ping(self):
+        return &#39;from Mixin&#39;
+class Base:
+    def ping(self):
+        return &#39;from Base&#39;
+class C(object, Mixin, Base):
+    def ping(self):
+        return super().ping()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:10:23.023489820 -0400
++++ fixed.py	2026-10-17 17:10:23.444494188 -0400
+@@ -6,7 +6,7 @@
+     def ping(self):
+         return &#39;from Base&#39;
+ 
+<span class="del">-class C(object, Mixin, Base):</span>
+<span class="add">+class C(Mixin, Base):</span>
+     def ping(self):
+         return super().ping()
+ 
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+from Mixin
+exit 1 → 0
+stderr before: TypeError: Cannot create a consistent method resolution order (MRO) for bases object, Mixin, Base
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18387">astral-sh/ruff/issues/18387</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15584">astral-sh/ruff/issues/15584</a> · <a href="reports/r1-p003.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Class Attributes vs Instance Attributes</td><td class="mut">Removing &#39;object&#39; has no effect on attribute lookup semantics in Python 3, but this progra</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Type Annotations Evaluated at Runtime</td><td class="mut">Ensures that removing &#39;object&#39; does not affect runtime evaluation of type annotations in c</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Method Resolution Order Change</td><td class="mut">Rewriting &#39;class C(object, Mixin)&#39; to &#39;class C(Mixin)&#39; alters MRO when Mixin and a later b</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Generators vs Lists</td><td class="mut">Tests that removing &#39;object&#39; does not affect lazy evaluation in generators defined in clas</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Context Managers Not Files</td><td class="mut">Verifies that removing &#39;object&#39; does not break context manager protocol (__enter__, __exit</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus and Comprehensions Scoping</td><td class="mut">Checks that removing &#39;object&#39; does not affect scoping in comprehensions or walrus usage in</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Whitespace Sensitivity After object Removal</td><td class="mut">When &#39;object&#39; is first base and followed by indented block, ensuring linters/formatters do</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>String Formatting Edge Cases</td><td class="mut">Ensures that removing &#39;object&#39; does not interfere with string formatting methods (% , form</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Star Imports and Module-Level Side Effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Runtime Type Annotations with typing-only imports</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Custom __bool__ and Truthiness Semantics</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable Default Arguments and Aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Dict Ordering, Hash, and Eq Overrides</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation Order and Side Effects in Merged Expressions</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Metaclass and __classcell__ Interaction</td><td class="mut">If a class uses a metaclass via &#39;__metaclass__&#39; attribute (Python 2) or &#39;__classcell__&#39; in</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Nested Class and Local Variable Name Conflict</td><td class="mut">If a class is defined inside a function and uses &#39;object&#39; to avoid a name conflict with a </td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Class Attributes vs Instance Attributes</summary><pre>class Descr:
+    def __set_name__(self, owner, name):
+        self.name = name
+    def __get__(self, obj, objtype=None):
+        return getattr(obj, &#39;_&#39; + self.name, None)
+    def __set__(self, obj, value):
+        setattr(obj, &#39;_&#39; + self.name, value * 2)
+
+class A(object):
+    x = Descr()
+    def __init__(self):
+        self.x = 5
+
+a = A()
+print(a.x)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:22.461483987 -0400
++++ fixed.py	2026-10-17 17:10:22.627485710 -0400
+@@ -6,7 +6,7 @@
+     def __set__(self, obj, value):
+         setattr(obj, &#39;_&#39; + self.name, value * 2)
+ 
+<span class="del">-class A(object):</span>
+<span class="add">+class A:</span>
+     x = Descr()
+     def __init__(self):
+         self.x = 5
+</pre></details><details id="r1-p002"><summary>r1-p002 — Type Annotations Evaluated at Runtime</summary><pre>from typing import List, TYPE_CHECKING
+if TYPE_CHECKING:
+    class _Tmp: pass
+
+class B(object):
+    attr: &#39;List[int]&#39; = [1, 2, 3]
+    def method(self) -&gt; int:
+        return len(self.attr)
+
+b = B()
+print(b.method())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:22.733486810 -0400
++++ fixed.py	2026-10-17 17:10:22.918488730 -0400
+@@ -2,7 +2,7 @@
+ if TYPE_CHECKING:
+     class _Tmp: pass
+ 
+<span class="del">-class B(object):</span>
+<span class="add">+class B:</span>
+     attr: &#39;List[int]&#39; = [1, 2, 3]
+     def method(self) -&gt; int:
+         return len(self.attr)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Method Resolution Order Change</summary><pre>class Mixin:
+    def ping(self):
+        return &#39;from Mixin&#39;
+
+class Base:
+    def ping(self):
+        return &#39;from Base&#39;
+
+class C(object, Mixin, Base):
+    def ping(self):
+        return super().ping()
+
+c = C()
+print(c.ping())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:23.023489820 -0400
++++ fixed.py	2026-10-17 17:10:23.444494188 -0400
+@@ -6,7 +6,7 @@
+     def ping(self):
+         return &#39;from Base&#39;
+ 
+<span class="del">-class C(object, Mixin, Base):</span>
+<span class="add">+class C(Mixin, Base):</span>
+     def ping(self):
+         return super().ping()
+ 
+</pre></details><details id="r1-p004"><summary>r1-p004 — Generators vs Lists</summary><pre>class D(object):
+    def gen(self):
+        yield 1
+        yield 2
+
+    @property
+    def values(self):
+        return list(self.gen())
+
+d = D()
+print(d.values)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:23.542495205 -0400
++++ fixed.py	2026-10-17 17:10:23.700496845 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-class D(object):</span>
+<span class="add">+class D:</span>
+     def gen(self):
+         yield 1
+         yield 2
+</pre></details><details id="r1-p005"><summary>r1-p005 — Context Managers Not Files</summary><pre>class Echo:
+    def __enter__(self):
+        self.buffer = []
+        return self
+    def __exit__(self, *exc):
+        return False
+    def write(self, data):
+        self.buffer.append(data)
+
+class F(object):
+    def log(self):
+        with Echo() as e:
+            e.write(&#39;test&#39;)
+            return &#39;&#39;.join(e.buffer)
+
+f = F()
+print(f.log())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:23.806497945 -0400
++++ fixed.py	2026-10-17 17:10:23.974499688 -0400
+@@ -7,7 +7,7 @@
+     def write(self, data):
+         self.buffer.append(data)
+ 
+<span class="del">-class F(object):</span>
+<span class="add">+class F:</span>
+     def log(self):
+         with Echo() as e:
+             e.write(&#39;test&#39;)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Walrus and Comprehensions Scoping</summary><pre>class G(object):
+    def process(self, data):
+        return [(y := x * 2) for x in data if (y := x * 2) &gt; 4]
+
+g = G()
+print(g.process([1, 2, 3]))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:24.072500705 -0400
++++ fixed.py	2026-10-17 17:10:24.231502354 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-class G(object):</span>
+<span class="add">+class G:</span>
+     def process(self, data):
+         return [(y := x * 2) for x in data if (y := x * 2) &gt; 4]
+ 
+</pre></details><details id="r1-p007"><summary>r1-p007 — Whitespace Sensitivity After object Removal</summary><pre>class H(object):
+    x = 1
+    def get_x(self):
+        return self.x
+
+h = H()
+print(h.get_x())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:24.330503381 -0400
++++ fixed.py	2026-10-17 17:10:24.493505072 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-class H(object):</span>
+<span class="add">+class H:</span>
+     x = 1
+     def get_x(self):
+         return self.x
+</pre></details><details id="r1-p008"><summary>r1-p008 — String Formatting Edge Cases</summary><pre>class I(object):
+    value = 42
+    def __str__(self):
+        return f&#39;Value: {self.value}&#39;
+    def __repr__(self):
+        return f&#39;I({self.value!r})
+&#39;
+
+i = I()
+print(str(i))
+print(repr(i))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Star Imports and Module-Level Side Effects</summary><pre>__all__ = []
+
+class _Hidden(object):
+    value = 42
+
+def init():
+    globals().update(_Hidden.__dict__)
+    __all__.append(&#39;value&#39;)
+
+init()
+print(value)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:35.673620945 -0400
++++ fixed.py	2026-10-17 17:10:35.849622768 -0400
+@@ -1,6 +1,6 @@
+ __all__ = []
+ 
+<span class="del">-class _Hidden(object):</span>
+<span class="add">+class _Hidden:</span>
+     value = 42
+ 
+ def init():
+</pre></details><details id="r2-p002"><summary>r2-p002 — Runtime Type Annotations with typing-only imports</summary><pre>from typing import List
+
+class Parser(object):
+    def parse(self, data: List[int]) -&gt; List[str]:
+        return [str(x) for x in data]
+
+p = Parser()
+result = p.parse([1, 2, 3])
+print(result)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:35.950623814 -0400
++++ fixed.py	2026-10-17 17:10:36.132625698 -0400
+@@ -1,6 +1,6 @@
+ from typing import List
+ 
+<span class="del">-class Parser(object):</span>
+<span class="add">+class Parser:</span>
+     def parse(self, data: List[int]) -&gt; List[str]:
+         return [str(x) for x in data]
+ 
+</pre></details><details id="r2-p003"><summary>r2-p003 — Custom __bool__ and Truthiness Semantics</summary><pre>class Flag(object):
+    def __init__(self, v):
+        self.v = v
+    def __bool__(self):
+        return self.v is not None
+
+f = Flag(None)
+print(bool(f))
+f.v = 0
+print(bool(f))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:36.251626930 -0400
++++ fixed.py	2026-10-17 17:10:36.415628627 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-class Flag(object):</span>
+<span class="add">+class Flag:</span>
+     def __init__(self, v):
+         self.v = v
+     def __bool__(self):
+</pre></details><details id="r2-p004"><summary>r2-p004 — Mutable Default Arguments and Aliasing</summary><pre>class Container(object):
+    def __init__(self, items=None):
+        self.items = items or []
+        self.items.append(len(self.items))
+
+c1 = Container()
+c2 = Container()
+print(c1.items, c2.items)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:36.517629684 -0400
++++ fixed.py	2026-10-17 17:10:36.679631361 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-class Container(object):</span>
+<span class="add">+class Container:</span>
+     def __init__(self, items=None):
+         self.items = items or []
+         self.items.append(len(self.items))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Dict Ordering, Hash, and Eq Overrides</summary><pre>class Key(object):
+    def __init__(self, val):
+        self.val = val
+    def __hash__(self):
+        return hash(self.val)
+    def __eq__(self, other):
+        return isinstance(other, Key) and self.val == other.val
+
+k1 = Key(1)
+k2 = Key(1)
+d = {k1: &#39;first&#39;, k2: &#39;second&#39;}
+print(len(d), d[k1])
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:36.785632458 -0400
++++ fixed.py	2026-10-17 17:10:36.952634187 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-class Key(object):</span>
+<span class="add">+class Key:</span>
+     def __init__(self, val):
+         self.val = val
+     def __hash__(self):
+</pre></details><details id="r2-p006"><summary>r2-p006 — Evaluation Order and Side Effects in Merged Expressions</summary><pre>counter = 0
+
+def inc():
+    global counter
+    counter += 1
+    return counter
+
+class Test(object):
+    x = inc()
+    y = inc()
+
+print(Test.x, Test.y, counter)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:37.053635232 -0400
++++ fixed.py	2026-10-17 17:10:37.227637034 -0400
+@@ -5,7 +5,7 @@
+     counter += 1
+     return counter
+ 
+<span class="del">-class Test(object):</span>
+<span class="add">+class Test:</span>
+     x = inc()
+     y = inc()
+ 
+</pre></details><details id="r2-p007"><summary>r2-p007 — Metaclass and __classcell__ Interaction</summary><pre>def outer():
+    class_cell = None
+
+    class Meta(type):
+        def __new__(mcls, name, bases, namespace, **kw):
+            if &#39;__classcell__&#39; in namespace:
+                namespace[&#39;__classcell__&#39;] = namespace.pop(&#39;__classcell__&#39;)
+            return super().__new__(mcls, name, bases, namespace, **kw)
+
+    class Base(object, metaclass=Meta):
+        pass
+
+    class Derived(Base):
+        x = 1
+
+    return Derived.x
+
+print(outer())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:10:37.318637975 -0400
++++ fixed.py	2026-10-17 17:10:37.484639694 -0400
+@@ -7,7 +7,7 @@
+                 namespace[&#39;__classcell__&#39;] = namespace.pop(&#39;__classcell__&#39;)
+             return super().__new__(mcls, name, bases, namespace, **kw)
+ 
+<span class="del">-    class Base(object, metaclass=Meta):</span>
+<span class="add">+    class Base(metaclass=Meta):</span>
+         pass
+ 
+     class Derived(Base):
+</pre></details><details id="r2-p008"><summary>r2-p008 — Nested Class and Local Variable Name Conflict</summary><pre>def make_class():
+    object = 42  # local variable named &#39;object&#39;
+    class Local(object):  # inherits from built-in object, not the local var
+        def get(self):
+            return object  # refers to local var due to scoping
+    return Local()
+
+inst = make_class()
+print(inst.get())
+</pre></details></body></html>

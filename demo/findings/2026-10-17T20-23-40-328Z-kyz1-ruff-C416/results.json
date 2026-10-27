@@ -1,0 +1,717 @@
+{
+  "runId": "2026-10-17T20-23-40-328Z-kyz1-ruff-C416",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C416",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-comprehension (C416)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary dict, list, and set comprehension.\n\n## Why is this bad?\nIt's unnecessary to use a dict/list/set comprehension to build a data structure if the\nelements are unchanged. Wrap the iterable with `dict()`, `list()`, or `set()` instead.\n\n## Example\n```python\n{a: b for a, b in iterable}\n[x for x in iterable]\n{x for x in iterable}\n```\n\nUse instead:\n```python\ndict(iterable)\nlist(iterable)\nset(iterable)\n```\n\n## Known problems\n\nThis rule may produce false positives for dictionary comprehensions that iterate over a mapping.\nThe dict constructor behaves differently depending on if it receives a sequence (e.g., a\nlist) or a mapping (e.g., a dict). When a comprehension iterates over the keys of a mapping,\nreplacing it with a `dict()` constructor call will give a different result.\n\nFor example:\n\n```pycon\n>>> d1 = {(1, 2): 3, (4, 5): 6}\n>>> {x: y for x, y in d1}  # Iterates over the keys of a mapping\n{1: 2, 4: 5}\n>>> dict(d1)               # Ruff's incorrect suggested fix\n{(1, 2): 3, (4, 5): 6}\n>>> dict(d1.keys())        # Correct fix\n{1: 2, 4: 5}\n```\n\nWhen the comprehension iterates over a sequence, Ruff's suggested fix is correct. However, Ruff\ncannot consistently infer if the iterable type is a sequence or a mapping and cannot suggest\nthe correct fix for mappings.\n\nAdditionally, rewriting comprehensions inside an object's `__len__` method may cause a\n`RecursionError`, as collection constructors can call back into `__len__`.\n\n## Fix safety\nThis rule's fix is always marked as unsafe because of the known problems described above and\nbecause comments may be dropped when rewriting the comprehension.\n"
+  },
+  "analysis": {
+    "summary": "Flags dict, list, or set comprehensions where the output expression equals the iteration variable(s), suggesting replacement with direct constructor calls.",
+    "firingShapes": [
+      "{a: b for a, b in items}",
+      "[x for x in seq]",
+      "{x for x in coll}",
+      "{k: v for k, v in zip(keys, vals)}",
+      "[i for i in range(n)]",
+      "{s for s in strings if True}",
+      "{(x, y): None for x, y in pairs}",
+      "[func(y) for y in data if func(y) == y]"
+    ],
+    "silentShapes": [
+      "{a: b*2 for a, b in items}",
+      "[x+1 for x in seq]",
+      "{x for x in coll if x > 0}",
+      "{k: v for k, v in d.items() if v}",
+      "[i for i, _ in enumerate(data)]",
+      "{s.upper(): len(s) for s in strings}"
+    ],
+    "fixDescription": "Replaces the comprehension with a call to dict(), list(), or set() using the same iterable expression, preserving only the iterable part and discarding any conditionals or transformed expressions.",
+    "hazards": [
+      "Rewriting `{a: b for a, b in mapping}` as `dict(mapping)` changes behavior when `mapping` is a dict, because the comprehension iterates over keys while `dict(mapping)` preserves key-value pairs.",
+      "Rewriting `{x for x in seq}` as `set(seq)` may raise a TypeError if `seq` contains unhashable elements like lists or dicts, whereas the comprehension would fail earlier during iteration.",
+      "Rewriting `[x for x in iterable]` as `list(iterable)` can trigger a RecursionError if `iterable` is an object whose `__iter__` method calls `len()` on the containing object, and the list constructor invokes `__len__`.",
+      "Rewriting a comprehension inside a lambda or nested function may alter variable scoping if the iterable expression captures variables from an outer scope that are later rebound, due to differences in when the iterable is evaluated.",
+      "If the iterable has side effects (e.g., a function call with prints or state changes), moving it into a constructor call may not change behavior, but if the comprehension was inside a larger expression, reordering could affect evaluation order relative to other side effects.",
+      "Comments inside the comprehension brackets (e.g., `{x # comment\n for x in y}`) are lost during the rewrite, as the autofix does not preserve internal comment syntax.",
+      "Rewriting `{k: v for k, v in zip(a, b)}` as `dict(zip(a, b))` is safe only if `zip(a, b)` produces pairs; however, if `a` and `b` are of unequal length, the behavior matches, but if the zip object is reused elsewhere, its state may be consumed earlier.",
+      "Rewriting a comprehension used in a default argument (e.g., `def f(x={y: z for y, z in items}):`) may cause premature evaluation of the iterable at definition time instead of call time, changing when side effects occur.",
+      "If the iterable is a class property or descriptor, accessing it via the constructor may trigger different behavior than in the comprehension due to how `__get__` is invoked.",
+      "Rewriting `{x for x in obj}` as `set(obj)` may invoke `__iter__` on `obj` twice if the constructor internally checks for set-like behavior, potentially causing inconsistent iteration or side effects.",
+      "In a boolean context like `if {x for x in items}:`, rewriting as `if set(items):` may behave differently if `items` is a non-list iterable that defines `__len__` to raise an exception, since `set()` may not call `__len__` while the comprehension does during iteration.",
+      "If the comprehension includes a walrus operator (e.g., `{x: y for x, y in data if (tmp := x) is not None}`), the autofix does not apply, but if mistakenly used, removing the condition would break scoping of the assignment expression."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.004803600000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Zip consumption hazard",
+      "hazard": "Rewriting {k: v for k, v in zip(a, b)} as dict(zip(a, b)) consumes the zip iterator early if reused.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              4,
+              6
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              7,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "len(d1): 2\nd2 len: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "len(d1): 2\nd2 len: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Property descriptor access",
+      "hazard": "Accessing a property via dict() constructor may invoke __get__ differently than in a comprehension.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "before\nitems called\nafter comp: {'a': 1, 'b': 2}\nbefore\nitems called\nafter dict: {'a': 1, 'b': 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "before\nitems called\nafter comp: {'a': 1, 'b': 2}\nbefore\nitems called\nafter dict: {'a': 1, 'b': 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Default argument evaluation timing",
+      "hazard": "Rewriting comprehension in default arg causes premature evaluation at definition time.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "state after def: [1]\nf(): 1\nstate after call: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "state after def: [1]\nf(): 1\nstate after call: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable default aliasing",
+      "hazard": "Rewriting comprehension in default arg creates shared mutable default across calls.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'dict' object has no attribute 'append'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Walrus operator scoping",
+      "hazard": "If autofix incorrectly removes condition with walrus, breaks assignment expression scope.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: {1: 2, 2: 4, 3: 6}\ntmp: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Coercion and arithmetic",
+      "hazard": "Rule silent when expression transforms values; no rewrite occurs.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "transformed: {'a': 2, 'b': 4}\nincremented: [1, 2, 3]\nfiltered set: {2, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Re-entry and loop interaction",
+      "hazard": "Comprehension in loop interacts with rewritten form via side effects in iterable.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              7,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "round 0 dict: {1: 10} counter: 1\nround 1 dict: {2: 20} counter: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "round 0 dict: {1: 10} counter: 1\nround 1 dict: {2: 20} counter: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Class vs instance attribute",
+      "hazard": "Attribute access via constructor may resolve to class attribute where comprehension uses instance.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              7,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              9,
+              26
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "comp: {'x': 1}\ncomp after set: {'z': 3}\ndict constr: {'x': 1}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "comp: {'x': 1}\ncomp after set: {'z': 3}\ndict constr: {'x': 1}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Unhashable Elements in Set Comprehension",
+      "hazard": "Rewriting `{x for x in seq}` as `set(seq)` may raise a TypeError if `seq` contains unhashable elements like lists or dicts, whereas the comprehension would fail earlier during iteration.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "comprehension error: TypeError: cannot use 'list' as a set element (unhashable type: 'list')\nset() error: TypeError: cannot use 'list' as a set element (unhashable type: 'list')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "comprehension error: TypeError: cannot use 'list' as a set element (unhashable type: 'list')\nset() error: TypeError: cannot use 'list' as a set element (unhashable type: 'list')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Default Argument Evaluation Timing",
+      "hazard": "Rewriting a comprehension used in a default argument (e.g., `def f(x={y: z for y, z in items}):`) may cause premature evaluation of the iterable at definition time instead of call time, changing when ",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              6,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "get_items called\nBefore first call:\nf called\nAfter modifying items:\nf called\nFirst result:  {1: 'a', 2: 'b'}\nSecond result: {1: 'a', 2: 'b'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "get_items called\nBefore first call:\nf called\nAfter modifying items:\nf called\nFirst result:  {1: 'a', 2: 'b'}\nSecond result: {1: 'a', 2: 'b'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Lost Comments in Comprehension",
+      "hazard": "Comments inside the comprehension brackets (e.g., `{x # comment\n for x in y}`) are lost during the rewrite, as the autofix does not preserve internal comment syntax.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Bytes vs Str Encoding Handling",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              8,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Chars from text: ['\\n', 'a', 'c', 'f', 'é']\nByte values: [10, 97, 99, 102, 169, 195]\nset(text):   ['\\n', 'a', 'c', 'f', 'é']\nset(b):      [10, 97, 99, 102, 169, 195]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Chars from text: ['\\n', 'a', 'c', 'f', 'é']\nByte values: [10, 97, 99, 102, 169, 195]\nset(text):   ['\\n', 'a', 'c', 'f', 'é']\nset(b):      [10, 97, 99, 102, 169, 195]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Lambda Scoping with Rebinding",
+      "hazard": "Rewriting a comprehension inside a lambda or nested function may alter variable scoping if the iterable expression captures variables from an outer scope that are later rebound, due to differences in ",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              3,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              11,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before rebinding: {1, 2, 3}\nAfter rebinding:  {4, 5, 6}\nComprehension lambda after rebinding: {4, 5, 6}\nset() lambda after rebinding:       {4, 5, 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before rebinding: {1, 2, 3}\nAfter rebinding:  {4, 5, 6}\nComprehension lambda after rebinding: {4, 5, 6}\nset() lambda after rebinding:       {4, 5, 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Numeric Coercion and Rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              12,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Comprehension result: {Decimal('1.0')} (length: 1)\nset() result:         {Decimal('1.0')} (length: 1)\nDecimal(\"1.0\") == float(1.0): True\nfloat(1.0) == True:         True\nDecimal(\"1.0\") == True:     True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Comprehension result: {Decimal('1.0')} (length: 1)\nset() result:         {Decimal('1.0')} (length: 1)\nDecimal(\"1.0\") == float(1.0): True\nfloat(1.0) == True:         True\nDecimal(\"1.0\") == True:     True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Keyword-only Arguments and Defaults",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary dict comprehension (rewrite using `dict()`)",
+            "span": [
+              3,
+              24
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First call:\nprocess called\nSecond call (after modifying items):\nprocess called\nFirst result:  {'a': 1}\nSecond result: {'a': 1}\nSame object?   False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First call:\nprocess called\nSecond call (after modifying items):\nprocess called\nFirst result:  {'a': 1}\nSecond result: {'a': 1}\nSame object?   False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Double __iter__ Invocation",
+      "hazard": "Rewriting `{x for x in obj}` as `set(obj)` may invoke `__iter__` on `obj` twice if the constructor internally checks for set-like behavior, potentially causing inconsistent iteration or side effects.",
+      "rule": "C416",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              12,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C416",
+            "severity": "warning",
+            "message": "Unnecessary set comprehension (rewrite using `set()`)",
+            "span": [
+              37,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Testing comprehension:\n__iter__ called #1\nResult: {1, 2, 3}, __iter__ calls: 1\nTesting set() constructor:\n__iter__ called #1\nResult: {1, 2, 3}, __iter__ calls: 1\n\nComprehension with inconsistent __iter__:\n__iter__ call #1\nResult: [1, 2, 3]\n__iter__ calls: 1\n\nset() with same inconsistent __iter__:\n__iter__ call #1\nResult: [1, 2, 3]\n__iter__ calls: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Testing comprehension:\n__iter__ called #1\nResult: {1, 2, 3}, __iter__ calls: 1\nTesting set() constructor:\n__iter__ called #1\nResult: {1, 2, 3}, __iter__ calls: 1\n\nComprehension with inconsistent __iter__:\n__iter__ call #1\nResult: [1, 2, 3]\n__iter__ calls: 1\n\nset() with same inconsistent __iter__:\n__iter__ call #1\nResult: [1, 2, 3]\n__iter__ calls: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

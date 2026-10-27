@@ -1,0 +1,167 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff SIM223 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff SIM223 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-37-33-991Z-218k-ruff-SIM223 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0080</p>
+<div class="card"><b>Rule analysis</b><p>Flags &#39;and&#39; expressions containing at least one constant falsey literal (like [], {}, &#39;&#39;, set(), etc.) where replacing the whole expression with either False (in boolean contexts) or truncating after the last truthy operand before the first falsey improves clarity.</p><p class="mut">Fix: Replaces the entire &#39;and&#39; expression with False when used in a boolean context (e.g., directly as an if/test condition), otherwise truncates the expression to include only operands up to (but not including) the first falsey literal, preserving the original evaluation order and short-circuit behavior for the remaining truthy prefix.</p><details><summary>9 hazards</summary><ul><li>Rewriting &#39;x and []&#39; to &#39;x and []&#39; (no change) when the falsey literal is not at a truncation point does not alter behavior but may miss optimization opportunities; however, the rule only triggers when a falsey literal is present and replacement is valid.</li><li>In &#39;if x and [] and y:&#39;, replacing with &#39;if False:&#39; changes behavior if &#39;x&#39; has side effects (e.g., function call) because the original evaluates &#39;x&#39; before short-circuiting, while the fix does not evaluate &#39;x&#39; at all.</li><li>In &#39;a = x and [] and y&#39;, replacing with &#39;a = x and []&#39; preserves short-circuiting: if &#39;x&#39; is falsey, &#39;x&#39; is evaluated and assigned; if &#39;x&#39; is truthy, &#39;[]&#39; is evaluated and assigned (due to truncation after &#39;x&#39;), matching the original which would assign &#39;[]&#39; after evaluating &#39;x&#39; and then short-circuit on &#39;[]&#39;.</li><li>If the expression appears in a context where its type matters (e.g., passed to a function expecting a list), replacing &#39;x and []&#39; with &#39;x and []&#39; (no change) is safe, but replacing with &#39;False&#39; in a non-boolean context would cause a type error; however, the fix only uses &#39;False&#39; in boolean contexts, so this hazard is mitigated by context detection.</li><li>The fix does not remove or move comments attached to the operands; if a comment is placed after a truncated operand (e.g., &#39;x and []  # comment&#39;), the comment may be lost if the rewrite deletes the falsey literal and surrounding whitespace without preserving trailing comments.</li><li>In nested expressions like &#39;f(x and [] and y)&#39;, replacing the inner &#39;and&#39; with &#39;x and []&#39; alters the argument passed to f: originally, if x is truthy, f([]) is called; after fix, if x is truthy, f([]) is still called — equivalent. If x is falsey, f(x) is called in both cases. So no hazard here — but this illustrates that pure functional contexts are safe.</li><li>If the falsey literal is a mutable default or shared object (e.g., &#39;x and [] and y&#39; where [] is a literal), replacing with &#39;x and []&#39; still creates a new empty list each time — no identity issue since list literals are distinct objects.</li><li>In &#39;x and [] and y&#39;, if &#39;x&#39; is an expression with side effects (e.g., &#39;print(1)&#39;), the original evaluates &#39;x&#39;, then &#39;[]&#39;, then short-circuits; the fix &#39;x and []&#39; evaluates &#39;x&#39;, then &#39;[]&#39;, then assigns — same side effects. No change in evaluation order or side effects for the kept prefix.</li><li>When the &#39;and&#39; chain starts with a falsey literal (e.g., &#39;[] and x&#39;), the fix truncates to nothing? Actually, the rule replaces with the first falsey value in non-boolean contexts — but documentation shows &#39;a = x and [] and y&#39; -&gt; &#39;a = x and []&#39;, implying it keeps up to the falsey. For &#39;[] and x&#39;, the first falsey is at start, so it should become just &#39;[]&#39;? But the fix description says &#39;truncates to include only operands up to (but not including) the first falsey&#39; — which would be empty. However, in practice, the rule likely keeps the first falsey as the result when it&#39;s the first element. Clarification needed: the silent shape &#39;0 and y&#39; suggests that non-literal falsey values are not flagged, so only literal falseys trigger. For &#39;[] and x&#39;, the fix would replace with &#39;[]&#39; (the first falsey literal). This is equivalent: original short-circuits on first operand [], result is []; fix is []. Same.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Custom bool and len interaction</td><td class="mut">Testing interaction between __bool__ and __len__ where replacing &#39;x and []&#39; with &#39;x&#39; chang</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Literal falsey at start of and-chain</td><td class="mut">Verifying that when the and-chain starts with a literal falsey like [], the fix replaces t</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Truncation preserves assignment semantics</td><td class="mut">In &#39;a = x and [] and y&#39;, ensuring that truncation to &#39;x and []&#39; preserves short-circuit be</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only and positional-only parameters</td><td class="mut">Ensuring that when the rewritten &#39;and&#39; expression appears in a function call with keyword-</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default argument aliasing</td><td class="mut">Testing that when a mutable default argument is involved in an &#39;and&#39; expression that gets </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Nested function call equivalence</td><td class="mut">Confirming that in a pure functional context like f(x and [] and y), the rewrite to f(x an</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Pathlib path handling</td><td class="mut">Ensuring that when pathlib.Path objects are used in &#39;and&#39; expressions involving literal fa</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Exception handling in and-expression</td><td class="mut">Testing that if the left operand of an &#39;and&#39; expression raises an exception, the rewrite d</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Side effect in left operand of boolean-context and-expression</td><td class="mut">In &#39;if x and [] and y:&#39;, replacing with &#39;if False:&#39; skips evaluation of &#39;x&#39;, losing side e</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Literal falsey at start of and-expression in assignment</td><td class="mut">For &#39;[] and x&#39;, the fix replaces with &#39;[]&#39;; behavior matches original short-circuit, but w</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Side effects in kept prefix of and-expression</td><td class="mut">In &#39;x and [] and y&#39;, fix becomes &#39;x and []&#39;; side effects in &#39;x&#39; occur in both versions.</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>And-expression in function argument: preserved behavior</td><td class="mut">Inner &#39;and&#39; rewritten inside f(); if x truthy, both versions pass []; if falsey, both pass</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Type-sensitive context: and-expression in list construction</td><td class="mut">Fix avoids False in non-boolean context; &#39;x and []&#39; remains as-is, preserving type expecta</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Comment preservation around modified and-expression</td><td class="mut">Comments near the and-expression should not interfere; we verify logic unchanged despite c</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>File write: and-expression in mode or data</td><td class="mut">Using and-expression in file open mode or write data; fix must not alter behavior.</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation order: and-expression with function calls and mutation</td><td class="mut">Left-to-right evaluation and short-circuiting must be preserved after truncation.</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Custom bool and len interaction</summary><pre>class X:
+    def __len__(self): return 0
+    def __bool__(self): return True
+x = X()
+result = x and []
+print(&#39;result:&#39;, result)
+print(&#39;bool(x):&#39;, bool(x))
+print(&#39;len(x):&#39;, len(x))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Literal falsey at start of and-chain</summary><pre>lst = [1, 2, 3]
+result = [] and lst
+print(&#39;result:&#39;, result)
+# After fix: result = []
+# Original: evaluates [], returns [] (falsey), short-circuits, lst not touched
+print(&#39;lst unchanged:&#39;, lst)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Truncation preserves assignment semantics</summary><pre>def get_x(b): return 0 if b else 5
+x = get_x(True)  # truthy
+y = &#39;hello&#39;
+a = x and [] and y
+print(&#39;a:&#39;, a)
+# If x is truthy, original evaluates x (truthy), then [] (falsey) -&gt; assigns []
+# Fix: x and [] -&gt; same
+# Now make x falsey
+x = get_x(False)
+a = x and [] and y
+print(&#39;a when x falsey:&#39;, a)
+# Original: x is falsey -&gt; assigns x (0)
+# Fix: x and [] -&gt; evaluates x (falsey) -&gt; assigns x (0)
+# Same result
+</pre></details><details id="r1-p004"><summary>r1-p004 — Keyword-only and positional-only parameters</summary><pre>def f(pos, /, *, kw):
+    print(f&#39;pos={pos}, kw={kw}&#39;)
+x = []
+# Rule triggers on: x and []
+f(x and [], kw=42)
+# Original: x is [] (falsey) -&gt; returns []
+# Fix: truncates to nothing? But per hazard 2, for [] and x it becomes []; here x and [] -&gt; if x falsey, result is x ([])
+# So f([], kw=42) in both cases
+# Now make x truthy
+x = [1]
+f(x and [], kw=42)
+# Original: x truthy -&gt; evaluate [] -&gt; returns []
+# Fix: x and [] -&gt; x truthy -&gt; evaluate [] -&gt; returns []
+# Same
+</pre></details><details id="r1-p005"><summary>r1-p005 — Mutable default argument aliasing</summary><pre>def f(a=[]):
+    a.append(1)
+    return a
+x = f()  # [] -&gt; [1]
+y = f()  # [1] -&gt; [1,1]
+# Now use in and-expression
+z = x and []
+print(&#39;z:&#39;, z)
+# Original: x is [1,1] (truthy) -&gt; evaluate [] -&gt; returns []
+# Fix: x and [] -&gt; same
+# Now make x falsey by clearing
+x.clear()
+z = x and []
+print(&#39;z after x.clear():&#39;, z)
+# Original: x is [] (falsey) -&gt; returns x ([])
+# Fix: x and [] -&gt; evaluates x (falsey) -&gt; returns x ([])
+# Both times z is []; but note: in second case, z is the same list as x (aliased)
+print(&#39;z is x:&#39;, z is x)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Nested function call equivalence</summary><pre>def f(val):
+    return val if val is not None else &#39;none&#39;
+x = []
+res = f(x and [] and &#39;y&#39;)
+print(&#39;res:&#39;, res)
+# x is [] -&gt; falsey -&gt; returns x ([]) -&gt; f([]) -&gt; &#39;[]&#39;
+# Fix: f(x and []) -&gt; x and [] -&gt; [] -&gt; f([]) -&gt; same
+x = [1]
+res = f(x and [] and &#39;y&#39;)
+print(&#39;res:&#39;, res)
+# x truthy -&gt; evaluate [] -&gt; falsey -&gt; returns [] -&gt; f([])
+# Fix: x and [] -&gt; same
+# No difference
+</pre></details><details id="r1-p007"><summary>r1-p007 — Pathlib path handling</summary><pre>from pathlib import Path
+p = Path(&#39;.&#39;)
+# Create a temporary file
+tmp = Path(&#39;tmp.txt&#39;)
+tmp.write_text(&#39;test&#39;)
+try:
+    # Rule triggers on: p and []
+    result = p and []
+    print(&#39;result:&#39;, result)
+    # Original: p is truthy (Path(&#39;.&#39;) exists) -&gt; evaluate [] -&gt; returns []
+    # Fix: p and [] -&gt; same
+    # Now make p falsey? Path objects are truthy even if empty? Actually, Path is always truthy.
+    # Instead, use a falsey literal at start
+    result2 = [] and p
+    print(&#39;result2:&#39;, result2)
+    # Original: [] -&gt; falsey -&gt; returns []
+    # Fix: becomes []
+    # Same
+finally:
+    if tmp.exists():
+        tmp.unlink()
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exception handling in and-expression</summary><pre>def bad():\n    raise ValueError(&#39;bad&#39;)\ntry:\n    # Rule triggers on: bad() and []\n    result = bad() and []\nexcept ValueError as e:\n    print(&#39;Caught:&#39;, type(e).__name__, str(e))\n# Original: calls bad() -&gt; raises -&gt; exception propagates\n# Fix: truncates to nothing? But per rule, in non-boolean context, replaces with first falsey? No: bad() and [] -&gt; if bad() raises, we never get to []\n# The fix for &#39;x and []&#39; in non-boolean context: if x is not a literal falsey, but the rule only fires if there&#39;s a literal falsey. Here, [] is literal falsey, so rule fires.
+# Fix: replaces &#39;bad() and []&#39; with &#39;bad()&#39;? Or truncates to before first falsey: bad() is first, then [] is falsey -&gt; so keep up to but not including [] -&gt; just &#39;bad()&#39;\n# So fix would be: result = bad()\n# Same behavior: calls bad() -&gt; raises\n# So exception behavior identical.
+</pre></details><details id="r2-p001"><summary>r2-p001 — Side effect in left operand of boolean-context and-expression</summary><pre>def f():
+    print(&#39;side&#39;)
+    return True
+x = f()
+y = 2
+if x and [] and y:
+    print(&#39;taken&#39;)
+else:
+    print(&#39;skipped&#39;, x)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Literal falsey at start of and-expression in assignment</summary><pre>lst = [1]
+x = lst and [] and lst
+print(&#39;result:&#39;, x)
+lst.append(2)
+print(&#39;lst after:&#39;, lst)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Side effects in kept prefix of and-expression</summary><pre>def g():
+    print(&#39;executed&#39;)
+    return 1
+x = g()
+y = never_defined if False else 3
+val = x and [] and y
+print(&#39;val:&#39;, val)
+</pre></details><details id="r2-p004"><summary>r2-p004 — And-expression in function argument: preserved behavior</summary><pre>def f(arg):
+    print(&#39;got:&#39;, arg)
+x = 1
+f(x and [] and 2)
+x = 0
+f(x and [] and 2)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Type-sensitive context: and-expression in list construction</summary><pre>x = 1
+lst = [x and [] and [9]]
+print(&#39;list contents:&#39;, lst)
+print(&#39;type of element:&#39;, type(lst[0]))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Comment preservation around modified and-expression</summary><pre>x = 1  # input
+# intermediate: x and []
+y = x and [] and 5  # compute
+print(&#39;y:&#39;, y)
+</pre></details><details id="r2-p007"><summary>r2-p007 — File write: and-expression in mode or data</summary><pre>x = 1
+mode = &#39;w&#39; and [] and &#39;w&#39;
+data = x and [] and &#39;hello&#39;
+with open(&#39;test.txt&#39;, mode) as f:
+    f.write(data)
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(&#39;read:&#39;, repr(f.read()))
+import os
+os.remove(&#39;test.txt&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Evaluation order: and-expression with function calls and mutation</summary><pre>state = []
+def log():
+    state.append(&#39;log&#39;)
+    return True
+x = log()
+res = x and [] and log()
+print(&#39;state:&#39;, state)
+print(&#39;res:&#39;, res)
+</pre></details></body></html>

@@ -1,0 +1,35 @@
+{
+  "summary": "Flags calls to trio.sleep(0) or anyio.sleep(0) and suggests replacing them with explicit checkpoint functions.",
+  "firingShapes": [
+    "await trio.sleep(0)",
+    "await anyio.sleep(0)",
+    "await trio.sleep( 0 )",
+    "result = trio.sleep(0); await result",
+    "func(trio.sleep(0))",
+    "lambda: trio.sleep(0)",
+    "with ctx: await trio.sleep(0)",
+    "for _ in range(1): await trio.sleep(0)"
+  ],
+  "silentShapes": [
+    "await trio.sleep(0.0)",
+    "await trio.sleep(1)",
+    "await anyio.sleep(0.1)",
+    "await trio.sleep(x) where x is a variable",
+    "await trio.sleep(False)"
+  ],
+  "fixDescription": "Replace trio.sleep(0) with trio.lowlevel.checkpoint() and anyio.sleep(0) with anyio.checkpoint(), preserving the await keyword and surrounding expression structure.",
+  "hazards": [
+    "If trio or anyio is imported as an alias (e.g., import trio as t), the fix may incorrectly reference trio.lowlevel.checkpoint instead of the aliased module, causing AttributeError.",
+    "If trio.sleep or anyio.sleep is shadowed by a local variable or function, the fix will replace the wrong symbol, leading to incorrect behavior or NameError.",
+    "If the call is part of a larger expression (e.g., f(trio.sleep(0))), replacing only the call may break argument ordering or introduce syntax errors if not handled contextually.",
+    "If the sleep call appears in a default argument or lambda, moving the checkpoint call may alter evaluation timing or scope, especially if closure variables are involved.",
+    "If the module trio.lowlevel or anyio is not imported, the fix may introduce a NameError unless the import is added, which the autofix may not do.",
+    "If there are comments inside the call parentheses (e.g., trio.sleep(  # comment\n 0 )), the fix may drop them, violating user intent even if semantically equivalent.",
+    "If the code uses from trio import sleep, the fix cannot safely rewrite to trio.lowlevel.checkpoint without knowing the original import form, risking incorrect module references.",
+    "If the code is in a string or comment (e.g., docstring or # await trio.sleep(0)), the tool might incorrectly flag and modify it, breaking documentation or introducing invalid code.",
+    "If the sleep function is accessed via getattr or dynamic lookup (e.g., getattr(trio, 'sleep')(0)), the fix cannot apply safely as it assumes a direct attribute access.",
+    "If the code runs under a mock or test patch where trio.sleep is replaced, the fix may bypass the mock and call the real checkpoint, altering test behavior.",
+    "If the expression uses keyword arguments like trio.sleep(delay=0), the fix may fail to match or incorrectly rewrite, especially if mixed with positional args.",
+    "If the file has encoding issues or non-standard whitespace, the autofix may misidentify the boundaries of the expression, leading to malformed replacement."
+  ]
+}

@@ -1,0 +1,617 @@
+{
+  "runId": "2026-10-17T21-01-06-042Z-shrf-biome-style_useConst",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useConst",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useConst\n- Fix: safe\n- Default severity: warn\n- Available from version: 1.0.0\n- Diagnostic category: lint/style/useConst\n- This rule is recommended\n\nDescription\n\n Require `const` declarations for variables that are only assigned once.\n\n Variables that are initialized and never reassigned and\n variables that are only assigned once can be declared as `const`.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n let a = 3;\n console.log(a);\n ```\n\n ```js,expect_diagnostic\n // `a` is redefined (not reassigned) on each loop step.\n for (let a of [1, 2, 3]) {\n     console.log(a);\n }\n ```\n\n ```js,expect_diagnostic\n // `a` is redefined (not reassigned) on each loop step.\n for (let a in [1, 2, 3]) {\n     console.log(a);\n }\n ```\n\n ```js,expect_diagnostic\n let a;\n a = 0;\n ```\n\n ```js,expect_diagnostic\n let a = 3;\n {\n     let a = 4;\n     a = 2;\n }\n ```\n\nValid\n\n ```js\n let a = 2;\n a = 3;\n console.log(a);\n ```\n\n ```js\n let a = 1, b = 2;\n b = 3;\n ```\n\n ```js\n let a;\n a; // the variable is read before its assignment\n a = 0;\n ```\n\nCaveats\n\n Since v2.2, the rule no longer reports variables that are read in an inner function before being written.\n This can result in false negatives. For example, the following code is now valid:\n\n ```js\n let a;\n function f() {\n     return a; // read\n }\n a = 0; // written\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "Flags `let` declarations where the variable is never reassigned after initialization.",
+    "firingShapes": [
+      "let x = 5;",
+      "for (let i of arr) {}",
+      "for (let key in obj) {}",
+      "let y; y = 10;",
+      "{ let z = 7; }",
+      "let a = 1, b = 2;",
+      "function f() { let c = 3; }",
+      "try { let e = 9; } catch {}"
+    ],
+    "silentShapes": [
+      "let p = 1; p = 2;",
+      "let q; q; q = 3;",
+      "let r; function s() { return r; } r = 4;",
+      "if (true) { let t = 6; } else { let t = 7; }",
+      "for (let u = 0; u < 3; u++) { u = u + 1; }"
+    ],
+    "fixDescription": "Replaces `let` with `const` for each variable declarator that has an initializer or is assigned exactly once before any reassignment, preserving declarators, commas, and block structure while removing the `let` keyword and inserting `const`.",
+    "hazards": [
+      "Rewriting `let` in a loop header like `for (let i of arr)` to `const` causes a TypeError because `const` bindings cannot be reassigned per iteration.",
+      "Changing `let` to `const` in a block-scoped redeclaration such as `{ let a = 1; let a = 2; }` results in a SyntaxError due to duplicate `const` declarations in the same block.",
+      "If the initializer contains a `delete` expression targeting an unqualified identifier (e.g., `let x = delete y;`), converting to `const` may throw a SyntaxError in strict mode because `const` bindings cannot be deleted.",
+      "When the variable is conditionally declared (e.g., `if (x) let y = 1;`), replacing `let` with `const` can cause a ReferenceError if the block is not entered, as `const` is not hoisted and remains inaccessible outside its block.",
+      "In non-strict mode, if the initializer assigns to an undeclared variable (e.g., `let a = (b = 5);`), switching to `const` may silently create a global variable instead of throwing, altering implicit globals behavior.",
+      "If the declarator lacks an initializer and is assigned later (e.g., `let a; a = 1;`), the fix incorrectly applies `const` to the uninitialized declarator, causing a SyntaxError because `const` must be initialized at declaration.",
+      "Moving a `let` declaration to `const` across a function boundary (e.g., from outer to inner scope via hoisting misunderstandings) breaks encapsulation and may expose unintended variables.",
+      "Comments attached to the `let` keyword or declarators (e.g., `let /* ignored */ x = 1;`) may be stripped or misplaced during the rewrite, altering source formatting or tooling expectations.",
+      "In a `try` block (e.g., `try { let e = 5; }`), rewriting to `const` is safe only if no reassignment occurs, but if the variable is referenced in `finally` after potential reassignment in `catch`, the timing of binding initialization may differ.",
+      "When used with `export let` (non-standard but possible in some environments), replacing with `export const` may break bindings expected to be mutable by importers.",
+      "If the variable name is `let` or `const` itself (e.g., `let let = 5;`), the rewrite produces invalid syntax (`const const = 5;`).",
+      "In eval contexts or dynamic scope manipulations, changing `let` to `const` alters the mutability of the binding, which may be relied upon for runtime redefinition via indirect eval."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032519999999999997,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 10,
+    "fixed": 9,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "ASI and semicolon-less code with leading parenthesis",
+      "hazard": "When `let` is converted to `const` in ASI-prone code without semicolons, a following line starting with `(` or `[` can be misinterpreted as a function call or array indexing on the prior expression, c",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'forEach')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'forEach')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:20.097451115 -0400\n+++ fixed.js\t2026-10-17 17:01:20.379454550 -0400\n@@ -1,2 +1,2 @@\n-let x = 5\n+const x = 5\n [1,2].forEach(v=>console.log(x+v))\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Moving let to const across function boundary breaks encapsulation",
+      "hazard": "If a `let` declared in an outer scope is reassigned inside an inner function, converting it to `const` prevents reassignment and alters behavior. This tests whether the linter incorrectly hoists or mi",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Non-strict mode: initializer assigns to undeclared variable",
+      "hazard": "In sloppy mode, `let a = (b = 5);` creates a global `b`. If `let` becomes `const`, the assignment still happens but `b` remains global\u2014however, if the linter mistakenly treats the inner assignment as ",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: b is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: b is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:20.778459409 -0400\n+++ fixed.js\t2026-10-17 17:01:21.052462746 -0400\n@@ -1 +1 @@\n-(function(){ 'use sloppy'; let a = (b = 5); console.log(typeof b, b); })();\n+(function(){ 'use sloppy'; const a = (b = 5); console.log(typeof b, b); })();\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Strict vs sloppy mode semantics",
+      "hazard": "In strict mode, assigning to an undeclared variable throws; in sloppy mode it creates a global. Converting `let` to `const` doesn't change this directly, but if the initializer has such an assignment,",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ReferenceError d is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ReferenceError d is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:21.225464852 -0400\n+++ fixed.js\t2026-10-17 17:01:21.502468224 -0400\n@@ -1,6 +1,6 @@\n 'use strict';\n try {\n-  let c = (d = 1);\n+  const c = (d = 1);\n } catch(e) {\n   console.log(e.name, e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Sparse arrays, holes, Array(n) vs [n]",
+      "hazard": "When initializing a `let` variable with an array literal containing holes (e.g., `[, , 3]`), converting to `const` should preserve the array structure. However, if the linter mishandles the initialize",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "3 undefined undefined 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3 undefined undefined 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:21.677470354 -0400\n+++ fixed.js\t2026-10-17 17:01:21.965473860 -0400\n@@ -1,2 +1,2 @@\n-let arr = [, , 3];\n+const arr = [, , 3];\n console.log(arr.length, arr[0], arr[1], arr[2]);\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Regular expressions: escapes, unicode flag, lastIndex with g flag",
+      "hazard": "If a `let` variable holds a regex with `/g` flag, its `lastIndex` mutates on each `exec`. Converting `let` to `const` should not affect this mutability. But if the linter incorrectly assumes immutabil",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "[ 'a', index: 0, input: 'aba', groups: undefined ] 1\n[ 'a', index: 2, input: 'aba', groups: undefined ] 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ 'a', index: 0, input: 'aba', groups: undefined ] 1\n[ 'a', index: 2, input: 'aba', groups: undefined ] 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:22.140475990 -0400\n+++ fixed.js\t2026-10-17 17:01:22.413479312 -0400\n@@ -1,3 +1,3 @@\n-let re = /a/g;\n+const re = /a/g;\n console.log(re.exec('aba'), re.lastIndex);\n console.log(re.exec('aba'), re.lastIndex);\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Block-scoped redeclaration with const causes SyntaxError",
+      "hazard": "Two `let` declarations in the same block are allowed; converting both to `const` causes a `SyntaxError` due to duplicate `const` declarations. This tests whether the linter attempts to rewrite both wi",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-01-06-042Z-shrf-biome-style_useConst/r1-p007/orig.js:1\n{ let a = 1; let a = 2; console.log(a); }\n                 ^\n\nSyntaxError: Identifier 'a' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Order of evaluation when expressions are merged or duplicated",
+      "hazard": "If a `let` variable's initializer has side effects (e.g., function calls), and the linter duplicates or merges expressions during rewrite, those effects might run twice or not at all. We use a comma-s",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1 10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Unassigned let converted to const",
+      "hazard": "If the declarator lacks an initializer and is assigned later (e.g., `let a; a = 1;`), the fix incorrectly applies `const` to the uninitialized declarator, causing a SyntaxError because `const` must be",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Delete unqualified identifier in initializer",
+      "hazard": "If the initializer contains a `delete` expression targeting an unqualified identifier (e.g., `let x = delete y;`), converting to `const` may throw a SyntaxError in strict mode because `const` bindings",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-01-06-042Z-shrf-biome-style_useConst/r2-p002/orig.js:2\nlet x = delete y;\n               ^\n\nSyntaxError: Delete of an unqualified identifier in strict mode.\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Conditional let declaration",
+      "hazard": "When the variable is conditionally declared (e.g., `if (x) let y = 1;`), replacing `let` with `const` can cause a ReferenceError if the block is not entered, as `const` is not hoisted and remains inac",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ReferenceError: y is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ReferenceError: y is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:27.815544970 -0400\n+++ fixed.js\t2026-10-17 17:01:28.092548333 -0400\n@@ -1,2 +1,2 @@\n-if (false) { let y = 1; }\n+if (false) { const y = 1; }\n try { console.log(y); } catch (e) { console.log(e.name + ': ' + e.message); }\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Numeric/string coercion with toString/valueOf",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          },
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:28.269550481 -0400\n+++ fixed.js\t2026-10-17 17:01:28.535553709 -0400\n@@ -1,3 +1,3 @@\n-let o = { valueOf: () => 2, toString: () => '3' };\n-let result = o + '';\n+const o = { valueOf: () => 2, toString: () => '3' };\n+const result = o + '';\n console.log(result);\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Export let (non-standard)",
+      "hazard": "When used with `export let` (non-standard but possible in some environments), replacing with `export const` may break bindings expected to be mutable by importers.",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "__proto__ and prototype access",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:28.940558624 -0400\n+++ fixed.js\t2026-10-17 17:01:29.224562070 -0400\n@@ -1,2 +1,2 @@\n-let obj = { __proto__: { x: 1 } };\n+const obj = { __proto__: { x: 1 } };\n console.log(obj.x);\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Strict vs sloppy mode semantics",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Eval context mutability",
+      "hazard": "In eval contexts or dynamic scope manipulations, changing `let` to `const` alters the mutability of the binding, which may be relied upon for runtime redefinition via indirect eval.",
+      "rule": "style/useConst",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          },
+          {
+            "rule": "style/useConst",
+            "severity": "warning",
+            "message": "This let declares a variable that is only assigned once.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:29.623566910 -0400\n+++ fixed.js\t2026-10-17 17:01:29.893570185 -0400\n@@ -1,4 +1,4 @@\n-let global = (0, eval)('this');\n-let x = 1;\n+const global = (0, eval)('this');\n+const x = 1;\n (0, eval)('x = 2');\n console.log(x);\n"
+      }
+    }
+  ]
+}

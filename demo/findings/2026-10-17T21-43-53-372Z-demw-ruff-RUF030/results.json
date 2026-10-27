@@ -1,0 +1,675 @@
+{
+  "runId": "2026-10-17T21-43-53-372Z-demw-ruff-RUF030",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF030",
+    "fixKind": "unknown",
+    "docs": "# assert-with-print-message (RUF030)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `assert expression, print(message)`.\n\n## Why is this bad?\nIf an `assert x, y` assertion fails, the Python interpreter raises an\n`AssertionError`, and the evaluated value of `y` is used as the contents of\nthat assertion error. The `print` function always returns `None`, however,\nso the evaluated value of a call to `print` will always be `None`.\n\nUsing a `print` call in this context will therefore output the message to\n`stdout`, before raising an empty `AssertionError(None)`. Instead, remove\nthe `print` and pass the message directly as the second expression,\nallowing `stderr` to capture the message in a well-formatted context.\n\n## Example\n```python\nassert False, print(\"This is a message\")\n```\n\nUse instead:\n```python\nassert False, \"This is a message\"\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as changing the second expression\nwill result in a different `AssertionError` message being raised, as well as\na change in `stdout` output.\n\n## References\n- [Python documentation: `assert`](https://docs.python.org/3/reference/simple_stmts.html#the-assert-statement)\n"
+  },
+  "analysis": {
+    "summary": "The rule flags assert statements where the second argument is a call to print(), which results in None being passed as the AssertionError message while printing to stdout.",
+    "firingShapes": [
+      "assert condition, print('message')",
+      "assert x > 0, print(f'Value {x} too low')",
+      "assert flag, print(log_msg())",
+      "assert not data, print('Empty input', file=sys.stderr)",
+      "assert val in allowed, print('Invalid:', val)",
+      "assert len(items) == n, print('Count mismatch')",
+      "assert user.is_admin, print('Access denied')",
+      "assert response.ok, print(json.dumps(response.text))"
+    ],
+    "silentShapes": [
+      "assert condition, 'message'",
+      "assert condition, print()",
+      "assert condition, log.error('message')",
+      "if not condition: print('message'); raise AssertionError()",
+      "assert condition, get_message()"
+    ],
+    "fixDescription": "Replace the print() call in the assert statement's second argument with its string literal argument, removing the print call and using the message directly as the assertion error message.",
+    "hazards": [
+      "The print call may have side effects beyond stdout, such as flushing buffers or triggering I/O errors, which are removed by the fix.",
+      "If print is called with non-string arguments (e.g., print(obj)), the fix incorrectly assumes a string literal, losing the original object's representation.",
+      "When print uses keyword arguments like sep, end, or file, the fix drops these formatting controls, altering output behavior.",
+      "If the print call is part of a larger expression (e.g., print(a) or print(b)), the fix is invalid as the rule only matches simple print calls, but the shape detection might misfire.",
+      "The fix removes any stdout output from the print call, which may be relied upon for logging, debugging, or test output capture.",
+      "In rare cases where print is overridden or mocked (e.g., in unit tests), the fix breaks test expectations by removing the call entirely.",
+      "If the print call appears in a lambda or comprehension within the assert (though unlikely given rule constraints), the fix would incorrectly rewrite it.",
+      "Comments attached to the print call or surrounding whitespace may be lost during the rewrite, depending on the linter's formatting preservation.",
+      "If the assertion message is intended to be None (via print()), the fix changes it to a string, altering the AssertionError's args.",
+      "The fix assumes the print call has exactly one argument; if it has zero or multiple arguments, the rewrite is syntactically invalid or semantically wrong."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034155,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "bytes vs str encoding",
+      "hazard": "When fixing `assert condition, print(b'data')`, replacing `print(b'data')` with raw `b'data'` loses the decoding step needed to match downstream string expectations.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              6,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "b'Hello'\nno assertNone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'Hello'\nno assertNone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "non-string print arg",
+      "hazard": "Replacing `print(obj)` with raw `obj` in `assert cond, print(obj)` changes behavior when obj has custom __str__ or side effects during printing.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              9,
+              23
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "<2>\nno raise|None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<2>\nno raise|None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "mutable default aliasing",
+      "hazard": "Rewriting `assert cond, print(default_arg)` where default_arg is a mutable default causes shared state across calls if the print is removed and the default is reused.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              7,
+              23
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[2]\nno raise|None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2]\nno raise|None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "lambda in assert",
+      "hazard": "If print were inside a lambda in assert (unlikely but testing edge), replacing it would break lambda semantics; though rule doesn't trigger, we simulate risk via side effect in arg.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "string formatting edge cases",
+      "hazard": "Fixing `assert cond, print(f'{x}')` to `f'{x}'` loses the print-side effect and may misrepresent formatting when x has __format__ that does I/O.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              10,
+              26
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "FORMATTING B\nB\nno raise|None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "FORMATTING B\nB\nno raise|None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "class vs instance attribute",
+      "hazard": "Rewriting `assert cond, print(cls.attr)` where attr is a class attribute accessed via instance may break if fix uses raw value and attr is a property with setter.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              10,
+              29
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "no raise\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "no raise\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "truthiness and bool",
+      "hazard": "When `assert cond, print(msg)` is fixed, if `cond` relies on an object with __bool__ that has side effects, removing print may change evaluation timing in loops.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              10,
+              19
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "BOOL_CALLED\nfail\nBOOL_CALLED\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "BOOL_CALLED\nfail\nBOOL_CALLED\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "keyword-only args",
+      "hazard": "Rewriting `assert cond, print(log(msg, file=f))` where log has keyword-only args may lose the file=sys.stderr intent if fix strips print and assumes string.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "error\nerror|error\n",
+          "stderr1": "error",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Overridden print mock",
+      "hazard": "In rare cases where print is overridden or mocked (e.g., in unit tests), the fix breaks test expectations by removing the call entirely.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              8,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Custom truthiness",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              7,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "bool(a): False\nlen(a): 1\na is truthy?\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "bool(a): False\nlen(a): 1\na is truthy?\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Keyword-only args",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "file content: \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Side effects beyond stdout",
+      "hazard": "The print call may have side effects beyond stdout, such as flushing buffers or triggering I/O errors, which are removed by the fix.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              6,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: '_io.TextIOWrapper' object has no attribute 'getvalue'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: '_io.TextIOWrapper' object has no attribute 'getvalue'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Exceptions and finally",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Other: ValueError from print\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "String formatting edge cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              2,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Hi 'Bob'\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Hi 'Bob'\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Non-string arguments to print",
+      "hazard": "If print is called with non-string arguments (e.g., print(obj)), the fix incorrectly assumes a string literal, losing the original object's representation.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              5,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "str\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "str\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Zero or multiple print args",
+      "hazard": "The fix assumes the print call has exactly one argument; if it has zero or multiple arguments, the rewrite is syntactically invalid or semantically wrong.",
+      "rule": "RUF030",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF030",
+            "severity": "warning",
+            "message": "`print()` call in `assert` statement is likely unintentional",
+            "span": [
+              1,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a b\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a b\n",
+          "stderr1": "AssertionError: None",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

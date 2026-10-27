@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags inconsistent usage of object literal property syntax by requiring either all properties to be written explicitly (`key: value`) or using shorthand notation (`key`) when the variable name matches the property key.",
+  "firingShapes": [
+    "let x = 1; const obj = {x: x};",
+    "const y = 2; const obj = {y: y, z: function() {}};",
+    "function f(a){return{a:a};}",
+    "let b = {}; const c = {b: b};",
+    "const d = e => ({d: d});",
+    "try{throw{e:e};}catch(e){}",
+    "for(let i=0;i<1;i++){let o={i:i};}",
+    "with({j:j}){}"
+  ],
+  "silentShapes": [
+    "let x = 1; const obj = {x};",
+    "const y = 2; const obj = {y, z() {}};",
+    "function f(a){return{a};}",
+    "const d = e => ({d});",
+    "let obj = {a: 1, b: 'two'};"
+  ],
+  "fixDescription": "When the option 'syntax' is 'explicit', the autofix replaces shorthand property notation (e.g., `foo`) with its explicit equivalent (`foo: foo`) by duplicating the identifier as both the property key and value. When the option is 'shorthand', it replaces explicit notation where the key and value are identical identifiers (e.g., `foo: foo`) with the shorthand form (`foo`).",
+  "hazards": [
+    "Rewriting `foo: foo` to `foo` in a `with` statement changes the object used for property lookup, potentially altering which properties are resolved due to differing object identity.",
+    "In `try/catch`, converting `{e: e}` to `{e}` may cause the catch clause's parameter `e` to shadow the property value incorrectly if the rewrite occurs inside the catch block, changing which variable is referenced.",
+    "Within a `for` loop's init or update clause, replacing `{i: i}` with `{i}` could affect timing if `i` has side effects (though unlikely for identifiers), but more critically, if `i` is declared with `var` in an outer scope, the shorthand may capture a different binding due to hoisting differences in evaluation context.",
+    "If the property value is a getter or setter (e.g., `get foo() {}`), rewriting to shorthand `foo` is invalid syntax and will cause a parse error, as shorthand does not support accessor properties.",
+    "When the object literal is used as the right-hand side of a comma operator (e.g., `let x = (y, {z: z});`), rewriting `{z: z}` to `{z}` does not change the value but may interfere with formatting tools that rely on explicit syntax for consistency, though semantically it remains equivalent.",
+    "In class fields, transforming `{method: method}` to `{method}` may break if `method` is not defined in the enclosing scope due to lexical scoping differences, though this is rare as class fields evaluate in the class scope.",
+    "If the identifier used in shorthand is later reassigned (e.g., `let f = 1; const o = {f}; f = 2;`), the object property retains the original value at the time of creation, which is preserved in the rewrite, so no hazard here—this is included to show that reassignment after object creation does not affect the equivalence.",
+    "Comments attached to the colon in explicit syntax (e.g., `foo: /* comment */ bar`) will be lost when rewriting to shorthand `foo`, as the autofix removes the colon and any surrounding whitespace/comments.",
+    "When the property key is an identifier but the value is a complex expression (e.g., `foo: bar + baz`), the rule does not fire, so no rewrite occurs—but if misapplied, rewriting such a case to shorthand would be a syntax error, highlighting that the fix only applies when key and value are the same identifier.",
+    "In non-strict mode, using `with` or `eval`, the rewritten shorthand may interact differently with scope chains if the object is used in a context where property resolution depends on the object's internal structure, though this is highly esoteric and unlikely."
+  ]
+}

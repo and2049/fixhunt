@@ -1,0 +1,624 @@
+{
+  "runId": "2026-10-17T21-07-22-912Z-zyh7-ruff-PLR6201",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLR6201",
+    "fixKind": "unknown",
+    "docs": "# literal-membership (PLR6201)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for membership tests on `list` and `tuple` literals.\n\n## Why is this bad?\nWhen testing for membership in a static sequence, prefer a `set` literal\nover a `list` or `tuple`, as Python optimizes `set` membership tests.\n\n## Example\n```python\n1 in [1, 2, 3]\n```\n\nUse instead:\n```python\n1 in {1, 2, 3}\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as the use of a `set` literal will\nerror at runtime if either the element being tested for membership (the\nleft-hand side) or any element of the sequence (the right-hand side)\nis unhashable (like lists or dictionaries). While Ruff will attempt to\ninfer the hashability of both sides and skip the fix when it can determine\nthat either side is unhashable, it may not always be able to do so.\n\n## References\n- [What’s New In Python 3.2](https://docs.python.org/3/whatsnew/3.2.html#optimizations)\n"
+  },
+  "analysis": {
+    "summary": "Flags membership tests using list or tuple literals where a set literal would be more efficient.",
+    "firingShapes": [
+      "x in [1, 2, 3]",
+      "y in ('a', 'b')",
+      "z in []",
+      "item in (None, False)",
+      "val in [True, 0, '']",
+      "elem in ()",
+      "k in [k for k in range(5)]",
+      "m in (m,)"
+    ],
+    "silentShapes": [
+      "x in s where s is a variable",
+      "x in {1, 2, 3}",
+      "x in range(1, 4)",
+      "x in frozenset([1, 2, 3])"
+    ],
+    "fixDescription": "Replaces the list or tuple literal on the right-hand side of a membership test with an equivalent set literal containing the same elements.",
+    "hazards": [
+      "Rewriting [1, 2, [3]] to {1, 2, [3]} raises TypeError due to unhashable list element.",
+      "Rewriting [(1,2), (3,4)] to {(1,2), (3,4)} is safe only if tuples are hashable, but fails if tuples contain unhashable items like lists.",
+      "Rewriting [] to set() changes the type from list to set, which may break code relying on list-specific methods or ordering.",
+      "Rewriting () to set() loses the ability to distinguish empty tuple from empty set in isinstance checks or pattern matching.",
+      "If the left-hand side is unhashable (e.g., a list), rewriting [1,2] to {1,2} causes TypeError during membership test even if original would have returned False.",
+      "The fix may reorder elements due to set's unordered nature, breaking code that depends on iteration order of the literal in subsequent expressions (though rare in pure membership).",
+      "Comments attached to the list/tuple literal (e.g., x in [1, # comment\n2]) may be lost or misplaced during rewrite.",
+      "In rare cases, if the literal contains duplicate elements, the set literal removes them, changing the logical meaning if duplicates were intended (though membership test behavior is identical for duplicates).",
+      "If the literal is used elsewhere in the same expression (e.g., x in [1,2] and [1,2].append(3)), the rewrite breaks aliasing or mutation expectations.",
+      "Rewriting a tuple literal to a set literal may interfere with unpacking or star expressions in larger contexts if the literal is reused (though rule only triggers on simple membership).",
+      "The fix may interfere with debugging or tracing tools that rely on the identity or type of the literal object.",
+      "If the literal appears in a string or comment nearby, the rewrite could create confusion or false positives in manual code review."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034266,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 8,
+    "fixed": 0,
+    "disputed": 8
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Tuple Literal Rewrite Hazard - Unhashable Elements",
+      "hazard": "Rewriting [(1,2), (3,4)] to {(1,2), (3,4)} is unsafe when tuples contain unhashable items like lists.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              5,
+              23
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before: ((1,),) in list -> True\nAfter:  ((1,),) in set -> True\nBefore: ((2,),) in list -> True\nAfter:  ((2,),) in set -> True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: ((1,),) in list -> True\nAfter:  ((1,),) in set -> True\nBefore: ((2,),) in list -> True\nAfter:  ((2,),) in set -> True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Bytes vs Str Encoding Hazard",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              4,
+              23
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before: b'hello\\n' in list -> True\nAfter:  b'hello\\n' in set  -> True\nBefore: b'world' in list -> True\nAfter:  b'world' in set  -> True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: b'hello\\n' in list -> True\nAfter:  b'hello\\n' in set  -> True\nBefore: b'world' in list -> True\nAfter:  b'world' in set  -> True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Duplicate Elements Semantic Hazard",
+      "hazard": "If the literal contains duplicate elements, the set literal removes them, changing the logical meaning if duplicates were intended.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              5,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before (list): 3 matches\nAfter  (set):  3 matches\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before (list): 3 matches\nAfter  (set):  3 matches\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Unhashable LHS TypeError Hazard",
+      "hazard": "If the left-hand side is unhashable (e.g., a list), rewriting [1,2] to {1,2} causes TypeError during membership test even if original would have returned False.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: [1, 2] in [1,2,3] -> False\nAfter error:  TypeError: cannot use 'list' as a set element (unhashable type: 'list')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Star-Imports and Module Side Effects Hazard",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "stdout access allowed\nstdout access allowed (set)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Type Annotations Runtime Evaluation Hazard",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Found 2 in list\nFound 2 in set\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Found 2 in list\nFound 2 in set\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Non-File Context Manager Hazard",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              13,
+              18
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Found in list\nFound in set\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Found in list\nFound in set\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Keyword-Only and Defaults Evaluation Hazard",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x=2: before=True, after=True\nx=4: before=False, after=False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Unhashable LHS TypeError Hazard",
+      "hazard": "Rewriting [1, 2] to {1, 2} when LHS is a list causes TypeError because lists are unhashable and cannot be members of a set.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Tuple with Unhashable Element Hazard",
+      "hazard": "Rewriting [(1, [2]), (3, 4)] to {(1, [2]), (3, 4)} fails because tuple (1, [2]) contains a list and is unhashable.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              2,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Comment Loss in Literal Rewrite Hazard",
+      "hazard": "Comments inside the list/tuple literal may be lost or misplaced when rewriting to a set literal.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "String Formatting Edge Cases Hazard",
+      "hazard": "The rule should not fire within string literals (%, .format(), f-strings) as they are not actual membership tests.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello in [\"hello\", \"world\"]\nhello in [\"hello\", \"world\"]\nhello in [\"hello\", \"world\"]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mutable Default Arguments and Aliasing Hazard",
+      "hazard": "If the list/tuple is used as a mutable default argument, rewriting it to a set may break expectations if the caller mutates it (though set is immutable, the identity change may matter in aliasing chec",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nFalse\nTrue\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Generators vs Lists: Lazy Evaluation Hazard",
+      "hazard": "Rewriting a generator expression to a set literal changes evaluation from lazy to eager, potentially consuming resources or causing side effects early.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Generator called\nTrue\nGenerator called\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Unhashable Element in List Hazard",
+      "hazard": "Rewriting [1, 2, [3]] to {1, 2, [3]} raises TypeError because the list [3] is unhashable and cannot be an element of a set.",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Bytes vs Str Encoding Hazard",
+      "hazard": "Mixing bytes and strings in membership tests: rewriting [b'a', b'b'] to {b'a', b'b'} is safe for bytes, but comparing str to bytes set always returns False (no error), while original list comparison a",
+      "rule": "PLR6201",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLR6201",
+            "severity": "warning",
+            "message": "Use a set literal when testing for membership",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

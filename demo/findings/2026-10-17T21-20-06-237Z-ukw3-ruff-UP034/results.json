@@ -1,0 +1,483 @@
+{
+  "runId": "2026-10-17T21-20-06-237Z-ukw3-ruff-UP034",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP034",
+    "fixKind": "unknown",
+    "docs": "# extraneous-parentheses (UP034)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for extraneous parentheses.\n\n## Why is this bad?\nExtraneous parentheses are redundant, and can be removed to improve\nreadability while retaining identical semantics.\n\n## Example\n```python\nprint((\"Hello, world\"))\n```\n\nUse instead:\n```python\nprint(\"Hello, world\")\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary parentheses around expressions where they do not affect precedence or grouping.",
+    "firingShapes": [
+      "x = (5)",
+      "return (value)",
+      "if (condition): pass",
+      "print((\"hello\"))",
+      "f((x))",
+      "[(i) for i in range(10)]",
+      "{(k): v for k, v in items}",
+      "yield (expr)"
+    ],
+    "silentShapes": [
+      "(a + b) * c",
+      "f((x, y))",
+      "(x := y)",
+      "assert (msg), expr",
+      "lambda: (x)"
+    ],
+    "fixDescription": "Removes the outer pair of parentheses when they enclose a single expression and are not required for operator precedence, tuple creation, or semantic clarity.",
+    "hazards": [
+      "Rewriting `return (yield x)` to `return yield x` changes it from yielding a value and returning None to a syntax error due to invalid yield placement.",
+      "Removing parentheses in `(lambda: x)()` alters grouping, causing the lambda to be applied to `x` instead of being called first.",
+      "Stripping parentheses from `((x))` may break code relying on the inner parentheses for visual grouping or tooling expectations, though semantically identical.",
+      "In `(x,)`, removing outer parentheses yields `x,`, which is still a tuple, but if mistakenly applied to `(x)` it becomes `x`, changing a tuple to a scalar.",
+      "For `f((x, y))`, removing outer parentheses gives `f(x, y)`, which unpacks the tuple and passes two arguments instead of one tuple argument.",
+      "In `assert (condition), message`, removing parentheses around `condition` results in `assert condition, message`, which is valid, but if applied to `(assert condition), message` it would break — however, the rule does not target this shape.",
+      "Comments immediately after the opening parenthesis like `(# comment\nx)` would be lost if the autofix removes the parentheses without preserving internal formatting.",
+      "In a tuple assignment like `((a, b)) = ((c, d))`, removing outer parentheses gives `(a, b) = (c, d)`, which is equivalent, but if nested incorrectly could be misapplied.",
+      "In `raise (Exception(\"err\"))`, removing parentheses yields `raise Exception(\"err\")`, which is equivalent, but if the expression were more complex, precedence might matter — though the rule avoids such cases.",
+      "In `[(i) for i in range(10)]`, removing parentheses yields `[i for i in range(10)]`, which is equivalent, but if the parentheses were part of a larger expression like `[(i) + 1]`, removal would change meaning — however, the rule does not fire there due to presence of `+`.",
+      "In f-strings like `f\"{(x)}\"`, the rule does not apply as it targets expressions outside string contexts; applying it incorrectly would break the f-string syntax.",
+      "In `isinstance((x), int)`, removing outer parentheses gives `isinstance(x, int)`, which is equivalent, but if written as `isinstance((x,), int)`, removing outer parentheses yields `isinstance(x,, int)` which is invalid — however, the rule does not fire on `(x,)` as it's a tuple."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0054018,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 9
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Lambda call grouping hazard",
+      "hazard": "Removing parentheses in `(lambda: x)()` changes grouping from calling the lambda then applying result to x, to defining a lambda that takes x as argument.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "F-string brace hazard",
+      "hazard": "Incorrectly removing parentheses in f\"{(x)}\" would break f-string syntax, but rule correctly does not target expressions inside string literals.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "F-string: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p003",
+      "title": "List comprehension parentheses hazard",
+      "hazard": "Rule removes parens in [(i) for i in range(10)] safely; hazard shown by contrast with [(i) + 1] where rule does not fire due to + operator.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "List comp: [0, 1, 2]\nWith plus: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Exception handling with finally/else",
+      "hazard": "Rewriting raise (ValueError('')) inside try block; finally/else clauses execute deterministically to show rewriting did not alter control flow.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: error\nFinally block\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Singleton tuple vs scalar hazard",
+      "hazard": "Removing parentheses from (x,) yields x, (still tuple), but from (x) yields x (scalar); rule avoids (x,) due to comma.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Tuple: (5,) <class 'tuple'>\nScalar: 5 <class 'int'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Tuple assignment nesting hazard",
+      "hazard": "Rule removes outer parens in ((a, b)) = ((c, d)) safely; incorrect nesting could misapply but rule does not target inner structures.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Assigned: 1 2 3 4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Assert message form hazard",
+      "hazard": "Rule removes parens around condition in assert (cond), msg safely; does not fire on (assert cond), msg which would be invalid.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Assert passed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Raise expression parentheses hazard",
+      "hazard": "Rule removes parens in raise (Exception('err')) safely; complex expressions avoided by rule due to precedence concerns.",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Raised caught: Exception test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Raise exception parentheses - safe removal",
+      "hazard": "Precedence in complex raise expressions",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: err\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Singleton tuple vs scalar confusion",
+      "hazard": "(x,) remains tuple after fix, (x) becomes scalar",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP034",
+            "severity": "warning",
+            "message": "Avoid extraneous parentheses",
+            "span": [
+              4,
+              6
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "int 5\ntuple (5,)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "int 5\ntuple (5,)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:20:29.470414771 -0400\n+++ fixed.py\t2026-10-17 17:20:29.643407252 -0400\n@@ -1,5 +1,5 @@\n def show(val):\n     print(type(val).__name__, val)\n x = 5\n-show((x))\n+show(x)\n show((x,))\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Context manager close behavior",
+      "hazard": "Non-file context manager with write but no close",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comment inside parentheses lost on rewrite",
+      "hazard": "Comments after ( are stripped when parens removed",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x = 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Function call with tuple argument unpacking hazard",
+      "hazard": "f((x,y)) -> f(x,y) changes arg count",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP034",
+            "severity": "warning",
+            "message": "Avoid extraneous parentheses",
+            "span": [
+              4,
+              3
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "len 1 args ((1, 2),)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "len 1 args ((1, 2),)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:20:30.012391216 -0400\n+++ fixed.py\t2026-10-17 17:20:30.174384187 -0400\n@@ -1,4 +1,4 @@\n def f(*args):\n     print('len', len(args), 'args', args)\n t = (1, 2)\n-f((t))\n+f(t)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Binary vs text file mode encoding",
+      "hazard": "Bytes vs str in file I/O with encoding/newline",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "bytes: b'hello\\n'\ntext: 'hello\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p007",
+      "title": "isinstance with tuple vs scalar hazard (near-miss)",
+      "hazard": "isinstance((x),int) safe; isinstance((x,),int) not triggered by rule",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p008",
+      "title": "Custom __bool__ and truthiness",
+      "hazard": "Truth value testing with custom __bool__",
+      "rule": "UP034",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    }
+  ]
+}

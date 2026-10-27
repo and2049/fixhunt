@@ -1,0 +1,578 @@
+{
+  "runId": "2026-10-17T20-45-53-206Z-fw8w-biome-correctness_noUnusedLabels",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "correctness/noUnusedLabels",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUnusedLabels\n- Fix: safe\n- Default severity: warn\n- Available from version: 1.0.0\n- Diagnostic category: lint/correctness/noUnusedLabels\n- This rule is recommended\n\nDescription\n\n Disallow unused labels.\n\n Labels that are declared and never used are most likely an error due to incomplete refactoring.\n\n The rule ignores reactive Svelte statements in Svelte components.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n LOOP: for (const x of xs) {\n     if (x > 0) {\n         break;\n     }\n     f(x);\n }\n ```\n\nValid\n\n ```js\n LOOP: for (const x of xs) {\n     if (x > 0) {\n         break LOOP;\n     }\n     f(x);\n }\n ```\n\n ```js\n function nonNegative(n) {\n     DEV: assert(n >= 0);\n     return n;\n }\n ```\n\n ```svelte\n <script>\n $: { /* reactive block */ }\n </script>\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags labeled statements where the label is never referenced by any break or continue statement within its scope.",
+    "firingShapes": [
+      "OUTER: while (true) { break; }",
+      "INNER: do { continue; } while (false);",
+      "START: for (let i = 0; i < 10; i++) { if (i === 5) break; }",
+      "LABEL: switch (x) { case 1: break; }",
+      "TRY: try { throw new Error(); } catch (e) { continue TRY; }",
+      "LOOP: for (;;) { if (Math.random() > 0.5) break LOOP; }",
+      "CASE: case 0: console.log('hi');",
+      "NESTED: A: B: C: { break; }"
+    ],
+    "silentShapes": [
+      "LOOP: for (const x of xs) { if (x > 0) break LOOP; f(x); }",
+      "DEV: assert(n >= 0);",
+      "$: { console.log('reactive'); }",
+      "LABEL: if (true) { break LABEL; }",
+      "OUTER: while (true) { INNER: for (;;) { break INNER; } }"
+    ],
+    "fixDescription": "The autofix removes the unused label and its trailing colon, leaving only the underlying statement unchanged.",
+    "hazards": [
+      "Removing a label before a block statement may change the interpretation of break/continue targets in nested loops if those inner statements rely on the outer label for control flow.",
+      "If the labeled statement is a function declaration, removing the label could cause a syntax error because labels are not permitted on function declarations in strict mode.",
+      "When the labeled statement is an empty block ({}), removing the label may drop a comment attached to the label token, altering source formatting.",
+      "In a labeled switch statement, removing the label could break if a nested switch uses the same label name via a continue statement (though continue doesn't apply to switch, this highlights label name reuse confusion).",
+      "If the label appears before a with statement, removing it might affect lexical scoping expectations in non-strict mode, though with is deprecated.",
+      "For a labeled debugger statement, removing the label has no semantic effect but may interfere with debugging tools that associate labels with breakpoints.",
+      "If the labeled statement is preceded by a line comment on the same line, the autofix may inadvertently remove that comment if it is token-attached to the label.",
+      "In a labeled expression statement (e.g., LABEL: x = 1;), removing the label is safe, but if the expression has side effects, the timing remains unchanged\u2014however, tools relying on label metadata for profiling could be affected.",
+      "When the labeled statement is a class declaration, removing the label causes a syntax error because labels are not allowed on class declarations.",
+      "If the label is used as a target by a break in a dynamically scoped eval string, removing it breaks the eval's control flow (though eval is discouraged).",
+      "In a labeled loop containing a function with a break that closes over the label, removing the label breaks the inner function's control flow if the break is not removed (but the rule only fires when unused, so this case shouldn't occur\u2014still, hypothetical misuse matters).",
+      "If the label is immediately followed by a newline and a comment on the next line, the autofix preserves the comment, but if the tool incorrectly joins lines, it could alter comment placement."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0028929000000000003,
+  "summary": {
+    "programs": 16,
+    "invalid": 6,
+    "fired": 9,
+    "fixed": 9,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hazard 1: Label captured by closure via break",
+      "hazard": "In a labeled loop containing a function with a break that closes over the label, removing the label breaks the inner function's control flow if the break is not removed.",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-45-53-206Z-fw8w-biome-correctness_noUnusedLabels/r1-p001/orig.js:2\n  const fn = () => { break OUTER; };\n                           ^^^^^\n\nSyntaxError: Undefined label 'OUTER'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Hazard 2: Label on class declaration causing syntax error after fix",
+      "hazard": "When the labeled statement is a class declaration, removing the label causes a syntax error because labels are not allowed on class declarations.",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-45-53-206Z-fw8w-biome-correctness_noUnusedLabels/r1-p002/orig.js:1\nMYLABEL: class Test {};\n         ^^^^^\n\nSyntaxError: Unexpected token 'class'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Hazard 3: Class elements interaction (fields, static block)",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-45-53-206Z-fw8w-biome-correctness_noUnusedLabels/r1-p003/orig.js:1\nLOOP: class C {\n      ^^^^^\n\nSyntaxError: Unexpected token 'class'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p004",
+      "title": "Hazard 4: Getter/setter and defineProperty side effects",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-45-53-206Z-fw8w-biome-correctness_noUnusedLabels/r1-p004/orig.js:1\nLABEL: let obj = {\n       ^^^\n\nSyntaxError: Lexical declaration cannot appear in a single-statement context\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p005",
+      "title": "Hazard 5: This binding in arrow vs function methods",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'val')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'val')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:02.254726081 -0400\n+++ fixed.js\t2026-10-17 16:46:02.530733259 -0400\n@@ -1,4 +1,4 @@\n-THISLABEL: {\n+{\n   const obj = {\n     val: 42,\n     fn: function() { return this.val; },\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Hazard 6: Line comment attached to label removed by autofix",
+      "hazard": "If the labeled statement is preceded by a line comment on the same line, the autofix may inadvertently remove that comment if it is token-attached to the label.",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Hazard 7: Name collision after label removal causes shadowing",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:02.921743429 -0400\n+++ fixed.js\t2026-10-17 16:46:03.192750471 -0400\n@@ -1,4 +1,4 @@\n-SHADOW: {\n+{\n   let SHADOW = 1;\n   console.log(SHADOW);\n   {\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Hazard 8: Var hoisting and redeclaration inside loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0\n1\nnumber number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n1\nnumber number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:03.357754757 -0400\n+++ fixed.js\t2026-10-17 16:46:03.630761848 -0400\n@@ -1,4 +1,4 @@\n-VARLOOP: for (var i = 0; i < 2; i++) {\n+for (var i = 0; i < 2; i++) {\n   var x = i;\n   console.log(x);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Hazard 1: Comment preservation after label",
+      "hazard": "Line comment after label may be mishandled during autofix",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:07.848871109 -0400\n+++ fixed.js\t2026-10-17 16:46:08.135878523 -0400\n@@ -1,4 +1,3 @@\n // Label here\n-OUTER: // comment after label\n while (false) { }\n console.log('done');\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Hazard 2: Label on class declaration",
+      "hazard": "Label on class declaration causes syntax error after removal",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-45-53-206Z-fw8w-biome-correctness_noUnusedLabels/r2-p002/orig.js:1\nCLASS: class C { constructor() { this.x = 1; } }\n       ^^^^^\n\nSyntaxError: Unexpected token 'class'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Hazard 3: Break in eval string referencing label",
+      "hazard": "Break in eval string depends on label existence",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "SyntaxError: Undefined label 'LOOP'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "SyntaxError: Undefined label 'LOOP'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:08.341883840 -0400\n+++ fixed.js\t2026-10-17 16:46:08.616890939 -0400\n@@ -1,4 +1,4 @@\n-LOOP: for (let i = 0; i < 3; i++) {\n+for (let i = 0; i < 3; i++) {\n   if (i === 1) eval('break LOOP;');\n   console.log(i);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Hazard 4: Null/undefined distinction with optional chaining",
+      "hazard": "Optional chaining short-circuit behavior under label",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "default\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "default\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:08.796895586 -0400\n+++ fixed.js\t2026-10-17 16:46:09.081902940 -0400\n@@ -1,4 +1,4 @@\n-LABEL: {\n+{\n   const obj = null;\n   const val = obj?.prop ?? 'default';\n   console.log(val);\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Hazard 5: Label on function declaration",
+      "hazard": "Label on function declaration invalid in strict mode",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-45-53-206Z-fw8w-biome-correctness_noUnusedLabels/r2-p005/orig.js:2\nFUNC: function f() { return 42; }\n      ^^^^^^^^\n\nSyntaxError: In strict mode code, functions can only be declared at top level or inside a block.\n    at checkSyntax (node:internal/main/check"
+    },
+    {
+      "id": "r2-p006",
+      "title": "Hazard 6: Numeric/string coercion edge cases",
+      "hazard": "Coercion behavior in labeled expression",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0 0\n0 \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0 0\n0 \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:09.315908973 -0400\n+++ fixed.js\t2026-10-17 16:46:09.602916373 -0400\n@@ -1,4 +1,4 @@\n-LABEL: {\n+{\n   const x = 0;\n   const y = '';\n   console.log(+x, +y);\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Hazard 7: This binding in arrow vs function methods",
+      "hazard": "This binding affected by label removal in method context",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:09.782921014 -0400\n+++ fixed.js\t2026-10-17 16:46:10.072928488 -0400\n@@ -1,4 +1,4 @@\n-OBJ: {\n+{\n   const obj = { value: 10, getValue: function() { return this.value; } };\n   const fn = obj.getValue;\n   console.log(obj.getValue(), fn());\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Hazard 8: Function declarations inside labeled blocks",
+      "hazard": "Function declaration in labeled block interacts with scope",
+      "rule": "correctness/noUnusedLabels",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noUnusedLabels",
+            "severity": "warning",
+            "message": "Unused label.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "99\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "99\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:46:10.269933561 -0400\n+++ fixed.js\t2026-10-17 16:46:10.572941363 -0400\n@@ -1,4 +1,4 @@\n-SCOPE: {\n+{\n   if (true) {\n     function inner() { return 99; }\n     console.log(inner());\n"
+      }
+    }
+  ]
+}

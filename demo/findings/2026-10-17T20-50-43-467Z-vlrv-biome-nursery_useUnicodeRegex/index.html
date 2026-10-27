@@ -1,0 +1,244 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome nursery/useUnicodeRegex — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome nursery/useUnicodeRegex <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-50-43-467Z-vlrv-biome-nursery_useUnicodeRegex · fix labelled <b>safe</b> · 16 programs, 15 fired, 13 fixed, 1 oracle-backed finding(s) · model cost $0.0164</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags any RegExp literal or constructor call missing the &#39;u&#39; or &#39;v&#39; flag.</p><p class="mut">Fix: Adds the &#39;u&#39; flag to RegExp literals lacking any flag, appends &#39;u&#39; to existing flags in literals, and adds &#39;u&#39; as the second argument to RegExp constructor calls missing it or having insufficient flags.</p><details><summary>10 hazards</summary><ul><li>Adding &#39;u&#39; to a RegExp literal containing an invalid Unicode escape like \\x{1} changes it from a syntax error to valid code, altering program behavior where the error was intentional.</li><li>Appending &#39;u&#39; to flags in a literal like /[a-z&amp;&amp;[^m-z]]/ may break execution in environments without Unicode Sets support, as the &#39;v&#39; flag would be required but only &#39;u&#39; is added.</li><li>For RegExp(&#39;pattern&#39;, &#39;uw&#39;), the fix produces &#39;uwu&#39; which includes duplicate &#39;u&#39; flags; while harmless, it is non-standard and could confuse tools expecting canonical flag order.</li><li>If the pattern string in new RegExp contains a backreference like \\1, adding &#39;u&#39; changes its meaning from octal escape to backreference, potentially altering matches.</li><li>In code relying on legacy octal escape interpretation (e.g., new RegExp(&#39;\\256&#39;)), adding &#39;u&#39; forbids octal escapes, causing the pattern to fail to compile where it previously matched extended ASCII.</li><li>When the RegExp constructor is called with a non-string pattern (e.g., another RegExp), adding &#39;u&#39; as a second argument is ignored per spec, but if the first argument is a RegExp and flags are provided, the fix may incorrectly add &#39;u&#39; when flags should replace rather than append.</li><li>If the regex is used in a context where the &#39;u&#39; flag changes the interpretation of ^ and $ to match line terminators in Unicode-sensitive ways, adding &#39;u&#39; could alter multiline matching behavior unexpectedly.</li><li>Comments attached to the RegExp token (e.g., /foo/* comment */) may be lost or misplaced during the rewrite if the tool does not preserve trailing or inner comments.</li><li>In a sequence like /foo/+bar, inserting &#39;u&#39; to make /foo/u/+bar could be misparsed due to precedence if whitespace is not managed, though unlikely, it risks altering expression structure.</li><li>For dynamically constructed regexes via new RegExp(userInput, &#39;g&#39;), the fix adds &#39;u&#39; making it &#39;gu&#39;, but if userInput contains unpaired surrogates, the &#39;u&#39; flag may cause a SyntaxError where the code previously relied on loose matching.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p003"><b>r1-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix adds the &#39;u&#39; flag to the RegExp constructor&#39;s flags argument, which changes the flags of the created regex from &#39;i&#39; to &#39;iu&#39;. When a RegExp is constructed from another RegExp with a flags argument, the provided flags replace the source regex&#39;s flags entirely; adding &#39;u&#39; alters the resulting regex&#39;s behavior (e.g., Unicode matching semantics) and is not a safe transformation.">judge: real · medium</span> RegExp constructor with RegExp arg<p class="mut">The fix adds the &#39;u&#39; flag to the RegExp constructor&#39;s flags argument, which changes the flags of the created regex from &#39;i&#39; to &#39;iu&#39;. When a RegExp is constructed from another RegExp with a flags argument, the provided flags replace the source regex&#39;s flags entirely; adding &#39;u&#39; alters the resulting regex&#39;s behavior (e.g., Unicode matching semantics) and is not a safe transformation.</p>
+<h2>Minimized program (3→3 lines)</h2><pre>let base = /a/g;
+let copy = new RegExp(base, &#39;i&#39;);
+console.log(copy.flags);
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:50:56.840217652 -0400
++++ fixed.js	2026-10-17 16:50:57.122222940 -0400
+@@ -1,3 +1,3 @@
+<span class="del">-let base = /a/g;</span>
+<span class="del">-let copy = new RegExp(base, &#39;i&#39;);</span>
+<span class="add">+let base = /a/gu;</span>
+<span class="add">+let copy = new RegExp(base, &#39;iu&#39;);</span>
+ console.log(copy.flags);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+i
+stdout after:
+iu</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11933">biomejs/biome/issues/11933</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/5693">biomejs/biome/issues/5693</a> · <a href="reports/r1-p003.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Label break continue with finally</td><td class="mut">label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Multiline ^$ behavior change</td><td class="mut">If the regex is used in a context where the &#39;u&#39; flag changes the interpretation of ^ and $</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>RegExp constructor with RegExp arg</td><td class="mut">When the RegExp constructor is called with a non-string pattern (e.g., another RegExp), ad</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Coercion in pattern</td><td class="mut">numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, Big</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Comment preservation</td><td class="mut">Comments attached to the RegExp token (e.g., /foo/* comment */) may be lost or misplaced d</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Order of evaluation side effects</td><td class="mut">order of evaluation when expressions are merged, duplicated or deleted (side effects run t</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Class fields interaction</td><td class="mut">class fields, static blocks, private names, super calls</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Var hoisting in loop</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Precedence risk in unary plus concatenation</td><td class="mut">In a sequence like /foo/+bar, inserting &#39;u&#39; to make /foo/u/+bar could be misparsed due to </td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Label break continue with finally</td><td class="mut">Label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Getters, setters and Object.defineProperty side effects</td><td class="mut">Getters, setters and Object.defineProperty side effects</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Async/await ordering, generators and yield position</td><td class="mut">Async/await ordering, generators and yield position</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Legacy octal escape interpretation</td><td class="mut">In code relying on legacy octal escape interpretation (e.g., new RegExp(&#39;\256&#39;)), adding &#39;</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Backreference meaning change under &#39;u&#39; flag</td><td class="mut">If the pattern string in new RegExp contains a backreference like \\1, adding &#39;u&#39; changes </td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Multiline ^$ behavior change with Unicode flag</td><td class="mut">If the regex is used in a context where the &#39;u&#39; flag changes the interpretation of ^ and $</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Null/undefined distinction, optional chaining short-circuit</td><td class="mut">Null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Label break continue with finally</summary><pre>outer: {
+  let result = &#39;&#39;;
+  try {
+    for (let i = 0; i &lt; 2; i++) {
+      const m = /a/.exec(&#39;a&#39;);
+      result += m ? m[0] : &#39;x&#39;;
+      if (i === 0) break outer;
+    }
+  } finally {
+    result += &#39;f&#39;;
+  }
+  console.log(result);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:50:55.968201295 -0400
++++ fixed.js	2026-10-17 16:50:56.229206192 -0400
+@@ -2,7 +2,7 @@
+   let result = &#39;&#39;;
+   try {
+     for (let i = 0; i &lt; 2; i++) {
+<span class="del">-      const m = /a/.exec(&#39;a&#39;);</span>
+<span class="add">+      const m = /a/u.exec(&#39;a&#39;);</span>
+       result += m ? m[0] : &#39;x&#39;;
+       if (i === 0) break outer;
+     }
+</pre></details><details id="r1-p002"><summary>r1-p002 — Multiline ^$ behavior change</summary><pre>let s = &#39;a\nb&#39;;
+let r = /^.$/;
+console.log(r.test(s));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:50:56.395209305 -0400
++++ fixed.js	2026-10-17 16:50:56.665214370 -0400
+@@ -1,3 +1,3 @@
+ let s = &#39;a\nb&#39;;
+<span class="del">-let r = /^.$/;</span>
+<span class="add">+let r = /^.$/u;</span>
+ console.log(r.test(s));
+</pre></details><details id="r1-p003"><summary>r1-p003 — RegExp constructor with RegExp arg</summary><pre>let base = /a/g;
+let copy = new RegExp(base, &#39;i&#39;);
+console.log(copy.flags);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:50:56.840217652 -0400
++++ fixed.js	2026-10-17 16:50:57.122222940 -0400
+@@ -1,3 +1,3 @@
+<span class="del">-let base = /a/g;</span>
+<span class="del">-let copy = new RegExp(base, &#39;i&#39;);</span>
+<span class="add">+let base = /a/gu;</span>
+<span class="add">+let copy = new RegExp(base, &#39;iu&#39;);</span>
+ console.log(copy.flags);
+</pre></details><details id="r1-p004"><summary>r1-p004 — Coercion in pattern</summary><pre>let obj = { valueOf: () =&gt; &#39;b&#39;, toString: () =&gt; &#39;B&#39; };
+let p = +obj;
+let r = new RegExp(p, &#39;&#39;);
+console.log(r.test(&#39;b&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:50:57.291226107 -0400
++++ fixed.js	2026-10-17 16:50:57.565231241 -0400
+@@ -1,4 +1,4 @@
+ let obj = { valueOf: () =&gt; &#39;b&#39;, toString: () =&gt; &#39;B&#39; };
+ let p = +obj;
+<span class="del">-let r = new RegExp(p, &#39;&#39;);</span>
+<span class="add">+let r = new RegExp(p, &#39;u&#39;);</span>
+ console.log(r.test(&#39;b&#39;));
+</pre></details><details id="r1-p005"><summary>r1-p005 — Comment preservation</summary><pre>/* start */
+let r = /a/* middle */;
+let m = r.exec(&#39;a&#39;);
+console.log(m ? m[0] : null);
+/* end */
+</pre></details><details id="r1-p006"><summary>r1-p006 — Order of evaluation side effects</summary><pre>let count = 0;
+let getPat = () =&gt; {
+  count++;
+  return &#39;a&#39;;
+};
+let r = new RegExp(getPat(), &#39;&#39;);
+console.log(count);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:50:57.785235364 -0400
++++ fixed.js	2026-10-17 16:50:58.059240497 -0400
+@@ -3,5 +3,5 @@
+   count++;
+   return &#39;a&#39;;
+ };
+<span class="del">-let r = new RegExp(getPat(), &#39;&#39;);</span>
+<span class="add">+let r = new RegExp(getPat(), &#39;u&#39;);</span>
+ console.log(count);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Class fields interaction</summary><pre>class C {
+  static r = /a/;
+  static {
+    console.log(C.r.test(&#39;a&#39;));
+  }
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:50:58.224243586 -0400
++++ fixed.js	2026-10-17 16:50:58.500248753 -0400
+@@ -1,5 +1,5 @@
+ class C {
+<span class="del">-  static r = /a/;</span>
+<span class="add">+  static r = /a/u;</span>
+   static {
+     console.log(C.r.test(&#39;a&#39;));
+   }
+</pre></details><details id="r1-p008"><summary>r1-p008 — Var hoisting in loop</summary><pre>function f() {
+  for (let i = 0; i &lt; 2; i++) {
+    if (i === 0) {
+      var r = /a/;
+    }
+    console.log(r.test(&#39;a&#39;));
+  }
+}
+f();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:50:58.664251824 -0400
++++ fixed.js	2026-10-17 16:50:58.939256972 -0400
+@@ -1,7 +1,7 @@
+ function f() {
+   for (let i = 0; i &lt; 2; i++) {
+     if (i === 0) {
+<span class="del">-      var r = /a/;</span>
+<span class="add">+      var r = /a/u;</span>
+     }
+     console.log(r.test(&#39;a&#39;));
+   }
+</pre></details><details id="r2-p001"><summary>r2-p001 — Precedence risk in unary plus concatenation</summary><pre>/abc/+1
+</pre><pre class="diff">--- orig.js	2026-10-17 16:51:05.062371213 -0400
++++ fixed.js	2026-10-17 16:51:05.317375954 -0400
+@@ -1 +1 @@
+<span class="del">-/abc/+1</span>
+<span class="add">+/abc/u+1</span>
+</pre></details><details id="r2-p002"><summary>r2-p002 — Label break continue with finally</summary><pre>outer: {
+  try {
+    if (/test/.test(&#39;x&#39;)) break outer;
+    console.log(&#39;should not reach&#39;);
+  } finally {
+    console.log(&#39;finally ran&#39;);
+  }
+}
+console.log(&#39;after label&#39;);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:51:05.482379022 -0400
++++ fixed.js	2026-10-17 16:51:05.750384006 -0400
+@@ -1,6 +1,6 @@
+ outer: {
+   try {
+<span class="del">-    if (/test/.test(&#39;x&#39;)) break outer;</span>
+<span class="add">+    if (/test/u.test(&#39;x&#39;)) break outer;</span>
+     console.log(&#39;should not reach&#39;);
+   } finally {
+     console.log(&#39;finally ran&#39;);
+</pre></details><details id="r2-p003"><summary>r2-p003 — Getters, setters and Object.defineProperty side effects</summary><pre>const obj = {};
+Object.defineProperty(obj, &#39;getter&#39;, {
+  get() { return /pattern/.test(&#39;input&#39;); }
+});
+console.log(obj.getter);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:51:05.932387390 -0400
++++ fixed.js	2026-10-17 16:51:06.205392463 -0400
+@@ -1,5 +1,5 @@
+ const obj = {};
+ Object.defineProperty(obj, &#39;getter&#39;, {
+<span class="del">-  get() { return /pattern/.test(&#39;input&#39;); }</span>
+<span class="add">+  get() { return /pattern/u.test(&#39;input&#39;); }</span>
+ });
+ console.log(obj.getter);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Async/await ordering, generators and yield position</summary><pre>(async () =&gt; {
+  const result = await Promise.resolve(/hello/.test(&#39;hello&#39;));
+  console.log(result);
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:51:06.373395584 -0400
++++ fixed.js	2026-10-17 16:51:06.660400915 -0400
+@@ -1,4 +1,4 @@
+ (async () =&gt; {
+<span class="del">-  const result = await Promise.resolve(/hello/.test(&#39;hello&#39;));</span>
+<span class="add">+  const result = await Promise.resolve(/hello/u.test(&#39;hello&#39;));</span>
+   console.log(result);
+ })();
+</pre></details><details id="r2-p005"><summary>r2-p005 — Legacy octal escape interpretation</summary><pre>try {
+  const regex = new RegExp(&#39;\\256&#39;);
+  console.log(regex.test(&#39;\xa0&#39;));
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre></details><details id="r2-p006"><summary>r2-p006 — Backreference meaning change under &#39;u&#39; flag</summary><pre>try {
+  const regex1 = new RegExp(&#39;\\1&#39;);
+  console.log(&#39;Pattern without u:&#39;, regex1);
+  console.log(&#39;Test &quot;\\x01&quot;\\x01:&#39;, regex1.test(&#39;\x01\x01&#39;));
+} catch (e) {
+  console.log(&#39;Error:&#39;, e.name + &#39;: &#39; + e.message);
+}
+try {
+  const regex2 = new RegExp(&#39;\\1&#39;, &#39;u&#39;);
+  console.log(&#39;Pattern with u:&#39;, regex2);
+  console.log(&#39;Test &quot;\\x01&quot;\\x01:&#39;, regex2.test(&#39;\x01\x01&#39;));
+} catch (e) {
+  console.log(&#39;Error with u:&#39;, e.name + &#39;: &#39; + e.message);
+}
+</pre></details><details id="r2-p007"><summary>r2-p007 — Multiline ^$ behavior change with Unicode flag</summary><pre>const str = &#39;a\nb\n&#39;;
+console.log(/^b$/gm.test(str));
+console.log(/^b$/gmu.test(str));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:51:07.406414766 -0400
++++ fixed.js	2026-10-17 16:51:07.689420018 -0400
+@@ -1,3 +1,3 @@
+ const str = &#39;a\nb\n&#39;;
+<span class="del">-console.log(/^b$/gm.test(str));</span>
+<span class="add">+console.log(/^b$/gmu.test(str));</span>
+ console.log(/^b$/gmu.test(str));
+</pre></details><details id="r2-p008"><summary>r2-p008 — Null/undefined distinction, optional chaining short-circuit</summary><pre>let obj = { prop: { value: /test/.test(&#39;foo&#39;) } };
+console.log(obj?.prop?.value);
+obj = null;
+console.log(obj?.prop?.value);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:51:07.863423248 -0400
++++ fixed.js	2026-10-17 16:51:08.144428460 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-let obj = { prop: { value: /test/.test(&#39;foo&#39;) } };</span>
+<span class="add">+let obj = { prop: { value: /test/u.test(&#39;foo&#39;) } };</span>
+ console.log(obj?.prop?.value);
+ obj = null;
+ console.log(obj?.prop?.value);
+</pre></details></body></html>

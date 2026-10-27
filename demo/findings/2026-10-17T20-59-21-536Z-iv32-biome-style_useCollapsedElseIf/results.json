@@ -1,0 +1,548 @@
+{
+  "runId": "2026-10-17T20-59-21-536Z-iv32-biome-style_useCollapsedElseIf",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useCollapsedElseIf",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useCollapsedElseIf\n- Fix: safe\n- Default severity: info\n- Available from version: 1.1.0\n- Diagnostic category: lint/style/useCollapsedElseIf\n\n\nDescription\n\n Enforce using `else if` instead of nested `if` in `else` clauses.\n\n If an `if` statement is the only statement in the `else` block, it is often clearer to use an `else if` form.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n if (condition) {\n     // ...\n } else {\n     if (anotherCondition) {\n         // ...\n     }\n }\n ```\n\n ```js,expect_diagnostic\n if (condition) {\n     // ...\n } else {\n     if (anotherCondition) {\n         // ...\n     } else {\n         // ...\n     }\n }\n ```\n\n ```js,expect_diagnostic\n if (condition) {\n     // ...\n } else {\n     // Comment\n     if (anotherCondition) {\n         // ...\n     }\n }\n ```\n\nValid\n\n ```js\n if (condition) {\n     // ...\n } else if (anotherCondition) {\n     // ...\n }\n ```\n\n ```js\n if (condition) {\n     // ...\n } else if (anotherCondition) {\n     // ...\n } else {\n     // ...\n }\n ```\n\n ```js\n if (condition) {\n     // ...\n } else {\n     if (anotherCondition) {\n         // ...\n     }\n     doSomething();\n }\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags when an else block contains exactly one if statement as its sole content.",
+    "firingShapes": [
+      "if(a){}else{if(b){}}",
+      "if(a){}else{if(b){}else{}}",
+      "if(a){}//\\nelse { if(b){} }",
+      "if(a){}else{ /*x*/ if(b){} }",
+      "if(a){}else{\\n\\tif(b){}\\n}",
+      "if(a){}else{//comment\\nif(b){}}",
+      "if(a){}else{   \\n\\tif(b){}\\n}",
+      "if(a){}else{(function(){})(); if(b){}}"
+    ],
+    "silentShapes": [
+      "if(a){}else{b(); if(c){}}",
+      "if(a){}else{if(b){} c();}",
+      "if(a){}else{/* comment */ b()}"
+    ],
+    "fixDescription": "Replaces 'else { if(condition) {...} }' with 'else if(condition) {...}', preserving inner block structure and comments.",
+    "hazards": [
+      "Moving a leading comment inside the else block to before the else if keyword changes its association from the inner if to the else clause, altering documentation intent.",
+      "If the else block contains a function declaration, hoisting behavior differs between block-scoped (else { function f(){} }) and else-if scoped (else if(...) function f(){}) declarations, potentially causing reference errors.",
+      "An empty else block ({}) after transformation would be invalid syntax, but the rule prevents this by requiring exactly one if statement.",
+      "When the inner if is labeled (e.g., else { label: if(x){} }), the label is lost during rewrite, breaking goto-like control flow via break/label.",
+      "If the else block starts with a directive prologue like 'use strict';, moving it before else if alters its scope from the else block to the else-if construct, potentially changing strict mode behavior.",
+      "Comments placed between the else brace and the inner if (e.g., else { /* comment */ if(){} }) are relocated to precede the else if, which may misalign them with subsequent code in minified outputs.",
+      "In environments with non-standard semantic whitespace sensitivity (e.g., certain DSLs or transpiled languages), removing braces could alter tokenization or parsing despite identical JS semantics.",
+      "If the inner if statement is part of a comma sequence (else { (0, if(x){}) }), the rewrite breaks invalid syntax but such cases are already parse errors; however, the rule assumes valid input where if is a statement, not an expression."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032355,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 7,
+    "fixed": 5,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Empty Else Block Prevention",
+      "hazard": "An empty else block ({}) after transformation would be invalid syntax, but the rule prevents this by requiring exactly one if statement.",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedElseIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into an else if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:32.788110634 -0400\n+++ fixed.js\t2026-10-17 16:59:33.076114328 -0400\n@@ -1,5 +1,3 @@\n let x = 1;\n-if (false) {} else {\n-  if (true) { x += 1; }\n-}\n+if (false) {} else if (true) { x += 1; }\n console.log(x); // Should be 2\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Comments Attached to Removed/Moved Code",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedElseIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into an else if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Getters/Setters/defineProperty Side Effects",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedElseIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into an else if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:33.525120084 -0400\n+++ fixed.js\t2026-10-17 16:59:33.801123622 -0400\n@@ -3,7 +3,5 @@\n   get() { return this._val || 0; },\n   set(v) { this._val = v * 2; }\n });\n-if (false) {} else {\n-  if (true) { obj.prop = 5; }\n-}\n+if (false) {} else if (true) { obj.prop = 5; }\n console.log(obj.prop); // Should be 10 due to setter doubling\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Directive Prologue Scope Change",
+      "hazard": "If the else block starts with a directive prologue like 'use strict';, moving it before else if alters its scope from the else block to the else-if construct, potentially changing strict mode behavior",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Exceptions Inside Removed/Rewritten Code",
+      "hazard": "exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedElseIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into an else if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:34.207128826 -0400\n+++ fixed.js\t2026-10-17 16:59:34.476132273 -0400\n@@ -1,8 +1,6 @@\n let w = 0;\n try {\n-  if (false) {} else {\n-    if (true) { throw new Error('test'); }\n-  }\n+  if (false) {} else if (true) { throw new Error('test'); }\n } catch(e) {\n   w = 1;\n }\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Function Declaration Hoisting Difference",
+      "hazard": "If the else block contains a function declaration, hoisting behavior differs between block-scoped (else { function f(){} }) and else-if scoped (else if(...) function f(){}) declarations, potentially c",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedElseIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into an else if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:34.659134618 -0400\n+++ fixed.js\t2026-10-17 16:59:34.936138167 -0400\n@@ -1,8 +1,6 @@\n let v;\n-if (false) {} else {\n-  if (true) {\n+if (false) {} else if (true) {\n     function inner() { return 42; }\n     v = inner();\n   }\n-}\n console.log(typeof v === 'number' ? v : 'undefined'); // Should be undefined in ES2015+ due to TDZ-like block scoping\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Name Collision Across Scopes After Move",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedElseIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into an else if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "11\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "11\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:59:35.106140345 -0400\n+++ fixed.js\t2026-10-17 16:59:35.387143944 -0400\n@@ -1,9 +1,7 @@\n let u = 1;\n for (let i = 0; i < 2; i++) {\n-  if (i === 0) {} else {\n-    if (true) {\n+  if (i === 0) {} else if (true) {\n       let u = i + 10;\n       console.log(u); // Should log 11 only once (i=1)\n     }\n-  }\n }\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Inner If in Comma Sequence (Invalid Assumed Valid Input)",
+      "hazard": "If the inner if statement is part of a comma sequence (else { (0, if(x){}) }), the rewrite breaks invalid syntax but such cases are already parse errors; however, the rule assumes valid input where if",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "no-op\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p001",
+      "title": "Function Declaration Hoisting Behavior Differs",
+      "hazard": "Function Declaration Hoisting Difference",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1,global fn\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Name Collision Across Scopes After Move (Shadowing)",
+      "hazard": "Name Collision Across Scopes After Move (shadowing)",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Comments Relocated Preceding Else If Misaligning With Subsequent Code",
+      "hazard": "Comments placed between the else brace and the inner if are relocated to precede the else if, which may misalign them with subsequent code in minified outputs.",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useCollapsedElseIf",
+            "severity": "info",
+            "message": "This if statement can be collapsed into an else if statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "A\nB\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "A\nB\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "This Binding: Arrow vs Function, Methods Extracted, Call/Apply/Bind",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Class Fields, Static Blocks, Private Names, Super Calls",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "300\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Function Declarations Inside Blocks, Switch Cases, Labeled Statements",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hit\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Label/Break/Continue Control Flow, Finally Blocks, Early Returns in Nested Blocks",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-59-21-536Z-iv32-biome-style_useCollapsedElseIf/r2-p007/orig.js:8\n      continue outer;\n               ^^^^^\n\nSyntaxError: Illegal continue statement: 'outer' does not denote an iteration statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNo"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Strict vs Sloppy Mode Semantics",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "style/useCollapsedElseIf",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-59-21-536Z-iv32-biome-style_useCollapsedElseIf/r2-p008/orig.js:8\n    delete junk; // TypeError in strict mode\n           ^^^^\n\nSyntaxError: Delete of an unqualified identifier in strict mode.\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js"
+    }
+  ]
+}

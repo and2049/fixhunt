@@ -1,0 +1,980 @@
+{
+  "runId": "2026-10-17T21-01-30-169Z-3u5f-biome-style_useExponentiationOperator",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useExponentiationOperator",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useExponentiationOperator\n- Fix: safe\n- Default severity: info\n- Available from version: 1.0.0\n- Diagnostic category: lint/style/useExponentiationOperator\n- This rule is recommended\n\nDescription\n\n Disallow the use of `Math.pow` in favor of the `**` operator.\n\n Introduced in ES2016, the infix exponentiation operator `**` is an alternative for the standard `Math.pow` function.\n Infix notation is considered to be more readable and thus more preferable than the function notation.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n const foo = Math.pow(2, 8);\n ```\n\n ```js,expect_diagnostic\n const bar = Math.pow(a, b);\n ```\n\n ```js,expect_diagnostic\n let baz = Math.pow(a + b, c + d);\n ```\n\n ```js,expect_diagnostic\n let quux = Math.pow(-1, n);\n ```\n\nValid\n\n ```js\n const foo = 2 ** 8;\n\n const bar = a ** b;\n\n let baz = (a + b) ** (c + d);\n\n let quux = (-1) ** n;\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags calls to Math.pow(base, exponent) where base and exponent are any expressions.",
+    "firingShapes": [
+      "const x = Math.pow(2, 3);",
+      "let y = Math.pow(a, b);",
+      "var z = Math.pow(a + b, c * d);",
+      "return Math.pow(-1, n);",
+      "Math.pow(obj.method(), arr[index]);",
+      "delete Math.pow(prop, anotherProp);",
+      "new C(Math.pow(x, y));",
+      "if (Math.pow(a, b) > 0) {}"
+    ],
+    "silentShapes": [
+      "const x = Math.pow(2);",
+      "let y = Math.pow();",
+      "const z = Math.pow(2, 3, 4);",
+      "Math.pow.call(null, 2, 3);",
+      "obj.Math.pow(2, 3);"
+    ],
+    "fixDescription": "Replace Math.pow(base, exponent) with the expression base ** exponent, preserving the original formatting and whitespace around the call but inserting the infix operator between the two arguments.",
+    "hazards": [
+      "If base or exponent contains a side-effecting expression like a function call, the autofix may change evaluation order because Math.pow evaluates both arguments before the call, while the ** operator evaluates left-hand side first then right-hand side, potentially altering observable behavior if the right-hand side has side effects that depend on the left-hand side's evaluation.",
+      "If base or exponent contains a comma expression, the autofix will incorrectly group due to the lower precedence of the comma operator compared to **, causing part of the intended argument to be excluded from the exponentiation operation.",
+      "If base or exponent contains yield or await expressions, the autofix may create invalid syntax because ** cannot directly contain these operators without parentheses, leading to a SyntaxError where the original Math.pow call was valid.",
+      "If base or exponent contains a newline without semicolon insertion protection, the autofix could trigger automatic semicolon insertion incorrectly, changing the parsing of subsequent statements.",
+      "If the Math.pow call appears in a context where its return value is used as a property key (e.g., computed property name), the autofix may produce invalid syntax because ** has lower precedence than the bracket operator, requiring additional parentheses that the autofix does not insert.",
+      "If the Math.pow call is inside a tag template literal, the autofix may break the template processing because the resulting ** expression alters how the template strings and interpolations are grouped.",
+      "If base or exponent contains a regular expression literal, the autofix may cause a SyntaxError because the asterisk in ** can be confused with the multiplication operator or regex quantifier depending on spacing.",
+      "If the call to Math.pow is actually a reference to a local variable named Math (shadowing the global), the autofix will incorrectly rewrite it as an exponentiation operation, changing the meaning entirely.",
+      "If the code is in a strict mode context where Math.pow is not configurable or is replaced, the autofix assumes the standard behavior, but the actual function might have custom semantics that ** does not replicate.",
+      "If base or exponent contains expressions with TypeScript-specific syntax (like type assertions or generics), the autofix may produce invalid JavaScript after transpilation if the rewrite interferes with those constructs.",
+      "If the original code had trailing comments on the Math.pow line, the autofix may drop or misplace them because it only rewrites the call expression and does not preserve comment attachment.",
+      "If base or exponent contains an expression that evaluates to NaN or Infinity, the behavior of ** differs from Math.pow in edge cases involving negative bases and non-integer exponents, potentially changing the result."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.019698,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 16,
+    "fixed": 15,
+    "fix-changes-behavior": 1,
+    "disputed": 1
+  },
+  "reports": [
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "try {\n  Math.pow = 42; // Should fail in strict mode\n} catch (e) {\n}\nconsole.log('Math.pow still works:', Math.pow(2, 3)); // Expected: 8\n",
+      "lines": {
+        "before": 20,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T21-01-30-169Z-3u5f-biome-style_useExponentiationOperator/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/410",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The program assigns to Math.pow, which throws in strict mode but is caught, leaving Math.pow as the original function. The fix replaces Math.pow(2, 3) with 2 ** 3, which bypasses the overwritten property and changes the observable behavior from a caught TypeError and no output to successful execution with output.",
+        "docsQuote": "Disallow the use of `Math.pow` in favor of the `**` operator.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useExponentiationOperator fix",
+          "style/useExponentiationOperator replace Math.pow calls",
+          "biome lint rule exponentiation operator conversion",
+          "fix behavior change from Math.pow to **"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 noDuplicateTestHooks: false positive on a local function named `before` called twice in a test",
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.15\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           windows\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `entropyThreshold` option for `noSecrets` rules does not have an effect · Issue #4494 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/4494",
+            "snippet": "biome/crates/biome\\_js\\_analyze/src/lint/nursery/no\\_secrets.rs\n\nLines 493 to 502 in fbf4b3d\n\n|  |\n\n| fn apply\\_exponential\\_entropy\\_scaling( |\n| entropy: f64, |\n| token\\_length: usize, |\n| base\\_threshold: f64, |\n| scaling\\_factor: f64, |\n| ) -> f64 { |\n| // We will apply a logarithmic dampening t"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Corrupted CLI safe fix for `useConsistentArrowReturn` · Issue #8347 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "snippet": "```\ntrue unset unset unset unset unset true true false true unset unset unset unset unset\n```\n\n### Rule name\n\nuseConsistentArrowReturn\n\n### Playground link\n\n### Expected result\n\nThe input\n\n```\nconst kek =(field \"first\" | \"second\") =>{return{first 1, second 2,}[field];};\n```\n\nshould be converted to ("
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Biome LSP is treating typescript files as if they were javascript files · Issue #3839 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3839",
+            "snippet": "I don't have this same problem with the `eslint` LSP (or any other LSP).\n\n### Expected result\n\nIt should always lint TypeScript files using TypeScript rules, not JavaScript rules.\n\n### Code of Conduct\n\n I agree to follow Biome's Code of Conduct\n\nReactions are currently unavailable\n\n## Activity\n\nNext"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Nest.js app breaks with useImportType rule · Issue #4514 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/4514",
+            "snippet": "More actions\n\n   Was bummed to discover this issue as this is one of the linting rules I value the most. For the record, eslint's `consistent-type-imports` absolutely handles this correctly: \n\n   I'm assuming biome's architecture precludes taking the approach eslint did? If not, and this is just a m"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 useConsistentCurlyBraces safe fix removes curly braces around expression character strings · Issue #8317 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8317",
+            "snippet": "This appears to have been fixed by #8439, which was merged for issue #8011 (the same underlying bug) and released in Biome 2.3.9. The rule now skips suggesting brace removal for JSX expression children whose string literal contains characters that would change meaning as plain JSX text — the guard i"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Biome not properly formatting workspace files · Issue #410 · biomejs/biome-vscode · GitHub",
+            "url": "https://github.com/biomejs/biome-vscode/issues/410",
+            "snippet": "8. switch to the source control tab\n    9. biome suddenly complains about `Math.pow()` usage in test.js even though it is disabled in biome.json\n    10. at this point when running `> format document with...` there's a random amount of biome instances ranging in my experience from 4 to over a dozen i"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "relation": "unrelated",
+            "why": "different rule about test hook naming"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "different rule about CSS property sorting"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "different rule about Sass variable ordering"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "different rule about nested CSS rule reordering"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule about unnecessary conditions on overloaded calls"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule about skipped test detection"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "different rule about private method usage detection"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "different rule about React StrictMode component export detection"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "different rule about unnecessary conditions on callback overloads"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "different rule about anchor content accessibility"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4494",
+            "relation": "unrelated",
+            "why": "different rule about secret entropy threshold option"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8347",
+            "relation": "unrelated",
+            "why": "different rule about consistent arrow return formatting"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3839",
+            "relation": "unrelated",
+            "why": "different issue about TypeScript vs JavaScript file handling"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4514",
+            "relation": "unrelated",
+            "why": "different rule about import type consistency"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8317",
+            "relation": "unrelated",
+            "why": "different rule about curly brace removal in JSX"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/410",
+            "relation": "related",
+            "why": "same rule style/useExponentiationOperator but different construct (test.js vs Math.pow reassignment)"
+          }
+        ],
+        "cost": 0.00424
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:34:39.960242464 -0400\n+++ fixed.js\t2026-10-22 13:34:42.104278607 -0400\n@@ -2,4 +2,4 @@\n   Math.pow = 42; // Should fail in strict mode\n } catch (e) {\n }\n-console.log('Math.pow still works:', Math.pow(2, 3)); // Expected: 8\n+console.log('Math.pow still works:', 2 ** 3); // Expected: 8\n",
+        "observed": "stdout before:\n\nstdout after:\nMath.pow still works: 8\nexit 1 → 0\nstderr before: TypeError: Math.pow is not a function\nstderr after: (none)",
+        "before": {
+          "stdout": "",
+          "stderr1": "TypeError: Math.pow is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "Math.pow still works: 8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "try {\n  Math.pow = 42; // Should fail in strict mode\n} catch (e) {\n}\nconsole.log('Math.pow still works:', 2 ** 3); // Expected: 8\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/useExponentiationOperator --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original code attempts to overwrite `Math.pow` with a number inside a try block, which fails in strict mode because `Math.pow` is non-writable, throwing a TypeError caught silently. The rewritten version replaces the call `Math.pow(2, 3)` with the exponentiation operator `2 ** 3`, bypassing `Math.pow` entirely. Since the error occurs during the assignment, not the call, the fix avoids the error by not using `Math.pow` after it’s broken, changing behavior from error-handled failure to silent success. This alters observable output and exit status, so it is not semantics-preserving.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Comma Expression Hazard",
+      "hazard": "If base or exponent contains a comma expression, the autofix will incorrectly group due to the lower precedence of the comma operator compared to **, causing part of the intended argument to be exclud",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Result: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Arguments Object Interaction",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          },
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "b: 8\nfn(): 8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b: 8\nfn(): 8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:47.818786756 -0400\n+++ fixed.js\t2026-10-17 17:01:48.092790054 -0400\n@@ -1,7 +1,7 @@\n-function test(a, b = Math.pow(2, 3)) {\n+function test(a, b = 2 ** 3) {\n   console.log('b:', b);\n }\n test(); // Expected: b: 8\n // After fix: still works? But we test capture via closure\n-const fn = () => Math.pow(2, 3);\n+const fn = () => 2 ** 3;\n console.log('fn():', fn()); // Expected: 8\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Temporal Dead Zone",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Caught: ReferenceError: Cannot access 'x' before initialization\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: ReferenceError: Cannot access 'x' before initialization\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:48.271792208 -0400\n+++ fixed.js\t2026-10-17 17:01:48.555795625 -0400\n@@ -1,5 +1,5 @@\n try {\n-  console.log(Math.pow(x, 2)); // TDZ: x not initialized\n+  console.log(x ** 2); // TDZ: x not initialized\n } catch (e) {\n   console.log('Caught:', e.name + ': ' + e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Tagged Template Literal",
+      "hazard": "If the Math.pow call is inside a tag template literal, the autofix may break the template processing because the resulting ** expression alters how the template strings and interpolations are grouped.",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          },
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Output: |8| end\nBad: |2|\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Output: |8| end\nBad: |2|\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:48.728797706 -0400\n+++ fixed.js\t2026-10-17 17:01:49.006801051 -0400\n@@ -1,7 +1,7 @@\n function tags(strings, ...values) {\n   return strings.raw[0] + '|' + values[0] + '|' + strings.raw[1];\n }\n-const output = tags`${Math.pow(2, 3)} end`;\n+const output = tags`${2 ** 3} end`;\n console.log('Output:', output); // Expected: '|8|'\n // After fix: tags`${2 ** 3} end` → same? Wait — no, if misgrouped...\n // Actually: if base/expr has comma, but here safe.\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Class Fields and Static Blocks",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          },
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Static block: 8\nInstance value: 16\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Static block: 8\nInstance value: 16\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:49.184803192 -0400\n+++ fixed.js\t2026-10-17 17:01:49.464806560 -0400\n@@ -1,10 +1,10 @@\n class C {\n-  static pow = Math.pow(2, 3);\n+  static pow = 2 ** 3;\n   static {\n     console.log('Static block:', C.pow); // Expected: 8\n   }\n   get value() {\n-    return Math.pow(this.prop, 2);\n+    return this.prop ** 2;\n   }\n }\n const inst = new C();\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Trailing Comments Preservation",
+      "hazard": "If the original code had trailing comments on the Math.pow line, the autofix may drop or misplace them because it only rewrites the call expression and does not preserve comment attachment.",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "x: 8\nFinal x: 8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: 8\nFinal x: 8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:49.630808556 -0400\n+++ fixed.js\t2026-10-17 17:01:49.893811720 -0400\n@@ -1,4 +1,4 @@\n-let x = Math.pow(2, 3); // Result should be 8\n+let x = 2 ** 3; // Result should be 8\n console.log('x:', x); // Print x\n // After fix: comment may be lost or moved — but we can't observe that directly\n // So instead, we make the line affect control flow via side effect in comment? Not possible.\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Strict vs Sloppy Mode",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          },
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Math.pow is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n\nstdout after:\nMath.pow still works: 8\nMode: strict\nexit 1 → 0\nstderr before: TypeError: Math.pow is not a function\nstderr after: (none)"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Math.pow still works: 8\nMode: strict\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:50.067813812 -0400\n+++ fixed.js\t2026-10-17 17:01:50.349817202 -0400\n@@ -4,7 +4,7 @@\n } catch (e) {\n   console.log('Assignment error:', e.name);\n }\n-console.log('Math.pow still works:', Math.pow(2, 3)); // Expected: 8\n+console.log('Math.pow still works:', 2 ** 3); // Expected: 8\n // In sloppy mode, assignment succeeds and breaks Math.pow\n // After fix: 2 ** 3 still works even if Math.pow is overwritten\n // So we can detect mode by whether Math.pow is callable\n@@ -15,6 +15,6 @@\n } else {\n   console.log('Mode: sloppy');\n   Math.pow = () => 0; // Break it\n-  console.log('After break, Math.pow(2,3):', Math.pow(2,3)); // Expected: 0\n+  console.log('After break, Math.pow(2,3):', 2 ** 3); // Expected: 0\n   console.log('But 2 ** 3:', 2 ** 3); // Expected: 8 — shows fix avoids reliance on Math.pow\n }\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Function Declarations in Blocks",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: helper is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: helper is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:50.522819282 -0400\n+++ fixed.js\t2026-10-17 17:01:50.789822492 -0400\n@@ -1,7 +1,7 @@\n switch (1) {\n   case 1:\n     function helper() {\n-      return Math.pow(2, 3);\n+      return 2 ** 3;\n     }\n     break;\n }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Trailing Comment Attached To Call",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:55.632880648 -0400\n+++ fixed.js\t2026-10-17 17:01:55.867883468 -0400\n@@ -1,2 +1,2 @@\n // This matters\n-const x = Math.pow(2, 3); // compute eight\n+const x = 2 ** 3; // compute eight\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Temporal Dead Zone Hoisting Conflict",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "TDZ:ReferenceError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TDZ:ReferenceError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:56.016885255 -0400\n+++ fixed.js\t2026-10-17 17:01:56.298888636 -0400\n@@ -1,2 +1,2 @@\n try { console.log(y); } catch(e) { console.log('TDZ:' + e.name); }\n-let y = Math.pow(2, 3)\n+let y = 2 ** 3\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Computed Property Key Precedence Failure",
+      "hazard": "If the Math.pow call appears in a context where its return value is used as a property key (e.g., computed property name), the autofix may produce invalid syntax because ** has lower precedence than t",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:56.466890651 -0400\n+++ fixed.js\t2026-10-17 17:01:56.743893973 -0400\n@@ -1 +1 @@\n-console.log({[Math.pow(2, 3)]: 'ok'}[8])\n+console.log({[2 ** 3]: 'ok'}[8])\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Newline Without Semicolon Protection ASI Hazard",
+      "hazard": "If base or exponent contains a newline without semicolon insertion protection, the autofix could trigger automatic semicolon insertion incorrectly, changing the parsing of subsequent statements.",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:56.912895999 -0400\n+++ fixed.js\t2026-10-17 17:01:57.184899260 -0400\n@@ -1,5 +1,5 @@\n let a = 2\n \n 3\n-let b = Math.pow(a, 1)\n+let b = a ** 1\n console.log(b)\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Arguments Object And Rest Parameters Collision",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "p=8, r.len=0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "p=8, r.len=0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:57.377901574 -0400\n+++ fixed.js\t2026-10-17 17:01:57.646904798 -0400\n@@ -1,2 +1,2 @@\n-function f(p = Math.pow(2, 3), ...r) { console.log('p=' + p + ', r.len=' + r.length); }\n+function f(p = 2 ** 3, ...r) { console.log('p=' + p + ', r.len=' + r.length); }\n f()\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Function Declaration In Block Scope Re-entry",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:57.823906920 -0400\n+++ fixed.js\t2026-10-17 17:01:58.087910084 -0400\n@@ -1 +1 @@\n-{ function g() { return Math.pow(2, 3); } console.log(g()); }\n+{ function g() { return 2 ** 3; } console.log(g()); }\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Regex Literal Asterisk Ambiguity In Exponentiation",
+      "hazard": "If base or exponent contains a regular expression literal, the autofix may cause a SyntaxError because the asterisk in ** can be confused with the multiplication operator or regex quantifier depending",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "no\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "no\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:58.261912169 -0400\n+++ fixed.js\t2026-10-17 17:01:58.520915272 -0400\n@@ -1 +1 @@\n-/a*/.test('') ? console.log('no') : console.log(/a*/.test(Math.pow(2, 3) + ''))\n+/a*/.test('') ? console.log('no') : console.log(/a*/.test(2 ** 3 + ''))\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Trailing Comment Dropped By Autofix",
+      "hazard": "If the original code had trailing comments on the Math.pow line, the autofix may drop or misplace them because it only rewrites the call expression and does not preserve comment attachment.",
+      "rule": "style/useExponentiationOperator",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useExponentiationOperator",
+            "severity": "info",
+            "message": "Use the '**' operator instead of 'Math.pow'.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "8\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:01:58.683917225 -0400\n+++ fixed.js\t2026-10-17 17:01:58.953920460 -0400\n@@ -1 +1 @@\n-console.log(Math.pow(2, 3)); // this comment must stay\n+console.log(2 ** 3); // this comment must stay\n"
+      }
+    }
+  ]
+}

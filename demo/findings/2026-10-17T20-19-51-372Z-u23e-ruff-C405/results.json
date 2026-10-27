@@ -1,0 +1,468 @@
+{
+  "runId": "2026-10-17T20-19-51-372Z-u23e-ruff-C405",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C405",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-literal-set (C405)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for `set()` calls that take unnecessary list or tuple literals\nas arguments.\n\n## Why is this bad?\nIt's unnecessary to use a list or tuple literal within a call to `set()`.\nInstead, the expression can be rewritten as a set literal.\n\n## Example\n```python\nset([1, 2])\nset((1, 2))\nset([])\n```\n\nUse instead:\n```python\n{1, 2}\n{1, 2}\nset()\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it may occasionally drop comments\nwhen rewriting the call. In most cases, though, comments will be preserved.\n"
+  },
+  "analysis": {
+    "summary": "Flags set() constructor called with a single list or tuple literal argument.",
+    "firingShapes": [
+      "set([1, 2])",
+      "set((1, 2))",
+      "set([])",
+      "set(())",
+      "set(list(range(5)))",
+      "set(tuple('abc'))"
+    ],
+    "silentShapes": [
+      "set({1, 2})",
+      "set(a, b)",
+      "set(iterable)",
+      "set(x for x in [1, 2])",
+      "list(set([1]))"
+    ],
+    "fixDescription": "Rewrites set(L) where L is a list or tuple literal to {*L} if non-empty, otherwise set().",
+    "hazards": [
+      "The rewrite drops inline or trailing comments attached to the set() call or its argument, as the autofix may not preserve comment nodes during AST transformation.",
+      "If the list or tuple literal contains mutable elements that are later modified, the resulting set may capture different object identities due to reconstruction via set literal, though values remain equal.",
+      "In rare cases involving custom __eq__ or __hash__ implementations, the order of element insertion during set literal construction could theoretically affect hash collision resolution, though final set equality is preserved.",
+      "If the argument is a tuple literal used elsewhere in the code (e.g., assigned to a variable), rewriting to a set literal severs that shared reference, potentially breaking aliasing expectations.",
+      "The autofix may incorrectly apply to set() calls generated via macros or code-generation tools where the list/tuple appears literal but is semantically dynamic, leading to incorrect static rewrites.",
+      "If the set() call is part of a larger expression where the original call's formatting or line breaks are significant (e.g., for diff tools or readability), the rewrite may alter whitespace in a way that breaks team formatting rules.",
+      "When the list or tuple literal contains duplicate elements, the set literal rewrite behaves identically, but intermediate steps in evaluation (like list creation) are skipped, which could matter in tracing or debugging contexts.",
+      "If the code relies on the set() constructor for its type (e.g., isinstance(x, set) after assignment), the rewrite still produces a set, so no behavioral change occurs—this hazard is included to emphasize that type preservation holds, unlike in unsafe cases."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032130000000000006,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 1,
+    "fixed": 0,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Mutable Default Arguments Aliasing",
+      "hazard": "Rewriting `set([])` to `set()` removes explicit empty list creation, causing shared state across function calls when used as a mutable default.",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "{0} {0}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Custom __eq__ and Hash Collision Resolution",
+      "hazard": "Set literal `{*L}` may insert elements in different order than `set(L)`, affecting internal hash table probing sequence even if final equality holds; this can surface in debugging or custom `__repr__`",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C405",
+            "severity": "warning",
+            "message": "Unnecessary list literal (rewrite as a set literal)",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "{A(1), A(2)}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "{A(1), A(2)}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Macro-Generated Code Misinterpretation",
+      "hazard": "Code generation tools may produce `set([x for x in ...])` where the list comprehension looks literal but is semantically dynamic; rewriting to `{*[x for x in ...]}` is invalid syntax, causing parse fa",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'list' as a set element (unhashable type: 'list')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p004",
+      "title": "Duplicate Elements and Intermediate Evaluation Skipped",
+      "hazard": "Rewriting `set([1,1,2])` skips list creation, removing a potential breakpoint or trace point in debugging where the list's construction had side effects.",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "list made 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Generators Consumed Once",
+      "hazard": "Rewriting `set(generator)` is not attempted by the rule (correctly), but if mistakenly applied, `{*gen}` would consume the generator eagerly, whereas `set(gen)` does so lazily; here we show the rule c",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "12\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Bytes vs Str Encoding and Newlines",
+      "hazard": "Rewriting `set([b'a', b'b'])` to `{*[b'a', b'b']}` is safe for bytes, but if the list were decoded strings with encoding-sensitive content, the rewrite doesn't change semantics—yet tracing list creati",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sequence item 0: expected str instance, bytes found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Type Annotations Evaluated at Runtime",
+      "hazard": "If a list literal in a set() call is used in a forward reference resolved at runtime via `typing.get_type_hints()`, rewriting it to a set literal doesn't change the value, but the intermediate list mi",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'set'> {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Non-File Context Managers with write()",
+      "hazard": "Rewriting `set([log_stream])` where `log_stream` is a context manager with `write()` but no `close()` doesn't affect resource safety, but if the list literal were part of a larger expression with side",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Mutable List Literal Elements Modified After Set Construction",
+      "hazard": "If the list or tuple literal contains mutable elements that are later modified, the resulting set may capture different object identities due to reconstruction via set literal, though values remain eq",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "i=0, set={0}, lst=[99]\ni=1, set={1}, lst=[99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Type Annotation Evaluated at Runtime Using Forward Reference",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "set from annotation-resolved list: {1, 2}\nAnnotation type: <class 'str'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Tuple Literal Shared Reference Severed by Rewrite",
+      "hazard": "If the argument is a tuple literal used elsewhere in the code (e.g., assigned to a variable), rewriting to a set literal severs that shared reference, potentially breaking aliasing expectations.",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "set from original t: {1, 2}\nt after reassignment: (3, 4)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Dict Ordering and Duplicate Keys in Set Construction via List",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set size from duplicate BadDict: 1\nElements: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Async Generator Consumption Affected by Set Literal Rewrite",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set from async gen: {1, 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Custom __eq__/__hash__ and Insertion Order in Set Literal",
+      "hazard": "In rare cases involving custom __eq__ or __hash__ implementations, the order of element insertion during set literal construction could theoretically affect hash collision resolution, though final set",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set contents: {OS(1,a)}\nLength: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Bytes vs Str Encoding and Newline Handling in Set Literal",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Evaluation Order and Side Effects in Set Argument Expression",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "C405",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Side effects log: [0]\nSet from f(): {0}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

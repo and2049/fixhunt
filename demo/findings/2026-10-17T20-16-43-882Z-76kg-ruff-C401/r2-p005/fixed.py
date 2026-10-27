@@ -1,0 +1,5 @@
+data = iter([1, 2, 3])
+s1 = set(x for x in data)
+print(f"First set: {s1}")
+s2 = set(x for x in data)
+print(f"Second set: {s2}")

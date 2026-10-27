@@ -1,0 +1,619 @@
+{
+  "runId": "2026-10-17T21-00-12-077Z-lnk8-biome-style_useConsistentArrowReturn",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useConsistentArrowReturn",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useConsistentArrowReturn\n- Fix: safe\n- Default severity: info\n- Available from version: 2.2.3\n- Diagnostic category: lint/style/useConsistentArrowReturn\n\n\nDescription\n\n Enforce consistent arrow function bodies.\n\n This rule enforces the use of arrow functions with no body block when the function body consists of a single return statement.\n This rule does not report when:\n - the function body contains directives (e.g. `\"use strict\"`), or\n - the body (or its descendants) contain comments, or\n - the single `return` has no argument (`return;`).\n\n The fix wraps expressions in parentheses when required for correctness (e.g. object literals and sequence expressions).\n\nExamples\n\nInvalid\n\n```js,expect_diagnostic\n const bar = () => {\n     return {\n         bar: {\n             foo: 1,\n             bar: 2,\n         }\n     };\n };\n ```\n\nValid\n\n ```js\n const foo = () => 0;\n const bar = () => { \"use strict\"; return 1 }\n const baz = () => { /* intentional */ return x }\n const qux = () => ({ a: 1 })   // already concise with parens\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags arrow functions with a block body containing only a single return statement.",
+    "firingShapes": [
+      "const f = () => { return x; };",
+      "let g = (a) => { return a + 1; };",
+      "var h = (x, y) => { return x * y; };",
+      "const i = () => { return { a: 1 }; };",
+      "const j = () => { return [1, 2]; };",
+      "const k = () => { return /pattern/g; };",
+      "const l = m => { return m.prop; };",
+      "function outer() { return () => { return 42; }; }"
+    ],
+    "silentShapes": [
+      "const f = () => { \"use strict\"; return x; };",
+      "const g = () => { /* comment */ return x; };",
+      "const h = () => { return; };",
+      "const i = () => { if (true) return x; };",
+      "const j = () => { try { return x; } finally {} };"
+    ],
+    "fixDescription": "Replace the block body with a concise arrow body by removing braces and the return keyword, wrapping the returned expression in parentheses if needed to avoid parsing ambiguities (e.g., object literals become ({ ... }) and comma-separated expressions remain grouped).",
+    "hazards": [
+      "Rewriting `() => { return expr, expr; }` as `() => (expr, expr)` changes evaluation order if the comma expression relies on left-to-right side effects being visible before the fix (though value is same, timing of side effects may differ in debuggers or proxies).",
+      "If the returned expression is an object literal like `{ a: 1 }`, omitting parentheses during rewrite would cause a parse error (`{` interpreted as block start), but the fix adds them\u2014however, if the original code relied on automatic semicolon insertion after the block, adding parentheses could alter ASI boundaries in edge cases involving newlines.",
+      "When the arrow function is used as a constructor via `new`, the concise form may incorrectly return the wrapped expression instead of the newly created instance (though arrow functions aren\u2019t constructible, this is more theoretical; if mistakenly called via `Reflect.construct`, behavior diverges).",
+      "If the return expression contains a `yield` (in generator context), rewriting breaks because arrow functions cannot be generators, but the rule doesn\u2019t fire on generators anyway\u2014still, if misapplied due to incorrect parsing, it would invalidate syntax.",
+      "In non-strict mode, if the function body contained a `with` statement (invalid in strict), but the rule doesn\u2019t fire on multi-statement bodies, so not applicable\u2014however, if a single `return with (x) {}` existed, the fix would preserve it, but `with` is deprecated and rarely used.",
+      "If the returned expression is a class declaration like `class C {}`, rewriting as `() => class C {}` is fine, but if the original relied on the block creating a lexical scope for `let`/`const` inside (which it doesn\u2019t\u2014returns don\u2019t create scopes), no issue arises.",
+      "If the arrow function\u2019s body had a trailing comment after `return` (e.g., `return x; // note`), the rule stays silent per documentation, so no fix is applied\u2014thus no hazard from comment loss in fired cases.",
+      "If the function is part of a larger expression like `x = () => { return y }()`, the fix changes precedence grouping; however, since the arrow function call is immediate, the value is unchanged, but if the return expression were itself a function call with side effects, the timing of evaluation relative to outer expressions remains identical due to call semantics.",
+      "In TypeScript or JSX contexts, if the arrow function returns a JSX element like `<div />`, rewriting as `() => (<div />)` is valid, but if the original block had a comment or directive (excluded), no issue\u2014however, tools that rely on block-body structure for formatting may reformat incorrectly post-fix."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0037947000000000002,
+  "summary": {
+    "programs": 15,
+    "invalid": 1,
+    "fired": 12,
+    "fixed": 12,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Regular Expression with Unicode Flag",
+      "hazard": "Rewriting changes regex literal precedence due to missing grouping parentheses when followed by operators.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:25.936783184 -0400\n+++ fixed.js\t2026-10-17 17:00:26.230786855 -0400\n@@ -1,5 +1,3 @@\n const pattern = 'ab';\n-const matchIt = s => {\n-  return new RegExp(pattern, 'u').test(s);\n-};\n+const matchIt = s => new RegExp(pattern, 'u').test(s);\n console.log(matchIt('\u00e1b'));\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "This Binding in Method Extraction",
+      "hazard": "Removing block braces does not affect arrow function's lexical this, but exposes reliance on outer this via closure.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:26.397788940 -0400\n+++ fixed.js\t2026-10-17 17:00:26.663792261 -0400\n@@ -1,7 +1,7 @@\n const obj = {\n   value: 42,\n   getValue: function() {\n-    return () => { return this.value; };\n+    return () => this.value;\n   }\n };\n const fn = obj.getValue();\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Function Declaration Inside Switch Case",
+      "hazard": "Rule fires on inner arrow function; rewriting changes temporal dead zone behavior if return expr uses let from case scope.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ReferenceError: getX is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ReferenceError: getX is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:26.840794471 -0400\n+++ fixed.js\t2026-10-17 17:00:27.111797854 -0400\n@@ -1,7 +1,7 @@\n switch (1) {\n   case 1:\n     let x = 10;\n-    const getX = () => { return x; };\n+    const getX = () => x;\n     break;\n }\n try {\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Yield in Return Expression (Generator Context)",
+      "hazard": "Rule does not fire on generators, but simulating misfire shows syntax error if arrow function incorrectly rewritten to contain yield.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Name Collision Across Scopes After Move",
+      "hazard": "Rewriting moves arrow function to outer scope, causing it to capture a different variable due to shadowing.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "ReferenceError: getX is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "ReferenceError: getX is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:27.501802721 -0400\n+++ fixed.js\t2026-10-17 17:00:27.764806004 -0400\n@@ -1,7 +1,7 @@\n let x = 1;\n {\n   let x = 2;\n-  const getX = () => { return x; };\n+  const getX = () => x;\n   console.log(getX()); // Prints 2\n }\n console.log(getX()); // After rewrite: prints 1 (outer x)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Class Declaration Returned",
+      "hazard": "Rule rewrites return of class declaration; though semantically safe, we verify no scoping issues arise from removed block.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:27.937808163 -0400\n+++ fixed.js\t2026-10-17 17:00:28.216811643 -0400\n@@ -1,8 +1,6 @@\n-const makeClass = () => {\n-  return class {\n+const makeClass = () => class {\n     constructor() { this.x = 1; }\n   };\n-};\n const C = makeClass();\n const c = new C();\n console.log(c.x);\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "__proto__ Key in Object Literal",
+      "hazard": "Rule rewrites object literal return; ensures __proto__ key is preserved and not interpreted as actual proto setter.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:28.387813776 -0400\n+++ fixed.js\t2026-10-17 17:00:28.662817207 -0400\n@@ -1,5 +1,3 @@\n-const makeObj = () => {\n-  return { __proto__: null, a: 1 };\n-};\n+const makeObj = () => ({ __proto__: null, a: 1 });\n const o = makeObj();\n console.log(o.__proto__ === null && o.a === 1);\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Constructor Use with Reflect.construct",
+      "hazard": "When the arrow function is used as a constructor via new or Reflect.construct, the concise form may incorrectly return the wrapped expression instead of honoring construction semantics.",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "madeViaNew: 1\nmadeViaConstruct: null\n",
+          "stderr1": "TypeError: [object Array] is not a constructor",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "madeViaNew: 1\nmadeViaConstruct: null\n",
+          "stderr1": "TypeError: [object Array] is not a constructor",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:36.839919001 -0400\n+++ fixed.js\t2026-10-17 17:00:37.127922579 -0400\n@@ -8,7 +8,7 @@\n console.log('madeViaNew:', madeViaNew ? madeViaNew.value : 'none');\n \n // Arrow function returning class - rule triggers here\n-const makeTarget = (cls) => { return cls; };\n+const makeTarget = (cls) => cls;\n let madeViaConstruct = null;\n try {\n   // Simulate incorrect construction attempt using Reflect.construct\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Order of Evaluation with Side Effects",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "log: ab|ab\nfirst: 1\nsecond: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "log: ab|ab\nfirst: 1\nsecond: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:37.291924616 -0400\n+++ fixed.js\t2026-10-17 17:00:37.578928180 -0400\n@@ -5,7 +5,7 @@\n };\n \n // Arrow with comma expression - rule triggers\n-const getVals = () => { return side('a'), side('b'); };\n+const getVals = () => (side('a'), side('b'));\n \n const first = getVals();\n log += '|';\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "With Statement in Non-Strict Mode (Single Return)",
+      "hazard": "In non-strict mode, if the function body contained a `with` statement (invalid in strict), but the rule doesn\u2019t fire on multi-statement bodies, so not applicable\u2014however, if a single `return with (x) ",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-00-12-077Z-lnk8-biome-style_useConsistentArrowReturn/r2-p003/orig.js:8\n    result = (() => { with(obj) { return x; } })();\n                      ^^^^\n\nSyntaxError: Strict mode code may not include a with statement\n    at checkSyntax (node:internal/main/check"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Exceptions Thrown Inside Rewritten Code",
+      "hazard": "exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "threw: true\nerror: Error: fail\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Comma Expression Evaluation Order",
+      "hazard": "Rewriting `() => { return expr, expr; }` as `() => (expr, expr)` changes evaluation order if the comma expression relies on left-to-right side effects being visible before the fix (though value is sam",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "trace: AB\nvalue: 66\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "trace: AB\nvalue: 66\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:38.030933795 -0400\n+++ fixed.js\t2026-10-17 17:00:38.302937171 -0400\n@@ -5,7 +5,7 @@\n };\n \n // Comma return - rule triggers here\n-const seq = () => { return step('A'), step('B'); };\n+const seq = () => (step('A'), step('B'));\n \n const val = seq();\n console.log('trace:', trace);\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Object.defineProperty Side Effects",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "defined: false\nvalue: 99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "defined: false\nvalue: 99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:38.468939232 -0400\n+++ fixed.js\t2026-10-17 17:00:38.734942535 -0400\n@@ -11,7 +11,7 @@\n });\n \n // Arrow returning object literal - rule triggers\n-const makeObj = (v) => { return { prop: v }; };\n+const makeObj = (v) => ({ prop: v });\n \n makeObj(5);\n console.log('defined:', defined);\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Function Declaration Inside Block/Switch/Label",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          },
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          },
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "block x: 2\ncase y: 4\nlabeled z: 13\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "block x: 2\ncase y: 4\nlabeled z: 13\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:38.896944546 -0400\n+++ fixed.js\t2026-10-17 17:00:39.187948158 -0400\n@@ -1,7 +1,7 @@\n {  // Block scope\n   let x = 1;\n   // Arrow in block - rule triggers\n-  const inc = () => { return x + 1; };\n+  const inc = () => x + 1;\n   x = inc();\n   console.log('block x:', x);\n }\n@@ -10,7 +10,7 @@\n   case 1:\n     let y = 2;\n     // Arrow in case - rule triggers\n-    const double = (z) => { return z * 2; };\n+    const double = (z) => z * 2;\n     y = double(y);\n     console.log('case y:', y);\n     break;\n@@ -19,7 +19,7 @@\n label: {\n   let z = 3;\n   // Arrow in labeled block\n-  const addTen = () => { return z + 10; };\n+  const addTen = () => z + 10;\n   z = addTen();\n   console.log('labeled z:', z);\n   break label;\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Strict vs Sloppy Mode Semantics",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "style/useConsistentArrowReturn",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          },
+          {
+            "rule": "style/useConsistentArrowReturn",
+            "severity": "info",
+            "message": "The body of this arrow function contains a single return statement.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "strict: s\nsloppy: S\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "strict: s\nsloppy: S\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:00:39.356950255 -0400\n+++ fixed.js\t2026-10-17 17:00:39.629953642 -0400\n@@ -1,7 +1,7 @@\n (function(){\n   'use strict';\n   let strictLog = '';\n-  const strictFn = () => { return strictLog += 's'; };\n+  const strictFn = () => strictLog += 's';\n   strictFn();\n   console.log('strict:', strictLog);\n })();\n@@ -9,7 +9,7 @@\n (function(){\n   // sloppy mode\n   let sloppyLog = '';\n-  const sloppyFn = () => { return sloppyLog += 'S'; };\n+  const sloppyFn = () => sloppyLog += 'S';\n   sloppyFn();\n   console.log('sloppy:', sloppyLog);\n })();\n"
+      }
+    }
+  ]
+}

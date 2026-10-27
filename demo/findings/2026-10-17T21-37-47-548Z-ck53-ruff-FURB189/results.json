@@ -1,0 +1,704 @@
+{
+  "runId": "2026-10-17T21-37-47-548Z-ck53-ruff-FURB189",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB189",
+    "fixKind": "unknown",
+    "docs": "# subclass-builtin (FURB189)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for subclasses of `dict`, `list` or `str`.\n\n## Why is this bad?\nBuilt-in types don't consistently use their own dunder methods. For example,\n`dict.__init__` and `dict.update()` bypass `__setitem__`, making inheritance unreliable.\n\nUse the `UserDict`, `UserList`, and `UserString` objects from the `collections` module\ninstead.\n\nThis rule does not apply to stub files, which should faithfully represent the runtime\nimplementation and may be out of the author's control.\n\n## Example\n\n```python\nclass UppercaseDict(dict):\n    def __setitem__(self, key, value):\n        super().__setitem__(key.upper(), value)\n\n\nd = UppercaseDict({\"a\": 1, \"b\": 2})  # Bypasses __setitem__\nprint(d)  # {'a': 1, 'b': 2}\n```\n\nUse instead:\n\n```python\nfrom collections import UserDict\n\n\nclass UppercaseDict(UserDict):\n    def __setitem__(self, key, value):\n        super().__setitem__(key.upper(), value)\n\n\nd = UppercaseDict({\"a\": 1, \"b\": 2})  # Uses __setitem__\nprint(d)  # {'A': 1, 'B': 2}\n```\n\n## Fix safety\nThis fix is marked as unsafe because `isinstance()` checks for `dict`,\n`list`, and `str` types will fail when using the corresponding User class.\nIf you need to pass custom `dict` or `list` objects to code you don't\ncontrol, ignore this check. If you do control the code, consider using\nthe following type checks instead:\n\n* `dict` -> `collections.abc.MutableMapping`\n* `list` -> `collections.abc.MutableSequence`\n* `str` -> No such conversion exists\n\n## References\n\n- [Python documentation: `collections`](https://docs.python.org/3/library/collections.html)\n"
+  },
+  "analysis": {
+    "summary": "Flags classes that inherit directly from built-in dict, list, or str due to inconsistent dunder method usage.",
+    "firingShapes": [
+      "class A(dict): pass",
+      "class B(list):\\n    def append(self, x): super().append(x)",
+      "class C(str):\\n    def __new__(cls, s): return super().__new__(cls, s.upper())",
+      "class D(UserDict, dict): pass",
+      "class E(tuple, list): pass",
+      "class F(collections.UserDict): pass",
+      "class G: def __init__(self): self.data = {}",
+      "class H(dict):\\n    __slots__ = ()"
+    ],
+    "silentShapes": [
+      "from collections import UserDict\\nclass A(UserDict): pass",
+      "class A(UserList):\\n    def __init__(self, iterable): super().__init__(iterable)",
+      "import collections\\nclass A(collections.UserString): pass",
+      "class A: pass",
+      "class A(int): pass"
+    ],
+    "fixDescription": "Replaces direct inheritance from dict, list, or str with the corresponding collections.UserDict, UserList, or UserString base class, preserving all other bases and class body content.",
+    "hazards": [
+      "The rewrite changes the MRO, potentially altering method resolution order in multiple inheritance scenarios involving the replaced base.",
+      "isinstance(obj, dict/list/str) checks will return False for instances after the rewrite, breaking type tests that rely on the original built-in type.",
+      "Code relying on the exact type (type(obj) is dict/list/str) will fail after the rewrite, as the type becomes the User* subclass.",
+      "If the class defines __slots__, the rewrite may conflict with User*'s __slots__ or cause layout incompatibilities, leading to attribute errors.",
+      "If the class overrides __new__ or __init__ and depends on the built-in's memory layout or initialization behavior, the User* alternative may not replicate it exactly.",
+      "If the class is used in C extensions or via CPython's internal APIs that expect the exact built-in type, the rewrite may cause segmentation faults or undefined behavior.",
+      "If the class relies on the built-in's hash implementation (e.g., for use in sets or as dict keys), the User* version may have different hashing behavior.",
+      "If the class is pickled/unpickled, the rewrite changes the serialized form and may break compatibility with existing pickles expecting the built-in type.",
+      "If the class is documented or inspected via __mro__, __bases__, or similar introspection, the output will differ after the rewrite.",
+      "Any decorators or metaclasses that inspect or modify the base classes at definition time may behave differently due to the changed base list.",
+      "If the code imports dict/list/str from elsewhere (e.g., via aliasing or shadowing), the fix may incorrectly replace the wrong base or fail to detect the inheritance.",
+      "Comments placed on the same line as the class declaration or within the parentheses of the base class list may be lost or misplaced during the rewrite."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0052764,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 13,
+    "fixed": 0,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Exact type check fails after rewrite",
+      "hazard": "Code relying on type(obj) is dict/list/str breaks when type becomes User* subclass.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              9,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "__mro__ inspection differs after rewrite",
+      "hazard": "Introspection via __mro__, __bases__ etc. shows different inheritance chain post-fix.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "(<class '__main__.A'>, <class 'dict'>, <class 'object'>)\n(<class 'dict'>,)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "(<class '__main__.A'>, <class 'dict'>, <class 'object'>)\n(<class 'dict'>,)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Aliased built-in causes misfire or missed detection",
+      "hazard": "If dict/list/str imported/aliased/shadowed, fix may replace wrong identifier or miss trigger.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class '__main__.A'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p004",
+      "title": "Descriptor/properties with side effects behave differently",
+      "hazard": "__get__/__set__ logic assumes dict storage; UserDict stores data in .data attribute.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              10,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Bytes vs str confusion in UserString rewrite",
+      "hazard": "UserString expects str input; passing bytes breaks or encodes unexpectedly post-fix.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `str` can be error prone, use `collections.UserString` instead",
+            "span": [
+              1,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "<class '__main__.MyStr'>\n'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class '__main__.MyStr'>\n'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "*args/**kwargs forwarding broken by signature mismatch",
+      "hazard": "UserList.__init__ signature differs from list; forwarding fails or misbehaves.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `list` can be error prone, use `collections.UserList` instead",
+            "span": [
+              1,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: list() takes no keyword arguments",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: list() takes no keyword arguments",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "MRO changed in multiple inheritance alters method resolution",
+      "hazard": "Replacing list with UserList shifts MRO, calling different parent method in diamond inheritance.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Context manager with write() but no close() misbehaves",
+      "hazard": "UserDict/UserList/UserString lack file-like semantics; write() may exist but context protocol fails.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              1,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "hello\nTypeError 'MyDict' object does not support the context manager protocol (missed __exit__ method)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello\nTypeError 'MyDict' object does not support the context manager protocol (missed __exit__ method)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "MRO and Base Inspection",
+      "hazard": "If the class is documented or inspected via __mro__, __bases__, or similar introspection, the output will differ after the rewrite.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "bases: (<class 'dict'>,)\nmro: ['A', 'dict', 'object']\ntype(x).__name__: A\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "bases: (<class 'dict'>,)\nmro: ['A', 'dict', 'object']\ntype(x).__name__: A\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "__slots__ Conflict",
+      "hazard": "If the class defines __slots__, the rewrite may conflict with User*'s __slots__ or cause layout incompatibilities, leading to attribute errors.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a.x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a.x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "dict Ordering and Duplicate Keys",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a[1]: 6\nlen(a): 1\ndict(a): {1: 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a[1]: 6\nlen(a): 1\ndict(a): {1: 6}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Inline Comments Lost",
+      "hazard": "Comments placed on the same line as the class declaration or within the parentheses of the base class list may be lost or misplaced during the rewrite.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `list` can be error prone, use `collections.UserList` instead",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "A.x: 1\nB.y: 2\nA.__doc__: doc\nB.__doc__: None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "A.x: 1\nB.y: 2\nA.__doc__: doc\nB.__doc__: None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "C Extension Expectation",
+      "hazard": "If the class is used in C extensions or via CPython's internal APIs that expect the exact built-in type, the rewrite may cause segmentation faults or undefined behavior.",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              2,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "isinstance(a, dict): True\ncheck(a): False\ntype(a) is dict: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "isinstance(a, dict): True\ncheck(a): False\ntype(a) is dict: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Evaluation Order Side Effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "f called\nA.__bases__[0].__name__: dict\ntype(a).__name__: A\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Attached Comments/Docstrings",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "A.__doc__: This is a docstring.\nhas inline comment? N/A\nmethod result: ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "A.__doc__: This is a docstring.\nhas inline comment? N/A\nmethod result: ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Mutable Default Arguments Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB189",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB189",
+            "severity": "warning",
+            "message": "Subclassing `dict` can be error prone, use `collections.UserDict` instead",
+            "span": [
+              9,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "call log lengths: [0, 0, 0]\ncall log contents: [{}, {}, {}]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "call log lengths: [0, 0, 0]\ncall log contents: [{}, {}, {}]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

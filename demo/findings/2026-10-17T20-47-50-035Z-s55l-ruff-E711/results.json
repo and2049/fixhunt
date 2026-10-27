@@ -1,0 +1,683 @@
+{
+  "runId": "2026-10-17T20-47-50-035Z-s55l-ruff-E711",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "E711",
+    "fixKind": "unknown",
+    "docs": "# none-comparison (E711)\n\nDerived from the **pycodestyle** linter.\n\nFix is always available.\n\n## What it does\nChecks for comparisons to `None` which are not using the `is` operator.\n\n## Why is this bad?\nAccording to [PEP 8], \"Comparisons to singletons like None should always be done with\n`is` or `is not`, never the equality operators.\"\n\n## Example\n```python\nif arg != None:\n    pass\nif None == arg:\n    pass\n```\n\nUse instead:\n```python\nif arg is not None:\n    pass\n```\n\n## Fix safety\n\nThis rule's fix is marked as unsafe, as it may alter runtime behavior when\nused with libraries that override the `==`/`__eq__` or `!=`/`__ne__` operators.\nIn these cases, `is`/`is not` may not be equivalent to `==`/`!=`. For more\ninformation, see [this issue].\n\n[PEP 8]: https://peps.python.org/pep-0008/#programming-recommendations\n[this issue]: https://github.com/astral-sh/ruff/issues/4560\n"
+  },
+  "analysis": {
+    "summary": "Flags non-is comparison operations against None.",
+    "firingShapes": [
+      "x == None",
+      "None == x",
+      "x != None",
+      "None != x"
+    ],
+    "silentShapes": [
+      "x is None",
+      "x is not None",
+      "y = None; if y:",
+      "def f(x=None): return x"
+    ],
+    "fixDescription": "Replaces '==' with 'is' and '!=' with 'is not' when comparing against None literal.",
+    "hazards": [
+      "If __eq__ is overridden, 'x == None' may differ from 'x is None', changing truth value.",
+      "If __ne__ is overridden, 'x != None' may differ from 'x is not None', altering logic flow.",
+      "Rewriting 'None == x' to 'None is x' fails if x defines __eq__ but not symmetric behavior via __eq__ delegation.",
+      "Comments attached to the operator (e.g., 'x == # comment\\nNone') may be lost or misplaced during token replacement.",
+      "In expressions like 'f(x == None)', rewriting changes operand type from bool to NoneType, breaking function expectations.",
+      "If None is shadowed locally (e.g., 'None = 5'), the fix incorrectly rewrites to 'is 5' or 'is not 5', causing NameError or wrong semantics.",
+      "In default arguments like 'def f(x=None): if x == None:', the fix alters comparison but not the default, creating inconsistency if None is rebound.",
+      "When used with Optional types in generics, 'x == None' might rely on overloaded equality in proxies, which 'is' bypasses.",
+      "In NumPy arrays, 'arr == None' returns an array of bools, while 'arr is None' is always False — rewrite breaks vectorized intent.",
+      "If the comparison is part of a larger expression like '(x == None) and y', rewriting may short-circuit differently due to truth value of None vs bool.",
+      "In eval() or exec() contexts, the rewritten string may fail if the local scope doesn't contain the built-in None after rebinding.",
+      "If the code relies on the == operator returning a non-boolean (e.g., custom proxy), replacing it with 'is' forces a bool, breaking downstream usage."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0040368,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Mutable Default Argument Aliasing After Rewrite",
+      "hazard": "Rewriting `x == None` to `x is None` in a mutable default argument context breaks aliasing checks due to shared mutable state across calls.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              2,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[2]\n[2, 2]\n[2, 2, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2]\n[2, 2]\n[2, 2, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Function Expecting Boolean from Equality Comparison",
+      "hazard": "Rewriting `x == None` to `x is None` inside a function call changes the operand from bool to NoneType, breaking functions that expect boolean input.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              4,
+              28
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "yes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "yes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Bytes vs Str Encoding and Newline Handling",
+      "hazard": "Rewriting `data == None` in binary/text I/O context can mask encoding-aware checks, leading to silent data corruption when comparing byte/str literals.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "6\nb'hello\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "6\nb'hello\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Optional Types and Overloaded Equality in Proxies",
+      "hazard": "Rewriting `x == None` to `x is None` bypasses `__eq__` overloads in proxy objects (e.g., Optional wrappers), breaking lazy validation or logging.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              8,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "eq called\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "eq called\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Comments and Docstrings Attached to Removed Code",
+      "hazard": "Rewriting removes the `== None` expression, taking its inline comment with it and losing documentation about why the check exists.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Star-Imports, Module-Level Side Effects, __all__",
+      "hazard": "Rewriting `x == None` in module init changes timing of side effects if the variable is defined via star-import and __all__ affects visibility.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "{'mode': 'prod'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "{'mode': 'prod'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Generators vs Lists: Iterators Consumed Once",
+      "hazard": "Rewriting `x == None` in a generator expression changes when the check occurs, causing premature consumption or mismatch in lazy evaluation.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Class Attributes vs Instance Attributes, Descriptors, Properties",
+      "hazard": "Rewriting `self.x == None` to `self.x is None` bypasses `__get__` descriptors, breaking computed or validated attributes.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              10,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "get called\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "get called\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Runtime Type Annotation Evaluation with Forward Ref",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "NameError: name 'Optional' is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Optional Generic Proxy with Overloaded Equality",
+      "hazard": "When used with Optional types in generics, 'x == None' might rely on overloaded equality in proxies, which 'is' bypasses.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              13,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "eq_true\nis_false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "eq_true\nis_false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Local Shadowing of None Breaks Rewrite",
+      "hazard": "If None is shadowed locally (e.g., 'None = 5'), the fix incorrectly rewrites to 'is 5' or 'is not 5', causing NameError or wrong semantics.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Evaluation Order with Side Effects in Arguments",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              9,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "eq_true, counter=1\nis_true, counter=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "eq_true, counter=1\nis_true, counter=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Dict with Custom __eq__ and Hash Collision",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              15,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              27,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "eq_true\neq_true_overridden\nis_false_overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "eq_true\neq_true_overridden\nis_false_overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Overridden __eq__ Changes Semantics",
+      "hazard": "If __eq__ is overridden, 'x == None' may differ from 'x is None', changing truth value.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              8,
+              26
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "x == None: True\nx is None: False\nAfter fix simulation: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x == None: True\nx is None: False\nAfter fix simulation: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Class Attribute vs Descriptor with Side Effects",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              15,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "E711",
+            "severity": "warning",
+            "message": "Comparison to `None` should be `cond is None`",
+            "span": [
+              30,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Descriptor accessed\nclass_attr_eq_true\nDescriptor accessed\n",
+          "stderr1": "NameError: name 'FakeNone' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Descriptor accessed\nclass_attr_eq_true\nDescriptor accessed\n",
+          "stderr1": "NameError: name 'FakeNone' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Eval Context After Local None Rebinding",
+      "hazard": "In eval() or exec() contexts, the rewritten string may fail if the local scope doesn't contain the built-in None after rebinding.",
+      "rule": "E711",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    }
+  ]
+}

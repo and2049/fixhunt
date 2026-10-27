@@ -1,0 +1,177 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C402 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C402 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-17-24-807Z-qd6v-ruff-C402 · fix labelled <b>unknown</b> · 16 programs, 11 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0039</p>
+<div class="card"><b>Rule analysis</b><p>Flags uses of dict() wrapping a generator expression where key-value pairs are produced via tuple literals.</p><p class="mut">Fix: Rewrites dict((key, value) for ...) into {key: value for ...} by removing the dict() call and replacing the generator expression with a dict comprehension using the same key and value expressions.</p><details><summary>10 hazards</summary><ul><li>If the generator expression contains a yield statement inside a nested function, rewriting to a dict comprehension may alter generator behavior and break code relying on lazy evaluation.</li><li>If the generator expression is used in a context where its object identity matters (e.g., passed to another function or stored), replacing it with a dict comprehension changes the object type and breaks identity checks.</li><li>If the key or value expression contains side effects (e.g., function calls with mutable state), changing from generator to dict comprehension alters evaluation order or timing, potentially causing different behavior.</li><li>If the generator expression includes asynchronous syntax (async for), the fix is invalid because dict comprehensions do not support async iteration, leading to a SyntaxError.</li><li>If the generator expression is part of a larger expression where operator precedence affects parsing (e.g., dict((k,v) for k,v in items) + 1), removing dict() may change how the expression is grouped.</li><li>If the generator expression defines a variable that is used later in the same scope (e.g., dict((k, v) for k, v in items); print(k)), the dict comprehension does not leak the loop variable, breaking downstream code.</li><li>If the generator expression is empty and relies on the dict() constructor to produce an empty dict, the fix still works but may interfere with debugging or introspection tools that distinguish between constructor calls and literals.</li><li>If the code contains a comment inside the generator expression (e.g., dict((k, # comment
+v) for k, v in items)), the autofix may drop or misplace it due to AST transformation limitations.</li><li>If the generator expression uses a tuple with more than two elements (e.g., dict((a,b,c) for a,b,c in data)), the fix incorrectly assumes pair structure and may produce invalid syntax or runtime errors.</li><li>If the generator expression is nested inside a lambda or conditional expression where the dict() call is necessary for correct grouping, removing it alters the meaning of the expression.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Object Identity Check</td><td class="mut">If the generator expression is used in a context where its object identity matters (e.g., </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Side Effect Order Change</td><td class="mut">If the key or value expression contains side effects (e.g., function calls with mutable st</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Async For Incompatibility</td><td class="mut">If the generator expression includes asynchronous syntax (async for), the fix is invalid b</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation Order Merge/Duplicate</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Loop Variable Leak</td><td class="mut">If the generator expression defines a variable that is used later in the same scope (e.g.,</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Comment Inside Generator</td><td class="mut">If the code contains a comment inside the generator expression (e.g., dict((k, # comment\n</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Truthiness and Identity Checks</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Exception Handling and Finally</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Side Effects in Value Expression</td><td class="mut">Evaluation Order Merge/Duplicate - Side effects in value expression alter execution count/</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Operator Precedence Change</td><td class="mut">Evaluation Order Merge/Duplicate - Removing dict() changes grouping with + operator due to</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Default Argument Evaluation Once</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once - Defaul</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generator Consumed Once in Loop</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation - Generator express</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Empty Generator Debug Distinction</td><td class="mut">If the generator expression is empty and relies on the dict() constructor to produce an em</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Runtime Type Annotation</td><td class="mut">type annotations evaluated at runtime, typing-only imports - Annotation uses the dict() ca</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Path Construction with Relative Paths</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths - dict</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Float Rounding and Coercion</td><td class="mut">int/float/bool coercion, Decimal, division and rounding - Floating point accumulation in v</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Object Identity Check</summary><pre>def check_id(obj):
+    return id(obj)
+gen = ((k, v) for k, v in [(1, &#39;a&#39;), (2, &#39;b&#39;)])
+d = dict(gen)
+print(&#39;dict id:&#39;, check_id(d))
+print(&#39;type:&#39;, type(d))
+print(&#39;generator consumed?&#39;, gen.__length_hint__())
+</pre></details><details id="r1-p002"><summary>r1-p002 — Side Effect Order Change</summary><pre>state = []
+def f():
+    state.append(len(state))
+    return len(state)
+d = dict((f(), f()) for _ in range(2))
+print(&#39;side effects:&#39;, state)
+print(&#39;dict:&#39;, d)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Async For Incompatibility</summary><pre>import asyncio
+async def gen():
+    for i in range(2):
+        yield (i, i*2)
+async def main():
+    try:
+        # This line triggers C402 but fix is invalid
+        d = dict((k, v) for k, v in [(1,2),(3,4)])
+        print(&#39;dict:&#39;, d)
+    except Exception as e:
+        print(type(e).__name__, str(e))
+asyncio.run(main())
+</pre></details><details id="r1-p004"><summary>r1-p004 — Evaluation Order Merge/Duplicate</summary><pre>refs = []
+def make_pair(i):
+    refs.append(i)
+    return (i, i*10)
+d = dict(make_pair(i) for i in [1,2] if (refs.append(i+100) or True))
+print(&#39;refs:&#39;, refs)
+print(&#39;dict:&#39;, d)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Loop Variable Leak</summary><pre>items = [(1, &#39;a&#39;), (2, &#39;b&#39;)]
+d = dict((k, v) for k, v in items)
+try:
+    print(&#39;k after:&#39;, k)
+except NameError as e:
+    print(&#39;NameError:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Comment Inside Generator</summary><pre>d = dict((k, # comment
+         v) for k, v in [(1,2),(3,4)])
+print(&#39;dict:&#39;, d)
+# Note: Comment position may affect readability but not semantics
+</pre></details><details id="r1-p007"><summary>r1-p007 — Truthiness and Identity Checks</summary><pre>class Obj:
+    def __init__(self, v):
+        self.v = v
+    def __bool__(self):
+        return self.v % 2 == 0
+    def __eq__(self, other):
+        return isinstance(other, Obj) and self.v == other.v
+data = [(Obj(1), Obj(2)), (Obj(3), Obj(4))]
+d = dict((k, v) for k, v in data)
+for k, v in d.items():
+    print(&#39;key bool:&#39;, bool(k), &#39;value bool:&#39;, bool(v))
+    print(&#39;k is Obj(1)?&#39;, k is Obj(1))
+    print(&#39;k == Obj(1)?&#39;, k == Obj(1))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Exception Handling and Finally</summary><pre>log = []
+def risky(i):
+    if i == 1:
+        raise ValueError(&#39;bad&#39;)
+    log.append(i)
+    return (i, i*10)
+try:
+    d = dict((risky(i), i) for i in [0,1,2])
+except ValueError as e:
+    print(&#39;Caught:&#39;, type(e).__name__, str(e))
+finally:
+    print(&#39;log:&#39;, log)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Side Effects in Value Expression</summary><pre>counter = [0]
+def inc():
+    counter[0] += 1
+    return counter[0]
+d = dict((i, inc()) for i in range(3))
+print(&#39;dict result:&#39;, d)
+print(&#39;counter:&#39;, counter[0])
+counter[0] = 0
+d2 = {i: inc() for i in range(3)}
+print(&#39;comp result:&#39;, d2)
+print(&#39;counter after comp:&#39;, counter[0])
+</pre></details><details id="r2-p002"><summary>r2-p002 — Operator Precedence Change</summary><pre>items = [(1, &#39;a&#39;), (2, &#39;b&#39;)]
+expr = dict((k, v) for k, v in items) + [{&#39;extra&#39;: 1}]
+print(&#39;expr type:&#39;, type(expr))
+print(&#39;expr length:&#39;, len(expr))
+try:
+    expr2 = {(k, v) for k, v in items} + [{&#39;extra&#39;: 1}]
+    print(&#39;comp expr type:&#39;, type(expr2))
+    print(&#39;comp expr length:&#39;, len(expr2))
+except TypeError as e:
+    print(&#39;TypeError:&#39;, type(e).__name__, &#39;:&#39;, str(e))
+</pre></details><details id="r2-p003"><summary>r2-p003 — Default Argument Evaluation Once</summary><pre>def make_dict(seq=[(i, i*2) for i in range(3)]):
+    return dict(seq)
+def make_dict_fixed():
+    return {(k, v) for k, v in [(i, i*2) for i in range(3)]}
+print(&#39;make_dict():&#39;, make_dict())
+print(&#39;make_dict_fixed():&#39;, make_dict_fixed())
+# Now rebind the default
+seq = [(0, 0), (1, 1), (2, 2)]
+print(&#39;make_dict() after rebind:&#39;, make_dict())
+</pre></details><details id="r2-p004"><summary>r2-p004 — Generator Consumed Once in Loop</summary><pre>pairs = ((i, i+1) for i in range(3))
+d1 = dict(pairs)
+print(&#39;d1:&#39;, d1)
+try:
+    d2 = dict(pairs)  # pairs is exhausted
+    print(&#39;d2:&#39;, d2)
+except Exception as e:
+    print(&#39;Error on second dict:&#39;, type(e).__name__, &#39;:&#39;, str(e))
+pairs = ((i, i+1) for i in range(3))
+dc = {k: v for k, v in pairs}
+print(&#39;dc:&#39;, dc)
+try:
+    dc2 = {k: v for k, v in pairs}  # pairs exhausted
+    print(&#39;dc2:&#39;, dc2)
+except Exception as e:
+    print(&#39;Error on second comp:&#39;, type(e).__name__, &#39;:&#39;, str(e))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Empty Generator Debug Distinction</summary><pre>empty_gen = (x for x in [] if False)
+d_empty = dict(empty_gen)
+print(&#39;dict from empty gen:&#39;, d_empty)
+print(&#39;type:&#39;, type(d_empty))
+print(&#39;isinstance dict:&#39;, isinstance(d_empty, dict))
+dc_empty = {k: v for k, v in empty_gen}
+print(&#39;dict comp from empty gen:&#39;, dc_empty)
+print(&#39;type:&#39;, type(dc_empty))
+print(&#39;isinstance dict:&#39;, isinstance(dc_empty, dict))
+# Simulate introspection: check call stack or source? Not possible without inspect.
+# Instead, show they are equal but constructor vs literal may matter in profiling/tracing.
+print(&#39;equal:&#39;, d_empty == dc_empty)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Runtime Type Annotation</summary><pre>from __future__ import annotations
+T = dict((str, int) for _ in [()])
+print(&#39;T:&#39;, T)
+print(&#39;type of T:&#39;, type(T))
+# This doesn&#39;t fire rule because it&#39;s not dict((k,v) for...) but dict((type, type)...)
+# So expect_trigger=false. We show it&#39;s silent.
+</pre></details><details id="r2-p007"><summary>r2-p007 — Path Construction with Relative Paths</summary><pre>import os
+paths = [(&#39;a&#39;, &#39;b.txt&#39;), (&#39;c&#39;, &#39;d.txt&#39;)]
+d_paths = dict((os.path.join(a, b), f&#39;{a}_{b}&#39;) for a, b in paths)
+print(&#39;d_paths:&#39;, d_paths)
+# Now simulate missing intermediate dir? Not creating files.
+# Just show the values.
+for k, v in d_paths.items():
+    print(f&#39;path: {k!r} -&gt; {v!r}&#39;)
+dc_paths = {os.path.join(a, b): f&#39;{a}_{b}&#39; for a, b in paths}
+print(&#39;dc_paths:&#39;, dc_paths)
+for k, v in dc_paths.items():
+    print(f&#39;path: {k!r} -&gt; {v!r}&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Float Rounding and Coercion</summary><pre>values = [0.1, 0.2, 0.3]
+total = [0.0]
+def add_and_return(x):
+    total[0] += x
+    return total[0]
+# This will fire rule: dict((x, add_and_return(x)) for x in values)
+d_acc = dict((x, add_and_return(x)) for x in values)
+print(&#39;d_acc:&#39;, d_acc)
+print(&#39;final total:&#39;, total[0])
+total[0] = 0.0
+dc_acc = {x: add_and_return(x) for x in values}
+print(&#39;dc_acc:&#39;, dc_acc)
+print(&#39;final total after comp:&#39;, total[0])
+</pre></details></body></html>

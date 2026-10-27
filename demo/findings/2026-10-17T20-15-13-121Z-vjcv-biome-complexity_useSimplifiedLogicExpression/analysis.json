@@ -1,0 +1,35 @@
+{
+  "summary": "Flags redundant literals in logical expressions (`&&`, `||`, `!!`) that can be removed without changing truthiness in boolean contexts.",
+  "firingShapes": [
+    "true && expr",
+    "false || expr",
+    "expr || false",
+    "expr && true",
+    "!a || !b",
+    "null ?? expr",
+    "undefined || expr",
+    "expr && undefined"
+  ],
+  "silentShapes": [
+    "expr || true",
+    "expr && false",
+    "value || false",
+    "value && true",
+    "!(a && b)"
+  ],
+  "fixDescription": "Removes the redundant literal: `true && expr` → `expr`, `false || expr` → `expr`, `expr || false` → `expr`, `expr && true` → `expr`, `!a || !b` → `!(a && b)`, `null ?? expr` → `expr`.",
+  "hazards": [
+    "Rewriting `true && expr` to `expr` changes behavior if `expr` has side effects and the surrounding context relies on short-circuiting (e.g., in `if` conditions where `expr` must not run).",
+    "Rewriting `false || expr` to `expr` alters evaluation order and may cause `expr` to execute when it previously would not have due to short-circuiting.",
+    "Rewriting `expr || false` to `expr` removes a falsy fallback, potentially changing the result when `expr` is `undefined` or `null` in non-boolean contexts (though rule only fires in boolean contexts, this notes boundary risk).",
+    "Rewriting `expr && true` to `expr` eliminates a truthy guard, which could affect outcomes if `expr` is falsy and the result is used in a non-boolean context (rule restricts to boolean contexts, but notes potential misuse).",
+    "Rewriting `!a || !b` to `!(a && b)` via De Morgan’s law is logically equivalent but may interfere with debugging or intent if the original form was used for readability or breakpoint placement.",
+    "Rewriting `null ?? expr` to `expr` removes nullish coalescing, causing `expr` to evaluate even when `null` is present (but note: `null ?? expr` only fires if `expr` is truthy? Actually, rule flags `null ?? nonNullExp` as invalid — fix removes `null ??`, so rewrites to `expr`; hazard: if `expr` has side effects, it now runs unconditionally whereas before it only ran if `null` was null/undefined).",
+    "If the expression contains comments (e.g., `true && /* comment */ foo()`), the autofix may drop inline comments attached to the literal or expression.",
+    "In rare cases involving `eval` or `with`, the rewritten expression might resolve variables differently due to scope changes, though unlikely.",
+    "If `expr` is a getter with side effects, removing the literal may change the number of times it is invoked.",
+    "The fix may break parsing if `expr` begins with a lookahead ambiguity (e.g., `true && function(){}()` → `function(){}()` which is invalid as a statement).",
+    "In template literals or tagged templates, removing literals could alter the shape of passed arguments if the expression is spread or concatenated.",
+    "If the logical expression is part of a larger sequence (e.g., `return true && expr, other;`), removing `true &&` may alter comma operator behavior."
+  ]
+}

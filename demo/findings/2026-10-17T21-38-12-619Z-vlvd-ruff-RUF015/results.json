@@ -1,0 +1,804 @@
+{
+  "runId": "2026-10-17T21-38-12-619Z-vlvd-ruff-RUF015",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF015",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-iterable-allocation-for-first-element (RUF015)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks the following constructs, all of which can be replaced by\n`next(iter(...))`:\n\n- `list(...)[0]`\n- `tuple(...)[0]`\n- `list(i for i in ...)[0]`\n- `[i for i in ...][0]`\n- `list(...).pop(0)`\n\n## Why is this bad?\nCalling e.g. `list(...)` will create a new list of the entire collection,\nwhich can be very expensive for large collections. If you only need the\nfirst element of the collection, you can use `next(...)` or\n`next(iter(...)` to lazily fetch the first element. The same is true for\nthe other constructs.\n\n## Example\n```python\nhead = list(x)[0]\nhead = [x * x for x in range(10)][0]\n```\n\nUse instead:\n```python\nhead = next(iter(x))\nhead = next(x * x for x in range(10))\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as migrating from (e.g.) `list(...)[0]`\nto `next(iter(...))` can change the behavior of your program in two ways:\n\n1. First, all above-mentioned constructs will eagerly evaluate the entire\n   collection, while `next(iter(...))` will only evaluate the first\n   element. As such, any side effects that occur during iteration will be\n   delayed.\n2. Second, accessing members of a collection via square bracket notation\n   `[0]` or the `pop()` function will raise `IndexError` if the collection\n   is empty, while `next(iter(...))` will raise `StopIteration`.\n\n## References\n- [Iterators and Iterables in Python: Run Efficient Iterations](https://realpython.com/python-iterators-iterables/#when-to-use-an-iterator-in-python)\n"
+  },
+  "analysis": {
+    "summary": "RUF015 flags eager allocation of iterables when only the first element is accessed via indexing or pop(0), suggesting replacement with lazy next(iter(...)).",
+    "firingShapes": [
+      "lst = list(seq)[0]",
+      "tup = tuple(seq)[0]",
+      "lst = [x for x in seq][0]",
+      "tup = tuple(x for x in seq)[0]",
+      "val = list(seq).pop(0)",
+      "head = [*seq][0]",
+      "first = [expr for expr in gen][0]",
+      "item = list(map(func, seq))[0]"
+    ],
+    "silentShapes": [
+      "first = next(iter(seq))",
+      "head = seq[0] if seq else None",
+      "result = list(seq)",
+      "value = seq.pop()",
+      "items = [x for x in seq]"
+    ],
+    "fixDescription": "Replace the eager iterable construction and indexing/pop with a lazy next(iter(...)) expression, preserving the inner iterable or comprehension but removing the outer list/tuple/set constructor and the [0] or .pop(0) access.",
+    "hazards": [
+      "Rewriting list(seq)[0] to next(iter(seq)) changes the exception type from IndexError on empty input to StopIteration, breaking exception handlers that catch IndexError but not StopIteration.",
+      "The rewrite eliminates eager evaluation of seq, so any side effects (e.g., I/O, state mutation) during iteration now occur only when the iterator is consumed, potentially delaying or avoiding them entirely if the result is unused.",
+      "If seq is used elsewhere after the original code, the rewrite may alter its state because iter(seq) advances the iterator, whereas list(seq) leaves seq unchanged for reusable iterables like lists.",
+      "For non-reusable iterators (e.g., file objects, generators), the rewrite consumes the iterator permanently, while the original list(seq)[0] would have exhausted it anyway—but if the list was stored or inspected, the rewrite loses that behavior.",
+      "When seq is a list, tuple, or other sequence, list(seq)[0] creates a copy; next(iter(seq)) references the original, so mutations to the original after the call affect the result in the rewrite but not in the original.",
+      "If the comprehension or generator expression inside list(...) contains capture variables that mutate during iteration, the timing of their evaluation shifts, possibly altering values observed due to late-binding closure effects.",
+      "The rewrite may drop trailing comments attached to the closing bracket or pop(0) call, as autofix tools often discard whitespace and comments during tree reconstruction.",
+      "In code like f(list(seq)[0]), rewriting to f(next(iter(seq))) changes evaluation order: seq is no longer evaluated before f is called, but during f’s execution if it consumes the iterator, altering side-effect sequencing.",
+      "If seq is a property or function call with side effects, the rewrite may invoke it multiple times if next(iter(...)) is used in a context that re-evaluates the expression (e.g., in a loop), whereas the original computed it once.",
+      "For expressions like [i for i in seq if cond][0], the rewrite to next(i for i in seq if cond) is valid, but if cond has side effects, their timing changes relative to other code between the comprehension and the indexing.",
+      "When the iterable is a class instance with a custom __iter__ that returns a mutable iterator, sharing that iterator via list(...) vs. iter(...) can lead to aliasing issues if the iterator is retained elsewhere."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.007469100000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 14,
+    "fixed": 0
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Property with side effects - multiple invocation",
+      "hazard": "If seq is a property or function call with side effects, the rewrite may invoke it multiple times if next(iter(...)) is used in a context that re-evaluates the expression.",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(s.value))` over single element slice",
+            "span": [
+              10,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "call:1, first:10\ncall:2, first:10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "call:1, first:10\ncall:2, first:10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Trailing comment loss",
+      "hazard": "The rewrite may drop trailing comments attached to the closing bracket or pop(0) call, as autofix tools often discard whitespace and comments during tree reconstruction.",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(seq))` over single element slice",
+            "span": [
+              2,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "State alteration of reusable iterable",
+      "hazard": "If seq is used elsewhere after the original code, the rewrite may alter its state because iter(seq) advances the iterator, whereas list(seq) leaves seq unchanged for reusable iterables like lists.",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(seq))` over single element slice",
+            "span": [
+              2,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "first:1, rest:[1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first:1, rest:[1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Keyword-only and positional-only forwarding with defaults",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(f()))` over single element slice",
+            "span": [
+              5,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(g(1)))` over single element slice",
+            "span": [
+              6,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "IndexError: list index out of range",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "IndexError: list index out of range",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Evaluation order and side effects in merged expressions",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(next_seq()))` over single element slice",
+            "span": [
+              6,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(next_seq()))` over single element slice",
+            "span": [
+              6,
+              29
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "i:2, val:3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "i:2, val:3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Star-imports and module-level side effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "no trigger\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Numeric coercion and rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(seq))` over single element slice",
+            "span": [
+              3,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "first:1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first:1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Type annotations evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(get_list()))` over single element slice",
+            "span": [
+              4,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "first:42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first:42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Mutation after list() affects result",
+      "hazard": "When seq is a mutable sequence, list(seq)[0] copies elements; next(iter(seq)) returns a reference to the original element. Mutating the original sequence after the call affects the result in the rewri",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(lst))` over single element slice",
+            "span": [
+              2,
+              14
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(lst))` over single element slice",
+            "span": [
+              4,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "old: 99\nnew: 88\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "old: 99\nnew: 88\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Exception in finally block with chaining",
+      "hazard": "If an exception is raised inside the rewritten expression and caught, finally/else clauses and exception chaining (__context__) may differ due to timing of evaluation.",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(get_seq()))` over single element slice",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: ValueError bad seq\nchained: RuntimeError handler failed\ncause: ValueError bad seq\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: ValueError bad seq\nchained: RuntimeError handler failed\ncause: ValueError bad seq\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Side effects delayed by lazy evaluation",
+      "hazard": "The rewrite eliminates eager evaluation of seq, so side effects (e.g., print, mutation) during iteration now occur only when the iterator is consumed, potentially delaying or avoiding them if the resu",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(gen))` over single element slice",
+            "span": [
+              10,
+              5
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(make_seq()))` over single element slice",
+            "span": [
+              14,
+              1
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(make_seq()))` over single element slice",
+            "span": [
+              17,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "prints so far: ['start', 'yield 0', 'yield 1', 'yield 2', 'end', 'start', 'yield 0', 'yield 1', 'yield 2', 'end']\nprints after: ['start', 'yield 0', 'yield 1', 'yield 2', 'end', 'start', 'yield 0', 'yield 1', 'yield 2', 'end', 'start', 'yield 0', 'yield 1', 'yield 2', 'end']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "prints so far: ['start', 'yield 0', 'yield 1', 'yield 2', 'end', 'start', 'yield 0', 'yield 1', 'yield 2', 'end']\nprints after: ['start', 'yield 0', 'yield 1', 'yield 2', 'end', 'start', 'yield 0', 'yield 1', 'yield 2', 'end', 'start', 'yield 0', 'yield 1', 'yield 2', 'end']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Generator consumed once: exhaustion difference",
+      "hazard": "For generators, the original list(seq)[0] exhausts the generator (via list builder), same as rewrite. But if the list was stored or inspected later, the rewrite loses that behavior — here we store the",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(g2))` over single element slice",
+            "span": [
+              13,
+              10
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(g2))` over single element slice",
+            "span": [
+              32,
+              13
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(g_post))` over single element slice",
+            "span": [
+              66,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "first from list: 1\nremaining in g: []\nfirst2: 1\nremaining in g2: []\nold first: 1\nold rest: [2, 3]\nnew first: 1\nnew rest attempt: []\nlst exists: [1, 2, 3]\n=== Simulating pre-rewrite: list stored ===\nfirst: 1\nrest: [2, 3]\n=== Simulating post-rewrite: no list stored ===\nfirst: 1\nrest attempt: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first from list: 1\nremaining in g: []\nfirst2: 1\nremaining in g2: []\nold first: 1\nold rest: [2, 3]\nnew first: 1\nnew rest attempt: []\nlst exists: [1, 2, 3]\n=== Simulating pre-rewrite: list stored ===\nfirst: 1\nrest: [2, 3]\n=== Simulating post-rewrite: no list stored ===\nfirst: 1\nrest attempt: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Shadowed built-in 'list' later redefined",
+      "hazard": "If the built-in 'list' is shadowed by a local variable after the code in question, the rewrite uses the current binding of 'list' at runtime, which may differ from the original built-in if the shadowi",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p006",
+      "title": "Conditional with side effects: timing changed",
+      "hazard": "For [i for i in seq if cond][0], the rewrite to next(i for i in seq if cond) changes when cond's side effects occur relative to other code between comprehension and indexing.",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(i for i in seq if cond(i))` over single element slice",
+            "span": [
+              23,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(i for i in seq if cond(i))` over single element slice",
+            "span": [
+              65,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(i for i in seq if cond(i))` over single element slice",
+            "span": [
+              102,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(i for i in seq if cond2(i))` over single element slice",
+            "span": [
+              135,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "old val: 2\nold effects: ['cond(1)', 'cond(2)', 'cond(3)', 'cond(4)']\nnew val: 2\nnew effects: ['cond(1)', 'cond(2)']\nnew val: 2\nnew effects (after [0]): ['cond(1)', 'cond(2)', 'cond(3)', 'cond(4)']\nwork then comp:\n  x= 42\n  val= 3\n  effects: ['work', 'cond(1)', 'cond(2)', 'cond(3)', 'cond(4)', 'cond(5)']\nwork then [0] on comp:\n  x= 42\n  val= 3\n  effects: ['work', 'cond(1)', 'cond(2)', 'cond(3)', 'cond(4)', 'cond(5)']\noriginal error during comp: ['cond(1)', 'cond(2)']\nrewrite attempt error: ['cond(1)', 'cond(2)']\nSimulating: if we had stored the list, we could see more effects\n",
+          "stderr1": "ValueError: fail at 2",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "old val: 2\nold effects: ['cond(1)', 'cond(2)', 'cond(3)', 'cond(4)']\nnew val: 2\nnew effects: ['cond(1)', 'cond(2)']\nnew val: 2\nnew effects (after [0]): ['cond(1)', 'cond(2)', 'cond(3)', 'cond(4)']\nwork then comp:\n  x= 42\n  val= 3\n  effects: ['work', 'cond(1)', 'cond(2)', 'cond(3)', 'cond(4)', 'cond(5)']\nwork then [0] on comp:\n  x= 42\n  val= 3\n  effects: ['work', 'cond(1)', 'cond(2)', 'cond(3)', 'cond(4)', 'cond(5)']\noriginal error during comp: ['cond(1)', 'cond(2)']\nrewrite attempt error: ['cond(1)', 'cond(2)']\nSimulating: if we had stored the list, we could see more effects\n",
+          "stderr1": "ValueError: fail at 2",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Non-reusable iterator: file object exhaustion",
+      "hazard": "For non-reusable iterators (e.g., file objects), the rewrite consumes the iterator permanently, while the original list(seq)[0] would have exhausted it anyway—but if the list was stored or inspected, ",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter(f))` over single element slice",
+            "span": [
+              13,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "old first: 'a\\n'\nold rest: [\"'b\\\\n'\", \"'c\\\\n'\"]\nnew first: 'a\\n'\nnew rest attempt: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "old first: 'a\\n'\nold rest: [\"'b\\\\n'\", \"'c\\\\n'\"]\nnew first: 'a\\n'\nnew rest attempt: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Truthiness: custom __bool__ vs __len__",
+      "hazard": "Truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '==' interacts with the rewrite if the expression is used in a boolean context shortly after, and the rewrite changes what object is produ",
+      "rule": "RUF015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF015",
+            "severity": "warning",
+            "message": "Prefer `next(iter([1,2,3]))` over single element slice",
+            "span": [
+              83,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "old: temp non-empty, 1\n=== With temp stored (pre-rewrite simulation) ===\ntemp bool: True\n  first: 1\n=== Without temp stored (post-rewrite simulation) ===\nfirst_new: 1\nCan check if more than one element? NO (no list stored)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "old: temp non-empty, 1\n=== With temp stored (pre-rewrite simulation) ===\ntemp bool: True\n  first: 1\n=== Without temp stored (post-rewrite simulation) ===\nfirst_new: 1\nCan check if more than one element? NO (no list stored)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

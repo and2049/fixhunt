@@ -1,0 +1,1 @@
+let obj = { class: 'Klass', for: 'loop' }; try { let c = obj[\'class\']; console.log('class prop:', c); } catch(e) { console.log('err1:', e.name); } try { let f = obj[\'for\']; console.log('for prop:', f); } catch(e) { console.log('err2:', e.name); } // Both lines above may be fixed but become invalid if allowKeywords:false

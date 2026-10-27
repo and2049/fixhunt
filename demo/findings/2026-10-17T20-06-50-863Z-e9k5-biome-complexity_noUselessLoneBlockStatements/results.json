@@ -1,0 +1,818 @@
+{
+  "runId": "2026-10-17T20-06-50-863Z-e9k5-biome-complexity_noUselessLoneBlockStatements",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/noUselessLoneBlockStatements",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessLoneBlockStatements\n- Fix: safe\n- Default severity: info\n- Available from version: 1.3.3\n- Diagnostic category: lint/complexity/noUselessLoneBlockStatements\n- This rule is recommended\n\nDescription\n\n Disallow unnecessary nested block statements.\n\n > In JavaScript, prior to ES6, standalone code blocks delimited by curly braces do not create a new scope and have no use.\n > In ES6, code blocks may create a new scope if a block-level binding (let and const), a class declaration or a function declaration (in strict mode) are present. A block is not considered redundant in these cases.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n {}\n ```\n\n ```js,expect_diagnostic\n if (foo) {\n   bar();\n   {\n     baz();\n   }\n }\n ```\n\nValid\n\n ```js\n while (foo) {\n   bar();\n }\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags empty block statements (`{}`) as they serve no purpose unless containing declarations that introduce bindings.",
+    "firingShapes": [
+      "{}",
+      "{ }",
+      "{\\n}",
+      "\\t\\t{\\r\\n}\\n",
+      "if (x) { {}; y(); }",
+      "for (;i<10;i++) {{}}",
+      "function f() { return {}{}; }",
+      "try { throw e; } catch(e) {{} finally {}",
+      "while(true){{break;}}"
+    ],
+    "silentShapes": [
+      "{ let x = 1; }",
+      "{ const y = 2; }",
+      "{ class C {} }",
+      "{ function g() {} }",
+      "if (true) { { let z = 3; }; console.log(z); }"
+    ],
+    "fixDescription": "Removes the empty block statement entirely, preserving surrounding syntax and whitespace except for the braces and their immediate interior.",
+    "hazards": [
+      "Rewriting `{}` inside a `with` statement changes the object used for property lookup, altering identifier resolution.",
+      "Removing a block in a comma expression like `( {}, x )` drops the left-hand side, changing the expression's value from `x` to potentially causing a syntax error if the comma was relied upon for sequencing.",
+      "Deleting a block that follows a label (e.g., `label: {};`) removes the labeled statement, breaking `break label;` or `continue label;` references elsewhere.",
+      "If the empty block contains a trailing comment (e.g., `{ /* note */ }`), the autofix may discard the comment, losing developer intent.",
+      "In non-strict mode, a function declaration inside a block is not allowed, but if present due to browser leniency, removing the block could expose it to outer scope, changing hoisting behavior.",
+      "When the block is the sole member of a `do-while` loop body (e.g., `do {} while (false);`), removing it creates an empty loop body, which is syntactically valid but may affect performance expectations or tooling that counts loop iterations.",
+      "In a sequence like `if (a) {}; else if (b) {};`, removing the first empty block could merge the `else if` with the prior `if`, changing the binding of the `else` clause if formatting relies on the block to delimit the then-branch.",
+      "If the empty block is part of a larger expression relying on its presence for automatic semicolon insertion (ASI), such as `return\\n{};`, its removal could cause ASI to insert a semicolon after `return`, returning `undefined` instead of the intended value.",
+      "In a `switch` statement, a case label followed by an empty block (e.g., `case 1: {}; break;`) when rewritten removes the block but leaves the label, which is harmless only if no fall-through is intended; however, if the block was meant to prevent fall-through via explicit emptiness, its removal does not change behavior but may mislead readers about intent.",
+      "When the block appears immediately after a `yield` expression (e.g., `yield {};`), removing it does not change the yielded value but may affect generator debugging or stack traces that expect a block boundary.",
+      "In template literals, a tagged template like `tag`{}`` with an empty block afterward (invalid syntax) would not occur, but if malformed code had `{}` adjacent due to a macro, removal could alter parsing; however, this is speculative and not a direct hazard of the rule."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0269755,
+  "summary": {
+    "programs": 16,
+    "invalid": 5,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 7,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r2-p008",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "try {\n  let x = 1\n{}\n[1,2,3].forEach(v => console.log(v))\n} catch(e) {\n}\n",
+      "lines": {
+        "before": 13,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T20-06-50-863Z-e9k5-biome-complexity_noUselessLoneBlockStatements/reports/r2-p008.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/11935",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/834",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/8685",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/39",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix removes a standalone block `{}` inside a try block that contains a `let x = 1` declaration. According to the documentation, a block is not redundant when a block-level binding like `let` is present in the enclosing scope, because the block creates a new scope for that binding. Removing the block changes the scope structure, which can alter runtime behavior (here, the `forEach` callback no longer executes, as shown by the missing stdout output). The rule incorrectly treats this block as useless and its removal as safe, but it is not semantically equivalent.",
+        "docsQuote": "Disallow unnecessary nested block statements. In ES6, code blocks may create a new scope if a block-level binding (let and const), a class declaration or a function declaration (in strict mode) are present. A block is not considered redundant in these cases.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noUselessLoneBlockStatements fix",
+          "complexity noUselessLoneBlockStatement empty block",
+          "biome lint rule remove useless lone blocks",
+          "fix behavior removes standalone braces in try"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUselessLoneBlockStatements` unwraps block-scoped functions in strict scripts and class bodies",
+            "url": "https://github.com/biomejs/biome/issues/11935",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:           npm\n  JS_RUNTIME_NAME:              node\n```\n\n</details>\n\n### Rule name\n\n`"
+          },
+          {
+            "source": "github",
+            "title": "💅 noDuplicateTestHooks: false positive on a local function named `before` called twice in a test",
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.15\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           windows\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUselessLoneBlockStatements collides with useSingleCaseStatement when using switch · Issue #834 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/834",
+            "snippet": "Which then triggers `noUselessLoneBlockStatements`. Using the auto-fix for `noUselessLoneBlockStatements`will turn the code into the first code snippet (again).\n\nThe `noUselessLoneBlockStatements` rule works as expected when there is a variable declaration:\n\n```\nswitch(1){// no rules are triggered d"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Biome format removes empty block with comments · Issue #8685 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8685",
+            "snippet": "More actions\n\n   I'd like to work on this. The fix should check if the block contains any comments before applying the safe fix in `noUselessLoneBlockStatements`.\n9. ematipico\n\n   assigned\n\n   Faizanq\n\n   on Jan 5, 2026\n10. Faizanq\n\n    added a commit that references this issue on Jan 5, 2026\n\n    f"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code · Issue #11351 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "snippet": "- #​11969 `865cd30` Thanks @​AlbinoGeek! - Fixed #​11962: `noUnknownTypeSelector` no longer reports view transition names inside view transition pseudo-elements, such as `page` in `::view-transition-group(page)`.\n   - #​11914 `06ff47b` Thanks @​dyc3! - Fixed #​11897: the safe fix for `noUselessStrin"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedClasses` cannot sort TailwindCSS classname corretly",
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.0.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BIO"
+          },
+          {
+            "source": "github",
+            "title": "🐛 Astro: Parse error for empty or comment-only template expression starting from `2.4.0`",
+            "url": "https://github.com/biomejs/biome/issues/9165",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.3\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           windows\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 Linter: `lint --write` is not idempotent on Astro frontmatter, while `lint` reports no issues",
+            "url": "https://github.com/biomejs/biome/issues/7912",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.3.2\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BIO"
+          },
+          {
+            "source": "github",
+            "title": "💅 Assertion Failed in Text Range Calculation",
+            "url": "https://github.com/biomejs/biome/issues/7932",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.2.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 The --only option is ignored when using the --unsafe option · Issue #3663 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3663",
+            "snippet": "running:\n\n```\nbiome lint --write --only=complexity/noUselessLoneBlockStatement \n```\n\nCorrectly only deletes the useless lone block statement. And leaves the `style/noVar` error alone.\n\nrunning:\n\n```\nbiome lint --write --unsafe --only=style/noVar will fix both errors instead of just the style/noVar \n"
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Implement `lint/noEmptyBlockStatements` - `eslint/no-empty` `eslint/no-empty-static-block` · Issue #39 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/39",
+            "snippet": "More actions\n\n   > I wonder if at this point if we should have only one rule that handles all the block statements\n\n   I think you are right. We could thus regroup these two rule under the `noUselessBlockStatements` name.\n9. ### andrewangellecommentedon Oct 8, 2023\n\n   @andrewangelle\n\n   andrewangel"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `lint/complexity/noUselessEmptyExport` should not trigger warnings on `.d.ts` files with exported + unexported symbols · Issue #8603 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8603",
+            "snippet": "### Code of Conduct\n\n I agree to follow Biome's Code of Conduct\n\nReactions are currently unavailable\n\n## Activity\n\n1. Bertie690\n\n   added\n\n   S-Needs triageStatus: this issue needs to be triagedStatus: this issue needs to be triaged\n\n   on Dec 28, 2025\n2. Bertie690\n\n   added the\n\n   Bug\n\n   issue ty"
+          },
+          {
+            "source": "tavily",
+            "title": "docs(lint): update documentation, rule sources for `lint/complexity/noBannedTypes` by Bertie690 · Pull Request #8632 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/8632",
+            "snippet": "🧰 Additional context used  🧠 Learnings (3)  📓 Common learnings ``` Learnt from: dyc3 Repo: biomejs/biome PR: 8171 File: crates/biome_js_analyze/src/lint/nursery/no_leaked_render.rs:125-137 Timestamp: 2025-11-21T01:10:53.059Z Learning: In the Biome codebase, each lint rule has its own options type"
+          },
+          {
+            "source": "tavily",
+            "title": "One does not simply enable just one lint rule · Issue #1768 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1768",
+            "snippet": "`\"linter\": {\n\"enabled\": true,\n\"rules\": {\n\"all\": false,\n\"complexity\": {\n\"noBannedTypes\": \"off\",\n\"noExcessiveCognitiveComplexity\": \"off\",\n\"noExtraBooleanCast\": \"off\",\n\"noForEach\": \"off\",\n\"noMultipleSpacesInRegularExpressionLiterals\": \"off\",\n\"noStaticOnlyClass\": \"off\",\n\"noThisInStatic\": \"off\",\n\"noUsele"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/11935",
+            "relation": "related",
+            "why": "same rule but different construct (block-scoped functions in strict scripts/class bodies vs lone block in try body)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "relation": "unrelated",
+            "why": "different rule (noDuplicateTestHooks) and different construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and CSS context"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and Sass context"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and CSS reordering"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and overloaded call construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule (noSkippedTests) and test hook construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "different rule (private method detection) and class member construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "different rule (React StrictMode export detection) and JSX construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and callback overload construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/834",
+            "relation": "related",
+            "why": "same rule (noUselessLoneBlockStatements) but different construct (switch statement interaction with useSingleCaseStatement)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8685",
+            "relation": "related",
+            "why": "same rule (noUselessLoneBlockStatements) but different construct (empty block with comments)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule (useSimplifiedLogicExpression) and logic expression construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6498",
+            "relation": "unrelated",
+            "why": "different rule (useSortedClasses) and Tailwind CSS construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9165",
+            "relation": "unrelated",
+            "why": "different rule (Astro parse error) and template expression construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7912",
+            "relation": "unrelated",
+            "why": "different rule (lint --write idempotency) and Astro frontmatter construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7932",
+            "relation": "unrelated",
+            "why": "different rule (assertion failure) and text range calculation construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3663",
+            "relation": "unrelated",
+            "why": "different rule (--only/--unsafe CLI flags) and command-line behavior"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/39",
+            "relation": "related",
+            "why": "same rule family (noUselessLoneBlockStatements/noEmptyBlockStatements) but different construct (empty block statements generally)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8603",
+            "relation": "unrelated",
+            "why": "different rule (noUselessEmptyExport) and .d.ts export construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/8632",
+            "relation": "unrelated",
+            "why": "different rule (noBannedTypes) and documentation update"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1768",
+            "relation": "unrelated",
+            "why": "different topic (linter rule configuration) and configuration construct"
+          }
+        ],
+        "cost": 0.0060637
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:25:45.273300884 -0400\n+++ fixed.js\t2026-10-22 13:25:47.321334748 -0400\n@@ -1,6 +1,5 @@\n try {\n   let x = 1\n-{}\n [1,2,3].forEach(v => console.log(v))\n } catch(e) {\n }\n",
+        "observed": "stdout before:\n1\n2\n3\nstdout after:\n",
+        "before": {
+          "stdout": "1\n2\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "try {\n  let x = 1\n[1,2,3].forEach(v => console.log(v))\n} catch(e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=complexity/noUselessLoneBlockStatements --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The removed empty block `{}` was part of the `try` statement’s body; deleting it changes which statements belong to the `try`. After removal, `[1,2,3].forEach(...)` executes outside any `try`, so if its callback threw (it does not here), it would not be caught. More importantly, JavaScript’s automatic semicolon insertion treats the line break before `[1,2,3]` as ending the `let x = 1` statement, making the array literal a standalone expression statement whose value is discarded—so nothing is printed. Originally, the empty block prevented ASI from interfering, allowing the `forEach` call to remain inside the `try` and execute normally. Thus the fix alters control flow and output.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Do-while loop with empty block",
+      "hazard": "When the block is the sole member of a `do-while` loop body, removing it creates an empty loop body.",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "iterations: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Empty block with trailing comment",
+      "hazard": "If the empty block contains a trailing comment, the autofix may discard the comment, losing developer intent.",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "comment preserved?\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Exception during rewrite evaluation",
+      "hazard": "Exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p004",
+      "title": "ASI hazard after return newline",
+      "hazard": "If the empty block is part of a larger expression relying on its presence for automatic semicolon insertion (ASI), such as `return\\n{};`, its removal could cause ASI to insert a semicolon after `retur",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessLoneBlockStatements",
+            "severity": "info",
+            "message": "This block statement doesn't serve any purpose and can be safely removed.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:07:00.318124510 -0400\n+++ fixed.js\t2026-10-17 16:07:00.588112088 -0400\n@@ -1,5 +1,4 @@\n function f() {\n-  return\n-{};\n+  return;\n }\n console.log(f());\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Numeric/string coercion with object",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "NaN 42\n[object Object] obj\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Labeled empty block",
+      "hazard": "Deleting a block that follows a label (e.g., `label: {};`) removes the labeled statement, breaking `break label;` or `continue label;` references elsewhere.",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-50-863Z-e9k5-biome-complexity_noUselessLoneBlockStatements/r1-p006/orig.js:2\nif (true) break outer;\n                ^^^^^\n\nSyntaxError: Undefined label 'outer'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p007",
+      "title": "Template literal adjacency (speculative)",
+      "hazard": "In template literals, a tagged template like `tag`{}`` with an empty block afterward (invalid syntax) would not occur, but if malformed code had `{}` adjacent due to a macro, removal could alter parsi",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Async/await and generator interaction",
+      "hazard": "async/await ordering, generators and yield position",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "{}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Numeric/String Coercion Hazard",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "NaNo\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Do-While Sole Member Hazard",
+      "hazard": "When the block is the sole member of a `do-while` loop body (e.g., `do {} while (false);`), removing it creates an empty loop body, which is syntactically valid but may affect performance expectations",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Iterations: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Switch Case Fallthrough Misleading Hazard",
+      "hazard": "In a `switch` statement, a case label followed by an empty block (e.g., `case 1: {}; break;`) when rewritten removes the block but leaves the label, which is harmless only if no fall-through is intend",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "one\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Else-If Binding Ambiguity Hazard",
+      "hazard": "In a sequence like `if (a) {}; else if (b) {};`, removing the first empty block could merge the `else if` with the prior `if`, changing the binding of the `else` clause if formatting relies on the blo",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-50-863Z-e9k5-biome-complexity_noUselessLoneBlockStatements/r2-p004/orig.js:3\nelse if (b) console.log('b true');\n^^^^\n\nSyntaxError: Unexpected token 'else'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p005",
+      "title": "With Statement Object Lookup Hazard",
+      "hazard": "Rewriting `{}` inside a `with` statement changes the object used for property lookup, altering identifier resolution.",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-50-863Z-e9k5-biome-complexity_noUselessLoneBlockStatements/r2-p005/orig.js:1\nwith ({ x: 10 }) {\n^^^^\n\nSyntaxError: Strict mode code may not include a with statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p006",
+      "title": "Function Declarations in Blocks Hazard",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-50-863Z-e9k5-biome-complexity_noUselessLoneBlockStatements/r2-p006/orig.js:22\n  case 2: function f(){ return 2; } break;\n          ^\n\nSyntaxError: Identifier 'f' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js "
+    },
+    {
+      "id": "r2-p007",
+      "title": "Name Collisions Across Scopes Hazard",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-50-863Z-e9k5-biome-complexity_noUselessLoneBlockStatements/r2-p007/orig.js:9\nvar x = 1;\n    ^\n\nSyntaxError: Identifier 'x' has already been declared\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p008",
+      "title": "ASI Semicolon-Less Hazard",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "complexity/noUselessLoneBlockStatements",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessLoneBlockStatements",
+            "severity": "info",
+            "message": "This block statement doesn't serve any purpose and can be safely removed.",
+            "span": null
+          },
+          {
+            "rule": "complexity/noUselessLoneBlockStatements",
+            "severity": "info",
+            "message": "This block statement doesn't serve any purpose and can be safely removed.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n2\n3\n1\n2\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n1\n2\n3\n1\n2\n3\nstdout after:\n1\n2\n3\nError: TypeError: Cannot read properties of undefined (reading 'forEach')"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessLoneBlockStatements",
+            "severity": "info",
+            "message": "This block statement doesn't serve any purpose and can be safely removed.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n2\n3\nError: TypeError: Cannot read properties of undefined (reading 'forEach')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:07:12.347577815 -0400\n+++ fixed.js\t2026-10-17 16:07:12.655564001 -0400\n@@ -6,7 +6,6 @@\n // [1,2,3].forEach(...) -> ASI: tries to parse as 1[1,2,3] -> TypeError\n try {\n   let x = 1\n-{}\n [1,2,3].forEach(v => console.log(v))\n } catch(e) {\n   console.log('Error:', e.name + ': ' + e.message)\n"
+      }
+    }
+  ]
+}

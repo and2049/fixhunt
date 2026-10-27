@@ -1,0 +1,861 @@
+{
+  "runId": "2026-10-17T21-28-24-508Z-1jyv-ruff-FURB110",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB110",
+    "fixKind": "unknown",
+    "docs": "# if-exp-instead-of-or-operator (FURB110)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for ternary `if` expressions that can be replaced with the `or`\noperator.\n\n## Why is this bad?\nTernary `if` expressions are more verbose than `or` expressions while\nproviding the same functionality.\n\n## Example\n```python\nx, y = 1, 2\n\nz = x if x else y\n```\n\nUse instead:\n```python\nx, y = 1, 2\n\nz = x or y\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe in the event that the body of the\n`if` expression contains side effects or comments.\n\nFor example, `foo` will be called twice in `foo() if foo() else bar()`\n(assuming `foo()` returns a truthy value), but only once in\n`foo() or bar()`.\n"
+  },
+  "analysis": {
+    "summary": "Flags ternary conditional expressions where the condition equals the true branch, suggesting replacement with 'or' operator.",
+    "firingShapes": [
+      "z = x if x else y",
+      "result = func() if func() else default",
+      "value = obj.attr if obj.attr else fallback",
+      "flag = data[key] if data[key] else alternative",
+      "output = a.b.c if a.b.c else backup",
+      "status = get_val() if get_val() else other",
+      "cond = x.y.z if x.y.z else y.x.z",
+      "flag = some_var if some_var else another"
+    ],
+    "silentShapes": [
+      "z = True if x else y",
+      "result = a if b else c",
+      "value = expr if expr else other_expr",
+      "flag = cond if cond else alt",
+      "output = func() if func() else backup()"
+    ],
+    "fixDescription": "Replace the ternary expression 'x if x else y' with the equivalent 'or' expression 'x or y'.",
+    "hazards": [
+      "If the condition expression has side effects (e.g., function call), it will be evaluated once in the rewrite but twice in the original when truthy, changing behavior.",
+      "If the condition expression is mutable and altered between evaluations, the rewrite may observe different state.",
+      "If the condition expression raises an exception on second evaluation but not first, the rewrite avoids the exception while original may raise it.",
+      "If the condition expression returns a value that is equal but not identical to the true branch due to custom __eq__, the rewrite may produce a different object.",
+      "If the condition expression is a property with side effects in its getter, the rewrite invokes it once vs potentially twice.",
+      "If the condition expression involves logging or debugging calls with side effects, those calls may occur fewer times in the rewrite.",
+      "If the condition expression appears in a context where its value is used elsewhere between evaluations, the rewrite breaks that dependency.",
+      "If the condition expression contains inline comments, the autofix may discard them during rewrite.",
+      "If the condition expression is part of a larger statement where evaluation order matters for subsequent expressions, the rewrite alters sequencing.",
+      "If the condition expression returns a non-boolean where truthiness differs from explicit boolean conversion, the rewrite behavior diverges."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0230169,
+  "summary": {
+    "programs": 18,
+    "invalid": 2,
+    "fired": 14,
+    "fixed": 9,
+    "disputed": 3,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r2-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class Sensor:\n    def __init__(self):\n        self._reads = 0\n    @property\n    def reading(self):\n        self._reads += 1\n        return self._reads  # 1,2,3,...\ns = Sensor()\nalarm = s.reading if s.reading else 0\nprint('sensor_reads:', s._reads, 'alarm:', alarm)\n",
+      "lines": {
+        "before": 16,
+        "after": 10
+      },
+      "reportPath": "runs/2026-10-17T21-28-24-508Z-1jyv-ruff-FURB110/reports/r2-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/11398",
+          "relation": "duplicate"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8402",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule rewrites 's.reading if s.reading else 0' to 's.reading or 0', but the property getter has a side effect (incrementing a counter). The original evaluates the condition once, while the rewritten form would evaluate it twice if truthy, but Python's 'or' short-circuits so it evaluates once—however, the original ternary evaluates the condition twice when truthy (once for condition, once for value), so the fix changes the number of side-effect executions from 2 to 1. The documentation explicitly marks this fix as unsafe when side effects are present, yet the fix was applied anyway, causing a silent change in program behavior.",
+        "docsQuote": "This rule's fix is marked as unsafe in the event that the body of the if expression contains side effects",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "FURB110 fix",
+          "FURB110 property access conditional expression",
+          "ruff ternary operator side effect optimization",
+          "FURB110 repeated attribute evaluation warning"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "FURB110 may break code ",
+            "url": "https://github.com/astral-sh/ruff/issues/11398",
+            "state": "closed",
+            "snippet": "\r\n* Keywords: FURB110\r\n* Command: `ruff --preview --select FURB110 --fix`\r\n* Ruff version: 0.4.3\r\n\r\nFURB110 autofix (with preview) changed code\r\n```py\r\nplace_id = (\r\n    location_place_id\r\n    if location_place_id\r\n    else City.objects.get(pk=city_id).gmaps_place_id\r\n    if city_id\r\n    else None\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11398",
+            "relation": "duplicate",
+            "why": "same rule FURB110 rewriting a ternary conditional with side-effecting property access into an 'or' expression, changing evaluation count"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "related",
+            "why": "same rule FURB110 autofix category but different construct (pack of fuzzer errors vs property side-effect ternary)"
+          }
+        ],
+        "cost": 0.0012801
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:42:53.110681546 -0400\n+++ fixed.py\t2026-10-22 13:42:55.122312032 -0400\n@@ -6,5 +6,5 @@\n         self._reads += 1\n         return self._reads  # 1,2,3,...\n s = Sensor()\n-alarm = s.reading if s.reading else 0\n+alarm = s.reading or 0\n print('sensor_reads:', s._reads, 'alarm:', alarm)\n",
+        "observed": "stdout before:\nsensor_reads: 2 alarm: 2\nstdout after:\nsensor_reads: 1 alarm: 1",
+        "before": {
+          "stdout": "sensor_reads: 2 alarm: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "sensor_reads: 1 alarm: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class Sensor:\n    def __init__(self):\n        self._reads = 0\n    @property\n    def reading(self):\n        self._reads += 1\n        return self._reads  # 1,2,3,...\ns = Sensor()\nalarm = s.reading or 0\nprint('sensor_reads:', s._reads, 'alarm:', alarm)\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select FURB110 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The property `reading` increments `_reads` each time it is accessed; evaluating `s.reading` twice in the original expression causes two increments, yielding alarm = 2 and final `_reads` = 2. The rewritten form `s.reading or 0` accesses the property only once (since its value is truthy), incrementing `_reads` once, so alarm = 1 and final `_reads` = 1. Thus the transformation changes the number of property evaluations, altering observable state.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Custom __eq__ equality without identity",
+      "hazard": "If the condition expression returns a value that is equal but not identical to the true branch due to custom __eq__, the rewrite may produce a different object.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              11,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ternary: True\nor     : True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ternary: True\nor     : True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:03.378492822 -0400\n+++ fixed.py\t2026-10-17 17:29:03.564489347 -0400\n@@ -8,7 +8,7 @@\n \n x = EqNotIdent(1)\n y = EqNotIdent(1)\n-z = x if x else y\n+z = x or y\n print('ternary:', z is x)\n # After rewrite: z = x or y\n z = x or y\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Inline comment discarded by autofix",
+      "hazard": "If the condition expression contains inline comments, the autofix may discard them during rewrite.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              4,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "ternary: 1\nor     : 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ternary: 1\nor     : 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "File write with partial data and truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p004",
+      "title": "Walrus and late binding in lambda",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ternary lambda results: [1, 1]\nor     lambda results: [1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Non-boolean truthiness divergence",
+      "hazard": "If the condition expression returns a non-boolean where truthiness differs from explicit boolean conversion, the rewrite behavior diverges.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              8,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ternary: fallback\nor     : fallback\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ternary: fallback\nor     : fallback\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:04.119478981 -0400\n+++ fixed.py\t2026-10-17 17:29:04.283475921 -0400\n@@ -5,7 +5,7 @@\n         return 'AlwaysFalse()'\n \n obj = AlwaysFalse()\n-val = obj if obj else 'fallback'\n+val = obj or 'fallback'\n print('ternary:', val)\n # After fix: val = obj or 'fallback'\n val = obj or 'fallback'\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Type annotation evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              2,
+              16
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ternary: [1]\nor     : [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ternary: [1]\nor     : [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:04.382474074 -0400\n+++ fixed.py\t2026-10-17 17:29:04.557470810 -0400\n@@ -1,5 +1,5 @@\n from typing import List\n-x: List[int] = [] if [] else [1]\n+x: List[int] = [] or [1]\n print('ternary:', x)\n # After fix: x = [] or [1]\n x = [] or [1]\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Context manager with write but no close",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              10,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "written: hi\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "written: hi\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "String formatting edge case with nested quotes",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ternary: Hello Alice\nor     : Hello Alice\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ternary: Hello Alice\nor     : Hello Alice\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:04.826465791 -0400\n+++ fixed.py\t2026-10-17 17:29:04.986462806 -0400\n@@ -1,5 +1,5 @@\n name = \"Alice\"\n-greeting = f'Hello {name}' if f'Hello {name}' else 'Anonymous'\n+greeting = f'Hello {name}' or 'Anonymous'\n print('ternary:', greeting)\n # After fix: greeting = f'Hello {name}' or 'Anonymous'\n greeting = f'Hello {name}' or 'Anonymous'\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Side effect duplication in function call",
+      "hazard": "If the condition expression has side effects (e.g., function call), it will be evaluated once in the rewrite but twice in the original when truthy, changing behavior.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "side_effect_counter: 1 z: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "side_effect_counter: 1 z: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:26.579066680 -0400\n+++ fixed.py\t2026-10-17 17:29:26.743063719 -0400\n@@ -4,5 +4,5 @@\n     return counter[0]\n x = inc()\n y = 99\n-z = x if x else y\n+z = x or y\n print('side_effect_counter:', counter[0], 'z:', z)\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Generator consumption mismatch",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              7,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:26.849061805 -0400\n+++ fixed.py\t2026-10-17 17:29:27.013058844 -0400\n@@ -4,7 +4,7 @@\n     yield 3\n g = gen()\n a = next(g, None)  # consumes first value\n-result = g if g else []  # g is now exhausted after first next(), so truthy? No: generator object is always truthy even if exhausted!\n+result = g or []  # g is now exhausted after first next(), so truthy? No: generator object is always truthy even if exhausted!\n # Wait: generator object is truthy regardless of state. So 'g if g else []' always returns g (the generator object), never [].\n # This does not trigger FURB110 because condition is 'g' (generator object), which is truthy, but the rule requires condition == true branch.\n # Here true branch is 'g', condition is 'g' -> yes, it matches.\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Generator consumption mismatch - REDO",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              16,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "get_gen calls: 3 result type: <class 'generator'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "get_gen calls: 3 result type: <class 'generator'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Dict ordering and duplicate keys - irrelevant to rule",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "dict truthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p005",
+      "title": "String formatting edge case with nested quotes",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              4,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "result: Hello Alice\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: Hello Alice\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:27.405051778 -0400\n+++ fixed.py\t2026-10-17 17:29:27.569048821 -0400\n@@ -1,7 +1,7 @@\n name = \"Alice\"\n # Condition expression: f-string that evaluates to truthy\n cond_expr = f'Hello {name}'\n-result = cond_expr if cond_expr else 'unnamed'\n+result = cond_expr or 'unnamed'\n print('result:', result)\n # Original: evaluates f-string once\n # Fixed: cond_expr or 'unnamed' -> evaluates once, same\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "String formatting edge case with nested quotes - REDO",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              7,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "build_count: 3 out: Value_3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "build_count: 3 out: Value_3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Property getter side effects",
+      "hazard": "If the condition expression is a property with side effects in its getter, the rewrite invokes it once vs potentially twice.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              12,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "sensor_reads: 3 alarm: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nsensor_reads: 3 alarm: 3\nstdout after:\nsensor_reads: 2 alarm: 2"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "sensor_reads: 2 alarm: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:27.827044170 -0400\n+++ fixed.py\t2026-10-17 17:29:27.988041267 -0400\n@@ -9,7 +9,7 @@\n # First, access s.reading to get a truthy value (1)\n _first = s.reading  # now _reads=1\n # Condition: s.reading -> property access\n-alarm = s.reading if s.reading else 0\n+alarm = s.reading or 0\n print('sensor_reads:', s._reads, 'alarm:', alarm)\n # Original: two property gets -> _reads increases by 2 (from 1 to 3), alarm = second reading (3)\n # Fixed: one property get -> _reads increases by 1 (to 2), alarm = that value (2)\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Evaluation order in larger statement",
+      "hazard": "If the condition expression is part of a larger statement where evaluation order matters for subsequent expressions, the rewrite alters sequencing.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              17,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "records: ['get_val', 'get_val', 'process_42'] final: 84\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "records: ['get_val', 'get_val', 'process_42'] final: 84\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p009",
+      "title": "Non-boolean truthiness divergence",
+      "hazard": "If the condition expression returns a non-boolean where truthiness differs from explicit boolean conversion, the rewrite behavior diverges.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB110",
+            "severity": "warning",
+            "message": "Replace ternary `if` expression with `or` operator",
+            "span": [
+              74,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Testing non-boolean:\nresult: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Testing non-boolean:\nresult: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:29:28.255036461 -0400\n+++ fixed.py\t2026-10-17 17:29:28.419033508 -0400\n@@ -71,6 +71,6 @@\n # Let's skip and use a placeholder that at least uses non-boolean.\n print('Testing non-boolean:')\n empty_list = []\n-result = empty_list if empty_list else [1]\n+result = empty_list or [1]\n print('result:', result)\n # Both branches same: returns [1]\n"
+      }
+    },
+    {
+      "id": "r2-p010",
+      "title": "Non-boolean truthiness divergence - REDO",
+      "hazard": "If the condition expression returns a non-boolean where truthiness differs from explicit boolean conversion, the rewrite behavior diverges.",
+      "rule": "FURB110",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    }
+  ]
+}

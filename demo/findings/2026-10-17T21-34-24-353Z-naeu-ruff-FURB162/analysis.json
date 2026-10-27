@@ -1,0 +1,28 @@
+{
+  "summary": "Flags `datetime.fromisoformat()` called with a string where `.replace('Z', '+00:00')` has been applied to remove a trailing 'Z' suffix.",
+  "firingShapes": [
+    "datetime.fromisoformat(s.replace(\"Z\", \"+00:00\"))",
+    "datetime.fromisoformat(t[:-1] + \"-00\")",
+    "datetime.fromisoformat(u.strip(\"Z\", \"-0000\"))",
+    "datetime.fromisoformat(v.rstrip(\"Z\", \"-00:00\"))"
+  ],
+  "silentShapes": [
+    "datetime.fromisoformat(w)",
+    "datetime.fromisoformat(x.replace(\"z\", \"+00:00\"))",
+    "datetime.datetime.fromisoformat(y.replace(\"Z\", \"+00:00\"))"
+  ],
+  "fixDescription": "Replace `datetime.fromisoformat(arg)` with `datetime.fromisoformat(base_string)`, where `arg` is a transformation like `s.replace(\"Z\", \"+00:00\")`, `t[:-1] + \"-00\"`, etc., and `base_string` is the original variable before transformation.",
+  "hazards": [
+    "If the base string contains internal 'Z' characters (e.g., \"Z2025-01-01T00:00:00Z\"), removing them via replace changes the input meaning and may cause parsing errors.",
+    "If the base string ends with multiple 'Z' characters, slicing off only one character (e.g., `[:-1]`) leaves trailing 'Z's, resulting in invalid ISO format.",
+    "If the base string lacks a trailing 'Z', transformations like `rstrip(\"Z\", \"-00:00\")` may still alter the string (e.g., removing trailing zeros), producing a different datetime.",
+    "If the base string is not a literal but a function call or complex expression, the rewrite may alter evaluation order or side effects if the transformation had any (though pure string methods are side-effect free, the base expression is evaluated once vs potentially multiple times in the original).",
+    "If the variable naming is reused or aliased elsewhere in the scope, the rewrite assumes the base variable is unchanged between its use in the transformation and the fromisoformat call, which may not hold if mutated in between (though unlikely for strings).",
+    "If the code relies on the transformation to normalize case (e.g., expecting lowercase 'z'), the fix does not account for that and may fail to parse.",
+    "If the string contains timezone offsets other than UTC (e.g., \"+05:30\"), the transformation incorrectly forces UTC, changing the represented time.",
+    "If the code is run under Python <3.11, `fromisoformat` cannot parse the 'Z' suffix directly, so the fix would cause a ValueError where the original code worked.",
+    "If the transformation includes additional logic beyond the simple patterns (e.g., chained replaces), the tool may not trigger, but if it did incorrectly, the fix would drop meaningful processing.",
+    "Comments attached to the transformation expression (e.g., `# workaround`) would be lost when the entire argument expression is replaced.",
+    "If the base string variable is defined later in the block (due to hoisting-like confusion in conditional blocks), the rewrite could reference it before assignment."
+  ]
+}

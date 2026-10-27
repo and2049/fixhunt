@@ -1,0 +1,308 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/useExponentiationOperator — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/useExponentiationOperator <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T21-01-30-169Z-3u5f-biome-style_useExponentiationOperator · fix labelled <b>safe</b> · 16 programs, 16 fired, 15 fixed, 1 oracle-backed finding(s) · model cost $0.0175</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags calls to Math.pow(base, exponent) where base and exponent are any expressions.</p><p class="mut">Fix: Replace Math.pow(base, exponent) with the expression base ** exponent, preserving the original formatting and whitespace around the call but inserting the infix operator between the two arguments.</p><details><summary>12 hazards</summary><ul><li>If base or exponent contains a side-effecting expression like a function call, the autofix may change evaluation order because Math.pow evaluates both arguments before the call, while the ** operator evaluates left-hand side first then right-hand side, potentially altering observable behavior if the right-hand side has side effects that depend on the left-hand side&#39;s evaluation.</li><li>If base or exponent contains a comma expression, the autofix will incorrectly group due to the lower precedence of the comma operator compared to **, causing part of the intended argument to be excluded from the exponentiation operation.</li><li>If base or exponent contains yield or await expressions, the autofix may create invalid syntax because ** cannot directly contain these operators without parentheses, leading to a SyntaxError where the original Math.pow call was valid.</li><li>If base or exponent contains a newline without semicolon insertion protection, the autofix could trigger automatic semicolon insertion incorrectly, changing the parsing of subsequent statements.</li><li>If the Math.pow call appears in a context where its return value is used as a property key (e.g., computed property name), the autofix may produce invalid syntax because ** has lower precedence than the bracket operator, requiring additional parentheses that the autofix does not insert.</li><li>If the Math.pow call is inside a tag template literal, the autofix may break the template processing because the resulting ** expression alters how the template strings and interpolations are grouped.</li><li>If base or exponent contains a regular expression literal, the autofix may cause a SyntaxError because the asterisk in ** can be confused with the multiplication operator or regex quantifier depending on spacing.</li><li>If the call to Math.pow is actually a reference to a local variable named Math (shadowing the global), the autofix will incorrectly rewrite it as an exponentiation operation, changing the meaning entirely.</li><li>If the code is in a strict mode context where Math.pow is not configurable or is replaced, the autofix assumes the standard behavior, but the actual function might have custom semantics that ** does not replicate.</li><li>If base or exponent contains expressions with TypeScript-specific syntax (like type assertions or generics), the autofix may produce invalid JavaScript after transpilation if the rewrite interferes with those constructs.</li><li>If the original code had trailing comments on the Math.pow line, the autofix may drop or misplace them because it only rewrites the call expression and does not preserve comment attachment.</li><li>If base or exponent contains an expression that evaluates to NaN or Infinity, the behavior of ** differs from Math.pow in edge cases involving negative bases and non-integer exponents, potentially changing the result.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The program assigns to Math.pow, which in strict mode throws a TypeError because Math.pow is a non-writable property. The original code catches this error and then successfully calls the original Math.pow function. The fix replaces Math.pow(2, 3) with 2 ** 3, which changes the behavior by avoiding the reassignment&#39;s side effect and the error, producing different observable output (no stderr, exit code change). This is a plausible real-world scenario where code might test or rely on Math.pow&#39;s non-writability.">judge: real · high</span> Strict vs Sloppy Mode<p class="mut">The program assigns to Math.pow, which in strict mode throws a TypeError because Math.pow is a non-writable property. The original code catches this error and then successfully calls the original Math.pow function. The fix replaces Math.pow(2, 3) with 2 ** 3, which changes the behavior by avoiding the reassignment&#39;s side effect and the error, producing different observable output (no stderr, exit code change). This is a plausible real-world scenario where code might test or rely on Math.pow&#39;s non-writability.</p>
+<h2>Minimized program (20→5 lines)</h2><pre>try {
+  Math.pow = 42; // Should fail in strict mode
+} catch (e) {
+}
+console.log(&#39;Math.pow still works:&#39;, Math.pow(2, 3)); // Expected: 8
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 17:01:50.067813812 -0400
++++ fixed.js	2026-10-17 17:01:50.349817202 -0400
+@@ -4,7 +4,7 @@
+ } catch (e) {
+   console.log(&#39;Assignment error:&#39;, e.name);
+ }
+<span class="del">-console.log(&#39;Math.pow still works:&#39;, Math.pow(2, 3)); // Expected: 8</span>
+<span class="add">+console.log(&#39;Math.pow still works:&#39;, 2 ** 3); // Expected: 8</span>
+ // In sloppy mode, assignment succeeds and breaks Math.pow
+ // After fix: 2 ** 3 still works even if Math.pow is overwritten
+ // So we can detect mode by whether Math.pow is callable
+@@ -15,6 +15,6 @@
+ } else {
+   console.log(&#39;Mode: sloppy&#39;);
+   Math.pow = () =&gt; 0; // Break it
+<span class="del">-  console.log(&#39;After break, Math.pow(2,3):&#39;, Math.pow(2,3)); // Expected: 0</span>
+<span class="add">+  console.log(&#39;After break, Math.pow(2,3):&#39;, 2 ** 3); // Expected: 0</span>
+   console.log(&#39;But 2 ** 3:&#39;, 2 ** 3); // Expected: 8 — shows fix avoids reliance on Math.pow
+ }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+Math.pow still works: 8
+Mode: strict
+exit 1 → 0
+stderr before: TypeError: Math.pow is not a function
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/410">biomejs/biome/issues/410</a> · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Comma Expression Hazard</td><td class="mut">If base or exponent contains a comma expression, the autofix will incorrectly group due to</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Arguments Object Interaction</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Temporal Dead Zone</td><td class="mut">temporal dead zone after code is hoisted or reordered</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Tagged Template Literal</td><td class="mut">If the Math.pow call is inside a tag template literal, the autofix may break the template </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Class Fields and Static Blocks</td><td class="mut">class fields, static blocks, private names, super calls</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Trailing Comments Preservation</td><td class="mut">If the original code had trailing comments on the Math.pow line, the autofix may drop or m</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Strict vs Sloppy Mode</td><td class="mut">strict vs sloppy mode semantics</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Function Declarations in Blocks</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Trailing Comment Attached To Call</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Temporal Dead Zone Hoisting Conflict</td><td class="mut">temporal dead zone after code is hoisted or reordered</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Computed Property Key Precedence Failure</td><td class="mut">If the Math.pow call appears in a context where its return value is used as a property key</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Newline Without Semicolon Protection ASI Hazard</td><td class="mut">If base or exponent contains a newline without semicolon insertion protection, the autofix</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Arguments Object And Rest Parameters Collision</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Function Declaration In Block Scope Re-entry</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Regex Literal Asterisk Ambiguity In Exponentiation</td><td class="mut">If base or exponent contains a regular expression literal, the autofix may cause a SyntaxE</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Trailing Comment Dropped By Autofix</td><td class="mut">If the original code had trailing comments on the Math.pow line, the autofix may drop or m</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Comma Expression Hazard</summary><pre>let result;
+result = Math.pow(1, 2, 3);
+console.log(&#39;Result:&#39;, result); // Should be NaN because second arg becomes &#39;3&#39;, third ignored
+</pre></details><details id="r1-p002"><summary>r1-p002 — Arguments Object Interaction</summary><pre>function test(a, b = Math.pow(2, 3)) {
+  console.log(&#39;b:&#39;, b);
+}
+test(); // Expected: b: 8
+// After fix: still works? But we test capture via closure
+const fn = () =&gt; Math.pow(2, 3);
+console.log(&#39;fn():&#39;, fn()); // Expected: 8
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:47.818786756 -0400
++++ fixed.js	2026-10-17 17:01:48.092790054 -0400
+@@ -1,7 +1,7 @@
+<span class="del">-function test(a, b = Math.pow(2, 3)) {</span>
+<span class="add">+function test(a, b = 2 ** 3) {</span>
+   console.log(&#39;b:&#39;, b);
+ }
+ test(); // Expected: b: 8
+ // After fix: still works? But we test capture via closure
+<span class="del">-const fn = () =&gt; Math.pow(2, 3);</span>
+<span class="add">+const fn = () =&gt; 2 ** 3;</span>
+ console.log(&#39;fn():&#39;, fn()); // Expected: 8
+</pre></details><details id="r1-p003"><summary>r1-p003 — Temporal Dead Zone</summary><pre>try {
+  console.log(Math.pow(x, 2)); // TDZ: x not initialized
+} catch (e) {
+  console.log(&#39;Caught:&#39;, e.name + &#39;: &#39; + e.message);
+}
+let x = 3; // Hoisted declaration, not initialization
+// After fix: same TDZ error
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:48.271792208 -0400
++++ fixed.js	2026-10-17 17:01:48.555795625 -0400
+@@ -1,5 +1,5 @@
+ try {
+<span class="del">-  console.log(Math.pow(x, 2)); // TDZ: x not initialized</span>
+<span class="add">+  console.log(x ** 2); // TDZ: x not initialized</span>
+ } catch (e) {
+   console.log(&#39;Caught:&#39;, e.name + &#39;: &#39; + e.message);
+ }
+</pre></details><details id="r1-p004"><summary>r1-p004 — Tagged Template Literal</summary><pre>function tags(strings, ...values) {
+  return strings.raw[0] + &#39;|&#39; + values[0] + &#39;|&#39; + strings.raw[1];
+}
+const output = tags`${Math.pow(2, 3)} end`;
+console.log(&#39;Output:&#39;, output); // Expected: &#39;|8|&#39;
+// After fix: tags`${2 ** 3} end` → same? Wait — no, if misgrouped...
+// Actually: if base/expr has comma, but here safe.
+// We need a case where ** changes grouping in interpolation
+// Let&#39;s use comma in exponent to break it
+const bad = tags`${Math.pow(2, 1, 2)}`; // 2^(1,2) → 2^2=4
+console.log(&#39;Bad:&#39;, bad); // Expected: &#39;|4|&#39;
+// If autofix makes 2 ** 1, 2 → (2**1), 2 → comma expr → value is 2
+// So bad becomes &#39;|2|&#39; → mismatch!
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:48.728797706 -0400
++++ fixed.js	2026-10-17 17:01:49.006801051 -0400
+@@ -1,7 +1,7 @@
+ function tags(strings, ...values) {
+   return strings.raw[0] + &#39;|&#39; + values[0] + &#39;|&#39; + strings.raw[1];
+ }
+<span class="del">-const output = tags`${Math.pow(2, 3)} end`;</span>
+<span class="add">+const output = tags`${2 ** 3} end`;</span>
+ console.log(&#39;Output:&#39;, output); // Expected: &#39;|8|&#39;
+ // After fix: tags`${2 ** 3} end` → same? Wait — no, if misgrouped...
+ // Actually: if base/expr has comma, but here safe.
+</pre></details><details id="r1-p005"><summary>r1-p005 — Class Fields and Static Blocks</summary><pre>class C {
+  static pow = Math.pow(2, 3);
+  static {
+    console.log(&#39;Static block:&#39;, C.pow); // Expected: 8
+  }
+  get value() {
+    return Math.pow(this.prop, 2);
+  }
+}
+const inst = new C();
+inst.prop = 4;
+console.log(&#39;Instance value:&#39;, inst.value); // Expected: 16
+// All Math.pow calls should fire and be fixed correctly
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:49.184803192 -0400
++++ fixed.js	2026-10-17 17:01:49.464806560 -0400
+@@ -1,10 +1,10 @@
+ class C {
+<span class="del">-  static pow = Math.pow(2, 3);</span>
+<span class="add">+  static pow = 2 ** 3;</span>
+   static {
+     console.log(&#39;Static block:&#39;, C.pow); // Expected: 8
+   }
+   get value() {
+<span class="del">-    return Math.pow(this.prop, 2);</span>
+<span class="add">+    return this.prop ** 2;</span>
+   }
+ }
+ const inst = new C();
+</pre></details><details id="r1-p006"><summary>r1-p006 — Trailing Comments Preservation</summary><pre>let x = Math.pow(2, 3); // Result should be 8
+console.log(&#39;x:&#39;, x); // Print x
+// After fix: comment may be lost or moved — but we can&#39;t observe that directly
+// So instead, we make the line affect control flow via side effect in comment? Not possible.
+// Workaround: if comment is lost, and we rely on it for something? Can&#39;t.
+// Instead: test that the line still executes and comment presence doesn&#39;t break syntax.
+// But requirement: trace must depend on rewritten code.
+// Alternative: if autofix breaks due to comment interference (e.g. places ** in comment)
+// Only if comment contains code-like text.
+// Let&#39;s put a fake operator in comment that could be misparsed if comment is not detached.
+// But JS ignores comments — so no effect.
+// This hazard may not be observable in output.
+// However: if autofix removes comment and we have fallback logic based on line count? No.
+// Given constraints, we accept that we cannot observe comment loss in output.
+// But we must include it — so we write it and hope the trace is same either way.
+// To satisfy &#39;trace depends on rewritten code&#39;: we make the Math.pow result used.
+// And assume that if comment is mishandled, it causes a syntax error.
+// Example: if autofix produces: let x = 2 ** 3; // Result should be 8
+// Still valid.
+// But if it puts ** inside comment: let x = 2; // 3** → syntax error? No.
+// Real risk: if comment has newline and autofix breaks line.
+// We&#39;ll assume the fix is correct for output, but include the comment as required.
+// Since we must show dependence, and we can&#39;t, we note: this program may not detect the bug.
+// But we include it as instructed.
+console.log(&#39;Final x:&#39;, x); // Expected: 8
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:49.630808556 -0400
++++ fixed.js	2026-10-17 17:01:49.893811720 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-let x = Math.pow(2, 3); // Result should be 8</span>
+<span class="add">+let x = 2 ** 3; // Result should be 8</span>
+ console.log(&#39;x:&#39;, x); // Print x
+ // After fix: comment may be lost or moved — but we can&#39;t observe that directly
+ // So instead, we make the line affect control flow via side effect in comment? Not possible.
+</pre></details><details id="r1-p007"><summary>r1-p007 — Strict vs Sloppy Mode</summary><pre>&quot;use strict&quot;;
+try {
+  Math.pow = 42; // Should fail in strict mode
+} catch (e) {
+  console.log(&#39;Assignment error:&#39;, e.name);
+}
+console.log(&#39;Math.pow still works:&#39;, Math.pow(2, 3)); // Expected: 8
+// In sloppy mode, assignment succeeds and breaks Math.pow
+// After fix: 2 ** 3 still works even if Math.pow is overwritten
+// So we can detect mode by whether Math.pow is callable
+let isStrict = true;
+try { Math.pow = 1; } catch { isStrict = false; }
+if (isStrict) {
+  console.log(&#39;Mode: strict&#39;);
+} else {
+  console.log(&#39;Mode: sloppy&#39;);
+  Math.pow = () =&gt; 0; // Break it
+  console.log(&#39;After break, Math.pow(2,3):&#39;, Math.pow(2,3)); // Expected: 0
+  console.log(&#39;But 2 ** 3:&#39;, 2 ** 3); // Expected: 8 — shows fix avoids reliance on Math.pow
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:50.067813812 -0400
++++ fixed.js	2026-10-17 17:01:50.349817202 -0400
+@@ -4,7 +4,7 @@
+ } catch (e) {
+   console.log(&#39;Assignment error:&#39;, e.name);
+ }
+<span class="del">-console.log(&#39;Math.pow still works:&#39;, Math.pow(2, 3)); // Expected: 8</span>
+<span class="add">+console.log(&#39;Math.pow still works:&#39;, 2 ** 3); // Expected: 8</span>
+ // In sloppy mode, assignment succeeds and breaks Math.pow
+ // After fix: 2 ** 3 still works even if Math.pow is overwritten
+ // So we can detect mode by whether Math.pow is callable
+@@ -15,6 +15,6 @@
+ } else {
+   console.log(&#39;Mode: sloppy&#39;);
+   Math.pow = () =&gt; 0; // Break it
+<span class="del">-  console.log(&#39;After break, Math.pow(2,3):&#39;, Math.pow(2,3)); // Expected: 0</span>
+<span class="add">+  console.log(&#39;After break, Math.pow(2,3):&#39;, 2 ** 3); // Expected: 0</span>
+   console.log(&#39;But 2 ** 3:&#39;, 2 ** 3); // Expected: 8 — shows fix avoids reliance on Math.pow
+ }
+</pre></details><details id="r1-p008"><summary>r1-p008 — Function Declarations in Blocks</summary><pre>switch (1) {
+  case 1:
+    function helper() {
+      return Math.pow(2, 3);
+    }
+    break;
+}
+console.log(&#39;Helper result:&#39;, helper()); // Expected: 8
+// After fix: helper uses 2 ** 3 — same result
+// But we want to test if hoisting/scoping affects it
+// Add re-declaration attempt
+try {
+  function helper() { return 0; } // Should throw in strict? But we&#39;re not strict
+} catch (e) {
+  console.log(&#39;Redeclaraion error:&#39;, e.message);
+}
+console.log(&#39;Helper again:&#39;, helper()); // Still 8
+// No change expected — but we include as structural hazard
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:50.522819282 -0400
++++ fixed.js	2026-10-17 17:01:50.789822492 -0400
+@@ -1,7 +1,7 @@
+ switch (1) {
+   case 1:
+     function helper() {
+<span class="del">-      return Math.pow(2, 3);</span>
+<span class="add">+      return 2 ** 3;</span>
+     }
+     break;
+ }
+</pre></details><details id="r2-p001"><summary>r2-p001 — Trailing Comment Attached To Call</summary><pre>// This matters
+const x = Math.pow(2, 3); // compute eight
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:55.632880648 -0400
++++ fixed.js	2026-10-17 17:01:55.867883468 -0400
+@@ -1,2 +1,2 @@
+ // This matters
+<span class="del">-const x = Math.pow(2, 3); // compute eight</span>
+<span class="add">+const x = 2 ** 3; // compute eight</span>
+</pre></details><details id="r2-p002"><summary>r2-p002 — Temporal Dead Zone Hoisting Conflict</summary><pre>try { console.log(y); } catch(e) { console.log(&#39;TDZ:&#39; + e.name); }
+let y = Math.pow(2, 3)
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:56.016885255 -0400
++++ fixed.js	2026-10-17 17:01:56.298888636 -0400
+@@ -1,2 +1,2 @@
+ try { console.log(y); } catch(e) { console.log(&#39;TDZ:&#39; + e.name); }
+<span class="del">-let y = Math.pow(2, 3)</span>
+<span class="add">+let y = 2 ** 3</span>
+</pre></details><details id="r2-p003"><summary>r2-p003 — Computed Property Key Precedence Failure</summary><pre>console.log({[Math.pow(2, 3)]: &#39;ok&#39;}[8])
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:56.466890651 -0400
++++ fixed.js	2026-10-17 17:01:56.743893973 -0400
+@@ -1 +1 @@
+<span class="del">-console.log({[Math.pow(2, 3)]: &#39;ok&#39;}[8])</span>
+<span class="add">+console.log({[2 ** 3]: &#39;ok&#39;}[8])</span>
+</pre></details><details id="r2-p004"><summary>r2-p004 — Newline Without Semicolon Protection ASI Hazard</summary><pre>let a = 2
+
+3
+let b = Math.pow(a, 1)
+console.log(b)
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:56.912895999 -0400
++++ fixed.js	2026-10-17 17:01:57.184899260 -0400
+@@ -1,5 +1,5 @@
+ let a = 2
+ 
+ 3
+<span class="del">-let b = Math.pow(a, 1)</span>
+<span class="add">+let b = a ** 1</span>
+ console.log(b)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Arguments Object And Rest Parameters Collision</summary><pre>function f(p = Math.pow(2, 3), ...r) { console.log(&#39;p=&#39; + p + &#39;, r.len=&#39; + r.length); }
+f()
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:57.377901574 -0400
++++ fixed.js	2026-10-17 17:01:57.646904798 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-function f(p = Math.pow(2, 3), ...r) { console.log(&#39;p=&#39; + p + &#39;, r.len=&#39; + r.length); }</span>
+<span class="add">+function f(p = 2 ** 3, ...r) { console.log(&#39;p=&#39; + p + &#39;, r.len=&#39; + r.length); }</span>
+ f()
+</pre></details><details id="r2-p006"><summary>r2-p006 — Function Declaration In Block Scope Re-entry</summary><pre>{ function g() { return Math.pow(2, 3); } console.log(g()); }
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:57.823906920 -0400
++++ fixed.js	2026-10-17 17:01:58.087910084 -0400
+@@ -1 +1 @@
+<span class="del">-{ function g() { return Math.pow(2, 3); } console.log(g()); }</span>
+<span class="add">+{ function g() { return 2 ** 3; } console.log(g()); }</span>
+</pre></details><details id="r2-p007"><summary>r2-p007 — Regex Literal Asterisk Ambiguity In Exponentiation</summary><pre>/a*/.test(&#39;&#39;) ? console.log(&#39;no&#39;) : console.log(/a*/.test(Math.pow(2, 3) + &#39;&#39;))
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:58.261912169 -0400
++++ fixed.js	2026-10-17 17:01:58.520915272 -0400
+@@ -1 +1 @@
+<span class="del">-/a*/.test(&#39;&#39;) ? console.log(&#39;no&#39;) : console.log(/a*/.test(Math.pow(2, 3) + &#39;&#39;))</span>
+<span class="add">+/a*/.test(&#39;&#39;) ? console.log(&#39;no&#39;) : console.log(/a*/.test(2 ** 3 + &#39;&#39;))</span>
+</pre></details><details id="r2-p008"><summary>r2-p008 — Trailing Comment Dropped By Autofix</summary><pre>console.log(Math.pow(2, 3)); // this comment must stay
+</pre><pre class="diff">--- orig.js	2026-10-17 17:01:58.683917225 -0400
++++ fixed.js	2026-10-17 17:01:58.953920460 -0400
+@@ -1 +1 @@
+<span class="del">-console.log(Math.pow(2, 3)); // this comment must stay</span>
+<span class="add">+console.log(2 ** 3); // this comment must stay</span>
+</pre></details></body></html>

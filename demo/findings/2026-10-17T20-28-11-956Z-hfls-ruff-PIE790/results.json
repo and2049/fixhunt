@@ -1,0 +1,692 @@
+{
+  "runId": "2026-10-17T20-28-11-956Z-hfls-ruff-PIE790",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PIE790",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-placeholder (PIE790)\n\nDerived from the **flake8-pie** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary `pass` statements and ellipsis (`...`) literals in\nfunctions, classes, and other blocks.\n\n## Why is this bad?\nIn Python, the `pass` statement and ellipsis (`...`) literal serve as\nplaceholders, allowing for syntactically correct empty code blocks. The\nprimary purpose of these nodes is to avoid syntax errors in situations\nwhere a statement or expression is syntactically required, but no code\nneeds to be executed.\n\nIf a `pass` or ellipsis is present in a code block that includes at least\none other statement (even, e.g., a docstring), it is unnecessary and should\nbe removed.\n\n## Example\n```python\ndef func():\n    \"\"\"Placeholder docstring.\"\"\"\n    pass\n```\n\nUse instead:\n```python\ndef func():\n    \"\"\"Placeholder docstring.\"\"\"\n```\n\nOr, given:\n```python\ndef func():\n    \"\"\"Placeholder docstring.\"\"\"\n    ...\n```\n\nUse instead:\n```python\ndef func():\n    \"\"\"Placeholder docstring.\"\"\"\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe in the rare case that the `pass` or ellipsis\nis followed by a string literal, since removal of the placeholder would convert the\nsubsequent string literal into a docstring.\n\n## References\n- [Python documentation: The `pass` statement](https://docs.python.org/3/reference/simple_stmts.html#the-pass-statement)\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary `pass` or ellipsis (`...`) statements when they appear alongside any other executable statement in a function, class, or block.",
+    "firingShapes": [
+      "def f():\\n    x = 1\\n    pass",
+      "class C:\\n    def m(self):\\n        ...",
+      "if True:\\n    print('hi')\\n    pass",
+      "try:\\n    pass\\nexcept ValueError:\\n    handle()",
+      "def f():\\n    '''doc'''\\n    pass",
+      "async def f():\\n    await something()\\n    ...",
+      "with open('x') as f:\\n    data = f.read()\\n    pass",
+      "for i in range(10):\\n    if i == 5:\\n        break\\n    else:\\n    pass"
+    ],
+    "silentShapes": [
+      "def f():\\n    pass",
+      "class C:\\n    ...",
+      "if False:\\n    pass",
+      "try:\\n    ...\\nexcept:\\n    pass",
+      "def f():\\n    '''doc'''",
+      "lambda: ..."
+    ],
+    "fixDescription": "Removes the unnecessary `pass` or ellipsis (`...`) statement when it occurs in a block containing at least one other statement.",
+    "hazards": [
+      "Removing a `pass` after a string literal may cause that string to be interpreted as a docstring, altering the function or class's `__doc__` attribute.",
+      "If a `pass` or `...` is followed by a commented-out line that relies on indentation, removing it could shift the comment's block association.",
+      "In a `try` block, removing a `pass` may change which `except` clause catches an exception if the block structure is altered by comment reattachment.",
+      "If the `pass` or `...` is the last line in a function and is followed by a blank line containing a trailing comment, removing it could move that comment into the preceding line's visual scope.",
+      "In an `async` function, removing a `...` placeholder does not affect coroutine behavior but may mislead tools that infer stub status from ellipsis-only bodies.",
+      "If a `pass` appears in a class body and is removed, subsequent assignment statements may be promoted to class attributes earlier than intended during execution.",
+      "In a nested block like an `if` inside a `for`, removing a `pass` could alter the `else` clause's execution if the block's nesting is visually misparsed due to comment shifts.",
+      "If a `# type: ignore` comment sits on the same line as the `pass` or `...`, removing the placeholder may detach the ignore from its intended target, suppressing or exposing type errors incorrectly."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.004953,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 13,
+    "fixed": 13,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Try-except pass removal affects exception handling via comment reattachment",
+      "hazard": "In a `try` block, removing a `pass` may change which `except` clause catches an exception if the block structure is altered by comment reattachment.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: x\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: x\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:30.411572494 -0400\n+++ fixed.py\t2026-10-17 16:28:30.575572458 -0400\n@@ -1,7 +1,7 @@\n def f():\n     try:\n         raise ValueError('x')  # This line must stay indented\n-        pass                   # Rule triggers: removable pass after stmt\n+        # Rule triggers: removable pass after stmt\n     except ValueError as e:\n         print('caught:', e)\n     except Exception as e:\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Int/float/bool coercion, Decimal, division and rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "(3, 2.0, False, Decimal('1.5'), 2)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "(3, 2.0, False, Decimal('1.5'), 2)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:30.681572435 -0400\n+++ fixed.py\t2026-10-17 16:28:30.857572397 -0400\n@@ -4,6 +4,6 @@\n     z = bool(0)\n     d = __import__('decimal').Decimal('1.5')\n     r = round(5 / 2)\n-    pass  # Rule triggers: removable pass after stmts\n+    # Rule triggers: removable pass after stmts\n     return (x, y, z, d, r)\n print(f())\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Async function ellipsis removal misleads stub inference",
+      "hazard": "In an `async` function, removing a `...` placeholder does not affect coroutine behavior but may mislead tools that infer stub status from ellipsis-only bodies.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `...` literal",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:30.968572373 -0400\n+++ fixed.py\t2026-10-17 16:28:31.269572311 -0400\n@@ -4,6 +4,6 @@\n         def __await__(self):\n             yield\n     await Awaitable()\n-    ...  # Rule triggers: removable ellipsis after stmt\n+    # Rule triggers: removable ellipsis after stmt\n import asyncio\n asyncio.run(f())\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable default arguments and aliasing after rewrite",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n[1, 1]\n[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1, 1]\n[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:31.445572274 -0400\n+++ fixed.py\t2026-10-17 16:28:31.617572238 -0400\n@@ -1,6 +1,6 @@\n def f(x=[]):\n     x.append(1)\n-    pass  # Rule triggers: removable pass after stmt\n+    # Rule triggers: removable pass after stmt\n     return x\n print(f())\n print(f())\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Pass removal after string literal alters __doc__ interpretation",
+      "hazard": "Removing a `pass` after a string literal may cause that string to be interpreted as a docstring, altering the function or class's `__doc__` attribute.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "'This is a string literal'\nbody\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'This is a string literal'\nbody\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:31.716572218 -0400\n+++ fixed.py\t2026-10-17 16:28:31.887572182 -0400\n@@ -1,6 +1,6 @@\n def f():\n     'This is a string literal'\n-    pass  # Rule triggers: removable pass after string -> becomes docstring\n+    # Rule triggers: removable pass after string -> becomes docstring\n     return 'body'\n print(repr(f.__doc__))\n print(f())\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comment block association shifted by pass removal",
+      "hazard": "If a `pass` or `...` is followed by a commented-out line that relies on indentation, removing it could shift the comment's block association.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:32.007572157 -0400\n+++ fixed.py\t2026-10-17 16:28:32.169572125 -0400\n@@ -1,7 +1,7 @@\n def f():\n     if True:\n         x = 1\n-        pass  # Rule triggers: removable pass\n+        # Rule triggers: removable pass\n         # y = 2  # This comment must stay; if dedented, it becomes top-level\n     print('x:', x)\n f()\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Nested if-else for clause execution altered by pass removal and comment shift",
+      "hazard": "In a nested block like an `if` inside a `for`, removing a `pass` could alter the `else` clause's execution if the block's nesting is visually misparsed due to comment shifts.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              14,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "else ran\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "else ran\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:32.266572105 -0400\n+++ fixed.py\t2026-10-17 16:28:32.440572071 -0400\n@@ -11,7 +11,7 @@\n for i in range(1):\n     if i == 0:\n         x = 1\n-        pass  # Rule triggers\n+        # Rule triggers\n         # TODO: handle i==0\n     else:\n         print('else')\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Type annotation uses typing import that becomes unused after placeholder removal",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:37.749571115 -0400\n+++ fixed.py\t2026-10-17 16:28:37.935571085 -0400\n@@ -2,5 +2,4 @@\n     from typing import List  # used in annotation\n     x = [1, 2]\n     return x  # triggers PIER790 on pass\n-    pass\n print(f())\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Nested loop inner if passes but outer else runs only if inner didn't break - comment shift alters binding",
+      "hazard": "In a nested block like an `if` inside a `for`, removing a `pass` could alter the `else` clause's execution if the block's nesting is visually misparsed due to comment shifts.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "outer else 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Side effect in expression ordering: function call before vs after pass deletion changes state",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "3 [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3 [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:38.179571047 -0400\n+++ fixed.py\t2026-10-17 16:28:38.344571022 -0400\n@@ -5,6 +5,6 @@\n def f():\n     a = log(1)\n     b = log(2)\n-    pass  # removal shouldn't change order\n+    # removal shouldn't change order\n     return a + b\n print(f(), state)\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Docstring becomes function body after pass removal, altering __doc__",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "This is the docstring 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "This is the docstring 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:38.445571006 -0400\n+++ fixed.py\t2026-10-17 16:28:38.610570981 -0400\n@@ -1,5 +1,5 @@\n def f():\n     '''This is the docstring'''\n-    pass  # removal makes docstring the only stmt -> becomes __doc__\n+    # removal makes docstring the only stmt -> becomes __doc__\n     return 42\n print(f.__doc__, f())\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Comment on next line relies on current indent; pass removal shifts comment into block",
+      "hazard": "If a `pass` or `...` is followed by a commented-out line that relies on indentation, removing it could shift the comment's block association.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:38.716570965 -0400\n+++ fixed.py\t2026-10-17 16:28:38.881570939 -0400\n@@ -1,5 +1,5 @@\n if True:\n     x = 1\n-    pass  # this pass keeps comment outside\n+    # this pass keeps comment outside\n     # print('should not run')\n print('x:', x)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "# type: ignore on same line as ellipsis; removal detaches ignore from target expression",
+      "hazard": "If a `# type: ignore` comment sits on the same line as the `pass` or `...`, removing the placeholder may detach the ignore from its intended target, suppressing or exposing type errors incorrectly.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `...` literal",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "wrong\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "wrong\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:38.981570924 -0400\n+++ fixed.py\t2026-10-17 16:28:39.144570900 -0400\n@@ -1,5 +1,4 @@\n def f():\n     y: int = 'wrong'  # type: ignore  # should be ignored\n-    ...\n     return y\n print(f())\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Blank line with trailing comment after function; pass removal moves comment into function scope visually",
+      "hazard": "If the `pass` or `...` is the last line in a function and is followed by a blank line containing a trailing comment, removing it could move that comment into the preceding line's visual scope.",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PIE790",
+            "severity": "warning",
+            "message": "Unnecessary `pass` statement",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "42 None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42 None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:28:39.244570885 -0400\n+++ fixed.py\t2026-10-17 16:28:39.413570861 -0400\n@@ -1,5 +1,4 @@\n def f():\n     return 42\n-    pass\n     #  This comment should stay out\n print(f(), f.__doc__)\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Non-file context manager with write but no close; pass removal in __exit__ alters suppression",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "PIE790",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ValueError: oops",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "summary": "Flags dictionary unpacking in a for-loop target where .items() is missing.",
+  "firingShapes": [
+    "for k, v in d:",
+    "for (k, v) in d:",
+    "for [k, v] in d:",
+    "for *rest in d:",
+    "for a, b, c in d:"
+  ],
+  "silentShapes": [
+    "for item in d:",
+    "for k, v in d.items():",
+    "for k in d.keys():",
+    "for v in d.values():",
+    "for k, v in sorted(d):"
+  ],
+  "fixDescription": "Rewrites the for-loop target expression by appending '.items()' to the iterated dictionary variable.",
+  "hazards": [
+    "If the dictionary key is a tuple (e.g., {(1, 2): 3}), the original loop unpacks the tuple key into the loop variables, but after the fix, .items() yields (key, value) pairs where the key is the tuple and the value is the mapped value, changing what gets assigned to the loop variables and thus altering runtime behavior.",
+    "If the dictionary is actually a non-dict object that defines __iter__ to yield 2-tuples (e.g., a list of pairs), the fix incorrectly assumes it is a dict and calls .items(), which may not exist, causing an AttributeError at runtime.",
+    "If the iterated variable is not a simple name but an attribute or subscript (e.g., obj.d or d[key]), the fix naively appends '.items()' resulting in invalid syntax like obj.d.items() or d[key].items() which may not be intended or may produce different results due to evaluation timing or side effects.",
+    "If the loop variable appears in a lambda or nested function within the loop body that captures the loop variable, changing what the loop variable refers to (from key to (key, value) pair) alters the closure semantics and may affect behavior if the captured variable is used later.",
+    "If the dictionary expression has side effects (e.g., a function call that returns a dict and mutates state), the original code evaluates it once per iteration check, but the fix still evaluates it once; however, if the fix were incorrectly applied multiple times due to faulty tooling, it could cause multiple evaluations, though Ruff's fix applies once.",
+    "If the code relies on the iterator being exhausted in a certain way (e.g., checking len(d) after the loop), the behavior differs because iterating over d yields keys while iterating over d.items() yields items, potentially exhausting a different view if the dict is mutated during iteration (though both are unsafe with mutation).",
+    "If the dictionary is a subclass that overrides __iter__ to return something other than keys (e.g., a custom mapping that yields values or pairs), the fix incorrectly assumes standard dict behavior and may break intended iteration logic.",
+    "If the loop target uses star unpacking (e.g., for *rest in d:) and the dictionary keys are not iterable or have unexpected structure, the fix may cause TypeError during unpacking of .items() output where the original succeeded due to different yielded values.",
+    "If the loop is inside a try-except block catching ValueError from unpacking, the fix may prevent the exception from being raised (if keys are 2-tuples) or cause a different exception (if keys are not 2-tuples), altering error handling flow.",
+    "If the dictionary variable is deleted or reassigned within the loop body, the fix does not change that behavior, but the timing of when .items() is called (at loop start) vs. the original iter() call (also at loop start) is equivalent; however, if the variable is rebound, the fix uses the new value's .items() which may differ from the original intent if the rebinding was meant to affect iteration."
+  ]
+}

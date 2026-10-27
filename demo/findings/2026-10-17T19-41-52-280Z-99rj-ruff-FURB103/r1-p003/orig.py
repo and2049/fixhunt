@@ -1,0 +1,13 @@
+class BoolObj:
+    def __init__(self, val):
+        self.val = val
+    def __bool__(self):
+        print(f'__bool__ called with {self.val}')
+        return bool(self.val)
+obj = BoolObj(0)
+with open('test.txt', 'w') as f:
+    f.write('yes' if obj else 'no')
+with open('test.txt') as f:
+    print(f.read())
+import os
+os.remove('test.txt')

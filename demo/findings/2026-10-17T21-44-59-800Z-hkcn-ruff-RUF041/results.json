@@ -1,0 +1,733 @@
+{
+  "runId": "2026-10-17T21-44-59-800Z-hkcn-ruff-RUF041",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF041",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-nested-literal (RUF041)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary nested `Literal`.\n\n## Why is this bad?\nPrefer using a single `Literal`, which is equivalent and more concise.\n\nParameterization of literals by other literals is supported as an ergonomic\nfeature as proposed in [PEP 586], to enable patterns such as:\n```python\nReadOnlyMode         = Literal[\"r\", \"r+\"]\nWriteAndTruncateMode = Literal[\"w\", \"w+\", \"wt\", \"w+t\"]\nWriteNoTruncateMode  = Literal[\"r+\", \"r+t\"]\nAppendMode           = Literal[\"a\", \"a+\", \"at\", \"a+t\"]\n\nAllModes = Literal[ReadOnlyMode, WriteAndTruncateMode,\n                  WriteNoTruncateMode, AppendMode]\n```\n\nAs a consequence, type checkers also support nesting of literals\nwhich is less readable than a flat `Literal`:\n```python\nAllModes = Literal[Literal[\"r\", \"r+\"], Literal[\"w\", \"w+\", \"wt\", \"w+t\"],\n                  Literal[\"r+\", \"r+t\"], Literal[\"a\", \"a+\", \"at\", \"a+t\"]]\n```\n\n## Example\n```python\nAllModes = Literal[\n    Literal[\"r\", \"r+\"],\n    Literal[\"w\", \"w+\", \"wt\", \"w+t\"],\n    Literal[\"r+\", \"r+t\"],\n    Literal[\"a\", \"a+\", \"at\", \"a+t\"],\n]\n```\n\nUse instead:\n```python\nAllModes = Literal[\n    \"r\", \"r+\", \"w\", \"w+\", \"wt\", \"w+t\", \"r+\", \"r+t\", \"a\", \"a+\", \"at\", \"a+t\"\n]\n```\n\nor assign the literal to a variable as in the first example.\n\n## Fix safety\nThe fix for this rule is marked as unsafe when the `Literal` slice is split\nacross multiple lines and some of the lines have trailing comments.\n\n## References\n- [Typing documentation: Legal parameters for `Literal` at type check time](https://typing.python.org/en/latest/spec/literal.html#legal-parameters-for-literal-at-type-check-time)\n\n[PEP 586]: https://peps.python.org/pep-0586/\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessarily nested Literal types where inner Literals can be flattened.",
+    "firingShapes": [
+      "x = Literal[Literal[\"a\", \"b\"]]",
+      "y = Literal[Literal[1, 2], Literal[3]]",
+      "z = Literal[Literal[True], Literal[False, None]]",
+      "T = Literal[Literal[X], Literal[Y]]",
+      "U = Literal[Literal[\"x\"], Literal[\"y\", \"z\"], Literal[\"w\"]]",
+      "V = Literal[Literal[Literal[\"nested\"]]]",
+      "W = Literal[Literal[\"a\"], Literal[\"b\", \"c\"], Literal[\"d\", \"e\", \"f\"]]",
+      "Z = Literal[Literal[0], Literal[1, 2, 3], Literal[4]]"
+    ],
+    "silentShapes": [
+      "x = Literal[\"a\", \"b\"]",
+      "y = Literal[Literal[\"a\", \"b\"], \"c\"]",
+      "z = Literal[MyType, Literal[\"x\"]]",
+      "T = Literal[Literal[\"a\" + \"b\"]]",
+      "U = Literal[Literal[\"a\"], Literal[\"b\"], # comment\n]"
+    ],
+    "fixDescription": "Replaces nested Literal expressions with a single Literal containing all unique arguments from the inner Literals, preserving order of first occurrence and removing duplicates.",
+    "hazards": [
+      "Rewriting Literal[Literal[expr]] where expr has side effects (e.g., function calls) changes evaluation from once per inner Literal to once in the flattened version, altering call count.",
+      "If inner Literals contain duplicate values, deduplication in the fix may break code relying on duplicate literal parameters for overload resolution or type narrowing.",
+      "Moving inline comments attached to inner Literal brackets (e.g., Literal[\"a\" # comment\n]) to the flattened Literal may detach them from their original syntactic context, changing comment association.",
+      "When nested Literals span multiple lines with trailing comments on some lines, the fix may reorder or lose those comments due to reformatting, violating the rule's noted unsafety condition.",
+      "If the outer Literal is used in a forward reference or string annotation, flattening may break evaluation if the inner Literals were relied upon for delayed processing.",
+      "In code that inspects the AST structure of Literal (e.g., via typing.get_args), the fix alters the nested structure expected by introspection tools or decorators.",
+      "If an inner Literal contains a mutable expression (e.g., Literal[[]]), though invalid, the fix would still flatten it, potentially exposing differences in how type checkers handle malformed literals.",
+      "When the nested Literal appears in a class body or function default, flattening could affect the timing of when the literal value is computed relative to other statements in the same block.",
+      "If the inner Literals are defined via imports or aliases that are later rebound, the fix captures their values at rewrite time, breaking dynamic behavior.",
+      "In code that uses Literal in conjunction with Final or ClassVar, flattening may interfere with how tools detect constantness if they rely on the Literal node structure."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0033231,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 15,
+    "fixed": 11,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Shadowed Builtins - Literal[int] Flattening",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "custom_int\nNone ('a', 'b')\n42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "custom_int\nNone ('a', 'b')\n42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:09.538052614 -0400\n+++ fixed.py\t2026-10-17 17:45:09.722051411 -0400\n@@ -1,6 +1,6 @@\n from typing import Literal\n int = lambda: print('custom_int')\n-x = Literal[Literal['a', 'b']]\n+x = Literal['a', 'b']\n print(int(), getattr(x, '__args__', x))\n del int\n int = 42\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Comments and Docstrings - Preserved During Rewrite",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "('hello', 'world')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "('hello', 'world')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Async Generators - Await Ordering Dependency",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p004",
+      "title": "Class Body Default - Timing of Evaluation",
+      "hazard": "When the nested Literal appears in a class body or function default, flattening could affect the timing of when the literal value is computed relative to other statements in the same block.",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              8,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "(1, 2) 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "(1, 2) 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:10.379047116 -0400\n+++ fixed.py\t2026-10-17 17:45:10.566045895 -0400\n@@ -5,6 +5,6 @@\n     counter += 1\n     return counter\n class C:\n-    x = Literal[Literal[inc()], Literal[inc()]]\n+    x = Literal[inc(), inc()]\n     y = counter\n print(C.x.__args__, C.y)\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "AST Inspection - get_args Structure Change",
+      "hazard": "In code that inspects the AST structure of Literal (e.g., via typing.get_args), the fix alters the nested structure expected by introspection tools or decorators.",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "3 ['a', 'b', 'c']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3 ['a', 'b', 'c']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:10.670045215 -0400\n+++ fixed.py\t2026-10-17 17:45:10.858043986 -0400\n@@ -1,4 +1,4 @@\n from typing import Literal, get_args\n-x = Literal[Literal['a', 'b'], Literal['c']]\n+x = Literal['a', 'b', 'c']\n args = get_args(x)\n print(len(args), [get_args(a) if hasattr(a, '__args__') else a for a in args])\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Context Manager - Non-File Write Object",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              14,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "['test'] ('a', 'b')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['test'] ('a', 'b')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:10.968043267 -0400\n+++ fixed.py\t2026-10-17 17:45:11.149042085 -0400\n@@ -11,5 +11,5 @@\n w = Writer()\n with w as f:\n     f.write('test')\n-x = Literal[Literal['a'], Literal['b']]\n+x = Literal['a', 'b']\n print(w.data, x.__args__)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Final/ClassVar - Constantness Detection",
+      "hazard": "In code that uses Literal in conjunction with Final or ClassVar, flattening may interfere with how tools detect constantness if they rely on the Literal node structure.",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "('x', 'y') ('x', 'y') ('x', 'y')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "('x', 'y') ('x', 'y') ('x', 'y')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:11.258041373 -0400\n+++ fixed.py\t2026-10-17 17:45:11.434040224 -0400\n@@ -1,5 +1,5 @@\n from typing import Literal, Final, ClassVar\n-NESTED = Literal[Literal['x'], Literal['y']]\n+NESTED = Literal['x', 'y']\n FLAT: Final = Literal['x', 'y']\n CLASS_VAR: ClassVar = Literal['x', 'y']\n print(NESTED.__args__, FLAT.__args__, CLASS_VAR.__args__)\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Star Imports - Module-Level Side Effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "('a', 'b', 'c')\n('d',)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "('a', 'b', 'c')\n('d',)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:11.549039473 -0400\n+++ fixed.py\t2026-10-17 17:45:11.725038323 -0400\n@@ -1,5 +1,5 @@\n from typing import Literal\n-x = Literal[Literal['a', 'b'], Literal['c']]\n+x = Literal['a', 'b', 'c']\n print(x.__args__)\n def side_effect():\n     global x\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Mutable Default Argument Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "typing.Literal['x', 'y']\ntyping.Literal['x', 'y']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "typing.Literal['x', 'y']\ntyping.Literal['x', 'y']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:16.442007569 -0400\n+++ fixed.py\t2026-10-17 17:45:16.631006339 -0400\n@@ -1,6 +1,6 @@\n from typing import Literal\n \n-def func(a=Literal[Literal['x'], Literal['y']]):\n+def func(a=Literal['x', 'y']):\n     a.append('z') if hasattr(a, 'append') else None\n     return a\n \n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "String Formatting Edge Cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "h w\nh w\ntyping.Literal['hello', 'world']\ntyping.Literal['hello', 'world']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "h w\nh w\ntyping.Literal['hello', 'world']\ntyping.Literal['hello', 'world']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:16.747005584 -0400\n+++ fixed.py\t2026-10-17 17:45:16.943004308 -0400\n@@ -1,6 +1,6 @@\n from typing import Literal\n \n-x = Literal[Literal['hello'], Literal['world']]\n+x = Literal['hello', 'world']\n s = '%s %s' % (x.__args__[0][0], x.__args__[1][0])\n print(s)\n print(f'{x.__args__[0][0]} {x.__args__[1][0]}')\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Inline Comment Detachment",
+      "hazard": "Moving inline comments attached to inner Literal brackets",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "('a', 'b')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "('a', 'b')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Non-File Context Manager with write()",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              12,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "typing.Literal['stdout', 'stderr']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "typing.Literal['stdout', 'stderr']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:17.247002330 -0400\n+++ fixed.py\t2026-10-17 17:45:17.446001035 -0400\n@@ -9,7 +9,7 @@\n     def write(self, s):\n         self.data = s\n \n-x = Literal[Literal['stdout'], Literal['stderr']]\n+x = Literal['stdout', 'stderr']\n with WriteOnly() as w:\n     w.write(str(x))\n print(w.data)\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Multi-line Literal with Trailing Comments",
+      "hazard": "When nested Literals span multiple lines with trailing comments on some lines",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'str' object has no attribute '__args__'. Did you mean: '__add__'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'str' object has no attribute '__args__'. Did you mean: '__add__'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Class Body Timing of Evaluation",
+      "hazard": "When the nested Literal appears in a class body or function default",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              3,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "typing.Literal['init']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "typing.Literal['init']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:17.944997789 -0400\n+++ fixed.py\t2026-10-17 17:45:18.141996508 -0400\n@@ -1,6 +1,6 @@\n from typing import Literal\n \n-LIT = Literal[Literal['init']]\n+LIT = Literal['init']\n \n class C:\n     attr = LIT  # Evaluated at class definition time\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Generators vs Lists Consumption",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              4,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[typing.Unpack[typing.Literal['a', 'b']]]\n[]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[typing.Unpack[typing.Literal['a', 'b']]]\n[]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:45:18.261995728 -0400\n+++ fixed.py\t2026-10-17 17:45:18.448994512 -0400\n@@ -1,7 +1,7 @@\n from typing import Literal\n \n def gen():\n-    for item in Literal[Literal['a'], Literal['b']]:\n+    for item in Literal['a', 'b']:\n         yield item\n \n g = gen()\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Comments and Docstrings on Removed Code",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "RUF041",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF041",
+            "severity": "warning",
+            "message": "Unnecessary nested `Literal`",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "('alpha', 'beta')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "('alpha', 'beta')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

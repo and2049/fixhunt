@@ -1,0 +1,541 @@
+{
+  "runId": "2026-10-17T21-37-15-830Z-em3h-ruff-FURB187",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB187",
+    "fixKind": "unknown",
+    "docs": "# list-reverse-copy (FURB187)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for list reversals that can be performed in-place in lieu of\ncreating a new list.\n\n## Why is this bad?\nWhen reversing a list, it's more efficient to use the in-place method\n`.reverse()` instead of creating a new list, if the original list is\nno longer needed.\n\n## Example\n```python\nl = [1, 2, 3]\nl = reversed(l)\n\nl = [1, 2, 3]\nl = list(reversed(l))\n\nl = [1, 2, 3]\nl = l[::-1]\n```\n\nUse instead:\n```python\nl = [1, 2, 3]\nl.reverse()\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as calling `.reverse()` on a list\nwill mutate the list in-place, unlike `reversed`, which creates a new list\nand leaves the original list unchanged.\n\nIf the list is referenced elsewhere, this could lead to unexpected\nbehavior.\n\n## References\n- [Python documentation: More on Lists](https://docs.python.org/3/tutorial/datastructures.html#more-on-lists)\n"
+  },
+  "analysis": {
+    "summary": "Flags inefficient list reversal patterns like assignment via slicing, reversed(), or list(reversed()) when .reverse() could be used.",
+    "firingShapes": [
+      "l = l[::-1]",
+      "l = list(reversed(l))",
+      "l = reversed(l)",
+      "x = x[::-1]",
+      "data = data[::-1]",
+      "lst = lst[::-1]",
+      "arr = arr[::-1]",
+      "seq = seq[::-1]"
+    ],
+    "silentShapes": [
+      "new_l = old_l[::-1]",
+      "rev_iter = reversed(old_list)",
+      "result = list(reversed(source))",
+      "a[:] = a[::-1]",
+      "b = b.copy(); b.reverse()"
+    ],
+    "fixDescription": "Replaces the assignment target variable with an in-place .reverse() call on the same variable, e.g., 'l = l[::-1]' becomes 'l.reverse()'.",
+    "hazards": [
+      "If the list is aliased elsewhere (e.g., another variable references the same list), mutating via .reverse() affects all aliases, whereas slicing creates a new list leaving original aliases unchanged.",
+      "If the reversed result is used immediately in an expression (e.g., function call), replacing with .reverse() breaks because .reverse() returns None, altering return values or side effects.",
+      "If the assignment is part of a larger expression (e.g., tuple unpacking or conditional), rewriting to a statement changes syntax and may cause invalid Python.",
+      "If the variable is deleted or reassigned later, the timing of mutation vs. creation affects memory usage and reference counting, potentially impacting __del__ methods or weakrefs.",
+      "If the list contains mutable elements and the code relies on the original list being unchanged for later use, .reverse() causes premature mutation.",
+      "If the slice operation includes step or bounds (e.g., l[::-1] vs l[1:5:-1]), the fix incorrectly applies .reverse() which only does full reversal, changing semantics.",
+      "If the variable is a property or item assignment (e.g., self.lst = self.lst[::-1]), the fix cannot be applied as .reverse() requires a direct variable name, not an attribute or subscript.",
+      "If the code depends on the identity of the list object (e.g., checking 'l is original' after reversal), .reverse() preserves identity while slicing creates a new object, breaking identity checks.",
+      "If the reversed list is iterated over before reassignment (e.g., for i in l[::-1]: ...; l = l[::-1]), moving .reverse() earlier changes iteration order due to premature mutation.",
+      "If the list reversal is guarded by a condition (e.g., if flag: l = l[::-1]), the fix must stay within the block; extracting .reverse() out of scope breaks conditioning.",
+      "If the variable is used in a lambda or comprehension after reversal but before reassignment, early mutation via .reverse() alters the iterable seen by the lambda/comprehension.",
+      "If the assignment occurs in a class or module level and the list is shared across instances or imports, in-place mutation introduces cross-instance state sharing bugs."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0030882,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 4,
+    "fixed": 0,
+    "disputed": 11
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Mutable element reliance",
+      "hazard": "If the list contains mutable elements and the code relies on the original list being unchanged for later use, .reverse() causes premature mutation.",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: [1, 2]\nAfter modification through lst: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Immediate use in expression",
+      "hazard": "If the reversed result is used immediately in an expression (e.g., function call), replacing with .reverse() breaks because .reverse() returns None, altering return values or side effects.",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Larger expression context",
+      "hazard": "If the assignment is part of a larger expression (e.g., tuple unpacking or conditional), rewriting to a statement changes syntax and may cause invalid Python.",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "matched [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p004",
+      "title": "File modes and truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'\\x01\\x00'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Property or item assignment",
+      "hazard": "If the variable is a property or item assignment (e.g., self.lst = self.lst[::-1]), the fix cannot be applied as .reverse() requires a direct variable name, not an attribute or subscript.",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Mutable default arguments and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2, 1]\n[]\n[]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Class vs instance attributes",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "class: [1, 2, 3]\ninstance: [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Pathlib vs os.path behavior",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "reversed parts: ['a']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Async generator yields different results due to delayed mutation",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first: [1, 2, 3]\nsecond: [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Deletion after reversal affects weakref callback timing",
+      "hazard": "If the variable is deleted or reassigned later, the timing of mutation vs. creation affects memory usage and reference counting, potentially impacting __del__ methods or weakrefs.",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB187",
+            "severity": "warning",
+            "message": "Use of assignment of `reversed` on list `l`",
+            "span": [
+              7,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'weakseq'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'weakseq'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Conditional reversal inside if-block must not be lifted",
+      "hazard": "If the list reversal is guarded by a condition (e.g., if flag: l = l[::-1]), the fix must stay within the block; extracting .reverse() out of scope breaks conditioning.",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB187",
+            "severity": "warning",
+            "message": "Use of assignment of `reversed` on list `l`",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "inside if: [3, 2, 1]\nafter if: [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "inside if: [3, 2, 1]\nafter if: [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Keyword-only argument captures original list before mutation",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first call: [3, 2, 1]\nsecond call: [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Comment attached to reversal line is lost after fix",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB187",
+            "severity": "warning",
+            "message": "Use of assignment of `reversed` on list `l`",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "reversed: [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "reversed: [3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Identity check fails after fix because new object created",
+      "hazard": "If the code depends on the identity of the list object (e.g., checking 'l is original' after reversal), .reverse() preserves identity while slicing creates a new object, breaking identity checks.",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "l is orig: False\nl: [3, 2, 1]\norig: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Bytes reversal produces mojibake if decoded as text later",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "reversed bytes: b'dlrow\\nolleh'\ndecoded string: 'dlrow\\nolleh'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Float list reversal affects later sum due to precision",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "FURB187",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB187",
+            "severity": "warning",
+            "message": "Use of assignment of `reversed` on list `l`",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "sum before: 0.6\nsum after: 0.6\nequal? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "sum before: 0.6\nsum after: 0.6\nequal? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

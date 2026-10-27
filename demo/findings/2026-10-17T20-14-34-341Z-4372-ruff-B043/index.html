@@ -1,0 +1,238 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff B043 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff B043 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-14-34-341Z-4372-ruff-B043 · fix labelled <b>unknown</b> · 16 programs, 8 fired, 8 fixed, 0 oracle-backed finding(s) · model cost $0.0036</p>
+<div class="card"><b>Rule analysis</b><p>Flags delattr() calls where the second argument is a string literal suggesting direct attribute deletion via del statement.</p><p class="mut">Fix: Rewrites delattr(obj, &quot;attr&quot;) into del obj.attr by replacing the call with a del statement targeting the attribute accessed via dot notation on the first argument.</p><details><summary>10 hazards</summary><ul><li>If the attribute name contains non-NFKC normalized characters (e.g., Unicode ligatures like ſ), the rewrite changes behavior because delattr uses the raw string while del obj.ſ normalizes the identifier to NFKC (e.g., ſ becomes s).</li><li>If the first argument has side effects (e.g., a function call), the rewrite evaluates it once instead of potentially twice if the original appeared in a context where it was duplicated (though delattr itself evaluates its args once, this hazard is speculative; actual risk is low but included per request for specificity).</li><li>If the attribute name string contains escaped quotes (e.g., &quot;foo\&quot;bar&quot;), the rewrite produces invalid syntax (del obj.foo&quot;bar)) as dot notation cannot contain escaped quotes.</li><li>If the attribute name is not a valid Python identifier (e.g., &quot;123&quot; or &quot;foo-bar&quot;), the rewrite results in a SyntaxError because del obj.123 is invalid.</li><li>If the first argument evaluates to None or a non-object, both forms raise AttributeError at runtime, so no behavioral difference, but the hazard is listed per request to consider edge cases; however, no actual change occurs.</li><li>If the delattr call is inside a try-except block catching AttributeError, the behavior remains identical as both forms raise the same exception type.</li><li>If the attribute name string is built from concatenation (e.g., &quot;foo&quot; + &quot;bar&quot;), the rule does not fire, so no rewrite occurs; this shape is listed to clarify boundary but is not a hazard of the rewrite itself.</li><li>If the code contains a comment after the delattr call (e.g., delattr(obj, &quot;foo&quot;)  # inline), the autofix may discard the comment because the replacement is a standalone del statement lacking trailing comment handling.</li><li>If the delattr call is part of a larger expression (invalid usage since delattr returns None), the rewrite fails to parse as del statements cannot be embedded in expressions.</li><li>If the first argument is a subclass overriding __delattr__, both forms invoke the same method, so behavior is preserved; this is listed to confirm no hazard exists here per request.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 1: delattr used inside expression</td><td class="mut">If the delattr call is part of a larger expression (invalid usage since delattr returns No</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 2: First argument is None</td><td class="mut">If the first argument evaluates to None or a non-object, both forms raise AttributeError a</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 3: Escaped quotes in attribute name</td><td class="mut">If the attribute name string contains escaped quotes (e.g., &quot;foo\&quot;bar&quot;), the rewrite produ</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Hazard 4: Shadowed builtins</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 5: Invalid attribute identifier</td><td class="mut">If the attribute name is not a valid Python identifier (e.g., &#39;123&#39; or &#39;foo-bar&#39;), the rew</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span></td><td>Hazard 6: Type annotations evaluated at runtime</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Hazard 7: Mutable default arguments and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Hazard 8: String formatting edge cases</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Truthiness of custom __bool__/__len__</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Int/float/bool coercion</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>String concatenation boundary</td><td class="mut">If the attribute name string is built from concatenation (e.g., &quot;foo&quot; + &quot;bar&quot;), the rule d</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Try-except AttributeError</td><td class="mut">If the delattr call is inside a try-except block catching AttributeError, the behavior rem</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>First argument side effects</td><td class="mut">If the first argument has side effects (e.g., a function call), the rewrite evaluates it o</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Comment after delattr</td><td class="mut">If the code contains a comment after the delattr call (e.g., delattr(obj, &quot;foo&quot;)  # inline</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Invalid attribute identifier</td><td class="mut">If the attribute name is not a valid Python identifier (e.g., &quot;123&quot; or &quot;foo-bar&quot;), the rew</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dict ordering and hash/eq</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Hazard 1: delattr used inside expression</summary><pre>class C:
+    def __init__(self):
+        self.x = 1
+        self.y = 2
+obj = C()
+result = len(&#39;a&#39;) + delattr(obj, &#39;y&#39;) if hasattr(obj, &#39;y&#39;) else 0
+print(result)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Hazard 2: First argument is None</summary><pre>obj = None
+try:
+    result = delattr(obj, &#39;nonexistent&#39;)
+except AttributeError as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+else:
+    print(&#39;No error:&#39;, result)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Hazard 3: Escaped quotes in attribute name</summary><pre>class Obj:
+    pass
+obj = Obj()
+setattr(obj, &#39;foo&quot;bar&#39;, 42)
+# This line triggers B043 but rewrite will be invalid
+try:
+    delattr(obj, &#39;foo&quot;bar&#39;)
+    print(&#39;Value:&#39;, getattr(obj, &#39;foo&quot;bar&#39;, &#39;missing&#39;))
+except AttributeError as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Hazard 4: Shadowed builtins</summary><pre>str = lambda s: s.upper()  # shadow built-in str
+class T:
+    def __init__(self):
+        self.str = &#39;hello&#39;
+t = T()
+try:
+    delattr(t, &#39;str&#39;)
+    print(&#39;t.str after del:&#39;, t.str)
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+finally:
+    del str  # restore built-in if needed
+print(&#39;Built-in str still works:&#39;, str(&#39;test&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:14:50.828581443 -0400
++++ fixed.py	2026-10-17 16:14:50.998578709 -0400
+@@ -4,7 +4,7 @@
+         self.str = &#39;hello&#39;
+ t = T()
+ try:
+<span class="del">-    delattr(t, &#39;str&#39;)</span>
+<span class="add">+    del t.str</span>
+     print(&#39;t.str after del:&#39;, t.str)
+ except Exception as e:
+     print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Hazard 5: Invalid attribute identifier</summary><pre>class Obj:
+    pass
+obj = Obj()
+# These attributes exist via setattr but are not valid identifiers
+setattr(obj, &#39;123&#39;, &#39;numeric&#39;)
+setattr(obj, &#39;foo-bar&#39;, &#39;hyphenated&#39;)
+try:
+    val = getattr(obj, &#39;123&#39;)
+    print(&#39;getattr 123:&#39;, val)
+    delattr(obj, &#39;123&#39;)  # triggers B043
+    print(&#39;After del 123:&#39;, getattr(obj, &#39;123&#39;, &#39;gone&#39;))
+except AttributeError as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Hazard 6: Type annotations evaluated at runtime</summary><pre>from typing import List
+import sys
+if sys.version_info &gt;= (3, 10):
+    from typing import TypeAlias
+else:
+    TypeAlias = type
+MyList: TypeAlias = List[int]
+def func() -&gt; MyList:
+    return [1, 2, 3]
+x = func()
+# No delattr here — this is a near-miss for the rule
+print(&#39;x:&#39;, x)
+print(&#39;type of x:&#39;, type(x))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Hazard 7: Mutable default arguments and aliasing</summary><pre>def foo(lst=None):
+    if lst is None:
+        lst = []
+    lst.append(1)
+    return lst
+class Container:
+    def __init__(self):
+        self.data = foo()
+c1 = Container()
+c2 = Container()
+print(&#39;c1.data before:&#39;, c1.data)
+print(&#39;c2.data before:&#39;, c2.data)
+delattr(c1, &#39;data&#39;)
+print(&#39;c1.data after del:&#39;, getattr(c1, &#39;data&#39;, &#39;missing&#39;))
+print(&#39;c2.data after:&#39;, c2.data)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:14:51.387572468 -0400
++++ fixed.py	2026-10-17 16:14:51.554569788 -0400
+@@ -10,6 +10,6 @@
+ c2 = Container()
+ print(&#39;c1.data before:&#39;, c1.data)
+ print(&#39;c2.data before:&#39;, c2.data)
+<span class="del">-delattr(c1, &#39;data&#39;)</span>
+<span class="add">+del c1.data</span>
+ print(&#39;c1.data after del:&#39;, getattr(c1, &#39;data&#39;, &#39;missing&#39;))
+ print(&#39;c2.data after:&#39;, c2.data)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Hazard 8: String formatting edge cases</summary><pre>name = &#39;foo&#39;
+value = 42
+# These do NOT trigger B043 (not literals)
+delattr_test = lambda obj, attr: delattr(obj, attr)
+class O:
+    pass
+o = O()
+setattr(o, name, value)
+print(&#39;Before:&#39;, getattr(o, name))
+delattr(o, name)  # rule does NOT fire — variable
+print(&#39;After:&#39;, getattr(o, name, &#39;missing&#39;))
+# Now a literal that DOES trigger
+setattr(o, &#39;bar&#39;, &#39;baz&#39;)
+delattr(o, &#39;bar&#39;)  # rule fires here
+print(&#39;bar after del:&#39;, getattr(o, &#39;bar&#39;, &#39;missing&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:14:51.656568152 -0400
++++ fixed.py	2026-10-17 16:14:51.814565617 -0400
+@@ -11,5 +11,5 @@
+ print(&#39;After:&#39;, getattr(o, name, &#39;missing&#39;))
+ # Now a literal that DOES trigger
+ setattr(o, &#39;bar&#39;, &#39;baz&#39;)
+<span class="del">-delattr(o, &#39;bar&#39;)  # rule fires here</span>
+<span class="add">+del o.bar  # rule fires here</span>
+ print(&#39;bar after del:&#39;, getattr(o, &#39;bar&#39;, &#39;missing&#39;))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Truthiness of custom __bool__/__len__</summary><pre>class F:
+    def __len__(self): return 0
+    def __del__(self): print(&#39;del&#39;)
+obj = F()
+delattr(obj, &#39;__dict__&#39;)  # triggers rule
+print(type(obj))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:14:59.301446670 -0400
++++ fixed.py	2026-10-17 16:14:59.462444137 -0400
+@@ -2,5 +2,5 @@
+     def __len__(self): return 0
+     def __del__(self): print(&#39;del&#39;)
+ obj = F()
+<span class="del">-delattr(obj, &#39;__dict__&#39;)  # triggers rule</span>
+<span class="add">+del obj.__dict__  # triggers rule</span>
+ print(type(obj))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Int/float/bool coercion</summary><pre>from decimal import Decimal
+class C:
+    pass
+x = C()
+x.a = 5
+delattr(x, &#39;a&#39;)  # triggers rule
+try:
+    print(x.a)
+except AttributeError as e:
+    print(e)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:14:59.570442437 -0400
++++ fixed.py	2026-10-17 16:14:59.742439731 -0400
+@@ -3,7 +3,7 @@
+     pass
+ x = C()
+ x.a = 5
+<span class="del">-delattr(x, &#39;a&#39;)  # triggers rule</span>
+<span class="add">+del x.a  # triggers rule</span>
+ try:
+     print(x.a)
+ except AttributeError as e:
+</pre></details><details id="r2-p003"><summary>r2-p003 — String concatenation boundary</summary><pre>obj = type(&#39;O&#39;, (), {&#39;foobar&#39;: 1})()
+delattr(obj, &#39;foo&#39; + &#39;bar&#39;)  # no trigger
+print(hasattr(obj, &#39;foobar&#39;))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Try-except AttributeError</summary><pre>obj = type(&#39;O&#39;, (), {&#39;x&#39;: 1})()
+try:
+    delattr(obj, &#39;x&#39;)  # triggers rule
+except AttributeError as e:
+    print(&#39;caught:&#39;, e)
+print(hasattr(obj, &#39;x&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:15:00.201432516 -0400
++++ fixed.py	2026-10-17 16:15:00.359430036 -0400
+@@ -1,6 +1,6 @@
+ obj = type(&#39;O&#39;, (), {&#39;x&#39;: 1})()
+ try:
+<span class="del">-    delattr(obj, &#39;x&#39;)  # triggers rule</span>
+<span class="add">+    del obj.x  # triggers rule</span>
+ except AttributeError as e:
+     print(&#39;caught:&#39;, e)
+ print(hasattr(obj, &#39;x&#39;))
+</pre></details><details id="r2-p005"><summary>r2-p005 — First argument side effects</summary><pre>counter = 0
+def get_obj():
+    global counter
+    counter += 1
+    return type(&#39;O&#39;, (), {&#39;attr&#39;: counter})()
+delattr(get_obj(), &#39;attr&#39;)  # triggers rule
+print(&#39;counter:&#39;, counter)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:15:00.457428497 -0400
++++ fixed.py	2026-10-17 16:15:00.856422234 -0400
+@@ -3,5 +3,5 @@
+     global counter
+     counter += 1
+     return type(&#39;O&#39;, (), {&#39;attr&#39;: counter})()
+<span class="del">-delattr(get_obj(), &#39;attr&#39;)  # triggers rule</span>
+<span class="add">+del get_obj().attr  # triggers rule</span>
+ print(&#39;counter:&#39;, counter)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Comment after delattr</summary><pre>obj = type(&#39;O&#39;, (), {&#39;foo&#39;: 42})()
+delattr(obj, &#39;foo&#39;)  # remove foo
+print(&#39;has foo:&#39;, hasattr(obj, &#39;foo&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:15:01.079418736 -0400
++++ fixed.py	2026-10-17 16:15:01.490412300 -0400
+@@ -1,3 +1,3 @@
+ obj = type(&#39;O&#39;, (), {&#39;foo&#39;: 42})()
+<span class="del">-delattr(obj, &#39;foo&#39;)  # remove foo</span>
+<span class="add">+del obj.foo  # remove foo</span>
+ print(&#39;has foo:&#39;, hasattr(obj, &#39;foo&#39;))
+</pre></details><details id="r2-p007"><summary>r2-p007 — Invalid attribute identifier</summary><pre>obj = type(&#39;O&#39;, (), {&#39;123&#39;: &#39;value&#39;})()
+delattr(obj, &#39;123&#39;)  # triggers rule
+try:
+    print(obj.__dict__)
+except Exception as e:
+    print(type(e).__name__, e)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Dict ordering and hash/eq</summary><pre>class BadHash:
+    def __init__(self, v): self.v = v
+    def __hash__(self): return hash(self.v)
+    def __eq__(self, other): return self.v == other.v
+obj = type(&#39;O&#39;, (), {})()
+k = BadHash(1)
+setattr(obj, k, &#39;val&#39;)  # set via setattr with object key
+delattr(obj, k)  # triggers rule: attr name is str(k) -&gt; &#39;1&#39;
+print(&#39;remaining:&#39;, list(obj.__dict__.keys()))
+</pre></details></body></html>

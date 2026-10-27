@@ -1,0 +1,581 @@
+{
+  "runId": "2026-10-17T21-49-01-368Z-odu8-ruff-RUF070",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF070",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-assign-before-yield (RUF070)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for variable assignments that immediately precede a `yield` (or\n`yield from`) of the assigned variable, where the variable is not\nreferenced anywhere else.\n\n## Why is this bad?\nThe variable assignment is not necessary, as the value can be yielded\ndirectly.\n\n## Example\n```python\ndef gen():\n    x = 1\n    yield x\n```\n\nUse instead:\n```python\ndef gen():\n    yield 1\n```\n\n## Fix safety\nThis fix is always marked as unsafe because removing the intermediate\nvariable assignment changes the local variable bindings visible to\n`locals()` and debuggers when the generator is suspended at the `yield`.\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant variable assignments directly before yielding the same variable.",
+    "firingShapes": [
+      "def f():\\n    x = expr\\n    yield x",
+      "async def f():\\n    x = expr\\n    yield x",
+      "def f():\\n    x = expr\\n    yield from x",
+      "def f():\\n    x = y\\n    yield x",
+      "def f():\\n    x = [expr]\\n    yield x",
+      "def f():\\n    x = func()\\n    yield x",
+      "def f():\\n    x = some.attr\\n    yield x",
+      "def f():\\n    x = some[0]\\n    yield x"
+    ],
+    "silentShapes": [
+      "def f():\\n    x = expr\\n    print(x)\\n    yield x",
+      "def f():\\n    x = expr\\n    if cond:\\n        yield x",
+      "def f():\\n    x = expr\\n    return x",
+      "def f():\\n    x = expr; y = z\\n    yield x",
+      "class C:\\n    def m(self):\\n        x = expr\\n        yield x"
+    ],
+    "fixDescription": "Replace 'x = expr\\n    yield x' with 'yield expr', preserving indentation and removing the assignment line while keeping all other code unchanged.",
+    "hazards": [
+      "Removing the assignment eliminates the local variable binding, altering the output of locals() inspection during generator suspension.",
+      "If the variable is referenced in a debugger or introspection tool at the yield point, the reference will become undefined after the fix.",
+      "The assignment may contain a side-effect (e.g., incrementing a counter via a property setter) that would be omitted by the fix.",
+      "If the assigned expression is used elsewhere in the function via closure capture, removing the assignment could break the closure by eliminating the variable reference.",
+      "The assignment line may carry a trailing comment that would be deleted by the rewrite, altering source documentation.",
+      "If the variable name is shadowed in an inner scope, removing the outer assignment could change which variable is yielded due to altered resolution.",
+      "The assignment may be part of a larger statement (e.g., walrus operator) that the rule does not handle, but if misapplied could break syntax.",
+      "If the expression is a mutable object and the variable is later mutated (though not yielded), the fix does not affect this, but the hazard is misdiagnosis—however, the rule only fires when unused, so this is mitigated; still, if the variable is used in a lambda defined later but not executed, the lambda's closure could break.",
+      "In rare cases, the assignment might be syntactically indistinguishable from a type annotation in stub files or conditional code, leading to incorrect removal.",
+      "If the yield is inside a try block and the assignment contains a finally-dependent expression, moving the expression into the yield could change exception timing.",
+      "The fix may interfere with instrumented code (e.g., coverage tools) that relies on the assignment line being executable.",
+      "If the assignment uses the walrus operator in a way that creates a variable used only in the yield, the rule may not fire due to current limitations, but if incorrectly extended, it could break."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032687999999999997,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 6,
+    "fixed": 0,
+    "disputed": 10
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Mutable object mutation after assignment",
+      "hazard": "If the expression is a mutable object and the variable is later mutated (though not yielded), the fix does not affect this, but the hazard is misdiagnosis—however, the rule only fires when unused, so ",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[[1], 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Property descriptor with side effects",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF070",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `yield` statement",
+            "span": [
+              10,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "prop accessed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "prop accessed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Closure capture in nested lambda",
+      "hazard": "If the assigned expression is used elsewhere in the function via closure capture, removing the assignment could break the closure by eliminating the variable reference.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[10, 20]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Variable shadowing in inner scope",
+      "hazard": "If the variable name is shadowed in an inner scope, removing the outer assignment could change which variable is yielded due to altered resolution.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[99, 88]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Star-import and __all__ interaction",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF070",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `yield` statement",
+            "span": [
+              24,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[123]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[123]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Numeric coercion and precision",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[Decimal('0.3333333333'), Decimal('1E-10')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Locals() inspection during generator suspension",
+      "hazard": "Removing the assignment eliminates the local variable binding, altering the output of locals() inspection during generator suspension.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First yielded: 42\n'x' in locals: True\nValue of 'x' in locals: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Walrus operator in assignment (near-miss)",
+      "hazard": "If the assignment uses the walrus operator in a way that creates a variable used only in the yield, the rule may not fire due to current limitations, but if incorrectly extended, it could break.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF070",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `y` before `yield` statement",
+            "span": [
+              9,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[5, 99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[5, 99]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Type annotation confusion",
+      "hazard": "In rare cases, the assignment might be syntactically indistinguishable from a type annotation in stub files or conditional code, leading to incorrect removal.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[42]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Evaluation order and side effects",
+      "hazard": "Evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: unsupported operand type(s) for +: 'int' and 'str'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Walrus operator interaction",
+      "hazard": "The assignment may be part of a larger statement (e.g., walrus operator) that the rule does not handle, but if misapplied could break syntax.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[5]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "Runtime type annotations",
+      "hazard": "Type annotations evaluated at runtime, typing-only imports",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF070",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `yield` statement",
+            "span": [
+              4,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[7]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[7]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Class vs instance attributes",
+      "hazard": "Class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF070",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `yield` statement",
+            "span": [
+              9,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[200]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[200]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Exception handling interference",
+      "hazard": "Exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF070",
+            "severity": "warning",
+            "message": "Unnecessary assignment to `x` before `yield` statement",
+            "span": [
+              6,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[ZeroDivisionError('division by zero')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[ZeroDivisionError('division by zero')]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Locals() inspection during suspension",
+      "hazard": "Removing the assignment eliminates the local variable binding, altering the output of locals() inspection during generator suspension.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[42]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Misapplied walrus extension",
+      "hazard": "If the assignment uses the walrus operator in a way that creates a variable used only in the yield, the rule may not fire due to current limitations, but if incorrectly extended, it could break.",
+      "rule": "RUF070",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[3, 2, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    }
+  ]
+}

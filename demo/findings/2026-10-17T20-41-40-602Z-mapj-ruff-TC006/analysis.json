@@ -1,0 +1,32 @@
+{
+  "summary": "The rule flags unquoted type expressions in typing.cast() calls.",
+  "firingShapes": [
+    "x = cast(list[int], y)",
+    "z = cast(Dict[str, Any], w)",
+    "a = cast(Union[Foo, Bar], b)",
+    "result = cast(tuple[int, str, float], value)",
+    "obj = cast(MyGeneric[T], something)",
+    "func(cast(set[bytes], data))",
+    "return cast(Optional[List[int]], maybe_list)",
+    "value = cast(Literal['a', 'b', 'c'], token)"
+  ],
+  "silentShapes": [
+    "x = cast('list[int]', y)",
+    "z = cast(\"Dict[str, Any]\", w)",
+    "a = cast(r\"Union[Foo, Bar]\", b)"
+  ],
+  "fixDescription": "Wrap the first argument of typing.cast() in double quotes if it is not already a string literal, preserving whitespace and formatting.",
+  "hazards": [
+    "If the first argument is a variable name (e.g., cast(T, x)), quoting it changes it from a type reference to a string literal, causing a runtime error when the type checker expects a type but receives a string.",
+    "If the first attribute is a class or type imported locally (not from typing), quoting it prevents actual type resolution at runtime, breaking isinstance or issubclass checks that might rely on the cast target.",
+    "If the type expression spans multiple lines (even without comments), the autofix may incorrectly quote only the first line or fail to preserve line breaks, resulting in a syntax error.",
+    "If the first argument contains a comment on any line except the last, the fix may be applied incorrectly or omitted by Ruff due to its safety condition, but if forced, could comment out part of the type expression.",
+    "If the cast call uses keyword arguments like cast(typ=MyType, val=x), the autofix may not recognize the structure and either misapply quotes or fail to fire, leading to inconsistent fixes.",
+    "If the type expression contains a forward reference that is only resolved during TYPE_CHECKING, quoting it is correct, but if the same expression appears in a runtime context elsewhere, the inconsistency may mask circular import issues.",
+    "If the type expression is a string literal already but uses single quotes (e.g., cast('int', x)), the rule may not fire (depending on configuration), but if it did and the fix added outer quotes, it would produce a malformed nested string like cast(''int'', x).",
+    "If the code relies on the type expression being evaluated for side effects (e.g., a function call that returns a type), quoting it prevents execution, removing those side effects and potentially altering program state.",
+    "If the cast is inside a lambda or comprehension and the type expression references a loop variable, quoting it changes the meaning from a dynamic type lookup to a static string, breaking intended behavior.",
+    "If the type expression uses the | union operator (Python 3.10+) like cast(int | str, x), quoting it is necessary for forward compatibility, but if the code is run on Python <3.10, the unquoted version would already fail, so the fix doesn't introduce new breakage but assumes the target environment supports the syntax.",
+    "If the first argument is a tuple or other container mistakenly used as a type (e.g., cast((int, str), x)), quoting it hides the fact that it's not a valid type annotation, delaying detection of a logical error until type checking fails."
+  ]
+}

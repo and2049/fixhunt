@@ -1,0 +1,493 @@
+{
+  "runId": "2026-10-17T20-57-26-418Z-nguo-ruff-PLC0208",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLC0208",
+    "fixKind": "unknown",
+    "docs": "# iteration-over-set (PLC0208)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\n## What it does\nChecks for iteration over a `set` literal in which each element is a literal.\n\n## Why is this bad?\nIterating over a `set` is less efficient than iterating over a sequence\ntype, such as `list` or `tuple`.\n\n## Example\n```python\nfor number in {1, 2, 3}:\n    ...\n```\n\nUse instead:\n```python\nfor number in (1, 2, 3):\n    ...\n```\n\n## References\n- [Python documentation: `set`](https://docs.python.org/3/library/stdtypes.html#set)\n"
+  },
+  "analysis": {
+    "summary": "The rule flags iteration over set literals containing only literal elements.",
+    "firingShapes": [
+      "for x in {1, 2}: pass",
+      "for item in {'a', 'b'}: print(item)",
+      "for i in {True, False}: continue",
+      "for val in {None, 0}: break",
+      "for ch in {'x', 'y', 'z'}: yield ch",
+      "for n in {-1, -2}: raise ValueError(n)",
+      "for t in {(1, 2), (3, 4)}: process(t)",
+      "for s in {'hello', 'world'}: log(s)"
+    ],
+    "silentShapes": [
+      "for x in {1, 2, y}: pass",
+      "for item in s: print(item)",
+      "for i in set(): continue",
+      "for val in frozenset({1, 2}): break",
+      "for ch in {expr()}: yield ch"
+    ],
+    "fixDescription": "Replace the set literal with a tuple literal containing the same elements in arbitrary order, preserving all literal values exactly as written.",
+    "hazards": [
+      "Rewriting a set literal used elsewhere in the same scope changes behavior if the original set was referenced by variable or attribute after the loop, as the tuple replacement is not equivalent for membership tests or mutation.",
+      "If the set literal appears in a context where its unhashable nature is relied upon (e.g., passed to a function expecting a set), replacing it with a tuple may cause TypeError or logic errors due to type mismatch.",
+      "When the set literal is part of a larger expression (e.g., union or intersection with another set), replacing it with a tuple breaks the operation as tuples do not support set methods.",
+      "If the loop variable is mutated within the loop body and later used to reconstruct a set, the original iteration order (arbitrary but consistent per run) may affect downstream logic differently than tuple order.",
+      "In rare cases where the set literal's hash randomization affects iteration order across runs, replacing it with a fixed-order tuple may make behavior deterministic where it was previously nondeterministic, altering probabilistic outcomes.",
+      "If the set literal contains duplicate literals (e.g., {1, 1, 2}), the set deduplicates them, but the tuple rewrite preserves duplicates, changing the number of iterations and potentially breaking logic relying on unique iteration.",
+      "Comments attached to the set literal (e.g., {1, 2  # inline}) may be lost or misplaced during the rewrite, as the autofix typically does not preserve comment placement within the literal.",
+      "If the set literal is defined on a line with a trailing comma (e.g., {1, 2,}), the autofix may incorrectly omit or mishandle the comma when generating the tuple, leading to a syntax error or unintended single-element tuple.",
+      "When the set literal is used in a default argument or class attribute, replacing it with a tuple may cause shared mutable state issues if the tuple is mistakenly treated as mutable, though tuples are immutable—this hazard is low but included for completeness regarding developer assumption.",
+      "In code that relies on the set literal being evaluated as a new object each time (e.g., in a loop or function call), the tuple rewrite also creates a new object each time, so no behavioral change occurs from object identity alone, but any reliance on set-specific identity (e.g., 'is' checks against a known set) would fail."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0030476999999999995,
+  "summary": {
+    "programs": 16,
+    "invalid": 7,
+    "fired": 3,
+    "fixed": 3,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "String Formatting Edge Cases",
+      "hazard": "When iterating over a set literal used in string formatting via % or .format(), replacement with a tuple changes argument order, affecting formatted output if placeholders rely on positional matching.",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Loop Variable Mutation and Set Reconstruction",
+      "hazard": "Mutating the loop variable during iteration and using it to rebuild a set can yield different element orders depending on whether the source was a set (arbitrary order) or tuple (fixed order), affecti",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0208",
+            "severity": "warning",
+            "message": "Use a sequence type instead of a `set` when iterating over values",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "AB\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "AB\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:39.421610644 -0400\n+++ fixed.py\t2026-10-17 16:57:39.587612913 -0400\n@@ -1,5 +1,5 @@\n items = []\n-for x in {'a', 'b'}:\n+for x in ('a', 'b'):\n     items.append(x.upper())\n rebuilt = set(items)\n print(''.join(sorted(rebuilt)))\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Star Imports, Module-Level Side Effects, __all__",
+      "hazard": "If a module's __all__ is defined by iterating over a set literal of strings, replacing it with a tuple changes the order of __all__, affecting star-import symbol resolution order and potentially which",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Evaluation Order and Side Effects",
+      "hazard": "When the set literal contains expressions with side effects (e.g., print or list append), duplicating or reordering those expressions in the tuple rewrite changes the number or order of side effects.",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Hash Randomization and Determinism",
+      "hazard": "Although string and int literals have stable hash, this program simulates sensitivity by using a placeholder; the hazard is theoretical: if set iteration order varied across runs due to hash seeding, ",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Dict Ordering, Duplicate Keys, __hash__/__eq__ Overrides",
+      "hazard": "When the set contains custom objects with overridden __hash__ and __eq__, iteration order affects the sequence in which they are processed, which may matter when used as dict keys or in further set op",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "File Modes and Truncation",
+      "hazard": "Iterating over a set of file mode strings to open and write files: if the set is replaced by a tuple, the order of file creation/changes is fixed, potentially altering which file gets written first in",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Set Object Identity and 'is' Checks",
+      "hazard": "If code relies on the set literal being a fresh object each time (e.g., for identity checks via 'is'), replacing it with a tuple does not preserve the object type, causing 'is' comparisons against a s",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Walrus assignment captures set identity before rewrite",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p002",
+      "title": "Set literal in union expression broken by tuple replacement",
+      "hazard": "When the set literal is part of a larger expression (e.g., union or intersection with another set), replacing it with a tuple breaks the operation as tuples do not support set methods.",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Inline comment lost during set-to-tuple rewrite",
+      "hazard": "Comments attached to the set literal (e.g., {1, 2  # inline}) may be lost or misplaced during the rewrite, as the autofix typically does not preserve comment placement within the literal.",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Context manager relying on fresh set object identity",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p005",
+      "title": "Type annotation evaluated at runtime from set literal",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "__all__ built from set literal triggers module-level side effect",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0208",
+            "severity": "warning",
+            "message": "Use a sequence type instead of a `set` when iterating over values",
+            "span": [
+              1,
+              23
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "['a', 'b']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['a', 'b']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:47.412719610 -0400\n+++ fixed.py\t2026-10-17 16:57:47.581721909 -0400\n@@ -1,2 +1,2 @@\n-__all__ = [x for x in {'a', 'b'}]\n+__all__ = [x for x in ('a', 'b')]\n print(__all__)\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Pathlib behavior depends on set iteration order",
+      "hazard": "pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Exception in loop body with finally clause affected by iteration order",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "PLC0208",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLC0208",
+            "severity": "warning",
+            "message": "Use a sequence type instead of a `set` when iterating over values",
+            "span": [
+              1,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\nfinally 1\nfinally 2\n",
+          "stderr1": "ValueError: 2",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\nfinally 1\nfinally 2\n",
+          "stderr1": "ValueError: 2",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:57:47.804724942 -0400\n+++ fixed.py\t2026-10-17 16:57:48.193730232 -0400\n@@ -1,4 +1,4 @@\n-for x in {1, 2}:\n+for x in (1, 2):\n     try:\n         if x == 2:\n             raise ValueError(x)\n"
+      }
+    }
+  ]
+}

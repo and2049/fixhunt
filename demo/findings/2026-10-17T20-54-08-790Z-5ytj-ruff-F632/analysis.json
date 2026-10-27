@@ -1,0 +1,34 @@
+{
+  "summary": "Flags 'is' or 'is not' comparisons between any expression and literal constants (including strings, numbers, None, booleans, and compound literals like lists/dicts/sets).",
+  "firingShapes": [
+    "x is 5",
+    "y is not \"hello\"",
+    "z is []",
+    "a is not {}",
+    "b is set()",
+    "c is True",
+    "d is not None",
+    "e is b'a'"
+  ],
+  "silentShapes": [
+    "x is y",
+    "x is not y",
+    "func() is 5",
+    "x is get_value()",
+    "[].is([])"
+  ],
+  "fixDescription": "Replaces 'is' with '==' and 'is not' with '!=' when comparing against literal constants, preserving all other expression structure.",
+  "hazards": [
+    "Rewriting 'x is 5' to 'x == 5' changes behavior if x defines __eq__ with side effects, as the comparison may now execute where it previously did not due to short-circuiting in identity checks.",
+    "If x is a numpy array, 'x is 5' is always False (no rewrite needed), but 'x == 5' returns an array of booleans, altering truth value in conditionals and potentially causing ValueError.",
+    "When x is None, 'x is not None' rewritten to 'x != None' may invoke __eq__ on x if x is an object with a custom __eq__, whereas identity check bypasses it entirely.",
+    "For class instances where __eq__ is overridden to return NotImplemented, 'x == 5' may trigger fallback to __eq__ on 5 (int), which returns NotImplemented and results in False, while 'x is 5' was already False—so behavior may seem same but relies on different mechanics.",
+    "In code like 'if (x is 0) and y:', rewriting to 'if (x == 0) and y:' preserves logic only if x == 0 has no side effects; if __eq__ mutates state, evaluation order side effects differ.",
+    "If x is a string literal like 'hello', 'x is \"hello\"' may be True due to interning, but 'x == \"hello\"' is also True—so no behavioral change, but the fix is still applied; however, relying on interning is fragile and the rewrite is semantically safer.",
+    "When x is a bytes object from external input, 'x is b\"a\"' is almost always False, but 'x == b\"a\"' compares values—correcting the intent, yet if the code depended on object identity for caching or pooling, the rewrite breaks that assumption.",
+    "If the literal is a mutable compound like [] and x is a local variable, 'x is []' is False unless x is that exact list, but 'x == []' may be True for empty lists—fix corrects mistaken identity use, but if x was intended to be checked for being the same mutable object (e.g., in a cache), the rewrite loses that distinction.",
+    "In rare cases where x is a property that returns a new list on each access, 'x is []' is always False, and 'x == []' may be True if the property returns an empty list—fix is correct, but if the code relied on the identity check to detect initialization state via object uniqueness, the rewrite obscures intent.",
+    "Comments attached to the 'is' or 'is not' operator (e.g., 'x is  # inline comment\n 5') may be lost or misplaced during rewrite if the tool does not preserve whitespace and comment tokens around the operator.",
+    "If the comparison is part of a larger expression like 'x is 5 or y is 10', rewriting each 'is' independently is safe, but if the literal is a complex expression mistakenly treated as constant (e.g., due to tool error), it could rewrite non-literals."
+  ]
+}

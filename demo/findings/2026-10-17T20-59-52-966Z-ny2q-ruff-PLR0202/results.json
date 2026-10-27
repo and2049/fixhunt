@@ -1,0 +1,734 @@
+{
+  "runId": "2026-10-17T20-59-52-966Z-ny2q-ruff-PLR0202",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLR0202",
+    "fixKind": "unknown",
+    "docs": "# no-classmethod-decorator (PLR0202)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for the use of a classmethod being made without the decorator.\n\n## Why is this bad?\nWhen it comes to consistency and readability, it's preferred to use the decorator.\n\n## Example\n\n```python\nclass Foo:\n    def bar(cls): ...\n\n    bar = classmethod(bar)\n```\n\nUse instead:\n\n```python\nclass Foo:\n    @classmethod\n    def bar(cls): ...\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags methods defined as plain functions then assigned via `classmethod(func)` outside the function body.",
+    "firingShapes": [
+      "class C:\n    def m(cls): ...\n    m = classmethod(m)",
+      "class C:\n    @staticmethod\n    def m(): ...\n    m = classmethod(m)",
+      "class C:\n    def m(self): ...\n    m = classmethod(m)",
+      "class C:\n    def m(cls, x): return x\n    m = classmethod(m)\n    n = m",
+      "class C:\n    def m(cls): pass\n    m = classmethod(m)\n    del m",
+      "class C:\n    def m(cls): ...\n    m = classmethod(m)\n    __all__ = ['m']",
+      "class C:\n    def m(cls): ...\n    m = classmethod(m)\n    if True:\n        pass",
+      "class D(C):\n    def m(cls): ...\n    m = classmethod(m)"
+    ],
+    "silentShapes": [
+      "class C:\n    @classmethod\n    def m(cls): ...",
+      "class C:\n    m = classmethod(lambda cls: None)",
+      "def m(cls): ...\n    m = classmethod(m)",
+      "class C:\n    def m(self): ...\n    m = staticmethod(m)",
+      "class C:\n    def m(cls): ...\n    cm = classmethod(m)\n    m = cm"
+    ],
+    "fixDescription": "Replaces the method definition and subsequent assignment with a single method definition prefixed by the `@classmethod` decorator, preserving the original function name, parameters, and body.",
+    "hazards": [
+      "If the method name is used in an annotation within the same class body before the assignment, moving the decorator may change the binding time and cause a NameError.",
+      "If the class contains a `__prepare__` metaclass method that relies on the order of attribute definitions, inserting the decorator earlier may alter the namespace preparation state.",
+      "If the method is decorated with other decorators (e.g., `@property`) in the original code, the autofix does not preserve them, potentially changing the descriptor behavior.",
+      "If the method assignment is guarded by a runtime condition (e.g., inside an `if` block), the autofix hoists it to unconditional execution, altering when the method becomes a classmethod.",
+      "If the method name is deleted (`del m`) after the assignment but before the end of the class body, the autofix incorrectly retains the method as a classmethod.",
+      "If the method is assigned to an alias (e.g., `n = m`) after the `classmethod` assignment, the autofix breaks the alias because `n` refers to the undecorated function in the original but would refer to the classmethod-descriptor after the fix.",
+      "If the method definition contains a type comment (e.g., `# type: (cls) -> int`) placed after the function, the autofix may discard it during rewrite, altering static type checking behavior.",
+      "If the method is defined in a class executed under `-OO` (optimized mode) where docstrings are omitted, the autofix preserves the docstring but the rewrite timing may interact unexpectedly with stripped constants.",
+      "If the class is nested inside a function and the method uses a closure variable from the outer scope, the autofix does not affect closure capture, but the redefinition order may interfere with late-bound defaults in rare cases.",
+      "If the method name is `__classcell__` (used in Python 3.7+ for class cell handling), rewriting it as a decorated method may interfere with the class creation protocol.",
+      "If the method assignment is preceded by a `from __future__ import` statement that affects execution semantics, the autofix does not account for potential changes in how the function is compiled.",
+      "If the method is part of a mixin intended to be overridden and the assignment relies on the original function being temporarily accessible via the class dict, the autofix may break intermediate access patterns during class construction."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0034917000000000004,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 15,
+    "fixed": 15,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "__prepare__ metaclass depends on attribute definition order",
+      "hazard": "Inserting @classmethod earlier alters namespace preparation state during class creation.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              10,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "('a', 'm')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "('a', 'm')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:05.813530631 -0400\n+++ fixed.py\t2026-10-17 17:00:05.976532687 -0400\n@@ -7,8 +7,8 @@\n         return super().__new__(cls, name, bases, ns)\n \n class C(metaclass=Meta):\n+    @classmethod\n     def m(cls): return 'm'\n-    m = classmethod(m)\n     def a(cls): return 'a'\n \n print(C.order)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Alias to method breaks after autofix",
+      "hazard": "Alias `n = m` after `classmethod` assignment refers to raw function; after fix refers to descriptor.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "NameError : name 'n' is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "NameError : name 'n' is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:06.074533923 -0400\n+++ fixed.py\t2026-10-17 17:00:06.236535965 -0400\n@@ -1,6 +1,6 @@\n class C:\n+    @classmethod\n     def m(cls): return 42\n-    m = classmethod(m)\n     n = m  # alias to original function\n \n try:\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Walrus and closure capture with late binding",
+      "hazard": "Lambda capturing method via walrus in comprehension binds late; autofix changes timing of descriptor availability.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'fs' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'fs' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:06.331537163 -0400\n+++ fixed.py\t2026-10-17 17:00:06.712541967 -0400\n@@ -1,6 +1,6 @@\n class C:\n+    @classmethod\n     def m(cls): return cls.__name__\n-    m = classmethod(m)\n     fs = [(lambda: m()) for _ in range(1)]\n \n print('fs[0]():', fs[0]())  # Should be 'C'\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "-OO mode interacts with docstring preservation",
+      "hazard": "Autofix preserves docstring but -OO strips constants; rewrite may keep dead string affecting memory or timing.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "C.m.__doc__: 'This is a docstring'\nC.m(): 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "C.m.__doc__: 'This is a docstring'\nC.m(): 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:06.936544791 -0400\n+++ fixed.py\t2026-10-17 17:00:07.103546896 -0400\n@@ -1,8 +1,8 @@\n class C:\n+    @classmethod\n     def m(cls):\n         '''This is a docstring'''\n         return 42\n-    m = classmethod(m)\n \n print('C.m.__doc__:', repr(C.m.__doc__))\n print('C.m():', C.m())\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Generator expression consumes iterator once",
+      "hazard": "Method used in generator expression; autofix changes when descriptor is available, affecting lazy evaluation.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'g' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'g' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:07.206548194 -0400\n+++ fixed.py\t2026-10-17 17:00:07.593553071 -0400\n@@ -1,6 +1,6 @@\n class C:\n+    @classmethod\n     def m(cls): return iter([1, 2, 3])\n-    m = classmethod(m)\n     g = (next(m()) for _ in range(3))\n \n print('list(g):', list(g))  # Should be [1, 2, 3]\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "File write with truncation and partial write",
+      "hazard": "Method used in file-writing loop; autofix changes timing, risking incomplete write if interrupted.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'm' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'm' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:07.807555767 -0400\n+++ fixed.py\t2026-10-17 17:00:08.196560668 -0400\n@@ -1,6 +1,6 @@\n class C:\n+    @classmethod\n     def m(cls): return b'hello'\n-    m = classmethod(m)\n \n with open('test.bin', 'wb') as f:\n     for i in range(2):\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Star-import and __all__ interaction",
+      "hazard": "Method assigned to __all__; autofix may alter when symbol is available for export.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "C.__all__: ['m']\nhasattr C.m: True\nC.m(): exported\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "C.__all__: ['m']\nhasattr C.m: True\nC.m(): exported\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:08.417563452 -0400\n+++ fixed.py\t2026-10-17 17:00:08.584565555 -0400\n@@ -1,6 +1,6 @@\n class C:\n+    @classmethod\n     def m(cls): return 'exported'\n-    m = classmethod(m)\n     __all__ = ['m']\n \n # Simulate star import: check what's in __all__\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "from __future__ import affects function compilation",
+      "hazard": "Future import (e.g., annotations) changes function semantics; autofix doesn't reapply context.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "C.m.__annotations__: {'return': \"'int'\"}\nC.m(): 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "C.m.__annotations__: {'return': \"'int'\"}\nC.m(): 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:08.691566903 -0400\n+++ fixed.py\t2026-10-17 17:00:08.857568994 -0400\n@@ -1,9 +1,9 @@\n from __future__ import annotations\n \n class C:\n+    @classmethod\n     def m(cls) -> 'int':  # string annotation due to future import\n         return 42\n-    m = classmethod(m)\n \n print('C.m.__annotations__:', C.m.__annotations__)\n print('C.m():', C.m())\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Annotation forward reference",
+      "hazard": "If the method name is used in an annotation within the same class body before the assignment, moving the decorator may change the binding time and cause a NameError.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: type object 'C' has no attribute 'f'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: type object 'C' has no attribute 'f'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:14.005633744 -0400\n+++ fixed.py\t2026-10-17 17:00:14.421638968 -0400\n@@ -1,6 +1,6 @@\n class C:\n     f: 'm'\n+    @classmethod\n     def m(cls):\n         return 42\n-    m = classmethod(m)\n print(C.f.__class__)\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Bytes vs str encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'data'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'data'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:14.635641655 -0400\n+++ fixed.py\t2026-10-17 17:00:14.799643715 -0400\n@@ -1,7 +1,7 @@\n class C:\n+    @classmethod\n     def m(cls):\n         return b'data'\n-    m = classmethod(m)\n with open('tmp.bin', 'wb') as f:\n     f.write(C.m())\n with open('tmp.bin', 'rb') as f:\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Conditional assignment hoist",
+      "hazard": "If the method assignment is guarded by a runtime condition (e.g., inside an `if` block), the autofix hoists it to unconditional execution, altering when the method becomes a classmethod.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'method'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "-OO mode docstring interaction",
+      "hazard": "If the method is defined in a class executed under `-OO` (optimized mode) where docstrings are omitted, the autofix preserves the docstring but the rewrite timing may interact unexpectedly with stripp",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:15.050646867 -0400\n+++ fixed.py\t2026-10-17 17:00:15.203648787 -0400\n@@ -1,6 +1,6 @@\n class C:\n+    @classmethod\n     def m(cls):\n         \"\"\"doc\"\"\"\n         return __doc__\n-    m = classmethod(m)\n print(C.m())\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Other decorators lost",
+      "hazard": "If the method is decorated with other decorators (e.g., `@property`) in the original code, the autofix does not preserve them, potentially changing the descriptor behavior.",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "<bound method m of <class '__main__.C'>>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<bound method m of <class '__main__.C'>>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:15.304650055 -0400\n+++ fixed.py\t2026-10-17 17:00:15.467652101 -0400\n@@ -1,8 +1,8 @@\n class C:\n+    @classmethod\n     @property\n     def m(cls):\n         return 'prop'\n-    m = classmethod(m)\n try:\n     print(C.m)\n except Exception as e:\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Nested class closure capture",
+      "hazard": "If the class is nested inside a function and the method uses a closure variable from the outer scope, the autofix does not affect closure capture, but the redefinition order may interfere with late-bo",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:15.562653294 -0400\n+++ fixed.py\t2026-10-17 17:00:15.723655315 -0400\n@@ -1,9 +1,9 @@\n def make():\n     x = 99\n     class C:\n+        @classmethod\n         def m(cls):\n             return x\n-        m = classmethod(m)\n     return C\n C = make()\n print(C.m())\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Dict ordering duplicate keys",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'dict' as a dict key (unhashable type: 'dict')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'dict' as a dict key (unhashable type: 'dict')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:15.826656608 -0400\n+++ fixed.py\t2026-10-17 17:00:16.223661590 -0400\n@@ -1,7 +1,7 @@\n class C:\n+    @classmethod\n     def m(cls):\n         return {}\n-    m = classmethod(m)\n d = {'a': 1, 'b': 2}\n d[C.m()] = 3\n print(d.get('a'), d.get('b'))\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Mutable default aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "PLR0202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR0202",
+            "severity": "warning",
+            "message": "Class method defined without decorator",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:00:16.430664187 -0400\n+++ fixed.py\t2026-10-17 17:00:16.580666069 -0400\n@@ -1,7 +1,7 @@\n class C:\n+    @classmethod\n     def m(cls, lst=[]):\n         lst.append(1)\n         return lst\n-    m = classmethod(m)\n print(C.m())\n print(C.m())\n"
+      }
+    }
+  ]
+}

@@ -1,0 +1,848 @@
+{
+  "runId": "2026-10-17T20-50-43-467Z-vlrv-biome-nursery_useUnicodeRegex",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "nursery/useUnicodeRegex",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useUnicodeRegex\n- Fix: safe\n- Default severity: info\n- Available from version: 2.4.5\n- Diagnostic category: lint/nursery/useUnicodeRegex\n\n\nDescription\n\n Enforce the use of the `u` or `v` flag for regular expressions.\n\n The `u` flag (Unicode mode) and `v` flag (Unicode Sets mode) enable proper handling\n of Unicode characters in regular expressions. Without these flags, regex patterns\n may not correctly match Unicode characters like emoji or characters outside the\n Basic Multilingual Plane.\n\n The `u` flag was introduced in ES2015 and enables:\n - Correct handling of surrogate pairs (e.g., emoji)\n - Unicode code point escapes (`\\u{...}`)\n - Case-insensitive matching for Unicode characters\n\n The `v` flag was introduced in ES2024 and provides all `u` flag features plus:\n - Set notation in character classes\n - String literals in character classes\n - Improved Unicode property escapes\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n /foo/;\n ```\n\n ```js,expect_diagnostic\n /foo/gi;\n ```\n\n ```js,expect_diagnostic\n new RegExp(\"foo\");\n ```\n\n ```js,expect_diagnostic\n new RegExp(\"foo\", \"gi\");\n ```\n\nValid\n\n ```js\n /foo/u;\n /foo/v;\n /foo/giu;\n new RegExp(\"foo\", \"u\");\n new RegExp(\"foo\", \"giv\");\n new RegExp(\"foo\", flags); // dynamic flags are ignored\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags any RegExp literal or constructor call missing the 'u' or 'v' flag.",
+    "firingShapes": [
+      "/abc/",
+      "/def/gi",
+      "new RegExp(\"xyz\")",
+      "new RegExp(\"pqr\", \"im\")",
+      "/[a-z]/",
+      "/\\\\d+/g",
+      "new RegExp(\"\\\\w+\")",
+      "new RegExp(\"\", \"y\")"
+    ],
+    "silentShapes": [
+      "/test/u",
+      "/match/v",
+      "new RegExp(\"pat\", \"u\")",
+      "new RegExp(\"pat\", \"giv\")",
+      "new RegExp(\"pat\", flags)"
+    ],
+    "fixDescription": "Adds the 'u' flag to RegExp literals lacking any flag, appends 'u' to existing flags in literals, and adds 'u' as the second argument to RegExp constructor calls missing it or having insufficient flags.",
+    "hazards": [
+      "Adding 'u' to a RegExp literal containing an invalid Unicode escape like \\\\x{1} changes it from a syntax error to valid code, altering program behavior where the error was intentional.",
+      "Appending 'u' to flags in a literal like /[a-z&&[^m-z]]/ may break execution in environments without Unicode Sets support, as the 'v' flag would be required but only 'u' is added.",
+      "For RegExp('pattern', 'uw'), the fix produces 'uwu' which includes duplicate 'u' flags; while harmless, it is non-standard and could confuse tools expecting canonical flag order.",
+      "If the pattern string in new RegExp contains a backreference like \\\\1, adding 'u' changes its meaning from octal escape to backreference, potentially altering matches.",
+      "In code relying on legacy octal escape interpretation (e.g., new RegExp('\\\\256')), adding 'u' forbids octal escapes, causing the pattern to fail to compile where it previously matched extended ASCII.",
+      "When the RegExp constructor is called with a non-string pattern (e.g., another RegExp), adding 'u' as a second argument is ignored per spec, but if the first argument is a RegExp and flags are provided, the fix may incorrectly add 'u' when flags should replace rather than append.",
+      "If the regex is used in a context where the 'u' flag changes the interpretation of ^ and $ to match line terminators in Unicode-sensitive ways, adding 'u' could alter multiline matching behavior unexpectedly.",
+      "Comments attached to the RegExp token (e.g., /foo/* comment */) may be lost or misplaced during the rewrite if the tool does not preserve trailing or inner comments.",
+      "In a sequence like /foo/+bar, inserting 'u' to make /foo/u/+bar could be misparsed due to precedence if whitespace is not managed, though unlikely, it risks altering expression structure.",
+      "For dynamically constructed regexes via new RegExp(userInput, 'g'), the fix adds 'u' making it 'gu', but if userInput contains unpaired surrogates, the 'u' flag may cause a SyntaxError where the code previously relied on loose matching."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0186255,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 15,
+    "fixed": 13,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r1-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "let base = /a/g;\nlet copy = new RegExp(base, 'i');\nconsole.log(copy.flags);\n",
+      "lines": {
+        "before": 3,
+        "after": 3
+      },
+      "reportPath": "runs/2026-10-17T20-50-43-467Z-vlrv-biome-nursery_useUnicodeRegex/reports/r1-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/11933",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/5693",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule adds the 'u' flag to regexes lacking Unicode mode. The program constructs a new RegExp from an existing one and passes an additional 'i' flag; per the spec, the new RegExp inherits the source regex's flags unless overridden, so adding 'u' to the source makes the copy's flags become 'iu' instead of 'i'. This is the documented semantic change the rule exists to make.",
+        "docsQuote": "Enforce the use of the `u` or `v` flag for regular expressions",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useUnicodeRegex fix",
+          "nursery useUnicodeRegex regex constructor flags",
+          "RegExp constructor unicode flag propagation",
+          "useUnicodeRegex rule RegExp flags behavior"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useUnicodeRegex` safe fix adds `u` to patterns that are invalid in unicode mode",
+            "url": "https://github.com/biomejs/biome/issues/11933",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:           npm\n  JS_RUNTIME_NAME:              node\n```\n\n</details>\n\n### Rule name\n\n`"
+          },
+          {
+            "source": "github",
+            "title": "💅 `useMathMinMax` false positive with Date values",
+            "url": "https://github.com/biomejs/biome/issues/10272",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 `nusery/noShadow` should not flag parameter names of function types",
+            "url": "https://github.com/biomejs/biome/issues/9482",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.7\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:   "
+          },
+          {
+            "source": "tavily",
+            "title": "fix(css_parser): fix is at unicode range check by xin2017338 · Pull Request #3745 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/3745",
+            "snippet": "The reason will be displayed to describe this comment to others. Learn more.\n\nThanks for the fix! I think we can merge the fix and decide later if we need to move some logics to the lexer.\n\n@Conaclos\n\nConaclos merged commit `49e2103` into   biomejs:main   Sep 3, 2024 [...] ### Choose a reason for hi"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 useRegexLiterals incorrect autofix · Issue #5693 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/5693",
+            "snippet": "More actions\n\n   @dyc3  \n    I've grasped all the locations of the codes you explained to me😊  \n    We also confirmed that the test passes through `cargo test -p biome_js_analyze.`\n\n   What I want is to test the new RegExp(`a\\b`) shoud be transformed to /a\\b/ whether this value runs normally in thi"
+          },
+          {
+            "source": "tavily",
+            "title": "fix(formatter): add break to ts constructor parameters with modifiers by TaKO8Ki · Pull Request #994 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/994",
+            "snippet": "This file contains hidden or bidirectional Unicode text that may be interpreted or compiled differently than what appears below. To review, open the file in an editor that reveals hidden Unicode characters. Learn more about bidirectional Unicode characters \n\nShow hidden characters\n\nSign up for free "
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 Private class members used from constructor are incorrectly marked as unused · Issue #8138 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8138",
+            "snippet": "marked 🐛 Possible breaking change in 2.3.6 patch release #8151 as a duplicate of this issue on Nov 19, 2025\n15. ### cpojercommentedon Nov 19, 2025\n\n    @cpojer\n\n    cpojer\n\n    on Nov 19, 2025\n\n    Contributor\n\n    More actions\n\n    This is a major bug that turns valid code into broken code when ap"
+          },
+          {
+            "source": "tavily",
+            "title": "feat(noImpliedEval): flag `new Function(...)` by dyc3 · Pull Request #9811 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/9811",
+            "snippet": "This file contains hidden or bidirectional Unicode text that may be interpreted or compiled differently than what appears below. To review, open the file in an editor that reveals hidden Unicode characters. Learn more about bidirectional Unicode characters \n\nShow hidden characters\n\nSign up for free "
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Port `prefer-regexp-test` · Issue #9377 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9377",
+            "snippet": "added\n\n   S-Help-wantedStatus: you're familiar with the code base and want to help the projectStatus: you're familiar with the code base and want to help the project\n\n   A-LinterArea: linterArea: linter\n\n   L-JavaScriptLanguage: JavaScript and super languagesLanguage: JavaScript and super languages\n"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/11933",
+            "relation": "related",
+            "why": "same rule but different construct (invalid patterns in unicode mode vs RegExp constructor flag handling)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10272",
+            "relation": "unrelated",
+            "why": "different rule (useMathMinMax) and different construct (Date values)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9482",
+            "relation": "unrelated",
+            "why": "different rule (nusery/noShadow) and different construct (function type parameter names)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/3745",
+            "relation": "unrelated",
+            "why": "different area (CSS parser unicode range check)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/5693",
+            "relation": "related",
+            "why": "same domain (regex autofix) but different construct (useRegexLiterals escaping vs useUnicodeRegex flag handling)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/994",
+            "relation": "unrelated",
+            "why": "different area (formatter TS constructor parameters)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8138",
+            "relation": "unrelated",
+            "why": "different rule (private class members unused detection)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/9811",
+            "relation": "unrelated",
+            "why": "different rule (noImpliedEval Function constructor)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9377",
+            "relation": "unrelated",
+            "why": "different rule (prefer-regexp-test port)"
+          }
+        ],
+        "cost": 0.0027398
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:32:57.180511834 -0400\n+++ fixed.js\t2026-10-22 13:32:59.349548314 -0400\n@@ -1,3 +1,3 @@\n-let base = /a/g;\n-let copy = new RegExp(base, 'i');\n+let base = /a/gu;\n+let copy = new RegExp(base, 'iu');\n console.log(copy.flags);\n",
+        "observed": "stdout before:\ni\nstdout after:\niu",
+        "before": {
+          "stdout": "i\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "iu\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "let base = /a/gu;\nlet copy = new RegExp(base, 'iu');\nconsole.log(copy.flags);\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=nursery/useUnicodeRegex --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original regex `/a/g` has only the global flag; adding `u` via the fix changes its behavior to Unicode mode, which alters how patterns like `\\w` or case-insensitive matching are interpreted—even if unused here. The copy inherits both `i` and `u` flags, so its `.flags` becomes `iu` instead of `i`. Though the current pattern `/a/` is unaffected by Unicode mode, the fix assumes safety without verifying that added flags don’t alter semantics for potential future patterns, making it unsafe in general. The observed change in output confirms the behavioral shift.",
+        "fired": 2,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Label break continue with finally",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:50:55.968201295 -0400\n+++ fixed.js\t2026-10-17 16:50:56.229206192 -0400\n@@ -2,7 +2,7 @@\n   let result = '';\n   try {\n     for (let i = 0; i < 2; i++) {\n-      const m = /a/.exec('a');\n+      const m = /a/u.exec('a');\n       result += m ? m[0] : 'x';\n       if (i === 0) break outer;\n     }\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Multiline ^$ behavior change",
+      "hazard": "If the regex is used in a context where the 'u' flag changes the interpretation of ^ and $ to match line terminators in Unicode-sensitive ways, adding 'u' could alter multiline matching behavior unexp",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:50:56.395209305 -0400\n+++ fixed.js\t2026-10-17 16:50:56.665214370 -0400\n@@ -1,3 +1,3 @@\n let s = 'a\\nb';\n-let r = /^.$/;\n+let r = /^.$/u;\n console.log(r.test(s));\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "RegExp constructor with RegExp arg",
+      "hazard": "When the RegExp constructor is called with a non-string pattern (e.g., another RegExp), adding 'u' as a second argument is ignored per spec, but if the first argument is a RegExp and flags are provide",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          },
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "i\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\ni\nstdout after:\niu"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "iu\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:50:56.840217652 -0400\n+++ fixed.js\t2026-10-17 16:50:57.122222940 -0400\n@@ -1,3 +1,3 @@\n-let base = /a/g;\n-let copy = new RegExp(base, 'i');\n+let base = /a/gu;\n+let copy = new RegExp(base, 'iu');\n console.log(copy.flags);\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Coercion in pattern",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:50:57.291226107 -0400\n+++ fixed.js\t2026-10-17 16:50:57.565231241 -0400\n@@ -1,4 +1,4 @@\n let obj = { valueOf: () => 'b', toString: () => 'B' };\n let p = +obj;\n-let r = new RegExp(p, '');\n+let r = new RegExp(p, 'u');\n console.log(r.test('b'));\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Comment preservation",
+      "hazard": "Comments attached to the RegExp token (e.g., /foo/* comment */) may be lost or misplaced during the rewrite if the tool does not preserve trailing or inner comments.",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-50-43-467Z-vlrv-biome-nursery_useUnicodeRegex/r1-p005/orig.js:2\nlet r = /a/* middle */;\n                     ^\n\nSyntaxError: Invalid regular expression: missing /\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Order of evaluation side effects",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:50:57.785235364 -0400\n+++ fixed.js\t2026-10-17 16:50:58.059240497 -0400\n@@ -3,5 +3,5 @@\n   count++;\n   return 'a';\n };\n-let r = new RegExp(getPat(), '');\n+let r = new RegExp(getPat(), 'u');\n console.log(count);\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Class fields interaction",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:50:58.224243586 -0400\n+++ fixed.js\t2026-10-17 16:50:58.500248753 -0400\n@@ -1,5 +1,5 @@\n class C {\n-  static r = /a/;\n+  static r = /a/u;\n   static {\n     console.log(C.r.test('a'));\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Var hoisting in loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:50:58.664251824 -0400\n+++ fixed.js\t2026-10-17 16:50:58.939256972 -0400\n@@ -1,7 +1,7 @@\n function f() {\n   for (let i = 0; i < 2; i++) {\n     if (i === 0) {\n-      var r = /a/;\n+      var r = /a/u;\n     }\n     console.log(r.test('a'));\n   }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Precedence risk in unary plus concatenation",
+      "hazard": "In a sequence like /foo/+bar, inserting 'u' to make /foo/u/+bar could be misparsed due to precedence if whitespace is not managed.",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:51:05.062371213 -0400\n+++ fixed.js\t2026-10-17 16:51:05.317375954 -0400\n@@ -1 +1 @@\n-/abc/+1\n+/abc/u+1\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Label break continue with finally",
+      "hazard": "Label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "should not reach\nfinally ran\nafter label\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "should not reach\nfinally ran\nafter label\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:51:05.482379022 -0400\n+++ fixed.js\t2026-10-17 16:51:05.750384006 -0400\n@@ -1,6 +1,6 @@\n outer: {\n   try {\n-    if (/test/.test('x')) break outer;\n+    if (/test/u.test('x')) break outer;\n     console.log('should not reach');\n   } finally {\n     console.log('finally ran');\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Getters, setters and Object.defineProperty side effects",
+      "hazard": "Getters, setters and Object.defineProperty side effects",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:51:05.932387390 -0400\n+++ fixed.js\t2026-10-17 16:51:06.205392463 -0400\n@@ -1,5 +1,5 @@\n const obj = {};\n Object.defineProperty(obj, 'getter', {\n-  get() { return /pattern/.test('input'); }\n+  get() { return /pattern/u.test('input'); }\n });\n console.log(obj.getter);\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Async/await ordering, generators and yield position",
+      "hazard": "Async/await ordering, generators and yield position",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:51:06.373395584 -0400\n+++ fixed.js\t2026-10-17 16:51:06.660400915 -0400\n@@ -1,4 +1,4 @@\n (async () => {\n-  const result = await Promise.resolve(/hello/.test('hello'));\n+  const result = await Promise.resolve(/hello/u.test('hello'));\n   console.log(result);\n })();\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Legacy octal escape interpretation",
+      "hazard": "In code relying on legacy octal escape interpretation (e.g., new RegExp('\\256')), adding 'u' forbids octal escapes, causing the pattern to fail to compile where it previously matched extended ASCII.",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Backreference meaning change under 'u' flag",
+      "hazard": "If the pattern string in new RegExp contains a backreference like \\\\1, adding 'u' changes its meaning from octal escape to backreference, potentially altering matches.",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Pattern without u: /\\1/\nTest \"\\x01\"\\x01: true\nError with u: SyntaxError: Invalid regular expression: /\\1/u: Invalid escape\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Pattern without u: /\\1/\nTest \"\\x01\"\\x01: true\nError with u: SyntaxError: Invalid regular expression: /\\1/u: Invalid escape\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Multiline ^$ behavior change with Unicode flag",
+      "hazard": "If the regex is used in a context where the 'u' flag changes the interpretation of ^ and $ to match line terminators in Unicode-sensitive ways, adding 'u' could alter multiline matching behavior unexp",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:51:07.406414766 -0400\n+++ fixed.js\t2026-10-17 16:51:07.689420018 -0400\n@@ -1,3 +1,3 @@\n const str = 'a\\nb\\n';\n-console.log(/^b$/gm.test(str));\n+console.log(/^b$/gmu.test(str));\n console.log(/^b$/gmu.test(str));\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Null/undefined distinction, optional chaining short-circuit",
+      "hazard": "Null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "nursery/useUnicodeRegex",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "nursery/useUnicodeRegex",
+            "severity": "info",
+            "message": "This regular expression is missing the u or v flag.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:51:07.863423248 -0400\n+++ fixed.js\t2026-10-17 16:51:08.144428460 -0400\n@@ -1,4 +1,4 @@\n-let obj = { prop: { value: /test/.test('foo') } };\n+let obj = { prop: { value: /test/u.test('foo') } };\n console.log(obj?.prop?.value);\n obj = null;\n console.log(obj?.prop?.value);\n"
+      }
+    }
+  ]
+}

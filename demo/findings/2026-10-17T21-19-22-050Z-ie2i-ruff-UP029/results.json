@@ -1,0 +1,662 @@
+{
+  "runId": "2026-10-17T21-19-22-050Z-ie2i-ruff-UP029",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP029",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-builtin-import (UP029)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for imports of Python 3 builtins from Python 2 compatibility shims\nsuch as `python-future` and `six`.\n\n## Why is this bad?\nThese shims existed to access Python 3 builtins from code that also ran on\nPython 2. On Python 3-only code, the imports are redundant.\n\n## Example\n```python\nfrom builtins import str\n\nstr(1)\n```\n\nUse instead:\n```python\nstr(1)\n```\n\n## Fix safety\nThis fix is marked as unsafe because it will remove comments attached to the unused import.\n\n## Options\n\nThis rule will not trigger on imports required by the `isort` configuration.\n\n- `lint.isort.required-imports`\n\n## References\n- [Python documentation: The Python Standard Library](https://docs.python.org/3/library/index.html)\n"
+  },
+  "analysis": {
+    "summary": "Flags imports of Python 3 builtins from compatibility modules like 'builtins' or 'six.moves' when they are unused after removing the import.",
+    "firingShapes": [
+      "from builtins import str\nstr('hello')",
+      "from six.moves import range\nfor i in range(5): pass",
+      "from past.builtins import map\nresult = map(lambda x: x*2, [1,2,3])",
+      "import builtins\nx = builtins.str(42)",
+      "from six.moves import filter\nlist(filter(None, [0,1,0]))",
+      "from future.utils import raise_\nraise_(ValueError('err'))",
+      "from six.moves import zip\nlist(zip([1,2], [3,4]))",
+      "from builtins import dict\nd = dict(a=1)"
+    ],
+    "silentShapes": [
+      "from builtins import str\nprint(str)",
+      "from six.moves import range\nif True: range = lambda x: x",
+      "import builtins\nif False: builtins.str = lambda x: x"
+    ],
+    "fixDescription": "Removes the import statement and leaves all usages of the imported builtin unchanged, relying on the Python 3 builtin being available by default.",
+    "hazards": [
+      "Removing 'from builtins import str' may break code if a local variable named 'str' was intended to shadow the builtin but the import removal causes the builtin to be used instead.",
+      "If 'six.moves.range' is imported and later reassigned to a non-callable, removing the import may cause a NameError when the builtin 'range' is used where a different object was expected.",
+      "The fix does not account for conditional imports; if the import is inside a function or conditional block, removing it may cause a NameError when the builtin is used outside that scope.",
+      "If the imported name is used as a string in eval() or exec(), removing the import may change behavior if the name resolution depends on the import being present.",
+      "Removing the import may break code that relies on the specific type or behavior of the shimmed builtin (e.g., 'past.builtins.map' returning a list in Python 2 style), even if the code is run on Python 3.",
+      "If the import is aliased (e.g., 'from six.moves import range as r'), the fix may not trigger or may leave the alias unused, but if it did, removing the import would break uses of the alias.",
+      "The fix may remove a comment attached to the import line (e.g., '# needed for old Python'), which is considered unsafe and could lead to loss of documentation.",
+      "If the module defining the shim (e.g., 'six') has side effects on import (e.g., registers plugins), removing the import may alter program behavior even if the imported name is not used.",
+      "In rare cases, if a third-party module defines a 'builtins' attribute that shadows the import, removing the import may cause a NameError due to missing attribute access.",
+      "If the code is run under a restricted environment where __builtins__ is modified, removing the import may bypass intentional builtin overrides provided by the shim."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0027627,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 11,
+    "fixed": 0,
+    "disputed": 5
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Conditional Import Scope Hazard",
+      "hazard": "Import removal ignores conditional/function scope; using builtin outside scope causes NameError.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `str`",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Star Import and __all__ Side Effect",
+      "hazard": "Star import may rely on __all__ from module; removing import breaks star-imported name resolution.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'six'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p003",
+      "title": "Dict Ordering and Hash Hazard",
+      "hazard": "Removing import changes dict key resolution if __hash__/__eq__ overridden and ordering matters.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `dict`",
+            "span": [
+              4,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Exception Handling Interaction",
+      "hazard": "Rewritten code inside try/except/finally may change exception flow if import removal alters name binding.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "Eval Exec String Dependency",
+      "hazard": "Imported name used as string in eval/exec; removing import changes resolution if name not in builtins.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `str`",
+            "span": [
+              1,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Module Side Effect on Import",
+      "hazard": "Importing six.moves has side effects (e.g., plugin registration); removing import alters behavior.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `range`",
+            "span": [
+              4,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "six not loaded\n",
+          "stderr1": "ModuleNotFoundError: No module named 'six'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "six not loaded\n",
+          "stderr1": "ModuleNotFoundError: No module named 'six'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Reassignment to Non-Callable",
+      "hazard": "Imported name reassigned to non-callable; later use expects callable but gets non-callable or missing.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `range`",
+            "span": [
+              1,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'six'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'six'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Truthiness and Identity Comparison",
+      "hazard": "__bool__/__len__ or None vs falsy interacts with 'is' vs '==' after import removal changes binding.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "False True True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p001",
+      "title": "Runtime-evaluated type annotation using forward reference",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `str`",
+            "span": [
+              2,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Generator consumed twice after import removal",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `range`",
+            "span": [
+              1,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "first: [0, 1, 2] second: [0, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first: [0, 1, 2] second: [0, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Third-party module with conflicting 'builtins' attribute",
+      "hazard": "In rare cases, if a third-party module defines a 'builtins' attribute that shadows the import, removing the import may cause a NameError due to missing attribute access.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "shadow\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "Star import with side effect in __init__",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `*`",
+            "span": [
+              1,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Conditional import inside function, used outside",
+      "hazard": "The fix does not account for conditional imports; if the import is inside a function or conditional block, removing it may cause a NameError when the builtin is used outside that scope.",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `str`",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Import removed but used in duplicated expression with side effect",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `str`",
+            "span": [
+              1,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "42 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "past.builtins.map returns list in Py2, but used as iterator",
+      "hazard": "Removing the import may break code that relies on the specific type or behavior of the shimmed builtin (e.g., 'past.builtins.map' returning a list in Python 2 style), even if the code is run on Python",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ModuleNotFoundError: No module named 'past'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Context manager with write but no close, used in with-block",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "UP029",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP029",
+            "severity": "warning",
+            "message": "Unnecessary builtin import: `str`",
+            "span": [
+              1,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

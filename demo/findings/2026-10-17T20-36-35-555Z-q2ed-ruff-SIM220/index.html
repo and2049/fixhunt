@@ -1,0 +1,136 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff SIM220 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff SIM220 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-36-35-555Z-q2ed-ruff-SIM220 · fix labelled <b>unknown</b> · 16 programs, 5 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0052</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags &#39;and&#39; expressions where one operand is the logical negation of the other, such as &#39;x and not x&#39;, which always evaluates to False.</p><p class="mut">Fix: Replace the entire &#39;and&#39; expression with the literal &#39;False&#39;.</p><details><summary>10 hazards</summary><ul><li>Rewriting &#39;func() and not func()&#39; to &#39;False&#39; changes behavior if func() has side effects, as the second call is omitted but the first may still be intended to execute.</li><li>In &#39;(x + y) and not (x + y)&#39;, if x or y are properties with getters that have side effects, the rewrite eliminates the second evaluation but preserves the first, altering observable state.</li><li>For &#39;obj.attr and not obj.attr&#39;, if obj.attr is a descriptor with a __get__ method that performs side effects, the rewrite reduces the number of invocations from two to one, changing behavior.</li><li>When used as &#39;lst[0] and not lst[0]&#39;, if lst[0] triggers a __getitem__ that raises an exception on the second access due to state change from the first, the rewrite avoids the exception but may hide intended error handling.</li><li>In &#39;d[key] and not d[key]&#39;, if the dictionary&#39;s __getitem__ has side effects (e.g., logging or caching), the rewrite halves the number of calls, affecting program diagnostics or performance.</li><li>If the expression is part of a larger statement like &#39;return a and not a&#39;, replacing it with &#39;return False&#39; is safe, but if it&#39;s in a context relying on the expression&#39;s type being something other than bool (though unlikely), it could cause issues—though Python treats it as bool, so low risk.</li><li>Comments attached to the expression, such as &#39;a and not a  # important check&#39;, would be lost if the autofix replaces the whole line or expression without preserving trailing comments.</li><li>In a macro-generated or templated code context where the duplication is intentional for code generation symmetry, replacing with &#39;False&#39; could break the generator&#39;s assumptions about paired evaluations.</li><li>If the expression is inside a lambda or comprehension where the duplicate evaluation is meant to ensure idempotency or retry logic (though logically flawed), removing the duplicate alters the intended fault-tolerance pattern.</li><li>When the expression appears in a debug or logging condition like &#39;if debug and not debug:&#39;, the rewrite to &#39;False&#39; silences the condition, but if debug is a mutable flag changed by the first eval, the second eval was meant to catch the change—now missed.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Comment preservation</td><td class="mut">Trailing comment lost when replacing &#39;and&#39; expression with False</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Stateful __getitem__ exception hiding</td><td class="mut">Second list access hides exception from mutable state change</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type annotation runtime evaluation</td><td class="mut">Forward reference in annotation triggers NameError if skipped</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dictionary __getitem__ side effects</td><td class="mut">Side-effecting __getitem__ called half as often</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span></td><td>Dict ordering and duplicates</td><td class="mut">Duplicate keys in dict literal; only last wins but both accessed</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Star-imports and module side effects</td><td class="mut">Star import executes module top-level; skipping second call changes side effects</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Function call side effects</td><td class="mut">Func with side effect called once instead of twice</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only and defaults</td><td class="mut">Default argument evaluated once; side effect skipped on second call</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Keyword-only and defaults - default evaluated once</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Larger statement context - return expression</td><td class="mut">If the expression is part of a larger statement like &#39;return a and not a&#39;, replacing it wi</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus and comprehension scoping</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Class vs instance attributes with property side effect</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Shadowed builtins - len redefined</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Debug flag mutability in condition</td><td class="mut">When the expression appears in a debug or logging condition like &#39;if debug and not debug:&#39;</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dict ordering and __eq__ side effect</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Type annotation runtime evaluation</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Comment preservation</summary><pre>result = []
+for i in range(2):
+    val = i and not i  # track iteration
+    result.append((val, i))
+print(result)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Stateful __getitem__ exception hiding</summary><pre>class List:
+    def __init__(self):
+        self.data = [1]
+        self.accessed = 0
+    def __getitem__(self, idx):
+        self.accessed += 1
+        if self.accessed == 2:
+            raise ValueError(&#39;second access&#39;)
+        return self.data[idx]
+lst = List()
+try:
+    x = lst[0] and not lst[0]
+except ValueError as e:
+    print(&#39;caught:&#39;, type(e).__name__, str(e))
+else:
+    print(&#39;result:&#39;, x, &#39;accesses:&#39;, lst.accessed)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Type annotation runtime evaluation</summary><pre>def f():
+    return True
+if f() and not f():  # annotation-like use
+    pass
+try:
+    x
+except NameError as e:
+    print(&#39;NameError:&#39;, e)
+else:
+    print(&#39;x defined:&#39;, x)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Dictionary __getitem__ side effects</summary><pre>class Dict:
+    def __init__(self):
+        self.store = {&#39;k&#39;: 1}
+        self.log = []
+    def __getitem__(self, key):
+        self.log.append(key)
+        return self.store[key]
+d = Dict()
+result = d[&#39;k&#39;] and not d[&#39;k&#39;]
+print(&#39;result:&#39;, result, &#39;log:&#39;, d.log)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Dict ordering and duplicates</summary><pre>d = {&#39;a&#39;: 1, &#39;a&#39;: 2}
+print(d[&#39;a&#39;])
+# no and-not pattern here
+</pre></details><details id="r1-p006"><summary>r1-p006 — Star-imports and module side effects</summary><pre>import sys
+mod = type(&#39;m&#39;, (), {})()
+mod.state = 0
+sys.modules[&#39;testmod&#39;] = mod
+exec(&quot;&quot;&quot;
+state = 0
+def func():
+    global state
+    state += 1
+    return state &gt; 0
+&quot;&quot;&quot;, mod.__dict__)
+from testmod import *
+if func() and not func():
+    pass
+print(&#39;testmod.state:&#39;, mod.state)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Function call side effects</summary><pre>calls = []
+def f():
+    calls.append(len(calls))
+    return len(calls) &lt; 2
+x = f() and not f()
+print(&#39;result:&#39;, x, &#39;calls:&#39;, calls)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Keyword-only and defaults</summary><pre>def g(x, y=[]):
+    y.append(1)
+    return len(y)
+try:
+    a = g(0) and not g(0)
+except:
+    pass
+print(&#39;y length after:&#39;, len(g(0, [])))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Keyword-only and defaults - default evaluated once</summary><pre>def f(a, *, b=print(&#39;default&#39;) or 1):
+    return a and not a
+print(f(2))
+print(f(2))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Larger statement context - return expression</summary><pre>def g():
+    x = 1
+    return x and not x
+print(type(g()))
+print(g())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Walrus and comprehension scoping</summary><pre>y = 0
+lst = [(y := i) and not (y := i) for i in range(2)]
+print(lst)
+print(y)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Class vs instance attributes with property side effect</summary><pre>class C:
+    @property
+    def val(self):
+        print(&#39;prop&#39;)
+        return 1
+    def test(self):
+        return self.val and not self.val
+c = C()
+c.test()
+</pre></details><details id="r2-p005"><summary>r2-p005 — Shadowed builtins - len redefined</summary><pre>len = lambda x: print(&#39;len&#39;) or 42
+x = [1,2,3]
+print(x and not x)
+print(len and not len)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Debug flag mutability in condition</summary><pre>debug = {&#39;value&#39;: True}
+if debug[&#39;value&#39;] and not debug.__setitem__(&#39;value&#39;, False) or True:
+    print(&#39;inside&#39;)
+else:
+    print(&#39;outside&#39;, debug[&#39;value&#39;])
+</pre></details><details id="r2-p007"><summary>r2-p007 — Dict ordering and __eq__ side effect</summary><pre>class Eq:
+    def __eq__(self, other):
+        print(&#39;eq&#39;)
+        return True
+    def __bool__(self):
+        return True
+k = Eq()
+d = {k: 1}
+print(d[k] and not d[k])
+</pre></details><details id="r2-p008"><summary>r2-p008 — Type annotation runtime evaluation</summary><pre>T = int
+if False:
+    x: T and not T  # type: ignore
+print(&#39;ok&#39;)
+</pre></details></body></html>

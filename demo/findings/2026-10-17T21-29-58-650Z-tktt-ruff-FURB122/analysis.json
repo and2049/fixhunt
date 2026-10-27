@@ -1,0 +1,30 @@
+{
+  "summary": "Flags loops calling IOBase.write inside a for-loop body where each iteration writes a value derived solely from the loop variable.",
+  "firingShapes": [
+    "for x in seq: f.write(x)",
+    "for i in range(len(a)): f.write(a[i])",
+    "while idx < n: f.write(data[idx]); idx += 1",
+    "for item in items: out.write(str(item))",
+    "for k, v in mapping.items(): log.write(f'{k}: {v}')",
+    "for chunk in iter(read, b''): sock.write(chunk)"
+  ],
+  "silentShapes": [
+    "for line in lines: print(line, file=f)",
+    "for elem in data: f.write(elem); f.flush()",
+    "try:\n for x in vals: f.write(x)\nexcept: pass",
+    "for x in y: z = x; f.write(z)"
+  ],
+  "fixDescription": "Replace the for-loop with a single call to writelines using a generator expression that yields the same values as the original write calls, preserving the loop variable usage.",
+  "hazards": [
+    "The rewrite may drop comments placed inside the for-loop body, as they are not preserved in the generator expression.",
+    "If the loop variable is mutated after the write call (e.g., f.write(x); x = None), the rewritten version loses access to the mutated value since it only captures the original iteration value.",
+    "When the write call is guarded by a condition inside the loop (e.g., if ok: f.write(x)), the fix incorrectly writes all items unconditionally, altering output.",
+    "If the loop contains multiple write statements (e.g., f.write(a); f.write(b)), the fix only replaces the first, leaving the second and changing behavior.",
+    "For binary files opened in 'wb' mode, using writelines with a generator of strings (instead of bytes) raises TypeError due to type mismatch.",
+    "If the iterable being looped over is modified during iteration (e.g., f.write(x); lines.pop(0)), the rewrite evaluates the iterable upfront via the generator, potentially causing different iteration or errors.",
+    "When the write call is part of a larger expression (e.g., n = f.write(x)), the fix discards the return value, breaking assignments or checks that relied on it.",
+    "If the file object is reassigned within the loop (e.g., f.write(x); f = open(...)), the rewrite uses the original file object for all writes, ignoring later reassignments.",
+    "In nested loops, applying the fix to the inner loop may incorrectly hoist the generator expression to the outer scope, causing name collisions or premature evaluation.",
+    "If the loop variable has the same name as a function used in the write argument (e.g., f.write(len) where len is the loop var), the rewrite captures the wrong binding due to late-binding closure in the generator."
+  ]
+}

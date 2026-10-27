@@ -1,0 +1,27 @@
+{
+  "summary": "The rule flags any use of the deprecated method `.warn()` on objects identified as loggers (including direct usage of `logging`, Flask’s `current_app.logger`, locally defined logger-like variables, and imported logger objects), suggesting replacement with the equivalent `.warning()` method.",
+  "firingShapes": [
+    "logging.warn(\"msg\")",
+    "logger.warn('msg') where logger = logging.getLogger()",
+    "current_app.logger.warn('msg') after 'from flask import current_app'",
+    "my_logger.warn('msg') where my_logger is imported and listed in lint.logger-objects"
+  ],
+  "silentShapes": [
+    "print('msg')",
+    "logger.error('msg')",
+    "some_object.warn('msg') if some_object does not start with 'log', end with 'logger'/'logging', nor match lint.logger-objects"
+  ],
+  "fixDescription": "Replace every occurrence of the method call `.warn(` with `.warning(` while preserving all arguments, formatting, and surrounding context exactly.",
+  "hazards": [
+    "Rewriting `obj.warn` to `obj.warning` changes behavior if `obj` defines a custom `.warn` method distinct from `.warning` (e.g., in a test mock or wrapper class).",
+    "If `warn` is accessed via `getattr(obj, 'warn')` dynamically, the textual replacement does not affect the attribute lookup and may leave stale code.",
+    "When `warn` appears inside a string literal or comment, the tool should not modify it, but overzealous matching could corrupt documentation or logging configuration strings.",
+    "If `warn` is part of a larger identifier like `warning_prefix`, the replacement would produce `warning_prefixing`, causing a NameError or unintended variable reference.",
+    "In code using `logging.Logger.warn` via a bound method stored earlier (e.g., `log_method = logger.warn; log_method()`), rewriting the source does not update the stored reference, leading to continued use of the deprecated method.",
+    "If the logger object is conditionally assigned (e.g., `logger = debug_logger if DEBUG else null_logger`) and only one branch defines `.warn`, the rewrite may incorrectly apply to a fallback object lacking `.warning`.",
+    "When `lint.logger-objects` includes a logger imported via `from x import y as z`, the tool may fail to recognize the alias and either miss the violation or incorrectly rewrite non-logger uses of `z`.",
+    "If the code defines a local variable named `warn` in the same scope (e.g., `warn = 42; logger.warn()`), the rewrite could ambiguously interfere with that variable though unlikely due to attribute access syntax.",
+    "In Flask apps, if `current_app` is accessed outside an application context, the rewrite does not fix the underlying runtime error but may create false confidence in correctness.",
+    "When multiple logger-like objects exist (e.g., `access_logger` and `error_logger`), the tool might incorrectly apply the fix based on naming heuristics even if only one is a true logger per `lint.logger-objects`."
+  ]
+}

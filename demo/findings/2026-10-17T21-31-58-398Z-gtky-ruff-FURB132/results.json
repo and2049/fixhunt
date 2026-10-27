@@ -1,0 +1,639 @@
+{
+  "runId": "2026-10-17T21-31-58-398Z-gtky-ruff-FURB132",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB132",
+    "fixKind": "unknown",
+    "docs": "# check-and-remove-from-set (FURB132)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `set.remove` that can be replaced with `set.discard`.\n\n## Why is this bad?\nIf an element should be removed from a set if it is present, it is more\nsuccinct and idiomatic to use `discard`.\n\n## Known problems\nThis rule is prone to false negatives due to type inference limitations,\nas it will only detect sets that are instantiated as literals or annotated\nwith a type annotation.\n\n## Example\n```python\nnums = {123, 456}\n\nif 123 in nums:\n    nums.remove(123)\n```\n\nUse instead:\n```python\nnums = {123, 456}\n\nnums.discard(123)\n```\n\n## References\n- [Python documentation: `set.discard()`](https://docs.python.org/3/library/stdtypes.html#set.discard)\n"
+  },
+  "analysis": {
+    "summary": "Flags conditional removal via 'in' followed by .remove() where discard() would suffice.",
+    "firingShapes": [
+      "if x in s:\n    s.remove(x)",
+      "while y in t:\n    t.remove(y)",
+      "for i in range(n):\n    if val in my_set:\n        my_set.remove(val)",
+      "def f(a,b):\n    if b in a:\n        a.remove(b)",
+      "s = {1,2};\nif 3 in s:\n    s.remove(3)"
+    ],
+    "silentShapes": [
+      "if x not in s:\n    s.add(x)",
+      "try:\n    s.remove(x)\nexcept KeyError:\n    pass",
+      "s.remove(x)  # unconditional remove",
+      "x = s.pop()",
+      "if cond:\n    other.remove(z)"
+    ],
+    "fixDescription": "Replace the conditional block checking membership and calling .remove() with a direct call to .discard() on the same set with the same argument.",
+    "hazards": [
+      "The condition may have side effects (e.g., function calls) whose execution is skipped when replacing with discard(), altering program behavior.",
+      "If the set expression is complex (e.g., a function call), evaluating it once in discard() vs. twice in the original (in condition and remove) changes evaluation count and potential side effects.",
+      "The variable used in the condition and remove might be reassigned or aliased between the check and the removal, making discard() operate on a different value.",
+      "If the set is a property or item access (e.g., obj.attr or arr[idx]), the fix may change how many times the attribute/index is evaluated.",
+      "The original code may rely on the KeyError being raised for debugging or control flow when the element is absent, which discard() suppresses.",
+      "If the set is actually a frozenset or other immutable set-like type, discard() may not exist or behave differently, causing AttributeError.",
+      "The fix may remove necessary comments or formatting attached to the if statement or its body that are not preserved in the rewrite.",
+      "In nested scopes, the variable names might refer to different entities due to shadowing, and the fix does not re-resolve them in the new context.",
+      "If the set is accessed via a descriptor (__getitem__/__setitem__) with logging or validation, discard() bypasses the intermediate check logic.",
+      "The rewrite assumes the argument to remove is hashable and valid for discard; if it is unhashable, both fail, but the error type or message might differ slightly in edge cases.",
+      "If the set variable is reused later and the conditional removal was part of a larger state-dependent logic, discarding unconditionally may break invariants.",
+      "The fix may interfere with debugger breakpoints set on the if line or the remove line, altering debugging experience."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.003981,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 8,
+    "fixed": 0,
+    "disputed": 9
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Generators vs Lists - Iterator Consumption",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(x)` instead of check and `remove`",
+            "span": [
+              9,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Final set: set()\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Final set: set()\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Variable Reassignment Between Check and Remove",
+      "hazard": "The variable used in the condition and remove might be reassigned or aliased between the check and the removal, making discard() operate on a different value.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set after: {1}\nx: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mutable Default Arguments and Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First call: {1, 3}\nSecond call: {3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Reliance on KeyError for Control Flow",
+      "hazard": "The original code may rely on the KeyError being raised for debugging or control flow when the element is absent, which discard() suppresses.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(4)` instead of check and `remove`",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "No exception, set unchanged: {1, 2, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "No exception, set unchanged: {1, 2, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Nested Scopes and Variable Shadowing",
+      "hazard": "In nested scopes, the variable names might refer to different entities due to shadowing, and the fix does not re-resolve them in the new context.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(x)` instead of check and `remove`",
+            "span": [
+              6,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Set after inner: {1}\nOuter x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set after inner: {1}\nOuter x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Numeric Coercion and Type Semantics",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(x)` instead of check and `remove`",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Set after remove(1.0): {2, 3}\nType of elements: [<class 'int'>, <class 'int'>]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Set after remove(1.0): {2, 3}\nType of elements: [<class 'int'>, <class 'int'>]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "State-Dependent Logic and Set Reuse",
+      "hazard": "If the set variable is reused later and the conditional removal was part of a larger state-dependent logic, discarding unconditionally may break invariants.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Invariant holds\nRemoved list: [2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "String Formatting Edge Cases in Context",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(val)` instead of check and `remove`",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Remaining: world\nf-string: world\nformat: world\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Remaining: world\nf-string: world\nformat: world\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Property Access Evaluation Count",
+      "hazard": "If the set is a property or item access (e.g., obj.attr or arr[idx]), the fix may change how many times the attribute/index is evaluated.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Start: 0\nAfter if-remove: 2\nAfter second if-remove: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Frozenset Immutable Type",
+      "hazard": "If the set is actually a frozenset or other immutable set-like type, discard() may not exist or behave differently, causing AttributeError.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "AttributeError: AttributeError : 'frozenset' object has no attribute 'remove'\ndiscard AttributeError: AttributeError : 'frozenset' object has no attribute 'discard'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Complex Set Expression Side Effects",
+      "hazard": "If the set expression is complex (e.g., a function call), evaluating it once in discard() vs. twice in the original (in condition and remove) changes evaluation count and potential side effects.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Initial counter: 1\nAfter if-remove calls: 2\nTwo calls result: 2\nOne call result (simulated fix): 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Truthiness and Custom Boolean",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(x)` instead of check and `remove`",
+            "span": [
+              13,
+              1
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s2.discard(None)` instead of check and `remove`",
+            "span": [
+              18,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'MyBool' as a set element (unhashable type: 'MyBool')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'MyBool' as a set element (unhashable type: 'MyBool')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mutable Default Arguments and Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First call f(1): {2, 3}\nSecond call f(2): {3}\nThird call f(3): set()\nFourth call f(1): set()\nAfter alias remove, s: {2, 3} alias: {2, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Unhashable Argument Error Difference",
+      "hazard": "The rewrite assumes the argument to remove is hashable and valid for discard; if it is unhashable, both fail, but the error type or message might differ slightly in edge cases.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(lst)` instead of check and `remove`",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s2.discard(u)` instead of check and `remove`",
+            "span": [
+              23,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "remove TypeError: TypeError : cannot use 'list' as a set element (unhashable type: 'list')\ndiscard TypeError: TypeError : cannot use 'list' as a set element (unhashable type: 'list')\nCustom unhashable remove: TypeError : cannot use 'Unhashable' as a set element (unhashable)\nCustom unhashable discard: TypeError : cannot use 'Unhashable' as a set element (unhashable)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "remove TypeError: TypeError : cannot use 'list' as a set element (unhashable type: 'list')\ndiscard TypeError: TypeError : cannot use 'list' as a set element (unhashable type: 'list')\nCustom unhashable remove: TypeError : cannot use 'Unhashable' as a set element (unhashable)\nCustom unhashable discard: TypeError : cannot use 'Unhashable' as a set element (unhashable)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Shadowed Builtins",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Debugger Breakpoint Interference",
+      "hazard": "The fix may interfere with debugger breakpoints set on the if line or the remove line, altering debugging experience.",
+      "rule": "FURB132",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB132",
+            "severity": "warning",
+            "message": "Use `s.discard(2)` instead of check and `remove`",
+            "span": [
+              11,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Lines executed: []\nSet after: {1, 3}\nLines executed with discard: []\nSet after discard: {1, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Lines executed: []\nSet after: {1, 3}\nLines executed with discard: []\nSet after discard: {1, 3}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

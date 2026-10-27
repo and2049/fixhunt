@@ -1,0 +1,33 @@
+{
+  "summary": "Flags manual file writes using open() and .write() when they can be replaced with pathlib.Path.write_text() or write_bytes().",
+  "firingShapes": [
+    "with open('file.txt', 'w') as f:\\n    f.write('text')",
+    "with open(path, 'wb') as f:\\n    f.write(data)",
+    "with open(filename, 'w', encoding='utf-8') as f:\\n    f.write(content)",
+    "with open(filepath, 'a') as f:\\n    f.write(line)\\n",
+    "with open(name, 'wt') as f:\\n    f.write(s)",
+    "with open(p, 'w', buffering=1) as f:\\n    f.write(msg)",
+    "with open(src, 'w', errors='ignore') as f:\\n    f.write(txt)",
+    "with open(out, 'wb', opener=None) as f:\\n    f.write(b)"
+  ],
+  "silentShapes": [
+    "with open('r+') as f:\\n    f.read()\\n    f.write('x')",
+    "with open('file.txt') as f:\\n    data = f.read()",
+    "f = open('file.txt', 'w'); f.write('text')",
+    "with open('file.txt', 'w') as f:\\n    if True:\\n        f.write('text')",
+    "with open('file.txt', 'w') as f:\\n    other(); f.write('text')"
+  ],
+  "fixDescription": "Replaces the with-open-write block with a direct call to pathlib.Path(file_path).write_text(content) or write_bytes(data), preserving the file path and written content while removing the variable assignment and block structure.",
+  "hazards": [
+    "The rewrite removes the file handle variable (f), breaking any subsequent use of f after the write but before the block ends.",
+    "If the write call is not the last statement in the block, the fix incorrectly truncates the block and drops later statements.",
+    "The fix assumes the file is opened solely for writing; modes like 'r+' or 'a+' are not equivalent to write_text/write_bytes and may alter behavior.",
+    "Comments attached to the 'with' line, 'as f:', or indentation are discarded during the rewrite, violating comment preservation expectations.",
+    "The rewrite does not preserve custom openers, buffering, or errors parameters, which may affect I/O behavior in edge cases.",
+    "If the file path expression has side effects (e.g., function call), duplicating it in Path() changes evaluation timing and frequency.",
+    "When the written data is a complex expression, the fix may alter evaluation order relative to other expressions in the surrounding scope.",
+    "The generated code lacks the implicit file closing guaranteed by the context manager, though write_text/write_bytes handle closure internally—this is safe only if no exceptions occur mid-write.",
+    "If 'open' or 'Path' is shadowed by a local variable, the fix may bind to the wrong identifier, altering semantics.",
+    "The fix introduces a new import dependency on pathlib; if the module does not already import Path, the rewrite may cause a NameError unless the tool adds the import."
+  ]
+}

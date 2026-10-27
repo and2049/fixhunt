@@ -1,0 +1,1 @@
+with open('tmp.txt', 'w+') as f:\n    f.write('hello')\n    f.seek(0)\n    print('read back:', repr(f.read()))\n# After bad fix: Path(...).write_text(...) loses read ability\n# But we test actual behavior\nimport os\nos.remove('tmp.txt')

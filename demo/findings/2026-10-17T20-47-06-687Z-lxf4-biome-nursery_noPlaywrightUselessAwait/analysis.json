@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags unnecessary `await` keywords before Playwright methods that return synchronous values, such as locator creation or synchronous expect matchers.",
+  "firingShapes": [
+    "await page.locator('.my-element');",
+    "await page.getByRole('button');",
+    "await expect(1).toBe(1);",
+    "await page.getByText('Hello');",
+    "await page.frameLocator('iframe');",
+    "await expect(true).toBeTruthy();",
+    "await page.locator('#id').getByText('text');",
+    "await expect(null).toBeNull();"
+  ],
+  "silentShapes": [
+    "page.locator('.my-element');",
+    "await page.locator('.my-element').click();",
+    "page.getByRole('button').fill('value');",
+    "await expect(page.locator('.foo')).toBeVisible();",
+    "const loc = page.locator('.el'); await loc.click();"
+  ],
+  "fixDescription": "Remove the `await` keyword from the expression, leaving the method call unchanged.",
+  "hazards": [
+    "Rewriting `await page.locator(...)` removes the await but if the locator method were overridden to return a Promise in a subclass or mock, the code would now ignore the Promise and proceed synchronously, breaking async logic.",
+    "If the expression has side effects (e.g., `await page.locator(fn())`), removing `await` changes when `fn()` is evaluated relative to surrounding code, potentially altering timing-dependent behavior.",
+    "In a sequence like `await page.locator(A); await page.locator(B);`, removing awaits could reorder execution if `A` or `B` have side effects, violating intended sequencing.",
+    "If the awaited expression is used in a boolean context like `if (await page.locator(...))`, removing `await` treats a Locator object as truthy instead of awaiting a potential Promise, changing the condition's evaluation.",
+    "When the awaited call is part of a larger expression such as `x = await page.locator(...)`, removing `await` assigns a Locator instead of a resolved Promise, breaking downstream code expecting a Promise.",
+    "If the locator method is accessed via a dynamic property (e.g., `await page[methodName]()`), the fix assumes it returns a sync value, but if the property resolves to an async method, the await removal breaks the code.",
+    "In try/catch blocks, removing `await` from a Playwright call that actually returns a Promise (due to monkey-patching or type mismatch) causes the Promise to be unhandled, leading to uncaught rejections instead of being caught.",
+    "Comments placed on the `await` token (e.g., `await/* TODO */ page.locator(...)`) may be lost during the rewrite if the tool does not preserve inline comments on removed tokens.",
+    "If the code relies on the awaited expression returning a Promise for `.then()` chaining (e.g., `await page.locator(...).then(...)`), removing `await` breaks the chain by applying `.then()` to a Locator.",
+    "In an async function, removing `await` from a call that returns a Promise (even if incorrectly flagged) turns the call into a fire-and-forget operation, potentially causing race conditions or unhandled rejections."
+  ]
+}

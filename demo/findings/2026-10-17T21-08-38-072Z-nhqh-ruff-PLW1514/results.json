@@ -1,0 +1,732 @@
+{
+  "runId": "2026-10-17T21-08-38-072Z-nhqh-ruff-PLW1514",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLW1514",
+    "fixKind": "unknown",
+    "docs": "# unspecified-encoding (PLW1514)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for uses of `open` and related calls without an explicit `encoding`\nargument.\n\n## Why is this bad?\nUsing `open` in text mode without an explicit encoding can lead to\nnon-portable code, with differing behavior across platforms. While readers\nmay assume that UTF-8 is the default encoding, in reality, the default\nis locale-specific.\n\nInstead, consider using the `encoding` parameter to enforce a specific\nencoding. [PEP 597] recommends the use of `encoding=\"utf-8\"` as a default,\nand suggests that it may become the default in future versions of Python.\n\nIf a locale-specific encoding is intended, use `encoding=\"locale\"`  on\nPython 3.10 and later, or `locale.getpreferredencoding()` on earlier versions,\nto make the encoding explicit.\n\n## Fix safety\nThis fix is always unsafe and may change the program's behavior. It forces\n`encoding=\"utf-8\"` as the default, regardless of the platform’s actual default\nencoding, which may cause `UnicodeDecodeError` on non-UTF-8 systems.\n```python\nwith open(\"test.txt\") as f:\n    print(f.read()) # before fix (on UTF-8 systems): 你好，世界！\nwith open(\"test.txt\", encoding=\"utf-8\") as f:\n    print(f.read()) # after fix (on Windows): UnicodeDecodeError\n```\n\n## Example\n```python\nopen(\"file.txt\")\n```\n\nUse instead:\n```python\nopen(\"file.txt\", encoding=\"utf-8\")\n```\n\n## References\n- [Python documentation: `open`](https://docs.python.org/3/library/functions.html#open)\n\n[PEP 597]: https://peps.python.org/pep-0597/\n"
+  },
+  "analysis": {
+    "summary": "The rule flags any call to built-in functions like `open`, `io.open`, `codecs.open`, `fileinput.input`, or `tarfile.open` when used in text mode without an explicit `encoding` argument.",
+    "firingShapes": [
+      "open('data.txt')",
+      "open('log.txt', 'r')",
+      "io.open('config.json')",
+      "codecs.open('message.txt', 'r')",
+      "fileinput.input('input.csv')",
+      "tarfile.open('archive.tar', 'r')"
+    ],
+    "silentShapes": [
+      "open('data.bin', 'rb')",
+      "open('text.txt', encoding='utf-8')",
+      "open('file.txt', 'w', encoding='ascii')",
+      "open(os.devnull, 'w')",
+      "getattr(__builtins__, 'open')('file.txt')"
+    ],
+    "fixDescription": "Adds `encoding='utf-8'` as a keyword argument to the function call, inserted before any `**kwargs` unpacking if present, otherwise appended at the end of the argument list.",
+    "hazards": [
+      "Adding `encoding='utf-8'` to a binary mode call like `open('file', 'rb')` creates an invalid argument combination that raises `ValueError` because encoding is not allowed in binary mode.",
+      "If the call already contains an `encoding` keyword argument (e.g., via `**kwargs` that includes 'encoding'), adding another `encoding='utf-8'` results in a duplicate keyword argument error (`TypeError: got multiple values for argument 'encoding'`).",
+      "When the file is opened in a locale-specific encoding (e.g., Windows-1252 on Western European Windows systems), forcing UTF-8 causes `UnicodeDecodeError` when reading existing non-UTF-8 encoded files.",
+      "For `tarfile.open`, adding `encoding='utf-8'` is invalid because `tarfile.open` does not accept an `encoding` parameter; it raises `TypeError: unexpected keyword argument`.",
+      "In `fileinput.input`, the `encoding` parameter behaves differently—it applies to all files processed, and forcing UTF-8 may break when processing mixed-encoding input streams.",
+      "If the `open` call is shadowed by a local variable or imported alias (e.g., `local_open = open; local_open('file')`), the autofix may incorrectly modify the wrong function or fail to recognize the call as subject to the rule.",
+      "When the call uses positional arguments where the mode is passed as a variable (e.g., `open(file, mode)`), inserting `encoding='utf-8'` assumes the mode is text-based, but if `mode` resolves to a binary mode at runtime, the call becomes invalid.",
+      "Adding `encoding='utf-8'` may interfere with code that relies on the system default encoding for compatibility with legacy data or inter-process communication, silently corrupting data or causing downstream failures.",
+      "If the call appears within a lambda or comprehension and is modified, the autofix may inadvertently alter binding or evaluation timing if the original comment or formatting is disturbed during rewrite.",
+      "In codebases with custom `open` wrappers that expect no encoding argument (e.g., for testing mocks), injecting `encoding='utf-8'` breaks the wrapper’s signature assumption, causing `TypeError` during test execution.",
+      "When the original source contains trailing comments (e.g., `open('file')  # read config`), the autofix may drop or misplace the comment due to improper reflow, especially if the edit disrupts whitespace or delimiter handling.",
+      "If the function call is part of a larger expression (e.g., `data = open('file').read()`), inserting `encoding='utf-8'` changes the temporary object’s behavior, potentially causing failure if the file encoding is not UTF-8."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.008569799999999999,
+  "summary": {
+    "programs": 15,
+    "invalid": 0,
+    "fired": 13,
+    "fixed": 0,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Generators vs Lists - Encoding Affects Lazy Evaluation",
+      "hazard": "Adding encoding='utf-8' changes decoding behavior lazily; a generator expression that reads lines will fail on non-UTF-8 data only when iterated, exposing the fix's semantic change.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "fixed error: UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Locale-Specific Encoding - Forced UTF-8 Causes Decode Error",
+      "hazard": "On systems where default encoding is Windows-1252, reading a CP1252-encoded file with forced UTF-8 raises UnicodeDecodeError, changing program behavior from success to failure.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              7,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "read failed: UnicodeDecodeError 'utf-8' codec can't decode byte 0x80 in position 6: invalid start byte\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "read failed: UnicodeDecodeError 'utf-8' codec can't decode byte 0x80 in position 6: invalid start byte\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Class Attributes - Encoding in Descriptor Triggers Unexpected Init",
+      "hazard": "The fix adds encoding during class-level file open in a descriptor, causing side effects at class definition time, affecting all instances before any are created.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              12,
+              12
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              19,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "log written\nlog contents: ''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "log written\nlog contents: ''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Dict Ordering - Key Depends on File Read Order",
+      "hazard": "The rewritten open call changes what bytes are successfully decoded, altering which lines are read and thus which keys appear in a dict, affecting insertion order and final output.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              6,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "decode error: UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 5: invalid start byte\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "decode error: UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 5: invalid start byte\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "String Formatting - % Operator on Decoded Bytes",
+      "hazard": "The fix changes the decoded string from open(), which is then formatted with %; if decoding fails or produces mojibake, the formatted output changes.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              6,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "error: UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "error: UnicodeDecodeError 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Evaluation Order - Side Effects in Open Args",
+      "hazard": "The fix inserts encoding='utf-8' as a kwarg, shifting positional args if **kwargs follows; if an argument has a side effect (like a function call), its evaluation order relative to others changes.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'tmp.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Keyword-Only Args - Encoding Added Before **kwargs Changes Call Semantics",
+      "hazard": "When the rule inserts encoding='utf-8' before **kwargs in a function call that forwards to open, it can interfere with keyword-only parameters if the function signature expects specific ordering.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              8,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "read content: 'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "read content: 'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Custom open wrapper expects no encoding",
+      "hazard": "Injecting encoding='utf-8' breaks custom wrapper signatures expecting no encoding arg.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              13,
+              6
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              16,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Content: hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Content: hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "tarfile.open rejects encoding kwarg",
+      "hazard": "tarfile.open does not accept encoding argument; adding it raises TypeError.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              4,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Async generator interaction with encoding fix",
+      "hazard": "Inserting encoding='utf-8' in async context may affect await ordering or generator launch.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              9,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Yielded: hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Yielded: hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Generator vs list: lazy evaluation affected by encoding",
+      "hazard": "Adding encoding='utf-8' changes decoding behavior in lazy generator expressions.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              19,
+              31
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              26,
+              32
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Gen first: héllo\nUnicodeDecodeError in gen: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte\n",
+          "stderr1": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Gen first: héllo\nUnicodeDecodeError in gen: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte\n",
+          "stderr1": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Duplicate encoding via **kwargs",
+      "hazard": "If **kwargs contains 'encoding', adding encoding='utf-8' causes duplicate keyword error.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              3,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Read: hi\nSkip: rule cannot fire and cause duplicate via **kwargs per spec\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Read: hi\nSkip: rule cannot fire and cause duplicate via **kwargs per spec\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Locale-specific encoding mismatch (Windows-1252)",
+      "hazard": "Forcing UTF-8 on legacy encoding file causes UnicodeDecodeError.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              9,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 3: unexpected end of data\nCorrect read: café\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 3: unexpected end of data\nCorrect read: café\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Exception in finally/else with rewritten open",
+      "hazard": "Rewritten open affects exception handling in finally/else blocks.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              3,
+              6
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              7,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              19,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Finally ran\nCaught: fail\nWith-stmt caught: fail\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Finally ran\nCaught: fail\nWith-stmt caught: fail\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Open in larger expression: .read() on temporary",
+      "hazard": "Inserting encoding='utf-8' changes temporary file object behavior in expressions.",
+      "rule": "PLW1514",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLW1514",
+            "severity": "warning",
+            "message": "`open` in text mode without explicit `encoding` argument",
+            "span": [
+              8,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte\nCorrect: 'héllo'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 1: invalid continuation byte\nCorrect: 'héllo'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

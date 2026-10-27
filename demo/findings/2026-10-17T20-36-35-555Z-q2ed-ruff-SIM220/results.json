@@ -1,0 +1,566 @@
+{
+  "runId": "2026-10-17T20-36-35-555Z-q2ed-ruff-SIM220",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM220",
+    "fixKind": "unknown",
+    "docs": "# expr-and-not-expr (SIM220)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for `and` expressions that include both an expression and its\nnegation.\n\n## Why is this bad?\nAn `and` expression that includes both an expression and its negation will\nalways evaluate to `False`.\n\n## Example\n```python\nx and not x\n```\n\n## References\n- [Python documentation: Boolean operations](https://docs.python.org/3/reference/expressions.html#boolean-operations)\n"
+  },
+  "analysis": {
+    "summary": "The rule flags 'and' expressions where one operand is the logical negation of the other, such as 'x and not x', which always evaluates to False.",
+    "firingShapes": [
+      "a and not a",
+      "not b and b",
+      "(x + y) and not (x + y)",
+      "func() and not func()",
+      "obj.attr and not obj.attr",
+      "lst[0] and not lst[0]",
+      "d['key'] and not d['key']",
+      "True and not True"
+    ],
+    "silentShapes": [
+      "a and not b",
+      "not a and b and c",
+      "a and (not b or c)",
+      "(a and b) and not c",
+      "a and not (b and c)"
+    ],
+    "fixDescription": "Replace the entire 'and' expression with the literal 'False'.",
+    "hazards": [
+      "Rewriting 'func() and not func()' to 'False' changes behavior if func() has side effects, as the second call is omitted but the first may still be intended to execute.",
+      "In '(x + y) and not (x + y)', if x or y are properties with getters that have side effects, the rewrite eliminates the second evaluation but preserves the first, altering observable state.",
+      "For 'obj.attr and not obj.attr', if obj.attr is a descriptor with a __get__ method that performs side effects, the rewrite reduces the number of invocations from two to one, changing behavior.",
+      "When used as 'lst[0] and not lst[0]', if lst[0] triggers a __getitem__ that raises an exception on the second access due to state change from the first, the rewrite avoids the exception but may hide intended error handling.",
+      "In 'd[key] and not d[key]', if the dictionary's __getitem__ has side effects (e.g., logging or caching), the rewrite halves the number of calls, affecting program diagnostics or performance.",
+      "If the expression is part of a larger statement like 'return a and not a', replacing it with 'return False' is safe, but if it's in a context relying on the expression's type being something other than bool (though unlikely), it could cause issues—though Python treats it as bool, so low risk.",
+      "Comments attached to the expression, such as 'a and not a  # important check', would be lost if the autofix replaces the whole line or expression without preserving trailing comments.",
+      "In a macro-generated or templated code context where the duplication is intentional for code generation symmetry, replacing with 'False' could break the generator's assumptions about paired evaluations.",
+      "If the expression is inside a lambda or comprehension where the duplicate evaluation is meant to ensure idempotency or retry logic (though logically flawed), removing the duplicate alters the intended fault-tolerance pattern.",
+      "When the expression appears in a debug or logging condition like 'if debug and not debug:', the rewrite to 'False' silences the condition, but if debug is a mutable flag changed by the first eval, the second eval was meant to catch the change—now missed."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.005196300000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 5,
+    "fixed": 0,
+    "disputed": 10
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Comment preservation",
+      "hazard": "Trailing comment lost when replacing 'and' expression with False",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM220",
+            "severity": "warning",
+            "message": "Use `False` instead of `i and not i`",
+            "span": [
+              3,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[(0, 0), (False, 1)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[(0, 0), (False, 1)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Stateful __getitem__ exception hiding",
+      "hazard": "Second list access hides exception from mutable state change",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: ValueError second access\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Type annotation runtime evaluation",
+      "hazard": "Forward reference in annotation triggers NameError if skipped",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "NameError: name 'x' is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Dictionary __getitem__ side effects",
+      "hazard": "Side-effecting __getitem__ called half as often",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: False log: ['k', 'k']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Dict ordering and duplicates",
+      "hazard": "Duplicate keys in dict literal; only last wins but both accessed",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Star-imports and module side effects",
+      "hazard": "Star import executes module top-level; skipping second call changes side effects",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "testmod.state: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Function call side effects",
+      "hazard": "Func with side effect called once instead of twice",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: True calls: [0, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Keyword-only and defaults",
+      "hazard": "Default argument evaluated once; side effect skipped on second call",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: object of type 'int' has no len()",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Keyword-only and defaults - default evaluated once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM220",
+            "severity": "warning",
+            "message": "Use `False` instead of `a and not a`",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "default\nFalse\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "default\nFalse\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Larger statement context - return expression",
+      "hazard": "If the expression is part of a larger statement like 'return a and not a', replacing it with 'return False' is safe, but if it's in a context relying on the expression's type being something other tha",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM220",
+            "severity": "warning",
+            "message": "Use `False` instead of `x and not x`",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "<class 'bool'>\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'bool'>\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Walrus and comprehension scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[0, False]\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Class vs instance attributes with property side effect",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "prop\nprop\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Shadowed builtins - len redefined",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM220",
+            "severity": "warning",
+            "message": "Use `False` instead of `x and not x`",
+            "span": [
+              3,
+              7
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM220",
+            "severity": "warning",
+            "message": "Use `False` instead of `len and not len`",
+            "span": [
+              4,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "False\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Debug flag mutability in condition",
+      "hazard": "When the expression appears in a debug or logging condition like 'if debug and not debug:', the rewrite to 'False' silences the condition, but if debug is a mutable flag changed by the first eval, the",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "inside\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Dict ordering and __eq__ side effect",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'Eq' as a dict key (unhashable type: 'Eq')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Type annotation runtime evaluation",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "SIM220",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM220",
+            "severity": "warning",
+            "message": "Use `False` instead of `T and not T`",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

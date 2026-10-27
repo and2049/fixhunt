@@ -1,0 +1,798 @@
+{
+  "runId": "2026-10-17T21-16-54-797Z-923v-ruff-UP015",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP015",
+    "fixKind": "unknown",
+    "docs": "# redundant-open-modes (UP015)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for redundant `open` mode arguments.\n\n## Why is this bad?\nRedundant `open` mode arguments are unnecessary and should be removed to\navoid confusion.\n\n## Example\n```python\nwith open(\"foo.txt\", \"r\") as f:\n    ...\n```\n\nUse instead:\n```python\nwith open(\"foo.txt\") as f:\n    ...\n```\n\n## References\n- [Python documentation: `open`](https://docs.python.org/3/library/functions.html#open)\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant 'r' mode argument in calls to built-in open().",
+    "firingShapes": [
+      "open('file', 'r')",
+      "open(\"file\", \"r\")",
+      "open(variable, 'r')",
+      "open(pathlib.Path('file'), 'r')"
+    ],
+    "silentShapes": [
+      "open('file', 'w')",
+      "open('file', 'rb')",
+      "open('file', 'r+')",
+      "open()",
+      "__builtins__.open('file', 'r')"
+    ],
+    "fixDescription": "Removes the second argument when it is exactly the string literal 'r' (single or double quoted).",
+    "hazards": [
+      "Rewriting open(variable, 'r') may change behavior if variable is not a string but evaluates to a string at runtime, as the static analysis assumes the argument is the mode.",
+      "If open is imported via 'from io import open' or overridden in scope, removing the argument may call a different function with different defaults.",
+      "In Python 2, 'r' mode behaves differently regarding Unicode, so removal could change decoding behavior in hybrid environments.",
+      "If the call uses keyword arguments like open(file=file, mode='r'), the tool may not fire, but if it did incorrectly, removing the mode could break if other keyword arguments depend on its presence.",
+      "If the mode argument is a variable named 'r' in scope (e.g., r = 'wb'; open(f, r)), the tool should not fire, but a buggy implementation might mistake it for the literal 'r'.",
+      "If the open call is inside a lambda or comprehension evaluated later, removing the mode does not change behavior, but if the mode were dynamically constructed, static removal is unsafe.",
+      "If the file argument is omitted and relies on positional inference (e.g., open(mode='r')), the shape doesn't match the rule, but a faulty fix could break argument positioning.",
+      "Comments attached to the mode argument (e.g., open(f, 'r'  # comment)) may be lost if the rewrite does not preserve trailing comments."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0042588,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 13,
+    "fixed": 13,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding",
+      "hazard": "Removing 'r' breaks forwarding wrappers that rely on exact signature matching.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'tmp.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Python 2 Unicode decode behavior",
+      "hazard": "In Python 2, omitting 'r' could silently switch to platform-dependent default encoding, altering Unicode handling.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              7,
+              26
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Read: 'é'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Read: 'é'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:04.464169595 -0400\n+++ fixed.py\t2026-10-17 17:17:04.633158993 -0400\n@@ -4,7 +4,7 @@\n     u = b'\\xc3\\xa9'.decode('utf-8')  # é\n     with open('tmp.txt', 'wb') as f:\n         f.write(u.encode('utf-8'))\n-    with open('tmp.txt', 'r') as f:  # trigger in Py2, but we suppress fire\n+    with open('tmp.txt') as f:  # trigger in Py2, but we suppress fire\n         data = f.read()\n     print('Read:', repr(data))\n except Exception as e:\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "File modes and truncation, partial writes",
+      "hazard": "Rewriting open(f, 'r') to open(f) in a loop that reopens for append could silently truncate if mode was mis-specified.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              2,
+              26
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'log.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'log.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:04.736152531 -0400\n+++ fixed.py\t2026-10-17 17:17:05.158126077 -0400\n@@ -1,5 +1,5 @@\n for i in range(2):\n-    with open('log.txt', 'r') as f:  # trigger\n+    with open('log.txt') as f:  # trigger\n         f.seek(0, 2)\n         f.write(str(i) + '\\n')\n     with open('log.txt') as f:\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable default arguments and aliasing",
+      "hazard": "If the mode argument is a mutable default (e.g., a list), removing 'r' could expose aliasing bugs when the list is mutated elsewhere.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'log.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Walrus, comprehensions, late binding in closures",
+      "hazard": "Rewriting open(f, 'r') inside a comprehension with walrus could break late-binding capture of the file object.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              3,
+              34
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'tmp0.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'tmp0.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:05.744089383 -0400\n+++ fixed.py\t2026-10-17 17:17:06.135064914 -0400\n@@ -1,6 +1,6 @@\n funs = []\n for i in range(2):\n-    if (f := open(f'tmp{i}.txt', 'r')) is not None:  # trigger\n+    if (f := open(f'tmp{i}.txt')) is not None:  # trigger\n         funs.append(lambda: f.read())\n         f.close()\n     else:\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Bytes vs str, encoding and newline handling",
+      "hazard": "Removing 'r' in a binary context (where 'r' is incorrect) could mask a bug; but if the rule fires on open(x, 'r') where x is bytes, it changes type expectations.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              2,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: b'file.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: b'file.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:06.351051414 -0400\n+++ fixed.py\t2026-10-17 17:17:06.743026912 -0400\n@@ -1,4 +1,4 @@\n name = b'file.txt'\n-with open(name, 'r') as f:  # trigger: name is bytes, but mode 'r' still valid in Py3\n+with open(name) as f:  # trigger: name is bytes, but mode 'r' still valid in Py3\n     print(type(f.read()))\n import os; os.remove('file.txt')\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Variable named 'r' in scope (near-miss)",
+      "hazard": "If a variable `r` holds a mode like 'wb', the rule should not fire, but a buggy linter might mistakenly remove it.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "Comments and docstrings attached to the removed code",
+      "hazard": "If a comment explains why 'r' is used (e.g., for clarity), removing it could delete meaningful documentation.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              3,
+              23
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'cfg.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'cfg.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:07.090005233 -0400\n+++ fixed.py\t2026-10-17 17:17:07.496979840 -0400\n@@ -1,6 +1,6 @@\n def read_config(path):\n     \"\"\"Read config file in text mode.\"\"\"\n-    return open(path, 'r')  # explicit for clarity - trigger\n+    return open(path)  # explicit for clarity - trigger\n with read_config('cfg.txt') as f:\n     print(f.read())\n with open('cfg.txt', 'w') as f:\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "String formatting edge case: % operator with unquoted placeholder",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              6,
+              20
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              9,
+              20
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'data.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'data.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:18.234316375 -0400\n+++ fixed.py\t2026-10-17 17:17:18.636291790 -0400\n@@ -3,10 +3,10 @@\n     # Use % formatting: relies on exact string 'r' being present\n     cmd = \"open('%s', 'r')\" % path\n     exec(cmd)\n-    f = open(path, 'r')\n+    f = open(path)\n     f.write('hello\\n')\n     f.close()\n-    f = open(path, 'r')\n+    f = open(path)\n     print(f.read().strip())\n     f.close()\n     import os\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "File modes and truncation: repeated open in append mode loop",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              6,
+              24
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              11,
+              21
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:18.845279009 -0400\n+++ fixed.py\t2026-10-17 17:17:19.015268614 -0400\n@@ -3,12 +3,12 @@\n     open(path, 'w').close()  # clear file\n     for i in range(3):\n         # This open should trigger UP015; removing 'r' breaks intent\n-        f = open(path, 'r')\n+        f = open(path)\n         f.close()\n         # Now append: depends on file not being truncated by mistaken 'r' removal\n         with open(path, 'a') as f:\n             f.write(str(i) + '\\n')\n-    with open(path, 'r') as f:\n+    with open(path) as f:\n         lines = f.readlines()\n     print(''.join(lines).strip())\n     import os\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Keyword arguments: mode='r' with other keywords that depend on its presence",
+      "hazard": "If the call uses keyword arguments like open(file=file, mode='r'), the tool may not fire, but if it did incorrectly, removing the mode could break if other keyword arguments depend on its presence.",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              17,
+              24
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:19.116262448 -0400\n+++ fixed.py\t2026-10-17 17:17:19.289251887 -0400\n@@ -14,7 +14,7 @@\n         f = wrapper(file=path, mode='r')\n         f.write('test\\n')\n         f.close()\n-        f = open(path, 'r')\n+        f = open(path)\n         print(f.read().strip())\n         f.close()\n     except Exception as e:\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Runtime type annotations: open in annotation evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              14,
+              31
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              23,
+              24
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'annot.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'annot.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:19.405244806 -0400\n+++ fixed.py\t2026-10-17 17:17:19.815219777 -0400\n@@ -11,7 +11,7 @@\n         # Redefine:\n         pass\n     # Instead: put the literal 'r' in a default that is evaluated\n-    def func2(file=open(path, 'r')):\n+    def func2(file=open(path)):\n         return file\n     # The rule fires on the default argument: open(path, 'r') -> open(path)\n     # In Py3, same behavior.\n@@ -20,7 +20,7 @@\n         f = func2()\n         f.write('hello\\n')\n         f.close()\n-        f = open(path, 'r')\n+        f = open(path)\n         print(f.read().strip())\n         f.close()\n     except Exception as e:\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Exception handling: finally clause depends on file being opened for reading",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              9,
+              24
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              19,
+              28
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:20.053205255 -0400\n+++ fixed.py\t2026-10-17 17:17:20.216195322 -0400\n@@ -6,7 +6,7 @@\n         # We can't make 'r' removal cause error in Py3, so simulate dependency:\n         # Suppose we check that the mode was 'r' via introspection (not possible)\n         # Instead: make the open call part of a resource that must be read-only\n-        f = open(path, 'r')\n+        f = open(path)\n         raise ValueError('simulated error')\n     except ValueError as e:\n         print('Caught:', type(e).__name__, str(e))\n@@ -16,7 +16,7 @@\n         # we need a different approach.\n         # Let's make the open call happen twice: once in try, once in finally\n         try:\n-            f = open(path, 'r')  # triggers UP015\n+            f = open(path)  # triggers UP015\n             f.write('should fail')  # will raise UnsupportedOperation\n         except Exception as inner:\n             print('Inner error:', type(inner).__name__, str(inner))\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Walrus in list comprehension: late binding captures loop variable",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              6,
+              30
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              7,
+              23
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              10,
+              23
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              17,
+              30
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              19,
+              23
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:20.321188924 -0400\n+++ fixed.py\t2026-10-17 17:17:20.486178870 -0400\n@@ -3,20 +3,20 @@\n     # Walrus assigns f in comprehension; each iteration rebinds f\n     # If UP015 fires on open(path, 'r'), it becomes open(path)\n     # Still same behavior in Py3, but we make the mode matter for cleanup\n-    results = [(f := open(p, 'r')).read() for p in paths]\n-    for f in [open(p, 'r') for p in paths]:  # dummy to show we need to close\n+    results = [(f := open(p)).read() for p in paths]\n+    for f in [open(p) for p in paths]:  # dummy to show we need to close\n         pass\n     # Actually close the files from walrus\n-    for f in [open(p, 'r') for p in paths]:  # reopen to show values\n+    for f in [open(p) for p in paths]:  # reopen to show values\n         print(f.read().strip())\n         f.close()\n     # Write files first\n     for i, p in enumerate(paths):\n         open(p, 'w').write(str(i))\n     # Now run the comprehension\n-    results = [(f := open(p, 'r')).read() for p in paths]\n+    results = [(f := open(p)).read() for p in paths]\n     print('Results:', [r.strip() for r in results])\n-    for f in [open(p, 'r') for p in paths]:  # close all\n+    for f in [open(p) for p in paths]:  # close all\n         f.close()\n     import os\n     for p in paths:\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Comment explaining why 'r' is used: clarity lost if removed",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              5,
+              20
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              8,
+              20
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'comment.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'comment.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:20.586172777 -0400\n+++ fixed.py\t2026-10-17 17:17:20.996147793 -0400\n@@ -2,10 +2,10 @@\n     path = 'comment.txt'\n     # We explicitly use 'r' to make clear we intend to read, not write\n     # Even though default is 'r', this comment documents intent\n-    f = open(path, 'r')  # Intent: read-only access\n+    f = open(path)  # Intent: read-only access\n     f.write('hello\\n')\n     f.close()\n-    f = open(path, 'r')\n+    f = open(path)\n     print(f.read().strip())\n     f.close()\n     import os\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict ordering and duplicate keys: mode affects file position in concurrent writes",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "UP015",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              11,
+              24
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP015",
+            "severity": "warning",
+            "message": "Unnecessary mode argument",
+            "span": [
+              18,
+              21
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:17:21.220134168 -0400\n+++ fixed.py\t2026-10-17 17:17:21.385124132 -0400\n@@ -8,14 +8,14 @@\n     # via side effect in dict construction\n     logs = []\n     for i in range(3):\n-        f = open(path, 'r')  # triggers UP015\n+        f = open(path)  # triggers UP015\n         logs.append({'time': i, 'mode': f.mode})\n         f.close()\n     # Now append data: each write depends on file not being truncated\n     for i in range(3):\n         with open(path, 'a') as f:\n             f.write(f'log{i}\\n')\n-    with open(path, 'r') as f:\n+    with open(path) as f:\n         content = f.read()\n     print('Logs:', logs)\n     print('File content:', repr(content.strip()))\n"
+      }
+    }
+  ]
+}

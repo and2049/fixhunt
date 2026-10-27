@@ -1,0 +1,259 @@
+{
+  "runId": "2026-10-22T18-04-37-277Z-0y37-eslint-no-extra-boolean-cast",
+  "tool": "eslint",
+  "ext": "js",
+  "version": "9.39.5",
+  "rule": {
+    "tool": "eslint",
+    "rule": "no-extra-boolean-cast",
+    "fixKind": "safe",
+    "docs": "Rule: no-extra-boolean-cast\nFixable: code\nType: suggestion\nDeprecated: no\nDescription: Disallow unnecessary boolean casts\nDocs: https://eslint.org/docs/latest/rules/no-extra-boolean-cast\n\n---\ntitle: no-extra-boolean-cast\nrule_type: suggestion\n---\n\nIn contexts such as an `if` statement's test where the result of the expression will already be coerced to a Boolean, casting to a Boolean via double negation (`!!`) or a `Boolean` call is unnecessary. For example, these `if` statements are equivalent:\n\n```js\nif (!!foo) {\n    // ...\n}\n\nif (Boolean(foo)) {\n    // ...\n}\n\nif (foo) {\n    // ...\n}\n```\n\n## Rule Details\n\nThis rule disallows unnecessary boolean casts.\n\nExamples of **incorrect** code for this rule:\n\n::: incorrect\n\n```js\n/*eslint no-extra-boolean-cast: \"error\"*/\n\nconst foo = !!!bar;\n\nconst foo1 = !!bar ? baz : bat;\n\nconst foo2 = Boolean(!!bar);\n\nconst foo3 = new Boolean(!!bar);\n\nif (!!foo) {\n    // ...\n}\n\nif (Boolean(foo)) {\n    // ...\n}\n\nwhile (!!foo) {\n    // ...\n}\n\ndo {\n    // ...\n} while (Boolean(foo));\n\nfor (; !!foo; ) {\n    // ...\n}\n```\n\n:::\n\nExamples of **correct** code for this rule:\n\n::: correct\n\n```js\n/*eslint no-extra-boolean-cast: \"error\"*/\n\nconst foo = !!bar;\nconst foo1 = Boolean(bar);\n\nfunction qux() {\n    return !!bar;\n}\n\nfoo = bar ? !!baz : !!bat;\n```\n\n:::\n\n## Options\n\nThis rule has an object option:\n\n*   `\"enforceForInnerExpressions\"` when set to `true`, in addition to checking default contexts, checks whether extra boolean casts are present in expressions whose result is used in a boolean context. See examples below. Default is `false`, meaning that this rule by default does not warn about extra booleans cast inside inner expressions.\n\n**Deprecated:** The object property `enforceForLogicalOperands` is deprecated ([eslint#18222](https://github.com/eslint/eslint/pull/18222)). Please use `enforceForInnerExpressions` instead.\n\n### enforceForInnerExpressions\n\nExamples of **incorrect** code for this rule with `\"enforceForInnerExpressions\"` option set to `true`:\n\n::: incorrect\n\n```js\n/*eslint no-extra-boolean-cast: [\"error\", {\"enforceForInnerExpressions\": true}]*/\n\nif (!!foo || bar) {\n    //...\n}\n\nwhile (!!foo && bar) {\n    //...\n}\n\nif ((!!foo || bar) && !!baz) {\n    //...\n}\n\nconst foo = new Boolean(!!bar || baz);\n\nfoo && Boolean(bar) ? baz : bat;\n\nconst ternaryBranches = Boolean(bar ? !!baz : bat);\n\nconst nullishCoalescingOperator = Boolean(bar ?? Boolean(baz));\n\nconst commaOperator = Boolean((bar, baz, !!bat));\n\n// another comma operator example\nfor (let i = 0; console.log(i), Boolean(i < 10); i++) {\n    // ...\n}\n```\n\n:::\n\nExamples of **correct** code for this rule with `\"enforceForInnerExpressions\"` option set to `true`:\n\n::: correct\n\n```js\n/*eslint no-extra-boolean-cast: [\"error\", {\"enforceForInnerExpressions\": true}]*/\n\n// Note that `||` and `&&` alone aren't a boolean context for either operand\n// since the resultant value need not be a boolean without casting.\nconst foo = !!bar || baz;\n\nif (foo || bar) {\n    //...\n}\n\nwhile (foo && bar) {\n    //...\n}\n\nif ((foo || bar) && baz) {\n    //...\n}\n\nconst foo1 = new Boolean(bar || baz);\n\nfoo && bar ? baz : bat;\n\nconst ternaryBranches = Boolean(bar ? baz : bat);\n\nconst nullishCoalescingOperator = Boolean(bar ?? baz);\n\nconst commaOperator = Boolean((bar, baz, bat));\n\n// another comma operator example\nfor (let i = 0; console.log(i), i < 10; i++) {\n    // ...\n}\n\n// comma operator in non-final position\nBoolean((Boolean(bar), baz, bat));\n```\n\n:::\n"
+  },
+  "analysis": {
+    "summary": "The rule flags unnecessary Boolean casts (via !! or Boolean()) in contexts where values are automatically coerced to Boolean.",
+    "firingShapes": [
+      "if (!!foo)",
+      "if (Boolean(foo))",
+      "while (!!foo)",
+      "do {} while (Boolean(foo));",
+      "for (; !!foo; ) {}",
+      "return !!foo;",
+      "!!foo ? bar : baz",
+      "new Boolean(!!foo)"
+    ],
+    "silentShapes": [
+      "if (foo)",
+      "while (foo)",
+      "return foo;",
+      "foo ? bar : baz",
+      "new Boolean(foo)"
+    ],
+    "fixDescription": "Removes the redundant Boolean cast (!! or Boolean()) around the expression, preserving the inner expression exactly as written.",
+    "hazards": [
+      "Removing !! from a comma-separated expression like !!(a, b) changes evaluation to yield b instead of !!b, altering truthiness if b is falsy but a is truthy.",
+      "Removing Boolean() from a new Boolean(...) expression like new Boolean(!!foo) changes the result from an object wrapper to a primitive boolean, breaking code that expects an object instance.",
+      "Removing !! from a logical OR operand like !!foo || bar changes short-circuit evaluation: if foo is falsy, the original evaluates bar for its truthiness, but after fix it evaluates bar directly, potentially executing bar when it should have been skipped due to foo's truthiness after double negation.",
+      "Removing !! from a logical AND operand like !!foo && bar changes evaluation: if foo is truthy, original evaluates bar for its truthiness; after fix, it evaluates bar directly, which may execute bar even when foo is falsy (since !!foo would be false) or skip it when foo is truthy but bar has side effects needed only when foo is truthy.",
+      "Removing !! from a conditional operator like !!foo ? bar : baz alters the condition: when foo is falsy, !!foo is false so baz runs; after fix, foo is falsy so baz still runs—but when foo is truthy but !!foo is true (same), wait—actually !!foo and foo have same truthiness, so this is safe? No: wait, !!foo and foo are always same truthiness, so ternary is safe. But the hazard is if the inner expression has side effects: !!foo evaluates foo once, same as foo, so no issue. Wait—rethink: actually !! and Boolean() are idempotent for truthiness, so removing them never changes truthiness. Therefore, the only hazards come from cases where the cast is not just about truthiness but about type or object wrapping or evaluation count. So: new Boolean(...) to Boolean(...) or primitive is a hazard because it changes type from object to primitive. Also, if the inner expression has side effects and is duplicated? No, the fix doesn't duplicate. Another hazard: if the expression is get x() { ... }, !!x calls getter once, same as x, so safe. But if it's something like !!(a=b), removing !! doesn't change that a=b happens once. So maybe the real hazards are only about new Boolean and comma operator? Let me check the docs: the rule does not flag !! in places like const foo = !!bar; when enforceForInnerExpressions is false, but when true, it does flag in logical operands. So for firing_shapes like if (!!foo || bar), the fix would remove !! from !!foo, making it if (foo || bar). Now, is !!foo || bar equivalent to foo || bar? Yes, because !!foo and foo have identical truthiness. So why would it be a hazard? Because of short-circuiting: if foo is an expression with side effects, !!foo evaluates foo once, and if foo is truthy (!!foo true), then bar is not evaluated. In foo || bar, if foo is truthy, bar is not evaluated. Same behavior. If foo is falsy, !!foo is false, so bar is evaluated; in foo || bar, if foo is falsy, bar is evaluated. Same. So actually, removing !! from a logical operand does not change behavior because !! preserves truthiness and does not alter short-circuiting—it just adds an extra operation that doesn't change the boolean outcome. Therefore, the fix is safe for logical operands too? But wait, the rule's documentation says with enforceForInnerExpressions: true, it flags !!foo || bar as incorrect. And the fix would be to remove !!. And according to truthiness equivalence, it should be safe. However, consider: what if foo is undefined? !!undefined is false, same as undefined in ||. What if foo is 0? !!0 is false, same as 0. So yes, truthiness preserved. Then why would there be a hazard? Maybe there isn't for logical operands? But the user asked for hazards specific to this rewrite. Perhaps the only real hazard is when the cast is part of a new Boolean() expression, because that creates an object vs primitive. Or when the cast is used in a way that the resulting value is used non-booleanly later? But the rule only removes the cast when it's unnecessary for boolean coercion, meaning the surrounding context already coerces to boolean. So if we remove the cast, the value is still used in a boolean context, so truthiness is what matters. Therefore, the fix should always preserve behavior in terms of truthiness. Except: new Boolean(...) produces an object, which is truthy, but if you remove the outer Boolean() from new Boolean(!!foo), you get !!foo which is primitive boolean. But wait: the incorrect example is const foo2 = Boolean(!!bar); and the fix would be const foo2 = !!bar; — both are primitive boolean, so safe. Another incorrect: const foo3 = new Boolean(!!bar); fix would be const foo3 = new Boolean(bar); ??? No, wait: the rule flags new Boolean(!!bar) as incorrect because !! is unnecessary inside Boolean or new Boolean? Actually, looking at incorrect examples: const foo2 = Boolean(!!bar); and const foo3 = new Boolean(!!bar); are flagged. The fix for Boolean(!!bar) would be Boolean(bar). For new Boolean(!!bar), the fix would be new Boolean(bar). So in that case, we are removing the inner !!, not the outer cast. So the fix is about removing redundant inner casts, not the outer Boolean or new Boolean. I think I misread. Let me re-examine: the rule flags unnecessary boolean casts. Examples of incorrect: const foo2 = Boolean(!!bar); — here, the outer Boolean is necessary? No, wait: the rule says ",
+      "enforceForInnerExpressions\": true"
+    ]
+  },
+  "opts": {
+    "n": 6,
+    "rounds": 1,
+    "unsafe": false
+  },
+  "cost": 0.0024426,
+  "summary": {
+    "programs": 6,
+    "invalid": 1,
+    "fired": 3,
+    "fixed": 3,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Var Hoisting Redefinition Inside Loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Strict Mode Throws on Duplicate Param Name",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-22T18-04-37-277Z-0y37-eslint-no-extra-boolean-cast/r1-p002/orig.js:2\nfunction g(a, a) { // duplicate param: SyntaxError in strict\n              ^\n\nSyntaxError: Duplicate parameter name not allowed in this context\n    at checkSyntax (node:internal/main/check_syntax"
+    },
+    {
+      "id": "r1-p003",
+      "title": "__proto__ Key Mutation Affects Prototype Chain",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-boolean-cast",
+            "severity": "{\"ruleId\":\"no-extra-boolean-cast\",\"severity\":2,\"message\":\"Redundant double negation.\",\"line\":2,\"column\":5,\"nodeType\":\"UnaryExpression\",\"messageId\":\"unexpectedNegation\",\"endLine\":2,\"endColumn\":20,\"fix\":{\"range\":[43,58],\"text\":\"obj.__proto__\"}}",
+            "message": "Redundant double negation.",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:04:51.037021621 -0400\n+++ fixed.js\t2026-10-22 14:04:55.233059042 -0400\n@@ -1,5 +1,5 @@\n let obj = { __proto__: { value: 1 } };\n-if (!!obj.__proto__) { // triggers rule: !! on object\n+if (obj.__proto__) { // triggers rule: !! on object\n   console.log(obj.value); // reads from prototype\n }\n obj.__proto__ = null;\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Getter Side Effect in !! Expression",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-boolean-cast",
+            "severity": "{\"ruleId\":\"no-extra-boolean-cast\",\"severity\":2,\"message\":\"Redundant double negation.\",\"line\":8,\"column\":5,\"nodeType\":\"UnaryExpression\",\"messageId\":\"unexpectedNegation\",\"endLine\":8,\"endColumn\":15,\"fix\":{\"range\":[121,131],\"text\":\"obj.prop\"}}",
+            "message": "Redundant double negation.",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "getter called\nfalsy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "getter called\nfalsy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:04:51.038021629 -0400\n+++ fixed.js\t2026-10-22 14:04:55.234059052 -0400\n@@ -5,7 +5,7 @@\n     return 0;\n   }\n });\n-if (!!obj.prop) { // triggers rule, calls getter once\n+if (obj.prop) { // triggers rule, calls getter once\n   console.log('truthy');\n } else {\n   console.log('falsy');\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Arguments Object Captures !! Expression",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n1\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Name Collision After Block Scope Move",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-boolean-cast",
+            "severity": "{\"ruleId\":\"no-extra-boolean-cast\",\"severity\":2,\"message\":\"Redundant double negation.\",\"line\":3,\"column\":7,\"nodeType\":\"UnaryExpression\",\"messageId\":\"unexpectedNegation\",\"endLine\":3,\"endColumn\":13,\"fix\":{\"range\":[24,30],\"text\":\"flag\"}}",
+            "message": "Redundant double negation.",
+            "span": [
+              3,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:04:51.040021646 -0400\n+++ fixed.js\t2026-10-22 14:04:55.264059346 -0400\n@@ -1,6 +1,6 @@\n {\n   let flag = 0;\n-  if (!!flag) { // triggers rule\n+  if (flag) { // triggers rule\n     let flag = 1; // shadowing\n     console.log(flag);\n   }\n"
+      }
+    }
+  ]
+}

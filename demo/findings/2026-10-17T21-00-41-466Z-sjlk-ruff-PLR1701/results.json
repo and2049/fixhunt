@@ -1,0 +1,631 @@
+{
+  "runId": "2026-10-17T21-00-41-466Z-sjlk-ruff-PLR1701",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLR1701",
+    "fixKind": "unknown",
+    "docs": "# repeated-isinstance-calls (PLR1701)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\n## Removed\nThis rule is identical to [SIM101] which should be used instead.\n\n## What it does\nChecks for repeated `isinstance` calls on the same object.\n\n## Why is this bad?\nRepeated `isinstance` calls on the same object can be merged into a\nsingle call.\n\n## Fix safety\nThis rule's fix is marked as unsafe on Python 3.10 and later, as combining\nmultiple `isinstance` calls with a binary operator (`|`) will fail at\nruntime if any of the operands are themselves tuples.\n\nFor example, given `TYPES = (dict, list)`, then\n`isinstance(None, TYPES | set | float)` will raise a `TypeError` at runtime,\nwhile `isinstance(None, set | float)` will not.\n\n## Example\n```python\ndef is_number(x):\n    return isinstance(x, int) or isinstance(x, float) or isinstance(x, complex)\n```\n\nUse instead:\n```python\ndef is_number(x):\n    return isinstance(x, (int, float, complex))\n```\n\nOr, for Python 3.10 and later:\n\n```python\ndef is_number(x):\n    return isinstance(x, int | float | complex)\n```\n\n## Options\n- `target-version`\n\n## References\n- [Python documentation: `isinstance`](https://docs.python.org/3/library/functions.html#isinstance)\n\n[SIM101]: https://docs.astral.sh/ruff/rules/duplicate-isinstance-call/\n"
+  },
+  "analysis": {
+    "summary": "The rule flags repeated isinstance() checks on the same variable combined with logical OR operators.",
+    "firingShapes": [
+      "return isinstance(x, int) or isinstance(x, str)",
+      "if isinstance(a, list) or isinstance(a, dict) or isinstance(a, tuple): pass",
+      "while not (isinstance(y, bytes) or isinstance(y, bytearray)): y = b''",
+      "assert isinstance(val, float) or isinstance(val, decimal.Decimal)",
+      "result = isinstance(obj, A) or isinstance(obj, B) or isinstance(obj, C)",
+      "lambda z: isinstance(z, pathlib.Path) or isinstance(z, str)",
+      "isinstance(node, ast.Call) or isinstance(node, ast.Attribute)",
+      "def f(p): return isinstance(p, Error) or isinstance(p, Warning)"
+    ],
+    "silentShapes": [
+      "isinstance(x, int) and isinstance(y, str)",
+      "isinstance(x, (int, str))",
+      "isinstance(x, int) or isinstance(y, str)",
+      "type(x) is int or type(x) is str",
+      "hasattr(x, 'read') or hasattr(x, 'write')"
+    ],
+    "fixDescription": "Replace a chain of isinstance(var, T1) or isinstance(var, T2) or ... with isinstance(var, (T1, T2, ...)) for Python <3.10, or isinstance(var, T1 | T2 | ...) for Python >=3.10 when target-version allows it.",
+    "hazards": [
+      "Rewriting isinstance(var, T1 | T2) fails at runtime if T1 or T2 is a tuple, e.g., T = (int, str); isinstance(x, T | float) raises TypeError.",
+      "If the variable in isinstance checks is not identical (e.g., due to shadowing or aliasing), merging changes which object is tested.",
+      "Side effects in isinstance arguments (like function calls) are evaluated once instead of per clause, altering behavior if those functions have side effects.",
+      "Comments embedded within the isinstance chain (e.g., isinstance(x, # type\nint) or ...) may be lost during rewrite due to token reformatting.",
+      "In nested expressions, precedence changes may occur if the original chain relied on 'or' short-circuiting with non-boolean contexts.",
+      "When used in annotation contexts or stringized annotations, the rewritten form may not be syntactically valid or may change meaning.",
+      "If the variable is a property with a getter, merging reduces getter calls from N to 1, altering side effects or state-dependent behavior.",
+      "Macros or decorators that rely on the syntactic form of multiple isinstance calls may malfunction after rewrite.",
+      "In eval() or exec() contexts with restricted namespaces, the tuple or union form may resolve names differently than sequential lookups.",
+      "If one isinstance check uses a forward reference as a string and others don't, the merged tuple/union form may inconsistently handle string resolution."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0029235,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 10,
+    "fixed": 0,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Runtime-evaluated type annotation",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `x`, merge into a single call",
+            "span": [
+              6,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Decorator relying on syntactic form",
+      "hazard": "Macros or decorators that rely on the syntactic form of multiple isinstance calls may malfunction after rewrite.",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `val`, merge into a single call",
+            "span": [
+              7,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'bool' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'bool' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Variable shadowing in isinstance chain",
+      "hazard": "If the variable in isinstance checks is not identical (e.g., due to shadowing or aliasing), merging changes which object is tested.",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `x`, merge into a single call",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Exception handling with finally/else",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p005",
+      "title": "Comments lost during rewrite",
+      "hazard": "Comments embedded within the isinstance chain (e.g., isinstance(x, # type\nint) or ...) may be lost during rewrite due to token reformatting.",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `x`, merge into a single call",
+            "span": [
+              4,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Side effects in isinstance arguments",
+      "hazard": "Side effects in isinstance arguments (like function calls) are evaluated once instead of per clause, altering behavior if those functions have side effects.",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `x`, merge into a single call",
+            "span": [
+              7,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\ncounter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\ncounter: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Evaluation order and side effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `x`, merge into a single call",
+            "span": [
+              5,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "eval: first\neval: second\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "eval: first\neval: second\nFalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Class vs instance attributes with descriptors",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Tuple union rewrite fails",
+      "hazard": "Rewriting isinstance(var, T1 | T2) fails at runtime if T1 or T2 is a tuple",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `v`, merge into a single call",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Walrus scoping in comprehension",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Side effects in isinstance args",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "taken\ncounter=2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Precedence change in nested or",
+      "hazard": "In nested expressions, precedence changes may occur if the original chain relied on 'or' short-circuiting with non-boolean contexts.",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for expression, merge into a single call",
+            "span": [
+              3,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mutable default aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `x`, merge into a single call",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "1\n2\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n2\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Context manager without close",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p007",
+      "title": "Comment loss in isinstance chain",
+      "hazard": "Comments embedded within the isinstance chain may be lost during rewrite due to token reformatting.",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Bytes vs str encoding",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "PLR1701",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM101",
+            "severity": "warning",
+            "message": "Multiple `isinstance` calls for `data`, merge into a single call",
+            "span": [
+              2,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "is bytes or str\nbytes len=11\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "is bytes or str\nbytes len=11\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

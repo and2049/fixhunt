@@ -1,0 +1,822 @@
+{
+  "runId": "2026-10-17T20-34-01-810Z-vxcq-ruff-SIM202",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM202",
+    "fixKind": "unknown",
+    "docs": "# negate-not-equal-op (SIM202)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for negated `!=` operators.\n\n## Why is this bad?\nNegated `!=` operators are less readable than `==` operators, as they avoid a\ndouble negation.\n\n## Example\n```python\nnot a != b\n```\n\nUse instead:\n```python\na == b\n```\n\n## Fix safety\nThe fix is marked as unsafe, as it might change the behaviour\nif `a` and/or `b` overrides `__ne__`/`__eq__`\nin such a manner that they don't return booleans.\n\n## References\n- [Python documentation: Comparisons](https://docs.python.org/3/reference/expressions.html#comparisons)\n"
+  },
+  "analysis": {
+    "summary": "Flags negated inequality expressions (`not x != y`) to suggest replacing them with equality checks (`x == y`).",
+    "firingShapes": [
+      "not a != b",
+      "not(x != y)",
+      "(not (a != b))",
+      "not foo() != bar()",
+      "not obj.attr != value",
+      "not lst[0] != item",
+      "not x != y if cond else z",
+      "not (a + b) != (c * d)"
+    ],
+    "silentShapes": [
+      "a != b",
+      "not (a == b)",
+      "not a == b",
+      "not (a != b) and c",
+      "not (a != b) or c"
+    ],
+    "fixDescription": "Replaces `not X != Y` with `X == Y`, preserving the surrounding expression structure but removing the outer `not` and inverting the inequality operator to equality.",
+    "hazards": [
+      "If `X.__ne__` returns a non-boolean (e.g., int, None), `not X != Y` may be truthy/falsy based on that value, while `X == Y` invokes `__eq__` which may return a different non-boolean, altering truthiness.",
+      "If `X.__eq__` has side effects (e.g., logging, state mutation), the fix introduces those where none occurred before, as the original only evaluated `__ne__`.",
+      "If `X` or `Y` is a property with side effects in its getter, the fix may evaluate it once (for `==`) vs twice (once for `!=` in `not ...`), changing side effect count.",
+      "In expressions like `not x != y if cond else z`, the fix alters grouping: original parses as `not (x != y) if cond else z`, fix produces `x == y if cond else z`, which is equivalent, but if misparsed due to low precedence of `if-else`, could risk misgrouping—though Ruff respects precedence, this notes developer confusion potential.",
+      "If `X` or `Y` overloads `__ne__` to return a custom truthy/falsey object (e.g., always returns `1`), `not X != Y` is `False`, while `X == Y` may invoke `__eq__` returning `0` → still `False`, but if `__eq__` returns `2`, both false; however, if `__ne__` returns `0` (falsey) → `not 0` is `True`, but `__eq__` returns `None` → `not None` is `True` only if fixed to `X == Y` then `not` removed—wait: fix removes `not`, so `X == Y` directly: if `__eq__` returns `None`, it's falsey → `False`, whereas original `not (X != Y)` with `__ne__` returning `0` (falsey) → `not falsey` → `True`. So divergence when `__ne__` returns falsey non-bool and `__eq__` returns falsey non-bool but different falsiness nuance? Actually: original: `not (X != Y)`. If `X != Y` returns `0` → `not 0` → `True`. Fix: `X == Y`. If `X == Y` returns `None` → falsey → `False`. So behavior differs. Hazard: return types of `__ne__`/`__eq__` affect truth value after `not` vs direct eval.",
+      "If `X` is `NaN` (float), `X != X` is `True`, so `not X != X` is `False`; `X == X` is `False` (since `NaN != NaN`), so fix gives `False` → same. But if `__eq__` overridden to return `True` for `NaN`, then fix diverges. Covered by non-boolean return, but worth noting: even boolean-returning overrides can break if they violate reflexivity/symmetry expectations assumed by the fix.",
+      "If the expression contains a `# type: ignore` comment on the `!=` token, the fix may drop it when rewriting the operator, losing suppression.",
+      "If the code relies on the syntactic form `not ... != ...` for searchability or tooling (e.g., regex-based refactors), the fix alters the source pattern, breaking such tools.",
+      "If `X` or `Y` is a tuple/list comparison, `not X != Y` is equivalent to `X == Y` only if `__ne__` and `__eq__` are consistent; but if one is overridden and not the other (e.g., `__ne__` returns `NotImplemented` leading to fallback, `__eq__` overridden), the fix may not mirror fallback behavior.",
+      "In rare cases where `X != Y` raises an exception (e.g., `AttributeError` in `__ne__`), the original `not X != Y` propagates it; the fix `X == Y` may not raise (if `__eq__` handles it) or raise a different exception, altering error flow."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0047397,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 15,
+    "fixed": 0,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Runtime Type Annotation Evaluation",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `x == 5` instead of `not x != 5`",
+            "span": [
+              4,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "val: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "val: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Parameter Passing Edge Cases",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `1 == 1` instead of `not 1 != 1`",
+            "span": [
+              1,
+              21
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "String Formatting Edge Cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `\"hi\" == \"hi\"` instead of `not \"hi\" != \"hi\"`",
+            "span": [
+              2,
+              16
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `'a' == 'a'` instead of `not 'a' != 'a'`",
+            "span": [
+              4,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Hello True world\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Hello True world\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable Default Arguments and Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `x == 5` instead of `not x != 5`",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[5]\n[5, 5]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[5]\n[5, 5]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Inconsistent __eq__ and __ne__ Override",
+      "hazard": "If `X` or `Y` is a tuple/list comparison, `not X != Y` is equivalent to `X == Y` only if `__ne__` and `__eq__` are consistent; but if one is overridden and not the other (e.g., `__ne__` returns `NotIm",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == b` instead of `not a != b`",
+            "span": [
+              10,
+              22
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "not a != b: False\na == b: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not a != b: False\na == b: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Conditional Expression Grouping Clarity",
+      "hazard": "In expressions like `not x != y if cond else z`, the fix alters grouping: original parses as `not (x != y) if cond else z`, fix produces `x == y if cond else z`, which is equivalent, but if misparsed ",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `x == y` instead of `not x != y`",
+            "span": [
+              4,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Property Getter Side Effects",
+      "hazard": "If `X` or `Y` is a property with side effects in its getter, the fix may evaluate it once (for `==`) vs twice (once for `!=` in `not ...`), changing side effect count.",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `c.value == 5` instead of `not c.value != 5`",
+            "span": [
+              10,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "before: 0\nafter: 1 expr: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "before: 0\nafter: 1 expr: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "File Modes and Truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `'' == ''` instead of `not '' != ''`",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "hello\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Precedence interaction with conditional expression",
+      "hazard": "In expressions like `not x != y if cond else z`, the fix alters grouping: original parses as `not (x != y) if cond else z`, fix produces `x == y if cond else z`, which is equivalent, but if misparsed ",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `x == y` instead of `not x != y`",
+            "span": [
+              5,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "orig: False\nfixed: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "orig: False\nfixed: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "__ne__ returns non-boolean affecting truthiness under not",
+      "hazard": "If `X.__ne__` returns a non-boolean (e.g., int, None), `not X != Y` may be truthy/falsy based on that value, while `X == Y` invokes `__eq__` which may return a different non-boolean, altering truthine",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == b` instead of `not a != b`",
+            "span": [
+              9,
+              22
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "not a != b: True\na == b: None\nFixed value (a == b): None\n",
+          "stderr1": "AssertionError",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not a != b: True\na == b: None\nFixed value (a == b): None\n",
+          "stderr1": "AssertionError",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Syntactic form relied upon for tooling/regex",
+      "hazard": "If the code relies on the syntactic form `not ... != ...` for searchability or tooling (e.g., regex-based refactors), the fix alters the source pattern, breaking such tools.",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Matches before fix: 1\nMatches after fix: 0\nChange in matches: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "bytes vs str, encoding and newline handling",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `b1 == b2` instead of `not b1 != b2`",
+            "span": [
+              5,
+              24
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `s1 == s2` instead of `not s1 != s2`",
+            "span": [
+              7,
+              24
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `b1 == b2` instead of `not b1 != b2`",
+            "span": [
+              13,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `s1 == s2` instead of `not s1 != s2`",
+            "span": [
+              14,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "not b1 != b2: True\nb1 == b2: True\nnot s1 != s2: True\ns1 == s2: True\nFixed b comparison: True\nFixed s comparison: True\nByte/str comparisons consistent\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not b1 != b2: True\nb1 == b2: True\nnot s1 != s2: True\ns1 == s2: True\nFixed b comparison: True\nFixed s comparison: True\nByte/str comparisons consistent\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "context managers that are not files, objects with write() but no close()",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == b` instead of `not a != b`",
+            "span": [
+              25,
+              22
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == b` instead of `not a != b`",
+            "span": [
+              27,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "not a != b: True\nAfter fix (a == b): True\nContext manager and comparison stable\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not a != b: True\nAfter fix (a == b): True\nContext manager and comparison stable\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "__ne__ returns falsey non-bool, __eq__ returns different falsey non-bool",
+      "hazard": "If `X` or `Y` overloads `__ne__` to return a custom truthy/falsey object (e.g., always returns `1`), `not X != Y` is `False`, while `X == Y` may invoke `__eq__` returning `0` → still `False`, but if `",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `x == y` instead of `not x != y`",
+            "span": [
+              12,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "not x != y: True\nx == y: None\nTypes: <class 'bool'> <class 'NoneType'>\nDivergence: original True vs fixed None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not x != y: True\nx == y: None\nTypes: <class 'bool'> <class 'NoneType'>\nDivergence: original True vs fixed None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "NaN with overridden __eq__ returning True",
+      "hazard": "If `X` is `NaN` (float), `X != X` is `True`, so `not X != X` is `False`; `X == X` is `False` (since `NaN != NaN`), so fix gives `False` → same. But if `__eq__` overridden to return `True` for `NaN`, t",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `x == x` instead of `not x != x`",
+            "span": [
+              9,
+              22
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `x == x` instead of `not x != x`",
+            "span": [
+              13,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "x != x: True\nnot x != x: False\nx == x: True\nOriginal result: False\nFixed result: True\nDivergence due to __eq__ override\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x != x: True\nnot x != x: False\nx == x: True\nOriginal result: False\nFixed result: True\nDivergence due to __eq__ override\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Custom __bool__ and len, None vs falsy, 'is' vs '=='",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "SIM202",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == b` instead of `not a != b`",
+            "span": [
+              14,
+              22
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == c` instead of `not a != c`",
+            "span": [
+              16,
+              22
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == b` instead of `not a != b`",
+            "span": [
+              23,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM202",
+            "severity": "warning",
+            "message": "Use `a == c` instead of `not a != c`",
+            "span": [
+              24,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "not a != b: True\na == b: True\nnot a != c: True\na == c: True\na is []: False\nbool(a): False\nFixed a==b: True\nFixed a==c: True\nCustom bool/len comparisons consistent\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not a != b: True\na == b: True\nnot a != c: True\na == c: True\na is []: False\nbool(a): False\nFixed a==b: True\nFixed a==c: True\nCustom bool/len comparisons consistent\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

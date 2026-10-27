@@ -1,0 +1,157 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C406 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C406 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-20-15-856Z-kjno-ruff-C406 · fix labelled <b>unknown</b> · 16 programs, 4 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0045</p>
+<div class="card"><b>Rule analysis</b><p>Flags calls to dict() constructed with list/tuple literals containing key-value pairs.</p><p class="mut">Fix: Rewrites dict(L) where L is a list or tuple of 2-element iterables into a dict literal {k: v for k, v in L}, preserving order and duplicates as per Python semantics.</p><details><summary>11 hazards</summary><ul><li>If the list/tuple contains duplicate keys, the dict literal preserves last-wins behavior identical to dict() constructor, but if the iterable is not actually a sequence of pairs (e.g., flat list), the comprehension may raise ValueError during construction where dict() would have succeeded by treating elements as pairs via iteration.</li><li>If the input iterable is not actually iterable (e.g., None), both forms raise TypeError, but the rewrite may fail earlier during comprehension setup if the type is incompatible with iteration.</li><li>If the list/tuple expression contains side effects (e.g., function calls with prints), moving them into a dict literal comprehension preserves evaluation order but may alter timing relative to surrounding expressions due to changes in when the iterable is materialized.</li><li>If the list/tuple is used elsewhere after the dict() call (aliasing), the rewrite creates a new dict and does not preserve the original list/tuple, potentially breaking code that mutates or inspects it later.</li><li>If the dict() call appears in a context where its return value is ignored but the list/tuple construction has side effects (e.g., dict([print(&#39;x&#39;), (1,2)][0])), the rewrite may drop those side effects if the comprehension short-circuits or fails to evaluate all elements.</li><li>If the list/tuple contains unhashable keys (e.g., lists), both forms fail at runtime with TypeError, but the dict literal comprehension may fail during key hashing in a different order than the constructor&#39;s internal processing.</li><li>If the code relies on the exact type being dict (not a subclass), the rewrite produces a built-in dict, which is equivalent for all standard uses but may break isinstance checks against a custom dict subclass if one was monkey-patched or expected via factory.</li><li>If the list/tuple literal contains nested mutable objects that are mutated during iteration (e.g., dict([(x.append(1), x.pop()) for x in [[], []]])), the rewrite preserves mutation order but may interact poorly with optimizations or early termination in comprehensions.</li><li>Comments attached to the list/tuple brackets or commas may be lost during AST rewrite, as the autofix replaces the entire node with a dict literal and does not transfer associated comment nodes.</li><li>If the dict() call is part of a larger expression where operator precedence groups unexpectedly (e.g., dict([(1,2)]) + 3 vs {(1,2):} + 3), the rewrite does not change precedence because the dict literal binds tighter than addition, but the original call already had dict() as a unit—so no change in meaning, only risk is if parentheses were omitted and relied on for grouping.</li><li>In rare cases involving __dict__ or descriptor interactions, replacing a call with a literal may bypass __call__ overrides if dict is shadowed locally, but the rule only triggers on built-in dict, so this is unsafe only if &#39;dict&#39; is rebound in scope.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Dict subclass check</td><td class="mut">Rewriting dict(L) to {k:v for k,v in L} produces a plain dict, breaking isinstance checks </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Exception handling in dict construction</td><td class="mut">Exceptions raised during dict() construction (e.g., in key/value expressions) are preserve</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side effect timing in iterable</td><td class="mut">Moving side effects (prints) from list/tuple into dict literal comprehension preserves ord</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Aliasing and mutation</td><td class="mut">If the list/tuple is aliased and mutated after dict() call, the rewrite breaks because it </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Unhashable keys failure order</td><td class="mut">Both forms fail with unhashable keys, but dict literal comprehension may fail during hashi</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span></td><td>Pathlib vs os.path (irrelevant to rule)</td><td class="mut">This hazard is unrelated to dict() rewriting; included to show silence on near-miss.</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>Local dict shadowing bypass</td><td class="mut">If &#39;dict&#39; is rebound in scope, the rule does not fire (it only triggers on built-in dict),</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Lost comments in AST rewrite</td><td class="mut">Comments attached to list/tuple brackets or commas are lost when replacing dict(L) with {k</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Rebound dict builtin</td><td class="mut">In rare cases involving __dict__ or descriptor interactions, replacing a call with a liter</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span></td><td>Descriptor with side effect in __get__</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Aliasing and mutation after dict() call</td><td class="mut">If the list/tuple is used elsewhere after the dict() call (aliasing), the rewrite creates </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span></td><td>File write with truncated data</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span></td><td>Star import and module level side effect</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>Pathlib vs os.path symlink resolution</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exception in dict construction with finally</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generator consumed once vs reusable list</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Dict subclass check</summary><pre>class MyDict(dict): pass
+original = dict([(1, 2)])
+rewritten = {(k, v) for k, v in [(1, 2)]}
+print(type(original), type(rewritten))
+print(isinstance(original, MyDict), isinstance(rewritten, MyDict))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Exception handling in dict construction</summary><pre>def f():
+    try:
+        d = dict([(1, 2), (3, 1/0)])
+    except ZeroDivisionError as e:
+        print(&#39;caught:&#39;, type(e).__name__)
+    else:
+        print(&#39;no error&#39;)
+    finally:
+        print(&#39;finally&#39;)
+f()
+try:
+    d = {(k, v) for k, v in [(1, 2), (3, 1/0)]}
+except ZeroDivisionError as e:
+    print(&#39;caught:&#39;, type(e).__name__)
+else:
+    print(&#39;no error&#39;)
+finally:
+    print(&#39;finally&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Side effect timing in iterable</summary><pre>def side():
+    print(&#39;side&#39;)
+    return [(&#39;a&#39;, 1)]
+print(&#39;before&#39;)
+d = dict(side())
+print(&#39;after&#39;)
+print(&#39;before&#39;)
+d = {k: v for k, v in side()}
+print(&#39;after&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Aliasing and mutation</summary><pre>pairs = [(&#39;a&#39;, 1)]
+d = dict(pairs)
+pairs.append((&#39;b&#39;, 2))
+print(&#39;pairs:&#39;, pairs)
+print(&#39;d:&#39;, d)
+pairs = [(&#39;a&#39;, 1)]
+d = {k: v for k, v in pairs}
+pairs.append((&#39;b&#39;, 2))
+print(&#39;pairs:&#39;, pairs)
+print(&#39;d:&#39;, d)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Unhashable keys failure order</summary><pre>try:
+    dict([([1, 2], 3)])
+except TypeError as e:
+    print(&#39;dict():&#39;, e)
+try:
+    {k: v for k, v in [([1, 2], 3)]}
+except TypeError as e:
+    print(&#39;{}:&#39;, e)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Pathlib vs os.path (irrelevant to rule)</summary><pre>import os
+import pathlib
+p = pathlib.Path(&#39;.&#39;)
+print(&#39;pathlib exists:&#39;, p.exists())
+print(&#39;os.path exists:&#39;, os.path.exists(&#39;.&#39;))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Local dict shadowing bypass</summary><pre>def dict(*args): return {&#39;mocked&#39;: True}
+d = dict([(1, 2)])  # rule does NOT fire here because dict is not built-in
+print(d)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Lost comments in AST rewrite</summary><pre>d = dict([  # x
+    (1, 2)  # y
+  ])  # z
+print(d)
+d = {  # x
+    k: v  # y
+    for k, v in [(1, 2)]  # z
+}
+print(d)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Rebound dict builtin</summary><pre>def f():
+    dict = lambda x: [&#39;shadow&#39;]
+    result = dict([(1, 2)])
+    print(result)
+f()
+</pre></details><details id="r2-p002"><summary>r2-p002 — Descriptor with side effect in __get__</summary><pre>class Desc:
+    def __get__(self, obj, objtype):
+        print(&#39;desc get&#39;)
+        return [(1, 2)]
+
+class A:
+    x = Desc()
+
+a = A()
+try:
+    # Access via class triggers descriptor
+    result = dict(A.x)
+except Exception as e:
+    print(type(e).__name__, str(e))
+print(&#39;done&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Aliasing and mutation after dict() call</summary><pre>pairs = [(1, 2)]
+d = dict(pairs)
+pairs.append((3, 4))
+print(&#39;pairs:&#39;, pairs)
+print(&#39;d:&#39;, d)
+</pre></details><details id="r2-p004"><summary>r2-p004 — File write with truncated data</summary><pre>with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    data = [(b&#39;hello&#39;, 5)]
+    d = dict(data)
+    try:
+        f.write(str(d))  # This will work
+    except Exception as e:
+        print(type(e).__name__, str(e))
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+</pre></details><details id="r2-p005"><summary>r2-p005 — Star import and module level side effect</summary><pre>import sys
+mod = type(&#39;m&#39;, (), {})()
+sys.modules[&#39;m&#39;] = mod
+mod._side = print(&#39;module side effect&#39;)
+# This won&#39;t trigger rule, testing isolation
+if hasattr(mod, &#39;_side&#39;):
+    print(&#39;side effect seen&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Pathlib vs os.path symlink resolution</summary><pre>import os
+import tempfile
+with tempfile.TemporaryDirectory() as tmp:
+    link = os.path.join(tmp, &#39;link&#39;)
+    target = os.path.join(tmp, &#39;target&#39;)
+    with open(target, &#39;w&#39;) as f:
+        f.write(&#39;yes&#39;)
+    os.symlink(target, link)
+    # Not a dict() call shape, just testing path behavior
+    print(os.path.exists(link))
+</pre></details><details id="r2-p007"><summary>r2-p007 — Exception in dict construction with finally</summary><pre>pairs = [(1, 2), (3, 4)]
+try:
+    d = dict(pairs)
+    raise ValueError(&#39;bad&#39;)
+except ValueError as e:
+    print(&#39;caught:&#39;, e)
+finally:
+    print(&#39;finally block&#39;)
+print(&#39;d exists:&#39;, &#39;d&#39; in locals())
+</pre></details><details id="r2-p008"><summary>r2-p008 — Generator consumed once vs reusable list</summary><pre>def gen():
+    yield (1, 2)
+    yield (3, 4)
+g = gen()
+d1 = dict(g)  # First consumption
+print(&#39;d1:&#39;, d1)
+try:
+    d2 = dict(g)  # Second consumption - exhausted
+    print(&#39;d2:&#39;, d2)
+except Exception as e:
+    print(&#39;error on second:&#39;, type(e).__name__, str(e))
+</pre></details></body></html>

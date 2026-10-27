@@ -1,0 +1,471 @@
+{
+  "runId": "2026-10-17T20-53-12-261Z-5dy3-ruff-F504",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "F504",
+    "fixKind": "unknown",
+    "docs": "# percent-format-extra-named-arguments (F504)\n\nDerived from the **Pyflakes** linter.\n\nFix is always available.\n\n## What it does\nChecks for unused mapping keys in `printf`-style format strings.\n\n## Why is this bad?\nUnused named placeholders in `printf`-style format strings are unnecessary,\nand likely indicative of a mistake. They should be removed.\n\n## Example\n```python\n\"Hello, %(name)s\" % {\"greeting\": \"Hello\", \"name\": \"World\"}\n```\n\nUse instead:\n```python\n\"Hello, %(name)s\" % {\"name\": \"World\"}\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe for mapping key\ncontaining function calls with potential side effects,\nbecause removing such arguments could change the behavior of the code.\n\nFor example, the fix would be marked as unsafe in the following case:\n```python\n\"Hello, %(name)s\" % {\"greeting\": print(1), \"name\": \"World\"}\n```\n\n## References\n- [Python documentation: `printf`-style String Formatting](https://docs.python.org/3/library/stdtypes.html#printf-style-string-formatting)\n"
+  },
+  "analysis": {
+    "summary": "Flags printf-style formatting expressions where extra named keys appear in the mapping argument but have no corresponding placeholder in the format string.",
+    "firingShapes": [
+      "\"%s %% {x}\" % {\"y\": \"z\", \"x\": \"a\"}",
+      "\"%(a)s\" % {\"b\": 1, \"c\": 2, \"a\": 3}",
+      "\"Test\" % {\"unused\": func(), \"other\": val}",
+      "'Hi %(name)s' % {'extra': 42, 'name': 'Bob'}",
+      "\"Value: %(value)d\" % {\"value\": 5, \"spam\": eggs}",
+      "'Result: %(res)f' % {'foo': bar(), 'baz': qux, 'res': 3.14}",
+      "'%(key)s' % {'a': 1, 'b': 2, 'key': 'win', 'extra': None}",
+      "'Item: %(item)s' % {'item': obj, 'spam': ham, 'eggs': bake()}"
+    ],
+    "silentShapes": [
+      "\"%(a)s %(b)s\" % {\"a\": 1, \"b\": 2}",
+      "'No placeholders' % {'x': 1, 'y': 2}",
+      "\"Literal\" % {}\", \"'Static' % {'unused': side_effect()}\"], "
+    ],
+    "fixDescription": "Removes all key-value pairs from the mapping argument where the key does not appear as a named placeholder in the format string.",
+    "hazards": [
+      "Removing a key whose value is a function call (e.g., func()) eliminates its side effects, changing program behavior if the function performs I/O or mutates state.",
+      "If the mapping argument is a variable (not a literal), the fix incorrectly assumes it can be rewritten as a smaller literal, which fails when the variable is reused elsewhere or has dynamic contents.",
+      "When the format string contains duplicate placeholders (e.g., '%(a)s %(a)s'), removing a key that appears only once in the mapping but is referenced multiple times may still be safe, but the fix logic must not overremove; however, the rule does not fire in such cases because the key is used.",
+      "If the mapping argument is constructed via a function call (e.g., % build_dict()), the fix cannot safely rewrite it to a literal without knowing the function's output, potentially causing a mismatch between expected and actual keys.",
+      "If the mapping argument includes nested expressions like %(key)s % {'a': f().b}, removing the key may break attribute access if f() returns None or an unexpected type, though this is less common.",
+      "Comments attached to the removed key-value pairs (e.g., # TODO) are lost when the fix rewrites the dictionary literal, stripping inline documentation.",
+      "In Python versions prior to 3.6, dictionary literals preserve insertion order only as an implementation detail; removing keys may alter iteration order if the dict is later passed to code relying on order (e.g., for k, v in d.items(): ...)",
+      "If the mapping argument is used in a larger expression (e.g., (%(a)s) % {'a':1, 'b':2} + c), the fix rewrites only the dict part, but if the surrounding expression depends on the exact structure (e.g., len(...) or == comparison), behavior may change.",
+      "When the format string uses mixed formatting (e.g., '%(name)s %d' % ({'name': 'x', 'extra': y}, 42)), the fix incorrectly assumes the entire right-hand side is a mapping, leading to invalid syntax or TypeError.",
+      "If the mapping argument is a subclass of dict that overrides __missing__ or __getitem__, removing keys may change behavior if the code relies on the fallback mechanism for missing keys.",
+      "The fix may produce a dictionary with fewer keys than expected by subsequent code that inspects the argument (e.g., via locals() or vars()), breaking introspection or debugging logic.",
+      "In rare cases, removing a key could resolve a naming conflict in a comprehension or lambda scope if the key was accidentally shadowing a built-in, though this is highly speculative and context-dependent."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0040131,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 15
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Variable reuse after removal",
+      "hazard": "If the mapping argument is a variable (not a literal), the fix incorrectly assumes it can be rewritten as a smaller literal, which fails when the variable is reused elsewhere or has dynamic contents.",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First: keep\nSecond: keep\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "File write partial failure",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "File content: 'hello\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Shadowed built-in redefinition",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: value also_used\n",
+          "stderr1": "TypeError: 'str' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Walrus and late-binding closure",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Closure result: 0\nClosure result: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Property with side effect in dict",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: Value: 1\nObj val after: 3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Dict in larger expression with len()",
+      "hazard": "If the mapping argument is used in a larger expression (e.g., (%(a)s) % {'a':1, 'b':2} + c), the fix rewrites only the dict part, but if the surrounding expression depends on the exact structure (e.g.",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Combined: Hello hello2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Lost inline comment in dict literal",
+      "hazard": "Comments attached to the removed key-value pairs (e.g., # TODO) are lost when the fix rewrites the dictionary literal, stripping inline documentation.",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: Keep: value\nMapping keys: ['keep', 'remove']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Accidental built-in shadow resolved by removal",
+      "hazard": "In rare cases, removing a key could resolve a naming conflict in a comprehension or lambda scope if the key was accidentally shadowing a built-in, though this is highly speculative and context-depende",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: X: test\nlist() failed: TypeError 'list' object is not callable\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Duplicate placeholders - rule should not fire since key is used",
+      "hazard": "When the format string contains duplicate placeholders (e.g., '%(a)s %(a)s'), removing a key that appears only once in the mapping but is referenced multiple times may still be safe, but the fix logic",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Output: 42 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p002",
+      "title": "int/float/bool coercion, Decimal, division and rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Formatted: Value: 10.50\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Nested expressions in mapping value breaking on attribute access",
+      "hazard": "If the mapping argument includes nested expressions like %(key)s % {'a': f().b}, removing the key may break attribute access if f() returns None or an unexpected type, though this is less common.",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Output: Result: 99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mixed formatting with tuple RHS - fix assumes mapping only",
+      "hazard": "When the format string uses mixed formatting (e.g., '%(name)s %d' % ({'name': 'x', 'extra': y}, 42)), the fix incorrectly assumes the entire right-hand side is a mapping, leading to invalid syntax or ",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Error: TypeError format requires a mapping\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "File modes and truncation, partial writes, non-str data passed to write",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "File content: 'Log: hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Walrus, comprehensions scoping, late binding in closures and lambdas",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Results: ['1', '1']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "String formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "F504",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "%: Hello World\n.format_map: Hello %(name)s\nf-string: Hello World\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,551 @@
+{
+  "runId": "2026-10-17T19-38-04-597Z-7kql-biome-style_noUselessElse",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/noUselessElse",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessElse\n- Fix: safe\n- Default severity: info\n- Available from version: 1.3.0\n- Diagnostic category: lint/style/noUselessElse\n\n\nDescription\n\n Disallow `else` block when the `if` block breaks early.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes useless.\n Its contents can be placed outside of the block.\n\n If an `if` block breaks early using a breaking statement (`return`, `break`, `continue`, or `throw`),\n then the `else` block becomes unnecessary.\n This is because the content of the `else` block will never be executed in conjunction with the `if` block,\n as the breaking statement ensures the control flow exits the `if` block immediately.\n Therefore, the `else` block is redundant, and its content can be placed outside of the block,\n reducing the indentation level by one.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n while (x > 0) {\n     if (f(x)) {\n         break;\n     } else {\n         x++\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         return 0;\n     } else {\n         return x;\n     }\n }\n ```\n\n ```js,expect_diagnostic\n function f(x) {\n     if (x < 0) {\n         throw new RangeError();\n     } else {\n         return x;\n     }\n }\n ```\n\nValid\n\n ```js\n function f(x) {\n     if (x < 0) {\n         return 0;\n     }\n     return x;\n }\n ```\n\n ```js\n function f(x) {\n     if (x < 0) {\n         console.info(\"negative number\");\n     } else if (x > 0) {\n         return x;\n     } else {\n         console.info(\"number 0\");\n     }\n }\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant else blocks after if statements containing breaking statements (return, break, continue, throw).",
+    "firingShapes": [
+      "if (a) { return; } else { b(); }",
+      "while (x) { if (y) break; else z++; }",
+      "for (; ;) { if (cond) continue; else foo(); }",
+      "switch(v){case 1:if(x){return}else{bar();}break;}",
+      "try{if(e){throw e}else{log();}}catch{}",
+      "function f(){if(x){return 1}else{return 2;}}",
+      "if(a){break;}else{c++;}",
+      "do{if(x)continue;else y++;}while(0);"
+    ],
+    "silentShapes": [
+      "if (a) { b(); } else { c(); }",
+      "if (a) { b(); } else if (c) { d(); } else { e(); }",
+      "if (a) { break; b(); } else { c(); }",
+      "if (a) { return; } else if (b) { return; } else { c(); }",
+      "if (a) { try { return; } finally {} } else { b(); }"
+    ],
+    "fixDescription": "Removes the else block and places its statements directly after the if block, preserving their original order and indentation relative to the enclosing scope.",
+    "hazards": [
+      "Moving statements from an else block after a continue in a loop changes which iteration they execute in, altering loop behavior.",
+      "If the else block contains a labeled break, moving it outside may break to a different label or become invalid.",
+      "Statements with side effects in the else block may now execute regardless of the if condition, changing program state.",
+      "If the else block declares a variable with let/const, moving it may alter its scope and cause temporal dead zone errors.",
+      "Comments attached to the else block may be lost or misplaced during the rewrite, affecting readability.",
+      "If the if block contains a return with a value, moving else statements after it creates unreachable code, potentially hiding logic errors.",
+      "In a switch case, moving else statements after a return may fall through to the next case if break is missing.",
+      "If the else block contains a throw, moving it after the if block may change the stack trace or exception handling context.",
+      "When the if block is inside a try block, moving else statements after it may place them outside the try's scope, altering finally execution.",
+      "If the else block contains a debugger statement, its execution context may change, affecting debugging behavior."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.003066,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 7,
+    "fixed": 7,
+    "disputed": 6
+  },
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hazard 1: Side effects in else block executed unconditionally",
+      "hazard": "Statements with side effects in the else block may now execute regardless of the if condition, changing program state.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:13.067702588 -0400\n+++ fixed.js\t2026-10-17 15:38:13.341699522 -0400\n@@ -1,7 +1,7 @@\n let x = 0;\n function f() {\n   if (false) { return; }\n-  else { x += 1; }\n+  x += 1; \n }\n f();\n console.log(x);\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Hazard 2: Temporal dead zone from moved let/const",
+      "hazard": "If the else block declares a variable with let/const, moving it may alter its scope and cause temporal dead zone errors.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:13.506697675 -0400\n+++ fixed.js\t2026-10-17 15:38:13.743695023 -0400\n@@ -1,5 +1,5 @@\n function f() {\n   if (true) { return; }\n-  else { let x = 1; console.log(x); }\n+  let x = 1; console.log(x); \n }\n try { f(); } catch (e) { console.log(e.name + ': ' + e.message); }\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Hazard 3: Changed stack trace from moved throw",
+      "hazard": "If the else block contains a throw, moving it after the if block may change the stack trace or exception handling context.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Error: test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Error: test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:13.894693333 -0400\n+++ fixed.js\t2026-10-17 15:38:14.208689807 -0400\n@@ -1,6 +1,6 @@\n function inner() {\n   if (false) { return; }\n-  else { throw new Error('test'); }\n+  throw new Error('test'); \n }\n function outer() {\n   try { inner(); } catch (e) { console.log(e.stack.split('\\n')[0]); }\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Hazard 4: Regex lastIndex interference from unconditional execution",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-38-04-597Z-7kql-biome-style_noUselessElse/r1-p004/orig.js:3\nif (false) { return; }\n             ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p005",
+      "title": "Hazard 5: Debugger statement execution context changed",
+      "hazard": "If the else block contains a debugger statement, its execution context may change, affecting debugging behavior.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:14.419687432 -0400\n+++ fixed.js\t2026-10-17 15:38:14.688684406 -0400\n@@ -1,6 +1,6 @@\n function f() {\n   if (true) { return; }\n-  else { debugger; console.log('reached'); }\n+  debugger; console.log('reached'); \n }\n f();\n console.log('done');\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Hazard 6: Else block moved outside try, finally not run",
+      "hazard": "When the if block is inside a try block, moving else statements after it may place them outside the try's scope, altering finally execution.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-38-04-597Z-7kql-biome-style_noUselessElse/r1-p006/orig.js:8\n  else { console.log('else'); }\n  ^^^^\n\nSyntaxError: Unexpected token 'else'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p007",
+      "title": "Hazard 7: Labeled break becomes invalid after move",
+      "hazard": "If the else block contains a labeled break, moving it outside may break to a different label or become invalid.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "reached\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "reached\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:14.902681998 -0400\n+++ fixed.js\t2026-10-17 15:38:15.169678984 -0400\n@@ -1,5 +1,5 @@\n outer: {\n   if (false) { break outer; }\n-  else { break outer; }\n+  break outer; \n }\n console.log('reached');\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Hazard 8: Var hoisting and re-declaration in loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:15.329677175 -0400\n+++ fixed.js\t2026-10-17 15:38:15.602674087 -0400\n@@ -1,5 +1,5 @@\n for (let i = 0; i < 2; i++) {\n   if (false) { continue; }\n-  else { var x = i; }\n+  var x = i; \n }\n console.log(x);\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "ASI and semicolon-less code causing expression misinterpretation",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Side effects in else block now execute unconditionally due to missing guard",
+      "hazard": "Statements with side effects in the else block may now execute regardless of the if condition, changing program state.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Strict mode violation from misplaced this assignment",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\nTypeError: Cannot set properties of undefined (setting 'value')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Block-scoped function declaration hoisted incorrectly across if/else",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Var re-declaration in loop breaks due to moved else block creating duplicate declaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/noUselessElse",
+            "severity": "info",
+            "message": "This else clause can be omitted because previous branches break early.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "10\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "10\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 15:38:22.431595431 -0400\n+++ fixed.js\t2026-10-17 15:38:22.696592325 -0400\n@@ -8,9 +8,8 @@\n let result = [];\n for (let i = 0; i < 2; i++) {\n   if (i === 0) continue;\n-  else {\n+  \n     var x = i + 1;\n     result.push(x);\n-  }\n }\n console.log(result.join(','));\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Finally block skipped because else moved outside try after return in if",
+      "hazard": "When the if block is inside a try block, moving else statements after it may place them outside the try's scope, altering finally execution.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T19-38-04-597Z-7kql-biome-style_noUselessElse/r2-p006/orig.js:4\n    return;\n    ^^^^^^\n\nSyntaxError: Illegal return statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p007",
+      "title": "Comments on else block lost during rewrite reducing code clarity",
+      "hazard": "Comments attached to the else block may be lost or misplaced during the rewrite, affecting readability.",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "This binding broken when method extracted from object and else block moved",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "style/noUselessElse",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot set properties of undefined (setting 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

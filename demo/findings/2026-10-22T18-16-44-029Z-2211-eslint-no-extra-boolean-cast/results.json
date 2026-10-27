@@ -1,0 +1,543 @@
+{
+  "runId": "2026-10-22T18-16-44-029Z-2211-eslint-no-extra-boolean-cast",
+  "tool": "eslint",
+  "ext": "js",
+  "version": "9.39.5",
+  "rule": {
+    "tool": "eslint",
+    "rule": "no-extra-boolean-cast",
+    "fixKind": "safe",
+    "docs": "Rule: no-extra-boolean-cast\nFixable: code\nType: suggestion\nDeprecated: no\nDescription: Disallow unnecessary boolean casts\nDocs: https://eslint.org/docs/latest/rules/no-extra-boolean-cast\n\n---\ntitle: no-extra-boolean-cast\nrule_type: suggestion\n---\n\nIn contexts such as an `if` statement's test where the result of the expression will already be coerced to a Boolean, casting to a Boolean via double negation (`!!`) or a `Boolean` call is unnecessary. For example, these `if` statements are equivalent:\n\n```js\nif (!!foo) {\n    // ...\n}\n\nif (Boolean(foo)) {\n    // ...\n}\n\nif (foo) {\n    // ...\n}\n```\n\n## Rule Details\n\nThis rule disallows unnecessary boolean casts.\n\nExamples of **incorrect** code for this rule:\n\n::: incorrect\n\n```js\n/*eslint no-extra-boolean-cast: \"error\"*/\n\nconst foo = !!!bar;\n\nconst foo1 = !!bar ? baz : bat;\n\nconst foo2 = Boolean(!!bar);\n\nconst foo3 = new Boolean(!!bar);\n\nif (!!foo) {\n    // ...\n}\n\nif (Boolean(foo)) {\n    // ...\n}\n\nwhile (!!foo) {\n    // ...\n}\n\ndo {\n    // ...\n} while (Boolean(foo));\n\nfor (; !!foo; ) {\n    // ...\n}\n```\n\n:::\n\nExamples of **correct** code for this rule:\n\n::: correct\n\n```js\n/*eslint no-extra-boolean-cast: \"error\"*/\n\nconst foo = !!bar;\nconst foo1 = Boolean(bar);\n\nfunction qux() {\n    return !!bar;\n}\n\nfoo = bar ? !!baz : !!bat;\n```\n\n:::\n\n## Options\n\nThis rule has an object option:\n\n*   `\"enforceForInnerExpressions\"` when set to `true`, in addition to checking default contexts, checks whether extra boolean casts are present in expressions whose result is used in a boolean context. See examples below. Default is `false`, meaning that this rule by default does not warn about extra booleans cast inside inner expressions.\n\n**Deprecated:** The object property `enforceForLogicalOperands` is deprecated ([eslint#18222](https://github.com/eslint/eslint/pull/18222)). Please use `enforceForInnerExpressions` instead.\n\n### enforceForInnerExpressions\n\nExamples of **incorrect** code for this rule with `\"enforceForInnerExpressions\"` option set to `true`:\n\n::: incorrect\n\n```js\n/*eslint no-extra-boolean-cast: [\"error\", {\"enforceForInnerExpressions\": true}]*/\n\nif (!!foo || bar) {\n    //...\n}\n\nwhile (!!foo && bar) {\n    //...\n}\n\nif ((!!foo || bar) && !!baz) {\n    //...\n}\n\nconst foo = new Boolean(!!bar || baz);\n\nfoo && Boolean(bar) ? baz : bat;\n\nconst ternaryBranches = Boolean(bar ? !!baz : bat);\n\nconst nullishCoalescingOperator = Boolean(bar ?? Boolean(baz));\n\nconst commaOperator = Boolean((bar, baz, !!bat));\n\n// another comma operator example\nfor (let i = 0; console.log(i), Boolean(i < 10); i++) {\n    // ...\n}\n```\n\n:::\n\nExamples of **correct** code for this rule with `\"enforceForInnerExpressions\"` option set to `true`:\n\n::: correct\n\n```js\n/*eslint no-extra-boolean-cast: [\"error\", {\"enforceForInnerExpressions\": true}]*/\n\n// Note that `||` and `&&` alone aren't a boolean context for either operand\n// since the resultant value need not be a boolean without casting.\nconst foo = !!bar || baz;\n\nif (foo || bar) {\n    //...\n}\n\nwhile (foo && bar) {\n    //...\n}\n\nif ((foo || bar) && baz) {\n    //...\n}\n\nconst foo1 = new Boolean(bar || baz);\n\nfoo && bar ? baz : bat;\n\nconst ternaryBranches = Boolean(bar ? baz : bat);\n\nconst nullishCoalescingOperator = Boolean(bar ?? baz);\n\nconst commaOperator = Boolean((bar, baz, bat));\n\n// another comma operator example\nfor (let i = 0; console.log(i), i < 10; i++) {\n    // ...\n}\n\n// comma operator in non-final position\nBoolean((Boolean(bar), baz, bat));\n```\n\n:::\n"
+  },
+  "analysis": {
+    "summary": "The rule flags unnecessary Boolean casts (!! or Boolean()) in contexts where values are automatically coerced to Boolean.",
+    "firingShapes": [
+      "if (!!foo)",
+      "while (Boolean(bar))",
+      "for (; !!baz; )",
+      "do {} while (!!qux)",
+      "return !!value",
+      "cond ? !!a : !!b",
+      "new Boolean(!!flag)",
+      "!!expr ? baz : bat"
+    ],
+    "silentShapes": [
+      "if (foo)",
+      "while (bar && baz)",
+      "return Boolean(value)",
+      "cond ? baz : bat",
+      "!!foo || bar"
+    ],
+    "fixDescription": "Removes the double negation (!!) or Boolean() call, keeping only the inner expression.",
+    "hazards": [
+      "Rewriting !!foo to foo in a comma operator like (console.log(i), !!i < 10) changes evaluation order if foo has side effects, as the inner expression may no longer be evaluated.",
+      "Replacing Boolean(!!bar) with !!bar in a context like new Boolean(!!bar) alters behavior because new Boolean() creates an object wrapper, while !!bar is a primitive boolean.",
+      "Removing !! from !!foo in foo && !!bar ? baz : bat could change type coercion in the ternary branches if !!bar was ensuring a boolean for consistent comparison.",
+      "Stripping Boolean() from Boolean(bar ?? baz) in a logical expression may alter truthiness evaluation if bar or baz are objects with custom valueOf/toString methods that affect coercion differently than direct boolean conversion.",
+      "Deleting !! from !!expr in a return statement like return !!expr; is safe only if the function expects a boolean; removing it could return a truthy/falsy value instead of strict true/false, breaking strict equality checks elsewhere.",
+      "Removing !! from !!foo in a loop condition like for (; !!foo; ) may cause infinite loops if foo is an object that becomes false only after double negation due to [[ToBoolean]] quirks (though rare, theoretically possible with exotic objects).",
+      "Eliminating Boolean() from Boolean((bar, baz, !!bat)) in a comma operator could drop the side effect of evaluating !!bat if bat is undefined and the rewrite leads to parsing errors or unexpected values.",
+      "Applying the fix inside nested expressions like if ((!!foo || bar) && !!baz) when enforceForInnerExpressions is true may remove necessary casts if the outer context doesn't coerce to boolean, but the inner !! was for value consistency, not just final coercion."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0028383,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 4,
+    "fixed": 4,
+    "disputed": 12
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Comment attachment during removal",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Temporal Dead Zone via hoisting interaction",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'y' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Sparse array indexing",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-boolean-cast",
+            "severity": "{\"ruleId\":\"no-extra-boolean-cast\",\"severity\":2,\"message\":\"Redundant double negation.\",\"line\":3,\"column\":5,\"nodeType\":\"UnaryExpression\",\"messageId\":\"unexpectedNegation\",\"endLine\":3,\"endColumn\":13,\"fix\":{\"range\":[42,50],\"text\":\"arr[0]\"}}",
+            "message": "Redundant double negation.",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "falsy\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "falsy\n3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:53.003671515 -0400\n+++ fixed.js\t2026-10-22 14:16:56.454784753 -0400\n@@ -1,4 +1,4 @@\n const arr = Array(3);\n arr[1] = false;\n-if (!!arr[0]) console.log('truthy'); else console.log('falsy'); // hole -> undefined\n+if (arr[0]) console.log('truthy'); else console.log('falsy'); // hole -> undefined\n console.log(arr.length);\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "__proto__ key preservation",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\nfalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Coercion side effects in valueOf/toString",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-boolean-cast",
+            "severity": "{\"ruleId\":\"no-extra-boolean-cast\",\"severity\":2,\"message\":\"Redundant double negation.\",\"line\":4,\"column\":5,\"nodeType\":\"UnaryExpression\",\"messageId\":\"unexpectedNegation\",\"endLine\":4,\"endColumn\":10,\"fix\":{\"range\":[47,52],\"text\":\"obj\"}}",
+            "message": "Redundant double negation.",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "truthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "truthy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:53.004671548 -0400\n+++ fixed.js\t2026-10-22 14:16:55.359748756 -0400\n@@ -1,4 +1,4 @@\n const obj = {\n   valueOf() { return 0; }\n };\n-if (!!obj) console.log('truthy'); else console.log('falsy');\n+if (obj) console.log('truthy'); else console.log('falsy');\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "null vs undefined short-circuit",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\nfalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Comma operator side effect loss",
+      "hazard": "Eliminating Boolean() from Boolean((bar, baz, !!bat)) in a comma operator could drop the side effect of evaluating !!bat if bat is undefined and the rewrite leads to parsing errors or unexpected value",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "side\nfalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Label and break interaction",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-boolean-cast",
+            "severity": "{\"ruleId\":\"no-extra-boolean-cast\",\"severity\":2,\"message\":\"Redundant double negation.\",\"line\":2,\"column\":7,\"nodeType\":\"UnaryExpression\",\"messageId\":\"unexpectedNegation\",\"endLine\":2,\"endColumn\":14,\"fix\":{\"range\":[15,22],\"text\":\"false\"}}",
+            "message": "Redundant double negation.",
+            "span": [
+              2,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "not reached\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "not reached\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:55.659758611 -0400\n+++ fixed.js\t2026-10-22 14:16:58.601855516 -0400\n@@ -1,5 +1,5 @@\n outer: {\n-  if (!!false) break outer;\n+  if (false) break outer;\n   console.log('not reached');\n }\n console.log('done');\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Comma Operator Side Effect Loss",
+      "hazard": "Rewriting !!foo to foo in a comma operator like (console.log(i), !!i < 10) changes evaluation order if foo has side effects, as the inner expression may no longer be evaluated.",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "side 0\nside 1\npass\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Return Statement Boolean Cast",
+      "hazard": "Deleting !! from !!expr in a return statement like return !!expr; is safe only if the function expects a boolean; removing it could return a truthy/falsy value instead of strict true/false, breaking s",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "boolean strict true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Regular Expressions Unicode and lastIndex",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Strict vs Sloppy Mode Semantics",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError 'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Sparse Arrays Holes Array(n)",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-boolean-cast",
+            "severity": "{\"ruleId\":\"no-extra-boolean-cast\",\"severity\":2,\"message\":\"Redundant double negation.\",\"line\":5,\"column\":7,\"nodeType\":\"UnaryExpression\",\"messageId\":\"unexpectedNegation\",\"endLine\":5,\"endColumn\":15,\"fix\":{\"range\":[92,100],\"text\":\"arr[i]\"}}",
+            "message": "Redundant double negation.",
+            "span": [
+              5,
+              7
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:17:05.517085054 -0400\n+++ fixed.js\t2026-10-22 14:17:08.429182447 -0400\n@@ -2,6 +2,6 @@\n arr[1] = 0;\n let sum = 0;\n for (let i = 0; i < arr.length; i++) {\n-  if (!!arr[i]) sum += arr[i];\n+  if (arr[i]) sum += arr[i];\n }\n console.log(sum);\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Comma Operator Bat Undefined Side Effect",
+      "hazard": "Eliminating Boolean() from Boolean((bar, baz, !!bat)) in a comma operator could drop the side effect of evaluating !!bat if bat is undefined and the rewrite leads to parsing errors or unexpected value",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "This Binding Arrow Function",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Exceptions Inside Rewritten Code",
+      "hazard": "exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "no-extra-boolean-cast",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Error boom\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

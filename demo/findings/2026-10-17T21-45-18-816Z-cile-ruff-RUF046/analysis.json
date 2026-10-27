@@ -1,0 +1,33 @@
+{
+  "summary": "Flags redundant int() casts around expressions that are already guaranteed to be integers.",
+  "firingShapes": [
+    "int(len(x))",
+    "int(abs(y))",
+    "int(True)",
+    "int(False)",
+    "int(__import__('sys').maxsize)",
+    "int(5 + 3)",
+    "int(round(z))",
+    "int(math.floor(w))"
+  ],
+  "silentShapes": [
+    "int(3.14)",
+    "int(input())",
+    "int(float(a))",
+    "int(getattr(obj, 'x', 0))",
+    "int(len(x) + 0.5)"
+  ],
+  "fixDescription": "Removes the outer int() call, leaving only the inner expression unchanged.",
+  "hazards": [
+    "Rewriting int(len(x)) to len(x) changes behavior if len(x) returns a non-integer type like a custom class with __len__ returning float, breaking type expectations.",
+    "Rewriting int(abs(y)) to abs(y) is unsafe if abs(y) returns a non-integer (e.g., Decimal or Fraction), altering numeric type and downstream operations.",
+    "Rewriting int(True) to True changes the type from int to bool, which may break isinstance(x, int) checks or arithmetic relying on int subclass behavior.",
+    "Rewriting int(False) to False similarly changes type from int to bool, potentially breaking logic that distinguishes 0 from False via type.",
+    "Rewriting int(__import__('sys').maxsize) to __import__('sys').maxsize is unsafe if the import has side effects or if the attribute lookup is expected to occur in a different context due to refactoring.",
+    "Rewriting int(5 + 3) to 5 + 3 is generally safe but may affect code relying on the explicit int conversion for documentation or type assertion purposes, though no semantic change occurs in standard integers.",
+    "Rewriting int(round(z)) to round(z) is unsafe if z defines __round__ returning a non-integer (e.g., float), as the int() cast would have truncated it to int, but removing it leaves a float, changing value and type.",
+    "Rewriting int(math.floor(w)) to math.floor(w) is unsafe if w defines __floor__ returning a non-integer (e.g., np.float64), as math.floor(w) would return that type, but the original int() cast forced it to int, altering subsequent integer-dependent operations.",
+    "The fix may disrupt formatting-dependent tools or linters that expect the int() call to be present for style consistency, even if semantically equivalent in simple cases.",
+    "If the int() call appears in a larger expression like int(f()) + 1, removing it could alter evaluation order if f() has side effects and the surrounding code relies on left-to-right execution, though pure expression replacement preserves order — hazard arises only if the fix is incorrectly applied to non-isolated calls."
+  ]
+}

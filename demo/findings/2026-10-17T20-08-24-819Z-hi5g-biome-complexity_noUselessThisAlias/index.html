@@ -1,0 +1,232 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/noUselessThisAlias — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/noUselessThisAlias <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-08-24-819Z-hi5g-biome-complexity_noUselessThisAlias · fix labelled <b>safe</b> · 15 programs, 9 fired, 9 fixed, 1 oracle-backed finding(s) · model cost $0.0357</p>
+<div class="card"><b>Rule analysis</b><p>Flags unnecessary aliases to &#39;this&#39; when used only within arrow functions that inherit the outer &#39;this&#39;.</p><p class="mut">Fix: Removes the variable declaration and replaces all references to the aliased variable with &#39;this&#39;.</p><details><summary>10 hazards</summary><ul><li>If the alias variable is reassigned after its initial assignment, replacing references with &#39;this&#39; will use the current &#39;this&#39; value instead of the captured value, changing behavior.</li><li>If the alias variable is used in a nested function that is not an arrow function (e.g., regular function or eval), the replacement may break due to differing &#39;this&#39; binding.</li><li>If the alias variable is used outside the scope where it was declared (e.g., returned or closed over in a way that escapes), removing the declaration causes a ReferenceError.</li><li>If the alias variable name conflicts with a variable in an inner scope, removing the outer declaration may cause inner references to resolve to a different variable.</li><li>If the alias variable is used in a dynamic context like &#39;with&#39; or indirect eval, static replacement cannot accurately determine usage, leading to incorrect refactoring.</li><li>If the alias variable is declared with &#39;var&#39; and hoisted, removing it may affect the temporal dead zone or hoisting behavior in ways that change execution if referenced before declaration.</li><li>If the alias variable is part of a comma-separated declaration (e.g., &#39;const self = this, other = expr;&#39;), the fix may incorrectly remove the entire declaration or mishandle the separator.</li><li>If the alias variable is used in a type annotation or JSDoc comment (e.g., &#39;/** @type {Any} */ const self = this;&#39;), removing the declaration may strip useful type information.</li><li>If the alias variable is used in a destructuring pattern or default parameter, the simple replacement fails to account for complex binding structures.</li><li>If the alias variable is referenced in a string literal (e.g., for code generation or logging), textual replacement is not performed, leading to mismatches between code and strings.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes a `var _this = this` declaration and replaces a reference to `_this` with `this`, but the reference occurs before the declaration in the same function scope. Due to hoisting, the original code reads the uninitialized variable (yielding `undefined`), while the fixed code reads the function&#39;s `this` binding (yielding the called object). This changes observable behavior in valid JavaScript and the fix is not safe for this construct.">judge: real · high</span> Var hoisting and TDZ interaction<p class="mut">The fix removes a `var _this = this` declaration and replaces a reference to `_this` with `this`, but the reference occurs before the declaration in the same function scope. Due to hoisting, the original code reads the uninitialized variable (yielding `undefined`), while the fixed code reads the function&#39;s `this` binding (yielding the called object). This changes observable behavior in valid JavaScript and the fix is not safe for this construct.</p>
+<h2>Minimized program (10→8 lines)</h2><pre>function test() {
+  console.log(typeof _this);
+  var _this = this;
+}
+try {
+  console.log(test.call({value: &#39;ok&#39;}));
+} catch (e) {
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:08:35.139172094 -0400
++++ fixed.js	2026-10-17 16:08:35.417161650 -0400
+@@ -1,7 +1,6 @@
+ function test() {
+<span class="del">-  console.log(typeof _this);</span>
+<span class="del">-  var _this = this;</span>
+<span class="del">-  return _this.value;</span>
+<span class="add">+  console.log(typeof this);</span>
+<span class="add">+  return this.value;</span>
+ }
+ try {
+   console.log(test.call({value: &#39;ok&#39;}));
+</pre>
+<h2>Observed</h2><pre>stdout before:
+undefined
+ok
+stdout after:
+object
+ok</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1633">biomejs/biome/issues/1633</a> · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Dynamic context via indirect eval</td><td class="mut">If the alias variable is used in a dynamic context like &#39;with&#39; or indirect eval, static re</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Regex with global flag and lastIndex mutation</td><td class="mut">regular expressions: escapes, unicode flag, lastIndex with the g flag</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Comments on removed declaration</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Escaped alias causing ReferenceError</td><td class="mut">If the alias variable is used outside the scope where it was declared (e.g., returned or c</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span></td><td>Alias in destructuring parameter</td><td class="mut">If the alias variable is used in a destructuring pattern or default parameter, the simple </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Var hoisting and TDZ interaction</td><td class="mut">If the alias variable is declared with &#39;var&#39; and hoisted, removing it may affect the tempo</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Sparse array with holes and lastIndex-like access</td><td class="mut">sparse arrays, holes, Array(n) vs [n], array-likes</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Inner scope variable conflict</td><td class="mut">If the alias variable name conflicts with a variable in an inner scope, removing the outer</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>__proto__ keys and prototype access</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>Type annotation/JSDoc comment stripping</td><td class="mut">If the alias variable is used in a type annotation or JSDoc comment (e.g., &#39;/** @type {Any</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Var hoisting and re-declaration in loop</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Getter/setter/Object.defineProperty side effects</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Comments attached to removed/moved code</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Nested non-arrow function usage</td><td class="mut">If the alias variable is used in a nested function that is not an arrow function (e.g., re</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Function declarations inside blocks/switch/labeled</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Dynamic context via indirect eval</summary><pre>let that = this;
+const obj = { x: 1, y: 2 };
+(() =&gt; {
+  &#39;use strict&#39;;
+  return Function(&#39;return that.x&#39;)();
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:33.184245752 -0400
++++ fixed.js	2026-10-17 16:08:33.474234810 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-let that = this;</span>
+<span class="add">+</span>
+ const obj = { x: 1, y: 2 };
+ (() =&gt; {
+   &#39;use strict&#39;;
+</pre></details><details id="r1-p002"><summary>r1-p002 — Regex with global flag and lastIndex mutation</summary><pre>let self = this;
+self.lastMatch = &#39;&#39;;
+const str = &#39;a1b2&#39;;
+[...str].forEach(() =&gt; {
+  const match = /\d/g.exec(str);
+  self.lastMatch += match ? match[0] : &#39;_&#39;;
+});
+console.log(self.lastMatch);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:33.642228472 -0400
++++ fixed.js	2026-10-17 16:08:33.896218888 -0400
+@@ -1,8 +1,8 @@
+<span class="del">-let self = this;</span>
+<span class="del">-self.lastMatch = &#39;&#39;;</span>
+<span class="add">+</span>
+<span class="add">+this.lastMatch = &#39;&#39;;</span>
+ const str = &#39;a1b2&#39;;
+ [...str].forEach(() =&gt; {
+   const match = /\d/g.exec(str);
+<span class="del">-  self.lastMatch += match ? match[0] : &#39;_&#39;;</span>
+<span class="add">+  this.lastMatch += match ? match[0] : &#39;_&#39;;</span>
+ });
+<span class="del">-console.log(self.lastMatch);</span>
+<span class="add">+console.log(this.lastMatch);</span>
+</pre></details><details id="r1-p004"><summary>r1-p004 — Comments on removed declaration</summary><pre>// important: capture this
+let me = this;
+// used in handler
+[1,2].forEach(() =&gt; console.log(me));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:34.057212818 -0400
++++ fixed.js	2026-10-17 16:08:34.335202352 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-// important: capture this</span>
+<span class="del">-let me = this;</span>
+<span class="add">+</span>
+ // used in handler
+<span class="del">-[1,2].forEach(() =&gt; console.log(me));</span>
+<span class="add">+[1,2].forEach(() =&gt; console.log(this));</span>
+</pre></details><details id="r1-p005"><summary>r1-p005 — Escaped alias causing ReferenceError</summary><pre>function outer() {
+  var self = this;
+  return () =&gt; self;
+}
+const f = outer.call({x:1});
+try {
+  console.log(f().x);
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:34.512195688 -0400
++++ fixed.js	2026-10-17 16:08:34.780185598 -0400
+@@ -1,6 +1,5 @@
+ function outer() {
+<span class="del">-  var self = this;</span>
+<span class="del">-  return () =&gt; self;</span>
+<span class="add">+  return () =&gt; this;</span>
+ }
+ const f = outer.call({x:1});
+ try {
+</pre></details><details id="r1-p006"><summary>r1-p006 — Alias in destructuring parameter</summary><pre>function process({ data = this }) {
+  return data;
+}
+console.log(process.call({value: 42}, {}));
+</pre></details><details id="r1-p007"><summary>r1-p007 — Var hoisting and TDZ interaction</summary><pre>function test() {
+  console.log(typeof _this);
+  var _this = this;
+  return _this.value;
+}
+try {
+  console.log(test.call({value: &#39;ok&#39;}));
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:35.139172094 -0400
++++ fixed.js	2026-10-17 16:08:35.417161650 -0400
+@@ -1,7 +1,6 @@
+ function test() {
+<span class="del">-  console.log(typeof _this);</span>
+<span class="del">-  var _this = this;</span>
+<span class="del">-  return _this.value;</span>
+<span class="add">+  console.log(typeof this);</span>
+<span class="add">+  return this.value;</span>
+ }
+ try {
+   console.log(test.call({value: &#39;ok&#39;}));
+</pre></details><details id="r1-p008"><summary>r1-p008 — Sparse array with holes and lastIndex-like access</summary><pre>let self = this;
+self.data = [10, , 30];
+const result = Array.from({length: 3}, (_, i) =&gt; self.data[i] ?? -1);
+console.log(result.join(&#39;,&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:35.576155676 -0400
++++ fixed.js	2026-10-17 16:08:35.832146059 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-let self = this;</span>
+<span class="del">-self.data = [10, , 30];</span>
+<span class="del">-const result = Array.from({length: 3}, (_, i) =&gt; self.data[i] ?? -1);</span>
+<span class="add">+</span>
+<span class="add">+this.data = [10, , 30];</span>
+<span class="add">+const result = Array.from({length: 3}, (_, i) =&gt; this.data[i] ?? -1);</span>
+ console.log(result.join(&#39;,&#39;));
+</pre></details><details id="r2-p001"><summary>r2-p001 — Inner scope variable conflict</summary><pre>const self = 42;
+function outer() {
+  const self = this;
+  return () =&gt; {
+    console.log(self);
+  };
+}
+outer()(100);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:39.410012256 -0400
++++ fixed.js	2026-10-17 16:08:39.687001939 -0400
+@@ -1,8 +1,7 @@
+ const self = 42;
+ function outer() {
+<span class="del">-  const self = this;</span>
+   return () =&gt; {
+<span class="del">-    console.log(self);</span>
+<span class="add">+    console.log(this);</span>
+   };
+ }
+ outer()(100);
+</pre></details><details id="r2-p002"><summary>r2-p002 — __proto__ keys and prototype access</summary><pre>const obj = { __proto__: { x: 1 }, y: 2 };
+const _this = obj;
+console.log(_this.__proto__.x + _this.y);
+</pre></details><details id="r2-p003"><summary>r2-p003 — Type annotation/JSDoc comment stripping</summary><pre>/** @type {number} */
+const self = 42;
+console.log(typeof self);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Var hoisting and re-declaration in loop</summary><pre>for (let i = 0; i &lt; 2; i++) {
+  var self = i;
+  (() =&gt; console.log(self))();
+}
+</pre></details><details id="r2-p005"><summary>r2-p005 — Getter/setter/Object.defineProperty side effects</summary><pre>const obj = {};
+let _this = obj;
+Object.defineProperty(obj, &#39;prop&#39;, {
+  get() { return this.value || 0; },
+  set(v) { this.value = v * 2; }
+});
+obj.value = 5;
+console.log(_this.prop);
+</pre></details><details id="r2-p006"><summary>r2-p006 — Comments attached to removed/moved code</summary><pre>// important note
+const self = this;
+// another comment
+(() =&gt; console.log(self))();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:40.853958542 -0400
++++ fixed.js	2026-10-17 16:08:41.130948257 -0400
+@@ -1,4 +1,3 @@
+<span class="del">-// important note</span>
+<span class="del">-const self = this;</span>
+<span class="add">+</span>
+ // another comment
+<span class="del">-(() =&gt; console.log(self))();</span>
+<span class="add">+(() =&gt; console.log(this))();</span>
+</pre></details><details id="r2-p007"><summary>r2-p007 — Nested non-arrow function usage</summary><pre>const obj = { method() { return this.val; }, val: 10 };
+const self = obj;
+function inner() {
+  return self.method();
+}
+console.log(inner());
+</pre></details><details id="r2-p008"><summary>r2-p008 — Function declarations inside blocks/switch/labeled</summary><pre>switch (1) {
+  case 1:
+    const self = this;
+    (() =&gt; self)();
+    break;
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:08:41.554932533 -0400
++++ fixed.js	2026-10-17 16:08:41.792923707 -0400
+@@ -1,6 +1,5 @@
+ switch (1) {
+   case 1:
+<span class="del">-    const self = this;</span>
+<span class="del">-    (() =&gt; self)();</span>
+<span class="add">+    (() =&gt; this)();</span>
+     break;
+ }
+</pre></details></body></html>

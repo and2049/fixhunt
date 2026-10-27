@@ -1,0 +1,659 @@
+{
+  "runId": "2026-10-17T20-16-00-929Z-j9nr-biome-complexity_useWhile",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/useWhile",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useWhile\n- Fix: safe\n- Default severity: warn\n- Available from version: 1.0.0\n- Diagnostic category: lint/complexity/useWhile\n\n\nDescription\n\n Enforce the use of `while` loops instead of `for` loops when the initializer and update expressions are not needed.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n for (; x.running;) {\n     x.step();\n }\n ```\n\nValid\n\n ```js\n for (let x = 0; x < 10; i++) {}\n ```\n\n ```js\n let x = 0\n for (; x < 10; i++) {}\n ```\n\n ```js\n for (let x = 0; x < 10;) {\n     i++\n }\n ```\n\n"
+  },
+  "analysis": {
+    "summary": "Flags for-loops without initialization or increment parts where only a condition remains, suggesting replacement with while loops.",
+    "firingShapes": [
+      "for (; cond;) {}",
+      "for (;cond;) stmt",
+      "for( ; x > 0 ;){}",
+      "for(;;){ if(!cond)break; stmt }",
+      "for(;a.b.c();){}",
+      "for(;flag&&!stop;){}",
+      "for( ; getValue() > threshold ; ) {}",
+      "for(;obj.prop;){}"
+    ],
+    "silentShapes": [
+      "for(let i=0;i<10;i++){}",
+      "for(;x<10;i++){}",
+      "for(let x=0;x<10;){}",
+      "for(;;){}",
+      "for(;true;) {}"
+    ],
+    "fixDescription": "Replace the for-loop with a while-loop using the condition as the test, keeping the loop body unchanged.",
+    "hazards": [
+      "Moving variable declarations from the init part to before the loop may cause hoisting issues if the variable is used prior to the loop.",
+      "If the init part contains side-effecting expressions (e.g., function calls), removing them alters execution order and may omit required initialization.",
+      "The fix assumes no update part exists; if present but ignored by the rule due to being empty, the rewrite incorrectly drops it.",
+      "Labels or break/continue statements targeting the for-loop by label may become invalid if the loop structure changes.",
+      "Comments attached to the for or semicolons may be lost during rewrite if not preserved by the tool.",
+      "In strict mode, deleting a variable via the init part (if present) would behave differently if the init is removed.",
+      "If the condition uses `with` or indirect eval, scope resolution could differ between for and while constructs.",
+      "The rewrite may interfere with automatic semicolon insertion if the loop header is malformed or adjacent to problematic tokens.",
+      "If the loop is part of a larger expression (e.g., return for (;cond;) expr;), the statement conversion breaks grammar.",
+      "Using `this` in the condition may capture a different object if the loop rewrite changes execution context indirectly.",
+      "If the init part declares a variable with `var` that is later accessed outside the loop, moving it outside may not preserve temporal dead zone behavior (though var has none, confusion with let/const could arise).",
+      "If the condition is a complex expression involving commas, the rewrite may misinterpret precedence or evaluation order."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0026135999999999998,
+  "summary": {
+    "programs": 15,
+    "invalid": 0,
+    "fired": 15,
+    "fixed": 15,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p002",
+      "title": "__proto__ keys prototype access",
+      "hazard": "Rewriting a for-loop accessing obj.__proto__ in condition may alter prototype chain mutation visibility if loop re-runs after mutation.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:14.821361406 -0400\n+++ fixed.js\t2026-10-17 16:16:15.112357606 -0400\n@@ -2,7 +2,7 @@\n let proto = { b: 2 };\n obj.__proto__ = proto;\n let seen = [];\n-for (; obj.__proto__;) {\n+while (obj.__proto__) {\n   seen.push(obj.__proto__.b);\n   obj.__proto__ = null;\n   break;\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "complex expression with commas",
+      "hazard": "The comma operator in for-condition has left-to-right evaluation; rewriting to while may break if condition relies on comma sequencing.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "x:1,y:1\nx:2,y:2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x:1,y:1\nx:2,y:2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:15.270355545 -0400\n+++ fixed.js\t2026-10-17 16:16:15.532352128 -0400\n@@ -1,4 +1,4 @@\n let x = 0, y = 0;\n-for (; (x++, y++, x < 3);) {\n+while ((x++, y++, x < 3)) {\n   console.log(`x:${x},y:${y}`);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "sparse arrays holes",
+      "hazard": "Loop condition checks array length; rewriting doesn't change behavior but must show interaction with sparse elements.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:15.715349742 -0400\n+++ fixed.js\t2026-10-17 16:16:15.986346208 -0400\n@@ -1,6 +1,6 @@\n let arr = [, , 3];\n let sum = 0;\n-for (; arr.length > 0;) {\n+while (arr.length > 0) {\n   const v = arr.pop();\n   if (v !== undefined) sum += v;\n }\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "temporal dead zone after hoisting",
+      "hazard": "Loop condition accesses a let variable before its declaration (TDZ); rewriting doesn't move the condition, so TDZ still throws.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ReferenceError: Cannot access 'x' before initialization\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ReferenceError: Cannot access 'x' before initialization\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:16.161343931 -0400\n+++ fixed.js\t2026-10-17 16:16:16.452340146 -0400\n@@ -1,5 +1,5 @@\n try {\n-  for (; typeof x === 'undefined';) {\n+  while (typeof x === 'undefined') {\n     console.log('unreachable');\n   }\n } catch (e) {\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "function declarations inside blocks switch labeled",
+      "hazard": "Function declaration in loop body; rewriting loop shouldn't affect hoisting, but must show function is redefined each iteration if re-entered.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:16.623337921 -0400\n+++ fixed.js\t2026-10-17 16:16:16.892334422 -0400\n@@ -1,5 +1,5 @@\n let fns = [];\n-for (; fns.length < 2;) {\n+while (fns.length < 2) {\n   function f() { return fns.length; }\n   fns.push(f);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "strict mode deleting variable via init part",
+      "hazard": "Not applicable: rule only triggers when init part is absent; no init to remove, so strict mode delete behavior unchanged.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:17.059332252 -0400\n+++ fixed.js\t2026-10-17 16:16:17.337328644 -0400\n@@ -1,6 +1,6 @@\n 'use strict';\n let v = 1;\n-for (; v;) {\n+while (v) {\n   console.log(v);\n   v = 0;\n }\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "regular expressions escapes unicode lastIndex g flag",
+      "hazard": "Loop condition uses regex.test() which advances lastIndex with g flag; rewriting doesn't change evaluation, so behavior preserved.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:17.515326335 -0400\n+++ fixed.js\t2026-10-17 16:16:17.794322715 -0400\n@@ -1,7 +1,7 @@\n let str = 'abab';\n let re = /ab/g;\n let matches = 0;\n-for (; re.test(str);) {\n+while (re.test(str)) {\n   matches++;\n }\n console.log(matches);\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Hoisting issue due to moving const/init variable",
+      "hazard": "Moving variable declarations from the init part to before the loop may cause hoisting issues if the variable is used prior to the loop.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'x' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'x' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:23.064254837 -0400\n+++ fixed.js\t2026-10-17 16:16:23.348251208 -0400\n@@ -1,4 +1,4 @@\n console.log(typeof x); // ReferenceError expected\n-for (; false;) {}\n+while (false) {}\n let x = 1;\n console.log('done');\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Var redeclaration shadowing outer scope",
+      "hazard": "If the init part declares a variable with `var` that is later accessed outside the loop, moving it outside may not preserve temporal dead zone behavior (though var has none, confusion with let/const c",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "3\n4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:23.516249060 -0400\n+++ fixed.js\t2026-10-17 16:16:23.780245687 -0400\n@@ -1,5 +1,5 @@\n var x = 1;\n-for (; x < 2;) {\n+while (x < 2) {\n   var x = 3;\n   console.log(x);\n   x++;\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Function declaration inside loop body affected by scoping",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ReferenceError: f is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ReferenceError: f is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:23.942243616 -0400\n+++ fixed.js\t2026-10-17 16:16:24.213240160 -0400\n@@ -1,4 +1,4 @@\n-for (; false;) {\n+while (false) {\n   function f() { return 1; }\n   break;\n }\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Comment loss during rewrite affecting readability",
+      "hazard": "Comments attached to the for or semicolons may be lost during rewrite if not preserved by the tool.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "executed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "executed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:24.386237955 -0400\n+++ fixed.js\t2026-10-17 16:16:24.661234449 -0400\n@@ -1,3 +1,3 @@\n // precondition\n-for (; /* stop */false;) {/* body */}\n+while (/* stop */false) {/* body */}\n console.log('executed');\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Class field initialization order dependency",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "static\nloop\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "static\nloop\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:24.832232269 -0400\n+++ fixed.js\t2026-10-17 16:16:25.115228666 -0400\n@@ -1,5 +1,5 @@\n class C { static y = console.log('static') || 1; }\n-for (; C.y;) {\n+while (C.y) {\n   console.log('loop');\n   break;\n }\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "ASI hazard with leading parenthesis after loop",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:25.278226593 -0400\n+++ fixed.js\t2026-10-17 16:16:25.555223071 -0400\n@@ -1,3 +1,3 @@\n-for (; false;)\n+while (false)\n (function(){ return console.log('IIFE') })()\n console.log('done')\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Sparse array length check in condition",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "3\n2\nend\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n2\nend\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:25.729220858 -0400\n+++ fixed.js\t2026-10-17 16:16:26.016217210 -0400\n@@ -1,5 +1,5 @@\n const arr = Array(3); arr[1] = 'a';\n-for (; arr.length > 1;) {\n+while (arr.length > 1) {\n   console.log(arr.length);\n   arr.pop();\n }\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Label break target invalidated by loop rewrite",
+      "hazard": "Labels or break/continue statements targeting the for-loop by label may become invalid if the loop structure changes.",
+      "rule": "complexity/useWhile",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/useWhile",
+            "severity": "warning",
+            "message": "Use a while loop instead of a for loop.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "after loop\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "after loop\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:16:26.187215041 -0400\n+++ fixed.js\t2026-10-17 16:16:26.465211515 -0400\n@@ -1,5 +1,5 @@\n outer:\n-for (; false;) {\n+while (false) {\n   break outer;\n }\n console.log('after loop')\n"
+      }
+    }
+  ]
+}

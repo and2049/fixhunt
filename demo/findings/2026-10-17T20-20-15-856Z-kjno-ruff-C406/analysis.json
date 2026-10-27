@@ -1,0 +1,34 @@
+{
+  "summary": "Flags calls to dict() constructed with list/tuple literals containing key-value pairs.",
+  "firingShapes": [
+    "dict([(k, v)])",
+    "dict(((k, v)))",
+    "dict([])",
+    "dict(([a, b], [c, d]))",
+    "dict(list(zip(x, y)))",
+    "dict(tuple(pairs))",
+    "dict([[('a', 1)]])",
+    "dict(((), ))"
+  ],
+  "silentShapes": [
+    "dict({})",
+    "dict(**kw)",
+    "dict(iterable)",
+    "dict(mapping=other_dict)",
+    "func(dict([(1,2)]))"
+  ],
+  "fixDescription": "Rewrites dict(L) where L is a list or tuple of 2-element iterables into a dict literal {k: v for k, v in L}, preserving order and duplicates as per Python semantics.",
+  "hazards": [
+    "If the list/tuple contains duplicate keys, the dict literal preserves last-wins behavior identical to dict() constructor, but if the iterable is not actually a sequence of pairs (e.g., flat list), the comprehension may raise ValueError during construction where dict() would have succeeded by treating elements as pairs via iteration.",
+    "If the input iterable is not actually iterable (e.g., None), both forms raise TypeError, but the rewrite may fail earlier during comprehension setup if the type is incompatible with iteration.",
+    "If the list/tuple expression contains side effects (e.g., function calls with prints), moving them into a dict literal comprehension preserves evaluation order but may alter timing relative to surrounding expressions due to changes in when the iterable is materialized.",
+    "If the list/tuple is used elsewhere after the dict() call (aliasing), the rewrite creates a new dict and does not preserve the original list/tuple, potentially breaking code that mutates or inspects it later.",
+    "If the dict() call appears in a context where its return value is ignored but the list/tuple construction has side effects (e.g., dict([print('x'), (1,2)][0])), the rewrite may drop those side effects if the comprehension short-circuits or fails to evaluate all elements.",
+    "If the list/tuple contains unhashable keys (e.g., lists), both forms fail at runtime with TypeError, but the dict literal comprehension may fail during key hashing in a different order than the constructor's internal processing.",
+    "If the code relies on the exact type being dict (not a subclass), the rewrite produces a built-in dict, which is equivalent for all standard uses but may break isinstance checks against a custom dict subclass if one was monkey-patched or expected via factory.",
+    "If the list/tuple literal contains nested mutable objects that are mutated during iteration (e.g., dict([(x.append(1), x.pop()) for x in [[], []]])), the rewrite preserves mutation order but may interact poorly with optimizations or early termination in comprehensions.",
+    "Comments attached to the list/tuple brackets or commas may be lost during AST rewrite, as the autofix replaces the entire node with a dict literal and does not transfer associated comment nodes.",
+    "If the dict() call is part of a larger expression where operator precedence groups unexpectedly (e.g., dict([(1,2)]) + 3 vs {(1,2):} + 3), the rewrite does not change precedence because the dict literal binds tighter than addition, but the original call already had dict() as a unit—so no change in meaning, only risk is if parentheses were omitted and relied on for grouping.",
+    "In rare cases involving __dict__ or descriptor interactions, replacing a call with a literal may bypass __call__ overrides if dict is shadowed locally, but the rule only triggers on built-in dict, so this is unsafe only if 'dict' is rebound in scope."
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "summary": "Flags calls to bin(x).count('1') where x is an integer expression, recommending replacement with x.bit_count().",
+  "firingShapes": [
+    "bin(a).count(\"1\")",
+    "bin(0xff).count(\"1\")",
+    "bin(len(lst)).count(\"1\")",
+    "bin(obj.method()).count(\"1\")",
+    "bin(x + y).count(\"1\")",
+    "bin(func()).count(\"1\")",
+    "bin(getattr(o, 'a')).count(\"1\")",
+    "bin(-n).count(\"1\")"
+  ],
+  "silentShapes": [
+    "bin(s).count(\"1\")",
+    "bin(None).count(\"1\")",
+    "bin(obj).count(\"1\") if hasattr(obj, '__index__') else 0",
+    "bin(expr).count('0')",
+    "bin(expr).count('1', 0, 5)"
+  ],
+  "fixDescription": "Replaces bin(X).count('1') with X.bit_count(), preserving the inner expression X exactly as it appeared.",
+  "hazards": [
+    "If X is a function call with side effects, the rewrite changes evaluation timing but not frequency—still one call—but may affect interleaving with other expressions in larger statements.",
+    "If X raises an exception (e.g., AttributeError, TypeError), the exception type and timing remain identical; however, if X returns a non-int that defines __index__ but not bit_count (e.g., custom numeric type), the rewrite will raise AttributeError where the original would succeed after bin conversion.",
+    "If X returns a float, both versions raise TypeError, but the original does so during bin() conversion while the rewrite raises AttributeError on bit_count lookup, altering the exception type.",
+    "If X returns a bool, both work (bool inherits bit_count), but the rewrite may be misleading stylistically though behaviorally equivalent.",
+    "If X is an expression whose value is used elsewhere in the same statement (e.g., in a tuple or assignment), the rewrite preserves the value and any side effects, but intermediate reuse of X is not possible since it's evaluated once in both forms.",
+    "If X is a conditional expression like a if cond else b, the rewrite preserves short-circuiting behavior identically.",
+    "If the code contains a comment between bin( and .count (e.g., bin(/* hint */x).count('1')), the autofix will drop the comment as it only preserves the inner expression.",
+    "If X is a lambda or comprehension that captures local state, the rewrite preserves capture semantics since evaluation is otherwise identical.",
+    "If X is a super() call or attribute access on a nested object (e.g., bin(self.obj.x).count('1')), the rewrite preserves the same attribute lookup chain.",
+    "If the code relies on bin(X) returning a string for further use (impossible here since .count('1') is chained), no issue arises—the intermediate string is never accessible."
+  ]
+}

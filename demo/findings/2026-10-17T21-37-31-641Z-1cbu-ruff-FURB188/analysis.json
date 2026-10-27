@@ -1,0 +1,35 @@
+{
+  "summary": "Flags conditional slicing to remove prefixes/suffixes after startswith/endswith checks.",
+  "firingShapes": [
+    "s = s[:-len(p)] if s.startswith(p) else s",
+    "s = s[len(p):] if s.startswith(p) else s",
+    "s = s[: -len(suf)] if s.endswith(suf) else s",
+    "s = s[-len(suf):] if s.endswith(suf) else s",
+    "t = t[3:] if t.startswith('abc') else t",
+    "u = u[:-5] if u.endswith('.log') else u",
+    "v = v[2:] if v.startswith('//') else v",
+    "w = w[:-1] if w.endswith('/') else w"
+  ],
+  "silentShapes": [
+    "s = s[1:] if s.startswith('a') else s[2:]",
+    "s = s[:-3] if len(s) > 3 else s",
+    "s = s[2:] if s.startswith('xy') and flag else s",
+    "s = s.removeprefix('pre') if hasattr(s, 'startswith') else s",
+    "if s.startswith('pre'): s = s[3:]; else: s = s[2:]"
+  ],
+  "fixDescription": "Replace conditional slice assignment with direct call to str.removeprefix() or str.removesuffix() using the same prefix/suffix literal.",
+  "hazards": [
+    "Rewriting s = s[:-len(p)] if s.startswith(p) else s when p is a variable with side effects in its evaluation changes timing of those effects.",
+    "If the slice expression uses a variable whose value changes between the startswith check and the slice, the fix may use a stale value.",
+    "When the assigned variable appears elsewhere in the condition (e.g., s = s[:-len(s)] if s.endswith(s) else s), the fix incorrectly binds the method to the original value.",
+    "If the slice is part of a larger expression (e.g., f(s[:-len(p)] if s.startswith(p) else s)), extracting the slice changes evaluation order relative to other function arguments.",
+    "If the branch contains commented-out code (e.g., s = s[:-len(p)]  # TODO: verify\nif s.startswith(p) else s), the fix may discard those comments.",
+    "When the target of assignment is a subscript or attribute (e.g., lst[i] = lst[i][:-len(p)] if lst[i].startswith(p) else lst[i]), the fix may not preserve the same assignment target semantics.",
+    "If the startswith/endswith argument is not a literal but a complex expression, the fix may incorrectly assume it is safe to pass directly to removeprefix/removesuffix.",
+    "In code with multiple assignments to the same variable in one line (e.g., a = b = s[:-len(p)] if s.startswith(p) else s), the fix may not replicate the multiple-assignment behavior.",
+    "If the conditional is nested inside a lambda or comprehension, the fix may alter scoping by lifting expressions.",
+    "When the string method is called on a non-str object that has startswith/endswith but not removeprefix/removesuffix (e.g., bytes), the fix introduces an AttributeError.",
+    "If the string is a subclass that overrides removeprefix/removesuffix with different behavior, the fix changes semantics.",
+    "In Python versions before 3.9, the fix would raise an AttributeError since removeprefix/removesuffix do not exist."
+  ]
+}

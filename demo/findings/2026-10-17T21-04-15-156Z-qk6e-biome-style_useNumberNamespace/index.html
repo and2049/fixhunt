@@ -1,0 +1,345 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/useNumberNamespace — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/useNumberNamespace <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace · fix labelled <b>safe</b> · 16 programs, 14 fired, 14 fixed, 5 oracle-backed finding(s) · model cost $0.0745</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags usage of global numeric functions and constants (`parseInt`, `parseFloat`, `NaN`, `Infinity`, `-Infinity`) without the `Number.` namespace prefix.</p><p class="mut">Fix: Replace the global identifier with its equivalent property on the `Number` object (e.g., `parseInt` → `Number.parseInt`, `NaN` → `Number.NaN`, `Infinity` → `Number.POSITIVE_INFINITY`, `-Infinity` → `Number.NEGATIVE_INFINITY`).</p><details><summary>11 hazards</summary><ul><li>Rewriting `parseInt` as `Number.parseInt` changes behavior if a local variable named `Number` exists in scope, causing a ReferenceError or accessing the wrong object.</li><li>If `Number` is reassigned (e.g., `let Number = 42;`), the fix will reference the reassigned value instead of the built-in Number constructor, altering semantics.</li><li>In strict mode, if `Number` is not declared, the fix assumes it refers to the global Number constructor, but if a with-block shadows Number, the lookup may resolve incorrectly.</li><li>The fix removes any comments attached to the original token (e.g., `parseInt/*foo*/(&quot;1&quot;);` becomes `Number.parseInt(&quot;1&quot;);` with the comment lost).</li><li>When used in new expressions like `new parseInt()`, rewriting to `new Number.parseInt()` is invalid syntax because `Number.parseInt` is not a constructor, causing a TypeError at runtime.</li><li>If the code relies on the global `parseInt` being accessed via the global object (e.g., in a sandbox where `globalThis.parseInt` is mocked), replacing it with `Number.parseInt` bypasses the mock and uses the real built-in.</li><li>In environments where `Number` is not defined (e.g., some old or minimal JS environments), the fix would throw a ReferenceError where the original code worked.</li><li>If `Infinity` is used as a property name (e.g., `obj.Infinity`), the fix would incorrectly rewrite it to `obj.Number.POSITIVE_INFINITY`, which is a different property and likely undefined.</li><li>When `-Infinity` appears in a template literal (e.g., &quot;-Infinity&quot;), the fix does not apply because it’s a string, but if mistakenly applied, it would corrupt the string literal.</li><li>If the code depends on the global `NaN` being identical to `window.NaN` in a browser context, and `Number.NaN` is used instead, it remains equivalent in value but may break identity checks in realms with multiple global contexts (e.g., iframes).</li><li>In eval() or Function constructor contexts, the rewritten code may be parsed in a different lexical scope, causing `Number` to resolve differently than the original global lookup.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p002"><b>r1-p002</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites the global `parseInt` call to `Number.parseInt`, but the program shadows the global `Number` with a local binding that has a different `parseInt` implementation. This changes the observable behavior from printing `1` to printing `1reassigned`, which is a silent wrong result in plausible code where `Number` is reassigned.">judge: real · high</span> Reassigned Number variable<p class="mut">The fix rewrites the global `parseInt` call to `Number.parseInt`, but the program shadows the global `Number` with a local binding that has a different `parseInt` implementation. This changes the observable behavior from printing `1` to printing `1reassigned`, which is a silent wrong result in plausible code where `Number` is reassigned.</p>
+<h2>Minimized program (3→2 lines)</h2><pre>let Number = { parseInt: s =&gt; s + &#39;reassigned&#39; };
+console.log(parseInt(&#39;1&#39;));
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 17:04:25.492627017 -0400
++++ fixed.js	2026-10-17 17:04:25.766630125 -0400
+@@ -1,3 +1,3 @@
+ &quot;use strict&quot;;
+ let Number = { parseInt: s =&gt; s + &#39;reassigned&#39; };
+<span class="del">-console.log(parseInt(&#39;1&#39;));</span>
+<span class="add">+console.log(Number.parseInt(&#39;1&#39;));</span>
+</pre>
+<h2>Observed</h2><pre>stdout before:
+1
+stdout after:
+1reassigned</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1228">biomejs/biome/issues/1228</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3578">biomejs/biome/issues/3578</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2075">biomejs/biome/issues/2075</a> · <a href="reports/r1-p002.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p006"><b>r1-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites `parseInt` to `Number.parseInt`, but the program explicitly sets the global `Number` property to `undefined`. This causes the fixed code to throw a TypeError (caught silently), changing the observable output from `1` to nothing. Since the rule documentation does not mention this semantic difference and the fix is labelled safe, this is a real bug in the autofix.">judge: real · high</span> Environment where Number is undefined<p class="mut">The fix rewrites `parseInt` to `Number.parseInt`, but the program explicitly sets the global `Number` property to `undefined`. This causes the fixed code to throw a TypeError (caught silently), changing the observable output from `1` to nothing. Since the rule documentation does not mention this semantic difference and the fix is labelled safe, this is a real bug in the autofix.</p>
+<h2>Minimized program (9→7 lines)</h2><pre>const g = Function(&#39;return this&#39;)();
+defineProperty(g, &#39;Number&#39;, { value: undefined });
+try {
+  console.log(parseInt(&#39;1&#39;));
+} catch (e) {
+}
+function defineProperty(obj, name, desc) { Object.defineProperty(obj, name, desc); }
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 17:04:27.232646748 -0400
++++ fixed.js	2026-10-17 17:04:27.500649785 -0400
+@@ -2,7 +2,7 @@
+ const g = Function(&#39;return this&#39;)();
+ defineProperty(g, &#39;Number&#39;, { value: undefined });
+ try {
+<span class="del">-  console.log(parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(Number.parseInt(&#39;1&#39;));</span>
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+ }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+1
+stdout after:
+TypeError: Cannot read properties of undefined (reading &#39;parseInt&#39;)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1228">biomejs/biome/issues/1228</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3578">biomejs/biome/issues/3578</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2075">biomejs/biome/issues/2075</a> · <a href="reports/r1-p006.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p003"><b>r2-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites `parseInt` to `Number.parseInt`, but the program declares a local variable `Number = 42` that shadows the global `Number` object. After the fix, `Number.parseInt` attempts to read property `parseInt` from the number `42`, which is `undefined`, so `typeof` yields `&quot;undefined&quot;` instead of `&quot;function&quot;`. This is a silent wrong result in plausible code where a variable happens to be named `Number`.">judge: real · high</span> Reassigned Number variable breaks fix<p class="mut">The fix rewrites `parseInt` to `Number.parseInt`, but the program declares a local variable `Number = 42` that shadows the global `Number` object. After the fix, `Number.parseInt` attempts to read property `parseInt` from the number `42`, which is `undefined`, so `typeof` yields `&quot;undefined&quot;` instead of `&quot;function&quot;`. This is a silent wrong result in plausible code where a variable happens to be named `Number`.</p>
+<h2>Minimized program (6→5 lines)</h2><pre>let Number = 42;
+try {
+  console.log(typeof parseInt(&#39;1&#39;));
+} catch (e) {
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 17:04:34.452728497 -0400
++++ fixed.js	2026-10-17 17:04:34.725731585 -0400
+@@ -1,6 +1,6 @@
+ let Number = 42;
+ try {
+<span class="del">-  console.log(typeof parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(typeof Number.parseInt(&#39;1&#39;));</span>
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+ }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+number
+stdout after:
+TypeError: Number.parseInt is not a function</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1228">biomejs/biome/issues/1228</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3578">biomejs/biome/issues/3578</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2075">biomejs/biome/issues/2075</a> · <a href="reports/r2-p003.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p004"><b>r2-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites `parseInt` to `Number.parseInt` inside a loop where `var Number = i` shadows the global `Number` object; after the first iteration `Number` becomes the number `0`, so `Number.parseInt` throws a TypeError. This is a plausible shadowing pattern in real code and the fix silently changes behavior from working to crashing.">judge: real · high</span> Var hoisting and redeclaration in loop<p class="mut">The fix rewrites `parseInt` to `Number.parseInt` inside a loop where `var Number = i` shadows the global `Number` object; after the first iteration `Number` becomes the number `0`, so `Number.parseInt` throws a TypeError. This is a plausible shadowing pattern in real code and the fix silently changes behavior from working to crashing.</p>
+<h2>Minimized program (4→4 lines)</h2><pre>for (var i = 0; i &lt; 2; i++) {
+  var Number = i;
+  console.log(typeof parseInt(&#39;1&#39;));
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 17:04:34.895733507 -0400
++++ fixed.js	2026-10-17 17:04:35.164736549 -0400
+@@ -1,4 +1,4 @@
+ for (var i = 0; i &lt; 2; i++) {
+   var Number = i;
+<span class="del">-  console.log(typeof parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(typeof Number.parseInt(&#39;1&#39;));</span>
+ }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+number
+number
+stdout after:
+
+exit 0 → 1
+stderr before: (none)
+stderr after: TypeError: Number.parseInt is not a function</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1228">biomejs/biome/issues/1228</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3578">biomejs/biome/issues/3578</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2075">biomejs/biome/issues/2075</a> · <a href="reports/r2-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p008"><b>r2-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites the global `parseInt` call to `Number.parseInt`, but the program shadows `Number` with a local constant that has a different `parseInt` implementation. This changes the observable behavior from logging `1` to logging `999`, which is a silent wrong result in plausible code where `Number` is reassigned or shadowed.">judge: real · high</span> Name collision after move due to shadowing<p class="mut">The fix rewrites the global `parseInt` call to `Number.parseInt`, but the program shadows `Number` with a local constant that has a different `parseInt` implementation. This changes the observable behavior from logging `1` to logging `999`, which is a silent wrong result in plausible code where `Number` is reassigned or shadowed.</p>
+<h2>Minimized program (4→4 lines)</h2><pre>{
+  const Number = { parseInt: () =&gt; 999 };
+  console.log(parseInt(&#39;1&#39;));
+}
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 17:04:36.450751086 -0400
++++ fixed.js	2026-10-17 17:04:36.715754081 -0400
+@@ -1,4 +1,4 @@
+ {
+   const Number = { parseInt: () =&gt; 999 };
+<span class="del">-  console.log(parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(Number.parseInt(&#39;1&#39;));</span>
+ }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+1
+stdout after:
+999</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/1228">biomejs/biome/issues/1228</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/3578">biomejs/biome/issues/3578</a> <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/2075">biomejs/biome/issues/2075</a> · <a href="reports/r2-p008.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Shadowed Number via with statement</td><td class="mut">If `Number` is shadowed by a with-block, the fix resolves to the wrong object.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Reassigned Number variable</td><td class="mut">If `Number` is reassigned, the fix uses the reassigned value instead of the built-in const</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Function declaration inside block scope</td><td class="mut">The rule fires inside a block-scoped function; the fix may capture a different Number due </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Temporal Dead Zone after hoisting simulation</td><td class="mut">Simulates TDZ by declaring Number after use in a closure that captures the uninitialized b</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Order of evaluation with side effects</td><td class="mut">The fix duplicates the argument expression due to macro-like expansion, causing side effec</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Environment where Number is undefined</td><td class="mut">In an environment without global Number, the fix throws ReferenceError while original work</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Async/await interaction with rewritten expression</td><td class="mut">The fix occurs inside an async function; await ordering may be affected if the expression </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Label/break/continue with finally and early return</td><td class="mut">The fix is inside a loop with labeled break and finally; altered control flow changes how </td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>__proto__ assignment affects Number resolution</td><td class="mut">__proto__ keys, prototype access, Object.assign vs spread</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Comment preservation during replacement</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Reassigned Number variable breaks fix</td><td class="mut">If `Number` is reassigned (e.g., `let Number = 42;`), the fix will reference the reassigne</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Var hoisting and redeclaration in loop</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Label/break/continue with finally and early return</td><td class="mut">label/break/continue control flow, finally blocks, early returns in nested blocks</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Global NaN identity vs Number.NaN in realm-like check</td><td class="mut">If the code depends on the global `NaN` being identical to `window.NaN` in a browser conte</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Eval context changes Number resolution</td><td class="mut">In eval() or Function constructor contexts, the rewritten code may be parsed in a differen</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Name collision after move due to shadowing</td><td class="mut">name collisions across scopes after a move (shadowing)</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Shadowed Number via with statement</summary><pre>&quot;use strict&quot;;
+const obj = { parseInt: s =&gt; s + &#39;shadow&#39; };
+with (obj) {
+  console.log(parseInt(&#39;1&#39;));
+}
+</pre></details><details id="r1-p002"><summary>r1-p002 — Reassigned Number variable</summary><pre>&quot;use strict&quot;;
+let Number = { parseInt: s =&gt; s + &#39;reassigned&#39; };
+console.log(parseInt(&#39;1&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:25.492627017 -0400
++++ fixed.js	2026-10-17 17:04:25.766630125 -0400
+@@ -1,3 +1,3 @@
+ &quot;use strict&quot;;
+ let Number = { parseInt: s =&gt; s + &#39;reassigned&#39; };
+<span class="del">-console.log(parseInt(&#39;1&#39;));</span>
+<span class="add">+console.log(Number.parseInt(&#39;1&#39;));</span>
+</pre></details><details id="r1-p003"><summary>r1-p003 — Function declaration inside block scope</summary><pre>&quot;use strict&quot;;
+{
+  function f() {
+    return parseInt(&#39;1&#39;);
+  }
+  console.log(f());
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:25.937632064 -0400
++++ fixed.js	2026-10-17 17:04:26.222635296 -0400
+@@ -1,7 +1,7 @@
+ &quot;use strict&quot;;
+ {
+   function f() {
+<span class="del">-    return parseInt(&#39;1&#39;);</span>
+<span class="add">+    return Number.parseInt(&#39;1&#39;);</span>
+   }
+   console.log(f());
+ }
+</pre></details><details id="r1-p004"><summary>r1-p004 — Temporal Dead Zone after hoisting simulation</summary><pre>&quot;use strict&quot;;
+(() =&gt; {
+  try {
+    return parseInt(&#39;1&#39;);
+  } catch (e) {
+    return e instanceof ReferenceError ? &#39;TDZ&#39; : &#39;other&#39;;
+  }
+})();
+let Number = 42;
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:26.392637224 -0400
++++ fixed.js	2026-10-17 17:04:26.638640013 -0400
+@@ -1,7 +1,7 @@
+ &quot;use strict&quot;;
+ (() =&gt; {
+   try {
+<span class="del">-    return parseInt(&#39;1&#39;);</span>
+<span class="add">+    return Number.parseInt(&#39;1&#39;);</span>
+   } catch (e) {
+     return e instanceof ReferenceError ? &#39;TDZ&#39; : &#39;other&#39;;
+   }
+</pre></details><details id="r1-p005"><summary>r1-p005 — Order of evaluation with side effects</summary><pre>&quot;use strict&quot;;
+let i = 0;
+function next() { return ++i; }
+console.log(parseInt(String(next())));
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:26.787641703 -0400
++++ fixed.js	2026-10-17 17:04:27.061644809 -0400
+@@ -1,4 +1,4 @@
+ &quot;use strict&quot;;
+ let i = 0;
+ function next() { return ++i; }
+<span class="del">-console.log(parseInt(String(next())));</span>
+<span class="add">+console.log(Number.parseInt(String(next())));</span>
+</pre></details><details id="r1-p006"><summary>r1-p006 — Environment where Number is undefined</summary><pre>&quot;use strict&quot;;
+const g = Function(&#39;return this&#39;)();
+defineProperty(g, &#39;Number&#39;, { value: undefined });
+try {
+  console.log(parseInt(&#39;1&#39;));
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+function defineProperty(obj, name, desc) { Object.defineProperty(obj, name, desc); }
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:27.232646748 -0400
++++ fixed.js	2026-10-17 17:04:27.500649785 -0400
+@@ -2,7 +2,7 @@
+ const g = Function(&#39;return this&#39;)();
+ defineProperty(g, &#39;Number&#39;, { value: undefined });
+ try {
+<span class="del">-  console.log(parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(Number.parseInt(&#39;1&#39;));</span>
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+ }
+</pre></details><details id="r1-p007"><summary>r1-p007 — Async/await interaction with rewritten expression</summary><pre>&quot;use strict&quot;;
+async function f() {
+  let x = 0;
+  const inc = () =&gt; ++x;
+  const v = await Promise.resolve(parseInt(String(inc())));
+  return v + x;
+}
+f().then(console.log);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:27.673651746 -0400
++++ fixed.js	2026-10-17 17:04:27.938654750 -0400
+@@ -2,7 +2,7 @@
+ async function f() {
+   let x = 0;
+   const inc = () =&gt; ++x;
+<span class="del">-  const v = await Promise.resolve(parseInt(String(inc())));</span>
+<span class="add">+  const v = await Promise.resolve(Number.parseInt(String(inc())));</span>
+   return v + x;
+ }
+ f().then(console.log);
+</pre></details><details id="r1-p008"><summary>r1-p008 — Label/break/continue with finally and early return</summary><pre>&quot;use strict&quot;;
+outer: {
+  for (let i = 0; i &lt; 3; i++) {
+    if (i === 1) break outer;
+    try {
+      console.log(parseInt(String(i)));
+    } finally {
+      console.log(&#39;finally&#39;);
+    }
+  }
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:28.105656643 -0400
++++ fixed.js	2026-10-17 17:04:28.373659679 -0400
+@@ -3,7 +3,7 @@
+   for (let i = 0; i &lt; 3; i++) {
+     if (i === 1) break outer;
+     try {
+<span class="del">-      console.log(parseInt(String(i)));</span>
+<span class="add">+      console.log(Number.parseInt(String(i)));</span>
+     } finally {
+       console.log(&#39;finally&#39;);
+     }
+</pre></details><details id="r2-p001"><summary>r2-p001 — __proto__ assignment affects Number resolution</summary><pre>const obj = {};
+obj.__proto__ = { Number: { parseInt: (s) =&gt; &#39;shadow&#39; } };
+console.log(parseInt(&#39;123&#39;)); // Should be &#39;shadow&#39;, fixed becomes 123
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:33.572718544 -0400
++++ fixed.js	2026-10-17 17:04:33.853721723 -0400
+@@ -1,3 +1,3 @@
+ const obj = {};
+ obj.__proto__ = { Number: { parseInt: (s) =&gt; &#39;shadow&#39; } };
+<span class="del">-console.log(parseInt(&#39;123&#39;)); // Should be &#39;shadow&#39;, fixed becomes 123</span>
+<span class="add">+console.log(Number.parseInt(&#39;123&#39;)); // Should be &#39;shadow&#39;, fixed becomes 123</span>
+</pre></details><details id="r2-p002"><summary>r2-p002 — Comment preservation during replacement</summary><pre>/* comment before */
+let x = parseInt(/* arg comment */ &#39;42&#39;); /* comment after */
+console.log(x);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:34.023723646 -0400
++++ fixed.js	2026-10-17 17:04:34.290726665 -0400
+@@ -1,3 +1,3 @@
+ /* comment before */
+<span class="del">-let x = parseInt(/* arg comment */ &#39;42&#39;); /* comment after */</span>
+<span class="add">+let x = Number.parseInt(/* arg comment */ &#39;42&#39;); /* comment after */</span>
+ console.log(x);
+</pre></details><details id="r2-p003"><summary>r2-p003 — Reassigned Number variable breaks fix</summary><pre>let Number = 42;
+try {
+  console.log(typeof parseInt(&#39;1&#39;));
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:34.452728497 -0400
++++ fixed.js	2026-10-17 17:04:34.725731585 -0400
+@@ -1,6 +1,6 @@
+ let Number = 42;
+ try {
+<span class="del">-  console.log(typeof parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(typeof Number.parseInt(&#39;1&#39;));</span>
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+ }
+</pre></details><details id="r2-p004"><summary>r2-p004 — Var hoisting and redeclaration in loop</summary><pre>for (var i = 0; i &lt; 2; i++) {
+  var Number = i;
+  console.log(typeof parseInt(&#39;1&#39;));
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:34.895733507 -0400
++++ fixed.js	2026-10-17 17:04:35.164736549 -0400
+@@ -1,4 +1,4 @@
+ for (var i = 0; i &lt; 2; i++) {
+   var Number = i;
+<span class="del">-  console.log(typeof parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(typeof Number.parseInt(&#39;1&#39;));</span>
+ }
+</pre></details><details id="r2-p005"><summary>r2-p005 — Label/break/continue with finally and early return</summary><pre>outer: {
+  try {
+    if (true) break outer;
+    console.log(parseInt(&#39;1&#39;));
+  } finally {
+    console.log(&#39;finally&#39;);
+  }
+}
+console.log(&#39;after&#39;);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:35.339738528 -0400
++++ fixed.js	2026-10-17 17:04:35.614741637 -0400
+@@ -1,7 +1,7 @@
+ outer: {
+   try {
+     if (true) break outer;
+<span class="del">-    console.log(parseInt(&#39;1&#39;));</span>
+<span class="add">+    console.log(Number.parseInt(&#39;1&#39;));</span>
+   } finally {
+     console.log(&#39;finally&#39;);
+   }
+</pre></details><details id="r2-p006"><summary>r2-p006 — Global NaN identity vs Number.NaN in realm-like check</summary><pre>console.log(NaN === Number.NaN);
+console.log(Object.is(NaN, Number.NaN));
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:35.778743491 -0400
++++ fixed.js	2026-10-17 17:04:36.055746622 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-console.log(NaN === Number.NaN);</span>
+<span class="del">-console.log(Object.is(NaN, Number.NaN));</span>
+<span class="add">+console.log(Number.NaN === Number.NaN);</span>
+<span class="add">+console.log(Object.is(Number.NaN, Number.NaN));</span>
+</pre></details><details id="r2-p007"><summary>r2-p007 — Eval context changes Number resolution</summary><pre>eval(&quot;console.log(typeof parseInt(&#39;1&#39;))&quot;);
+</pre></details><details id="r2-p008"><summary>r2-p008 — Name collision after move due to shadowing</summary><pre>{
+  const Number = { parseInt: () =&gt; 999 };
+  console.log(parseInt(&#39;1&#39;));
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:04:36.450751086 -0400
++++ fixed.js	2026-10-17 17:04:36.715754081 -0400
+@@ -1,4 +1,4 @@
+ {
+   const Number = { parseInt: () =&gt; 999 };
+<span class="del">-  console.log(parseInt(&#39;1&#39;));</span>
+<span class="add">+  console.log(Number.parseInt(&#39;1&#39;));</span>
+ }
+</pre></details></body></html>

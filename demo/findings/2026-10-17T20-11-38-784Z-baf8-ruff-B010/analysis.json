@@ -1,0 +1,32 @@
+{
+  "summary": "Flags setattr() calls where the attribute name argument is a literal string.",
+  "firingShapes": [
+    "setattr(x, \"a\", 1)",
+    "setattr(y, 'b', z)",
+    "setattr(obj, \"hello world\", None)",
+    "setattr(item, '\\t', 42)",
+    "setattr(data, \"🙂\", True)",
+    "setattr(self, \"_private\", value)",
+    "setattr(cls, \"ClassAttr\", 99)",
+    "setattr(module, \"dynamic_attr\", func())"
+  ],
+  "silentShapes": [
+    "setattr(x, variable, 1)",
+    "setattr(obj, attr_name.split('_')[0], value)",
+    "setattr(target, get_attr(), 42)"
+  ],
+  "fixDescription": "Rewrites setattr(obj, \"attr\", value) to obj.attr = value, preserving the target object, attribute name literal, and value expression exactly.",
+  "hazards": [
+    "Rewriting setattr(obj, \"ſ\", 1) to obj.ſ = 1 changes behavior because Python normalizes identifiers in attribute access via NFKC, turning \"ſ\" into \"s\".",
+    "If the setattr call contains inline comments (e.g., setattr(x, \"a\", 1  # comment)), the autofix may drop them since the rewritten assignment cannot preserve arbitrary comment placement.",
+    "When the target object is a complex expression like setattr(f()[0], \"a\", 1), rewriting to f()[0].a = 1 may change evaluation order or side effects if f() has mutable state.",
+    "If the attribute name literal is not a valid Python identifier (e.g., setattr(obj, \"123\", 1)), the rewrite obj.123 = 1 is a syntax error.",
+    "Rewriting setattr(obj, \"__builtins__\", value) to obj.__builtins__ = value may violate module-level immutability expectations or trigger unintended name mangling in classes.",
+    "In code relying on dynamic attribute names via setattr, replacing with direct assignment may break frameworks that intercept setattr via __setattr__ but not direct attribute assignment.",
+    "If the value expression contains side effects (e.g., setattr(obj, \"a\", print(\"side\") or 1)), moving it into an assignment does not change evaluation timing, but refactoring tools might reorder expressions unsafely in broader contexts.",
+    "When used in nested scopes like setattr(lambda: obj, \"a\", 1), the rewrite (lambda: obj).a = 1 may fail if the lambda’s return value is not assignable due to expression context restrictions.",
+    "Rewriting setattr(klass, \"ClsAttr\", 42) to klass.ClsAttr = 42 inside a function may create an attribute on the class object at runtime where the original intended a local or closure variable due to mis-scoping.",
+    "If the target object is a property returning a non-setattr-compatible object (e.g., a read-only proxy), the assignment may succeed where setattr would have raised an AttributeError due to __setattr__ overrides.",
+    "In multi-target assignments like setattr(a, \"x\", setattr(b, \"y\", 1)), the autofix may produce invalid syntax or altered semantics due to broken expression chaining."
+  ]
+}

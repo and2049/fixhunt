@@ -1,0 +1,128 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/useExportType — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/useExportType <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T21-02-29-009Z-9grl-biome-style_useExportType · fix labelled <b>safe</b> · 16 programs, 0 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0034</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags named exports where the exported identifier is used exclusively as a type annotation and lacks the &#39;type&#39; keyword on the export statement.</p><p class="mut">Fix: The autofix adds the &#39;type&#39; keyword before the exported identifier(s) in the export statement, transforming &#39;export { I };&#39; into &#39;export { type I };&#39; for single or multiple type-only exports, and converts mixed exports like &#39;export { type X, Y };&#39; into &#39;export type { X }; export { Y };&#39; when the &#39;style&#39; option is set to &#39;separatedType&#39;, or keeps them grouped as &#39;export { type X, Y };&#39; under &#39;auto&#39; or &#39;inlineType&#39; styles if values are present.</p><details><summary>12 hazards</summary><ul><li>Rewriting &#39;export { I };&#39; to &#39;export { type I };&#39; changes the meaning if I is later used as a value (e.g., new I()) in another file, causing a runtime error because the type-only export is erased.</li><li>If the exported identifier is a namespace (e.g., export { N }; → export { type N };), the rewrite is invalid because namespaces cannot be exported as types, leading to a parse error.</li><li>When the identifier is an enum (e.g., export { E }; → export { type E };), the rewrite may break code that relies on the enum&#39;s runtime value (e.g., E.A) since type-only enums are not emitted.</li><li>Adding &#39;type&#39; to an export of a const variable (e.g., export { v }; → export { type v };) is invalid syntax because const declarations cannot be type-only exported, causing a parse error.</li><li>In a file with &#39;export { type X, Y };&#39;, the autofix under &#39;separatedType&#39; style may split it into &#39;export type { X }; export { Y };&#39;, but if Y is actually a type used elsewhere, the second export becomes incorrect and may trigger the same rule again or cause errors.</li><li>If the exported identifier is declared in the same file via a type alias that is conditionally defined (e.g., type T = cond ? string : number;), marking it as type-only is safe, but if the alias is later used in a value position (e.g., as a default export), the rewrite hides that usage and may lead to undetected misuse.</li><li>The autofix may move or drop attached comments (e.g., JSDoc or // TODO) on the export statement if the tool does not preserve them during rewriting, especially when splitting or reformatting the export clause.</li><li>In a re-export like &#39;export { T } from &quot;mod&quot;;&#39;, if T is a type in the source module but the rule incorrectly flags it (though documentation says it should ignore), applying &#39;type&#39; would be invalid because re-exports cannot be marked as type-only in the same way, causing a parse error.</li><li>If the file is in a JavaScript context (not TypeScript) and the rule is mistakenly applied, adding &#39;type&#39; introduces invalid syntax that breaks parsing.</li><li>When using &#39;export { type I };&#39; under &#39;inlineType&#39; style, if the file also exports a value with the same name (e.g., const I = 5;), the rewrite creates a duplicate identifier error because &#39;type I&#39; and &#39;value I&#39; conflict in the same scope.</li><li>The fix assumes that all references to the identifier are type-only, but if there is a dynamic import like import(&#39;./mod&#39;).then(({ I }) =&gt; new I()), the static analysis may miss the value usage, making the rewrite unsafe.</li><li>If the export statement is inside a nested block (e.g., if (false) { export { I }; }), the rewrite is syntactically invalid because exports cannot appear inside blocks, though the original would also be invalid—this edge case highlights that the rule assumes top-level exports.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Hazard 1: Exported interface used as constructor</td><td class="mut">Rewriting `export { I };` to `export { type I };` removes the type at runtime, breaking va</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Hazard 2: Enum used via property access</td><td class="mut">Rewriting `export { E };` to `export { type E };` removes enum runtime value, breaking E.A</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">invalid</span></td><td>Hazard 3: Order of evaluation with side effects</td><td class="mut">Duplicating export statements can cause initializer side effects to run multiple times.</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 4: JavaScript file with invalid &#39;type&#39; keyword</td><td class="mut">Adding &#39;type&#39; in a .js file causes syntax error due to invalid token.</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Hazard 5: Attached JSDoc comment lost during rewrite</td><td class="mut">Autofix may drop JSDoc comment on export statement when adding &#39;type&#39;.</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span></td><td>Hazard 6: Comment on moved code dropped</td><td class="mut">When splitting exports, comments on individual specifiers may be lost.</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>Hazard 7: Name collision after move</td><td class="mut">Moving an export to a separate statement may cause it to be shadowed by a local var.</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Hazard 8: Strict mode semantics affected by code motion</td><td class="mut">Moving code into a function block may change &#39;this&#39; or arguments behavior.</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 1: Exporting const variable with added &#39;type&#39;</td><td class="mut">Adding &#39;type&#39; to an export of a const variable is invalid syntax.</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 2: JS file with invalid &#39;type&#39; keyword</td><td class="mut">In .js file, adding &#39;type&#39; causes syntax error.</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>Hazard 3: Export inside nested block</td><td class="mut">Export inside block is invalid; fix assumes top-level.</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 4: Re-export with type marker</td><td class="mut">Cannot add &#39;type&#39; to re-export statement.</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">invalid</span></td><td>Hazard 5: Control flow - break/label/finally</td><td class="mut">Side effects in labeled blocks with break/finally.</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>Hazard 6: Function with arguments, length, rest</td><td class="mut">Function exported; rule should not fire (value used).</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Hazard 7: Exporting namespace with added &#39;type&#39;</td><td class="mut">Cannot export namespace as type-only.</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span></td><td>Hazard 8: __proto__ and prototype access</td><td class="mut">Object mutation via __proto__; export unchanged.</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Hazard 1: Exported interface used as constructor</summary><pre>// Hazard 1
+interface I {}
+export { I };
+// This module will be imported elsewhere; but we simulate by evaluating this file.
+// Since I is only a type, at runtime there is no value I.
+console.log(typeof I);
+</pre></details><details id="r1-p002"><summary>r1-p002 — Hazard 2: Enum used via property access</summary><pre>// Hazard 2
+enum E { A }
+export { E };
+console.log(E.A);
+</pre></details><details id="r1-p003"><summary>r1-p003 — Hazard 3: Order of evaluation with side effects</summary><pre>// Hazard 3
+let count = 0;
+const obj = { get value() { count++; return 42; } };
+{ export { obj.value as v }; } // block to isolate
+console.log(count);
+</pre></details><details id="r1-p004"><summary>r1-p004 — Hazard 4: JavaScript file with invalid &#39;type&#39; keyword</summary><pre>// Hazard 4
+// @ts-ignore
+const x = 1;
+export { x };
+console.log(&#39;should not reach&#39;);
+</pre></details><details id="r1-p005"><summary>r1-p005 — Hazard 5: Attached JSDoc comment lost during rewrite</summary><pre>// Hazard 5
+/** @description Exported interface */
+interface I {}
+export { I };
+// Simulate: if comment is lost, we can&#39;t detect it, but we rely on I being undefined at runtime.
+// Instead, we check if the export statement is altered by trying to use I as value (fails).
+try {
+  new I();
+} catch (e) {
+  console.log(e.name);
+}
+</pre></details><details id="r1-p006"><summary>r1-p006 — Hazard 6: Comment on moved code dropped</summary><pre>// Hazard 6
+const a = 1; // comment for a
+const b = 2; // comment for b
+export { a, b };
+console.log(a + b);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Hazard 7: Name collision after move</summary><pre>// Hazard 7
+let X = 1;
+{ export { type X }; } // block scope
+if (typeof X === &#39;number&#39;) {
+  console.log(&#39;value&#39;);
+} else {
+  console.log(&#39;type&#39;);
+}
+</pre></details><details id="r1-p008"><summary>r1-p008 — Hazard 8: Strict mode semantics affected by code motion</summary><pre>// Hazard 8
+&#39;use strict&#39;;
+function f() {
+  export { arguments }; // invalid, but we avoid syntax error by not actually exporting
+  return arguments;
+}
+try {
+  f();
+} catch (e) {
+  console.log(e.name);
+}
+</pre></details><details id="r2-p001"><summary>r2-p001 — Hazard 1: Exporting const variable with added &#39;type&#39;</summary><pre>const V = 1;
+export { V };
+try {
+  console.log(V);
+} catch (e) {
+  // This won&#39;t run initially
+}
+// Biome will attempt to fix to: export { type V }; which is invalid
+</pre></details><details id="r2-p002"><summary>r2-p002 — Hazard 2: JS file with invalid &#39;type&#39; keyword</summary><pre>// @ts-nocheck
+const S = &#39;hello&#39;;
+export { S };
+console.log(S.toUpperCase());
+// Biome fix: export { type S }; -&gt; SyntaxError in JS
+</pre></details><details id="r2-p003"><summary>r2-p003 — Hazard 3: Export inside nested block</summary><pre>if (false) {
+  const B = 2;
+  export { B }; // Invalid in original, flagged but fix irrelevant
+}
+console.log(&#39;no crash&#39;);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Hazard 4: Re-export with type marker</summary><pre>export { T } from &#39;typescript:/dummy&#39;;
+// Biome may flag and try: export { type T } from ... -&gt; invalid
+// Simulate effect:
+let got = undefined;
+try {
+  // This line would be broken by fix
+  got = 1;
+} catch (e) {
+  got = e;
+}
+console.log(typeof got);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Hazard 5: Control flow - break/label/finally</summary><pre>const C = { value: 10 };
+export { C };
+let sum = 0;
+outer: for (let i = 0; i &lt; 2; i++) {
+  if (i === 1) break outer;
+  sum += C.value;
+} finally {
+  sum += 5;
+}
+console.log(sum); // Should be 15: 10 (from i=0) + 5 (finally)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Hazard 6: Function with arguments, length, rest</summary><pre>function F(a, b = 5, ...rest) {
+  return a + b + rest.length;
+}
+export { F };
+console.log(F(1, 2, 3, 4)); // 1+2+2=5
+</pre></details><details id="r2-p007"><summary>r2-p007 — Hazard 7: Exporting namespace with added &#39;type&#39;</summary><pre>const N = { prop: &#39;x&#39; };
+export { N };
+// Biome fix: export { type N }; -&gt; invalid
+console.log(N.prop); // Should print &#39;x&#39;
+</pre></details><details id="r2-p008"><summary>r2-p008 — Hazard 8: __proto__ and prototype access</summary><pre>const P = {}
+P.__proto__ = { x: 1 };
+console.log(P.x); // 1
+class Q {}
+export { P, Q }; // Rule silent on P (used via __proto__), Q (constructor)
+// No fix applied, behavior preserved
+</pre></details></body></html>

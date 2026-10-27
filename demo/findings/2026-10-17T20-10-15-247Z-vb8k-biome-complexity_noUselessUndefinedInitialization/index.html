@@ -1,0 +1,393 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/noUselessUndefinedInitialization — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/noUselessUndefinedInitialization <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-10-15-247Z-vb8k-biome-complexity_noUselessUndefinedInitialization · fix labelled <b>safe</b> · 16 programs, 10 fired, 10 fixed, 3 oracle-backed finding(s) · model cost $0.0758</p>
+<div class="card"><b>Rule analysis</b><p>Flags unnecessary initializations of variables to `undefined`, since they receive that value implicitly.</p><p class="mut">Fix: Removes the `= undefined` initializer from variable declarations while preserving other declarators in the same statement and moving any inline comments to the end of the declaration.</p><details><summary>11 hazards</summary><ul><li>In a `for` loop initializer like `for (let i = 0, j = undefined; i &lt; n; i++)`, removing `= undefined` may alter the evaluation order if the omitted initializer had side effects (though `undefined` is literal, Biome treats it as removable only when isolated).</li><li>If a variable declaration with `= undefined` is inside a `with` statement, removing the initializer could change scope resolution if the variable name matches a property in the with object.</li><li>In non-strict mode, a variable named `undefined` could be reassigned, but the rule only flags explicit initialization to the literal `undefined`, so the fix remains safe as it doesn&#39;t affect the global `undefined` binding.</li><li>When a declaration like `let x = undefined, y = foo();` is split across lines with a comment after `undefined`, the fix moves the comment to the end of the line, potentially changing its visual association though not its syntactic validity.</li><li>In a `try` block, if `let x = undefined;` is followed by a `return` statement, removing the initializer does not affect control flow since the assignment of `undefined` is a no-op.</li><li>In a comma-separated declaration like `var a = undefined, b = 1;`, removing `= undefined` results in `var a, b = 1;`, which is valid and equivalent because `a` is still implicitly `undefined`.</li><li>If the code relies on the temporal dead zone (TDZ) behavior of `let` or `const`, removing an explicit `= undefined` does not change TDZ semantics since the variable is still not accessed before declaration.</li><li>In a function parameter default like `function f(x = undefined)`, the rule does not trigger, so no fix is applied; thus, no hazard arises from confusing parameter defaults with variable initializers.</li><li>In a class field like `class C { f = undefined; }`, the rule does not trigger (as per valid examples), so no fix is attempted, avoiding incorrect removal of meaningful initializations.</li><li>If a declaration contains a trailing comma after the initializer (e.g., `let x = undefined,`), removing `= undefined` may leave a dangling comma, but Biome&#39;s formatter handles this by adjusting the syntax appropriately during the fix.</li><li>In a destructuring pattern like `let [a = undefined] = [];`, the rule does not currently flag this (per documentation focus on simple initializations), so no fix is applied, preventing incorrect simplification of destructuring defaults.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p005"><b>r1-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the explicit `= undefined` initializer from a `var` declaration inside a loop. Because `var` is function-scoped, the original code re-initializes `a` to `undefined` on every iteration, while the fixed code leaves `a` uninitialized only on the first iteration and then retains the previous iteration&#39;s value. This changes the observable output from `undefined, undefined` to `undefined, 0`, a silent wrong result in plausible code.">judge: real · high</span> Var Hoisting and Redeclaration in Loop<p class="mut">The fix removes the explicit `= undefined` initializer from a `var` declaration inside a loop. Because `var` is function-scoped, the original code re-initializes `a` to `undefined` on every iteration, while the fixed code leaves `a` uninitialized only on the first iteration and then retains the previous iteration&#39;s value. This changes the observable output from `undefined, undefined` to `undefined, 0`, a silent wrong result in plausible code.</p>
+<h2>Minimized program (11→8 lines)</h2><pre>function scopeTest() {
+  for (let i = 0; i &lt; 2; i++) {
+    var a = undefined; // Rule triggers twice
+    console.log(&#39;Iteration&#39;, i, &#39;a =&#39;, a);
+    a = i * 10;
+  }
+}
+scopeTest();
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:10:29.082376252 -0400
++++ fixed.js	2026-10-17 16:10:29.366367928 -0400
+@@ -1,7 +1,7 @@
+ function scopeTest() {
+   console.log(&#39;a before loop:&#39;, typeof a); // hoisted, undefined
+   for (let i = 0; i &lt; 2; i++) {
+<span class="del">-    var a = undefined; // Rule triggers twice</span>
+<span class="add">+    var a ; // Rule triggers twice</span>
+     console.log(&#39;Iteration&#39;, i, &#39;a =&#39;, a);
+     a = i * 10;
+   }
+</pre>
+<h2>Observed</h2><pre>stdout before:
+a before loop: undefined
+Iteration 0 a = undefined
+Iteration 1 a = undefined
+a after loop: 10
+stdout after:
+a before loop: undefined
+Iteration 0 a = undefined
+Iteration 1 a = 0
+a after loop: 10</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11938">biomejs/biome/issues/11938</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6003">biomejs/biome/issues/6003</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6906">biomejs/biome/issues/6906</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/8776">biomejs/biome/pull/8776</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2533">biomejs/biome/issues/2533</a> · <a href="reports/r1-p005.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the explicit `= undefined` initializer from a `var` declaration inside a block, which changes the semantics because `var` is function-scoped and the initializer actually assigns `undefined` to the outer variable `a` at that point; without it the outer `a` retains its previous value `&#39;assigned&#39;`, so the program&#39;s observable output changes from `undefined` to `assigned`.">judge: real · high</span> Comma-Separated Declaration Equivalence<p class="mut">The fix removes the explicit `= undefined` initializer from a `var` declaration inside a block, which changes the semantics because `var` is function-scoped and the initializer actually assigns `undefined` to the outer variable `a` at that point; without it the outer `a` retains its previous value `&#39;assigned&#39;`, so the program&#39;s observable output changes from `undefined` to `assigned`.</p>
+<h2>Minimized program (15→8 lines)</h2><pre>function commaTest() {
+  a = &#39;assigned&#39;;
+  if (true) {
+    var a = undefined, c = 2; // Rule triggers again
+  }
+  console.log(&#39;After redeclaration:&#39;, a, typeof c);
+}
+commaTest();
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:10:29.950350814 -0400
++++ fixed.js	2026-10-17 16:10:30.215343061 -0400
+@@ -1,12 +1,12 @@
+ function commaTest() {
+<span class="del">-  var a = undefined, b = 1; // Rule triggers on a</span>
+<span class="add">+  var a , b = 1; // Rule triggers on a</span>
+   console.log(&#39;Initial:&#39;, typeof a, b);
+   a = &#39;assigned&#39;;
+   console.log(&#39;After reassignment:&#39;, a, b);
+   
+   // Re-enter scope to test re-declaration
+   if (true) {
+<span class="del">-    var a = undefined, c = 2; // Rule triggers again</span>
+<span class="add">+    var a , c = 2; // Rule triggers again</span>
+     console.log(&#39;Redecled:&#39;, a, c);
+   }
+   console.log(&#39;After redeclaration:&#39;, a, typeof c);
+</pre>
+<h2>Observed</h2><pre>stdout before:
+Initial: undefined 1
+After reassignment: assigned 1
+Redecled: undefined 2
+After redeclaration: undefined number
+stdout after:
+Initial: undefined 1
+After reassignment: assigned 1
+Redecled: assigned 2
+After redeclaration: assigned number</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/biomejs/biome/issues/11938">biomejs/biome/issues/11938</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6003">biomejs/biome/issues/6003</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6906">biomejs/biome/issues/6906</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/8776">biomejs/biome/pull/8776</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2533">biomejs/biome/issues/2533</a> · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p002"><b>r2-p002</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The program shadows the global `undefined` with a local variable `var undefined = 42`; the original `var x = undefined` reads that local binding and logs 42, but the fix rewrites it to `var x;` which always initializes `x` to the real `undefined`, changing the observable output from 42 to undefined.">judge: real · high</span> Non-Strict Mode Undefined Reassignment Safety<p class="mut">The program shadows the global `undefined` with a local variable `var undefined = 42`; the original `var x = undefined` reads that local binding and logs 42, but the fix rewrites it to `var x;` which always initializes `x` to the real `undefined`, changing the observable output from 42 to undefined.</p>
+<h2>Minimized program (6→5 lines)</h2><pre>(function() {
+  var undefined = 42;
+  var x = undefined;
+  console.log(x);
+})();
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:10:34.886207085 -0400
++++ fixed.js	2026-10-17 16:10:35.161199124 -0400
+@@ -1,6 +1,6 @@
+ (function() {
+   &#39;use sloppy&#39;;
+   var undefined = 42;
+<span class="del">-  var x = undefined;</span>
+<span class="add">+  var x ;</span>
+   console.log(x);
+ })();
+</pre>
+<h2>Observed</h2><pre>stdout before:
+42
+stdout after:
+undefined</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11938">biomejs/biome/issues/11938</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/12040">biomejs/biome/issues/12040</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/11439">biomejs/biome/issues/11439</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6003">biomejs/biome/issues/6003</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/6906">biomejs/biome/issues/6906</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/pull/8776">biomejs/biome/pull/8776</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/2533">biomejs/biome/issues/2533</a> · <a href="reports/r2-p002.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Sparse Arrays - Hole Creation</td><td class="mut">sparse arrays, holes, Array(n) vs [n], array-likes</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Comment Movement Preservation</td><td class="mut">comments attached to the removed or moved code</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Coercion Differences in Template Literals</td><td class="mut">numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, Big</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>Exception During Initialization Evaluation</td><td class="mut">exceptions thrown inside the code the fix removes or rewrites</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Var Hoisting and Redeclaration in Loop</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>For Loop Initializer Comma Sequence</td><td class="mut">In a `for` loop initializer like `for (let i = 0, j = undefined; i &lt; n; i++)`, removing `=</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Comma-Separated Declaration Equivalence</td><td class="mut">In a comma-separated declaration like `var a = undefined, b = 1;`, removing `= undefined` </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Nullish Coalescing and Optional Chaining Sensitivity</td><td class="mut">null/undefined distinction, optional chaining short-circuit, nullish vs falsy</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Temporal Dead Zone After Hoisting</td><td class="mut">temporal dead zone after code is hoisted or reordered</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Non-Strict Mode Undefined Reassignment Safety</td><td class="mut">In non-strict mode, a variable named `undefined` could be reassigned, but the rule only fl</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>Destructuring Default Not Flagged</td><td class="mut">In a destructuring pattern like `let [a = undefined] = [];`, the rule does not currently f</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Coercion Differences: + vs Template Literal</td><td class="mut">numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, Big</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Function Declarations Inside Blocks</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exception During Fix Removal</td><td class="mut">exceptions thrown inside the code the fix removes or rewrites</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>This Binding in Arrow vs Function</td><td class="mut">this binding: arrow vs function, methods extracted from objects, call/apply/bind</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Getter/Setter and DefineProperty Side Effects</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Sparse Arrays - Hole Creation</summary><pre>function test(arr) {
+  return arr.length === 3 &amp;&amp; Number.isNaN(arr[1]);
+}
+
+// Create sparse array via direct assignment to index 2
+let a = [];
+a[2] = 1; // Creates hole at index 0,1 -&gt; [empty × 2, 1]
+console.log(&#39;Direct:&#39;, test(a));
+
+// Recreate using pattern rule flags: explicit undefined then assignment
+let b = [];
+b[0] = undefined; // Rule triggers here
+b[2] = 1;
+console.log(&#39;After undefined assign:&#39;, test(b)); // Should differ due to hole vs undefined
+</pre></details><details id="r1-p002"><summary>r1-p002 — Comment Movement Preservation</summary><pre>function getValue(flag) {
+  // Flag-controlled initialization
+  let x = undefined; /* important note */
+  if (flag) x = 42;
+  return x;
+}
+
+console.log(&#39;Flag false:&#39;, getValue(false));
+console.log(&#39;Flag true:&#39;, getValue(true));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:27.988408380 -0400
++++ fixed.js	2026-10-17 16:10:28.246400801 -0400
+@@ -1,6 +1,6 @@
+ function getValue(flag) {
+   // Flag-controlled initialization
+<span class="del">-  let x = undefined; /* important note */</span>
+<span class="add">+  let x ; /* important note */</span>
+   if (flag) x = 42;
+   return x;
+ }
+</pre></details><details id="r1-p003"><summary>r1-p003 — Coercion Differences in Template Literals</summary><pre>const obj = {
+  toString() { return &#39;obj&#39;; },
+  valueOf() { return 42; }
+};
+
+let u = undefined; // Rule triggers
+console.log(&#39;+ coercion:&#39;, String(u + obj));
+console.log(&#39;template literal:&#39;, `${u}${obj}`);
+
+// Change u via reassignment
+test();
+function test() { u = &#39;changed&#39;; }
+console.log(&#39;After reassignment +:&#39;, String(u + obj));
+console.log(&#39;After reassignment template:&#39;, `${u}${obj}`);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:28.413395896 -0400
++++ fixed.js	2026-10-17 16:10:28.682387995 -0400
+@@ -3,7 +3,7 @@
+   valueOf() { return 42; }
+ };
+ 
+<span class="del">-let u = undefined; // Rule triggers</span>
+<span class="add">+let u ; // Rule triggers</span>
+ console.log(&#39;+ coercion:&#39;, String(u + obj));
+ console.log(&#39;template literal:&#39;, `${u}${obj}`);
+ 
+</pre></details><details id="r1-p004"><summary>r1-p004 — Exception During Initialization Evaluation</summary><pre>let throws = false;
+function sideEffect() {
+  if (throws) throw new Error(&#39;side effect&#39;);
+  return &#39;ok&#39;;
+}
+
+try {
+  let x = sideEffect(); // Not undefined init → rule silent
+  console.log(&#39;Assigned:&#39;, x);
+} catch (e) {
+  console.log(&#39;Caught:&#39;, e.name, e.message);
+}
+
+throws = true;
+try {
+  let y = sideEffect();
+  console.log(&#39;Assigned:&#39;, y);
+} catch (e) {
+  console.log(&#39;Caught:&#39;, e.name, e.message);
+}
+</pre></details><details id="r1-p005"><summary>r1-p005 — Var Hoisting and Redeclaration in Loop</summary><pre>function scopeTest() {
+  console.log(&#39;a before loop:&#39;, typeof a); // hoisted, undefined
+  for (let i = 0; i &lt; 2; i++) {
+    var a = undefined; // Rule triggers twice
+    console.log(&#39;Iteration&#39;, i, &#39;a =&#39;, a);
+    a = i * 10;
+  }
+  console.log(&#39;a after loop:&#39;, a); // Should be 10 from last iteration
+}
+
+scopeTest();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:29.082376252 -0400
++++ fixed.js	2026-10-17 16:10:29.366367928 -0400
+@@ -1,7 +1,7 @@
+ function scopeTest() {
+   console.log(&#39;a before loop:&#39;, typeof a); // hoisted, undefined
+   for (let i = 0; i &lt; 2; i++) {
+<span class="del">-    var a = undefined; // Rule triggers twice</span>
+<span class="add">+    var a ; // Rule triggers twice</span>
+     console.log(&#39;Iteration&#39;, i, &#39;a =&#39;, a);
+     a = i * 10;
+   }
+</pre></details><details id="r1-p006"><summary>r1-p006 — For Loop Initializer Comma Sequence</summary><pre>let log = &#39;&#39;;
+function mark() { log += &#39;called&#39;; return undefined; }
+
+for (let i = 0, j = mark(); i &lt; 2; i++) { // Rule does NOT trigger (not isolated undefined)
+  log += `-i${i}-j${j}`;
+}
+console.log(&#39;Log (should show call):&#39;, log);
+
+// Separate test: isolated undefined in comma decl
+log = &#39;&#39;;
+for (let i = 0; i &lt; 1; i++) {
+  let a = undefined, b = 1; // Rule triggers on a
+  log += `a${a}b${b}`;
+}
+console.log(&#39;After fix equivalent:&#39;, log);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:29.527363210 -0400
++++ fixed.js	2026-10-17 16:10:29.787355590 -0400
+@@ -9,7 +9,7 @@
+ // Separate test: isolated undefined in comma decl
+ log = &#39;&#39;;
+ for (let i = 0; i &lt; 1; i++) {
+<span class="del">-  let a = undefined, b = 1; // Rule triggers on a</span>
+<span class="add">+  let a , b = 1; // Rule triggers on a</span>
+   log += `a${a}b${b}`;
+ }
+ console.log(&#39;After fix equivalent:&#39;, log);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Comma-Separated Declaration Equivalence</summary><pre>function commaTest() {
+  var a = undefined, b = 1; // Rule triggers on a
+  console.log(&#39;Initial:&#39;, typeof a, b);
+  a = &#39;assigned&#39;;
+  console.log(&#39;After reassignment:&#39;, a, b);
+  
+  // Re-enter scope to test re-declaration
+  if (true) {
+    var a = undefined, c = 2; // Rule triggers again
+    console.log(&#39;Redecled:&#39;, a, c);
+  }
+  console.log(&#39;After redeclaration:&#39;, a, typeof c);
+}
+
+commaTest();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:29.950350814 -0400
++++ fixed.js	2026-10-17 16:10:30.215343061 -0400
+@@ -1,12 +1,12 @@
+ function commaTest() {
+<span class="del">-  var a = undefined, b = 1; // Rule triggers on a</span>
+<span class="add">+  var a , b = 1; // Rule triggers on a</span>
+   console.log(&#39;Initial:&#39;, typeof a, b);
+   a = &#39;assigned&#39;;
+   console.log(&#39;After reassignment:&#39;, a, b);
+   
+   // Re-enter scope to test re-declaration
+   if (true) {
+<span class="del">-    var a = undefined, c = 2; // Rule triggers again</span>
+<span class="add">+    var a , c = 2; // Rule triggers again</span>
+     console.log(&#39;Redecled:&#39;, a, c);
+   }
+   console.log(&#39;After redeclaration:&#39;, a, typeof c);
+</pre></details><details id="r1-p008"><summary>r1-p008 — Nullish Coalescing and Optional Chaining Sensitivity</summary><pre>function process(input) {
+  let data = undefined; // Rule triggers
+  console.log(&#39;data == null:&#39;, data == null);
+  console.log(&#39;data === null:&#39;, data === null);
+  console.log(&#39;data ?? &quot;default&quot;:&#39;, data ?? &#39;default&#39;);
+  console.log(&#39;data || &quot;fallback&quot;:&#39;, data || &#39;fallback&#39;);
+  
+  const obj = { value: 42 };
+  console.log(&#39;obj.prop?.length:&#39;, obj.prop?.length);
+  console.log(&#39;obj[data]?.prop:&#39;, obj[data]?.prop);
+}
+
+process();
+
+// Show difference if data were null
+data = null;
+console.log(&#39;\nWith null:&#39;);
+console.log(&#39;data == null:&#39;, data == null);
+console.log(&#39;data === null:&#39;, data === null);
+console.log(&#39;data ?? &quot;default&quot;:&#39;, data ?? &#39;default&#39;);
+console.log(&#39;data || &quot;fallback&quot;:&#39;, data || &#39;fallback&#39;);
+}
+</pre></details><details id="r2-p001"><summary>r2-p001 — Temporal Dead Zone After Hoisting</summary><pre>function test() {
+  console.log(typeof x); // Should log &#39;undefined&#39; before init
+  var x = undefined;
+  console.log(x);
+}
+test();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:34.450219722 -0400
++++ fixed.js	2026-10-17 16:10:34.726211722 -0400
+@@ -1,6 +1,6 @@
+ function test() {
+   console.log(typeof x); // Should log &#39;undefined&#39; before init
+<span class="del">-  var x = undefined;</span>
+<span class="add">+  var x ;</span>
+   console.log(x);
+ }
+ test();
+</pre></details><details id="r2-p002"><summary>r2-p002 — Non-Strict Mode Undefined Reassignment Safety</summary><pre>(function() {
+  &#39;use sloppy&#39;;
+  var undefined = 42;
+  var x = undefined;
+  console.log(x);
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:34.886207085 -0400
++++ fixed.js	2026-10-17 16:10:35.161199124 -0400
+@@ -1,6 +1,6 @@
+ (function() {
+   &#39;use sloppy&#39;;
+   var undefined = 42;
+<span class="del">-  var x = undefined;</span>
+<span class="add">+  var x ;</span>
+   console.log(x);
+ })();
+</pre></details><details id="r2-p003"><summary>r2-p003 — Destructuring Default Not Flagged</summary><pre>let [a = undefined] = [];
+console.log(a);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Coercion Differences: + vs Template Literal</summary><pre>let x = undefined;
+const obj = { toString() { return &#39;42&#39;; }, valueOf() { return 0; } };
+console.log(String(x) + obj);
+console.log(`${x}${obj}`);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:35.556187700 -0400
++++ fixed.js	2026-10-17 16:10:35.815180210 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-let x = undefined;</span>
+<span class="add">+let x ;</span>
+ const obj = { toString() { return &#39;42&#39;; }, valueOf() { return 0; } };
+ console.log(String(x) + obj);
+ console.log(`${x}${obj}`);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Function Declarations Inside Blocks</summary><pre>if (true) {
+  function inner() {
+    var tmp = undefined;
+    return tmp;
+  }
+  console.log(inner());
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:35.987175235 -0400
++++ fixed.js	2026-10-17 16:10:36.260167357 -0400
+@@ -1,6 +1,6 @@
+ if (true) {
+   function inner() {
+<span class="del">-    var tmp = undefined;</span>
+<span class="add">+    var tmp ;</span>
+     return tmp;
+   }
+   console.log(inner());
+</pre></details><details id="r2-p006"><summary>r2-p006 — Exception During Fix Removal</summary><pre>let y;
+try {
+  y = undefined;
+  throw new Error(&#39;test&#39;);
+} catch (e) {
+  console.log(y === undefined, e.message);
+}
+</pre></details><details id="r2-p007"><summary>r2-p007 — This Binding in Arrow vs Function</summary><pre>const obj = {
+  val: 42,
+  regular: function() {
+    var x = undefined;
+    return () =&gt; {
+      console.log(this.val, x);
+    };
+  }
+};
+const fn = obj.regular();
+fn();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:10:36.647156189 -0400
++++ fixed.js	2026-10-17 16:10:36.922148253 -0400
+@@ -1,7 +1,7 @@
+ const obj = {
+   val: 42,
+   regular: function() {
+<span class="del">-    var x = undefined;</span>
+<span class="add">+    var x ;</span>
+     return () =&gt; {
+       console.log(this.val, x);
+     };
+</pre></details><details id="r2-p008"><summary>r2-p008 — Getter/Setter and DefineProperty Side Effects</summary><pre>const obj = {};
+Object.defineProperty(obj, &#39;prop&#39;, {
+  get() { return this._val; },
+  set(v) { this._val = v; }
+});
+obj.prop = undefined;
+console.log(obj.prop);
+</pre></details></body></html>

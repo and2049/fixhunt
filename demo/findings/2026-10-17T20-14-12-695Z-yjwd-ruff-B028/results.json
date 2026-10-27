@@ -1,0 +1,692 @@
+{
+  "runId": "2026-10-17T20-14-12-695Z-yjwd-ruff-B028",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "B028",
+    "fixKind": "unknown",
+    "docs": "# no-explicit-stacklevel (B028)\n\nDerived from the **flake8-bugbear** linter.\n\nFix is always available.\n\n## What it does\nChecks for `warnings.warn` calls without an explicit `stacklevel` keyword\nargument.\n\n## Why is this bad?\nThe `warnings.warn` method uses a `stacklevel` of 1 by default, which\nwill output a stack frame of the line on which the \"warn\" method\nis called. Setting it to a higher number will output a stack frame\nfrom higher up the stack.\n\nIt's recommended to use a `stacklevel` of 2 or higher, to give the caller\nmore context about the warning.\n\nIn Python 3.12 and higher, one may also use `skip_file_prefixes` to specify\nwhich file prefixes are ignored when counting the stack level. This implicitly overrides the `stacklevel` to be\nat least 2, according to the [Python documentation].\n## Example\n```python\nimport warnings\n\nwarnings.warn(\"This is a warning\")\n```\n\nUse instead:\n```python\nimport warnings\n\nwarnings.warn(\"This is a warning\", stacklevel=2)\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe because it changes\nthe behavior of the code. Moreover, the fix will assign\na stacklevel of 2, while the user may wish to assign a\nhigher stacklevel to address the diagnostic.\n\n## References\n- [Python documentation: `warnings.warn`][Python documentation]\n\n[Python documentation]: https://docs.python.org/3/library/warnings.html#warnings.warn\n"
+  },
+  "analysis": {
+    "summary": "Flags calls to warnings.warn missing an explicit stacklevel argument.",
+    "firingShapes": [
+      "warnings.warn('msg')",
+      "warnings.warn(msg)",
+      "warnings.warn('msg', category=UserWarning)",
+      "warnings.warn(message='msg')",
+      "_warn = warnings.warn; _warn('msg')",
+      "getattr(warnings, 'warn')('msg')",
+      "warnings.warn('msg', stacklevel=1)",
+      "warnings.warn('msg', skip_file_prefixes=['foo']) if sys.version_info < (3, 12)"
+    ],
+    "silentShapes": [
+      "warnings.warn('msg', stacklevel=2)",
+      "warnings.warn('msg', stacklevel=3)",
+      "warnings.warn('msg', skip_file_prefixes=['mypkg'] if sys.version_info >= (3, 12))",
+      "logger.warning('msg')"
+    ],
+    "fixDescription": "Adds ', stacklevel=2' as the last positional or keyword argument before any existing keyword arguments like category or filename, preserving other arguments and their order.",
+    "hazards": [
+      "If stacklevel was already provided as a positional argument after message (e.g., warnings.warn(msg, 1)), adding another stacklevel=2 creates a duplicate keyword argument, causing a TypeError.",
+      "If the call uses *args to pass arguments (e.g., warnings.warn(*args)), inserting stacklevel=2 breaks argument unpacking and may misalign parameters.",
+      "If the call is inside a lambda or comprehension where stacklevel affects outer scope lookup, forcing stacklevel=2 may alter which warning is suppressed by filters.",
+      "If warnings.warn is monkey-patched or overridden locally, the fix assumes the original signature and may pass an unexpected keyword argument.",
+      "If the code relies on the default stacklevel=1 behavior to show the warning origin at the warn site, changing it to 2 shifts blame to the caller, altering diagnostic intent.",
+      "If the call includes skip_file_prefixes in Python <3.12, the fix incorrectly adds stacklevel=2 despite skip_file_prefixes being ignored, potentially conflicting with user intent.",
+      "If the message argument is an expression with side effects (e.g., warn(f(x))), reordering arguments to insert stacklevel=2 could change evaluation order if the fix incorrectly places it before the message.",
+      "If the call uses keyword-only arguments via *, such as warnings.warn(msg, *, category=Error), inserting stacklevel=2 before * causes a syntax error.",
+      "If the code depends on the warning being filtered based on stackline matching, changing stacklevel alters which frames are considered and may unexpectedly show or hide warnings.",
+      "If the call is in a stub (.pyi) file or conditional typing block, adding runtime arguments may violate type checker expectations or cause overload mismatches."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.002817,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Bytes vs Str Encoding Hazard",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              6,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Warned with: 'data'\n",
+          "stderr1": "<wd>/prog: UserWarning: data",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Warned with: 'data'\n",
+          "stderr1": "<wd>/prog: UserWarning: data",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Monkey-Patch Signature Hazard",
+      "hazard": "If warnings.warn is monkey-patched or overridden locally, the fix assumes the original signature and may pass an unexpected keyword argument.",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Patched warn called with: test, category=None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Patched warn called with: test, category=None\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Exception Handling Hazard",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Caught: failed\nFinally block executed\n",
+          "stderr1": "<wd>/prog: UserWarning: error ahead",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: failed\nFinally block executed\n",
+          "stderr1": "<wd>/prog: UserWarning: error ahead",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Async Await Ordering Hazard",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Async warn completed\n",
+          "stderr1": "<wd>/prog: UserWarning: async msg",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Async warn completed\n",
+          "stderr1": "<wd>/prog: UserWarning: async msg",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Mutable Default Aliasing Hazard",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'tuple' as a dict key (unhashable type: 'list')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: cannot use 'tuple' as a dict key (unhashable type: 'list')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Stacklevel Filtering Hazard",
+      "hazard": "If the code depends on the warning being filtered based on stackline matching, changing stacklevel alters which frames are considered and may unexpectedly show or hide warnings.",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "No warning printed if filtered\n",
+          "stderr1": "<wd>/prog: UserWarning: filtered?",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "No warning printed if filtered\n",
+          "stderr1": "<wd>/prog: UserWarning: filtered?",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Skip File Prefixes <3.12 Hazard",
+      "hazard": "If the call includes skip_file_prefixes in Python <3.12, the fix incorrectly adds stacklevel=2 despite skip_file_prefixes being ignored, potentially conflicting with user intent.",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "skip_file_prefixes respected\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Stub File Overload Hazard",
+      "hazard": "If the call is in a stub (.pyi) file or conditional typing block, adding runtime arguments may violate type checker expectations or cause overload mismatches.",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "No runtime effect from conditional block\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "No runtime effect from conditional block\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Mutable default argument mutation affects behavior",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              10,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "lst after: [99]\n",
+          "stderr1": "<wd>/prog: UserWarning: [99]",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "lst after: [99]\n",
+          "stderr1": "<wd>/prog: UserWarning: [99]",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Message expression side effect evaluation order changed",
+      "hazard": "If the message argument is an expression with side effects (e.g., warn(f(x))), reordering arguments to insert stacklevel=2 could change evaluation order if the fix incorrectly places it before the mes",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              8,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "counter: 1\n",
+          "stderr1": "<wd>/prog: UserWarning: message-1",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "counter: 1\n",
+          "stderr1": "<wd>/prog: UserWarning: message-1",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "*args forwarding misaligned by inserted stacklevel",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: wrapper() got an unexpected keyword argument 'category'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Star-import and __all__ interaction with rewritten call",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "warn called via star-import\n",
+          "stderr1": "<wd>/prog: UserWarning: test",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Stacklevel change alters warning origin reporting",
+      "hazard": "If the code relies on the default stacklevel=1 behavior to show the warning origin at the warn site, changing it to 2 shifts blame to the caller, altering diagnostic intent.",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "<wd>/prog: UserWarning: alert",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "<wd>/prog: UserWarning: alert",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Stub file conditional typing block gets invalid runtime arg",
+      "hazard": "If the call is in a stub (.pyi) file or conditional typing block, adding runtime arguments may violate type checker expectations or cause overload mismatches.",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "TYPE_CHECKING block skipped at runtime\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TYPE_CHECKING block skipped at runtime\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "*args unpacking broken by inserted stacklevel argument",
+      "hazard": "If the call uses *args to pass arguments (e.g., warnings.warn(*args)), inserting stacklevel=2 breaks argument unpacking and may misalign parameters.",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "warning issued with *args\n",
+          "stderr1": "<wd>/prog: UserWarning: dynamic message",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Expression coercion and evaluation order affected",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "B028",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B028",
+            "severity": "warning",
+            "message": "No explicit `stacklevel` keyword argument found",
+            "span": [
+              8,
+              1
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "x: [9]\n",
+          "stderr1": "<wd>/prog: RuntimeWarning: 4.5",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: [9]\n",
+          "stderr1": "<wd>/prog: RuntimeWarning: 4.5",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

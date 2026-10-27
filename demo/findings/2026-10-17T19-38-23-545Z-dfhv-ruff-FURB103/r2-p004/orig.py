@@ -1,0 +1,1 @@
+x = 0\nwith open('tmp.txt', 'w') as f:\n    x = 1\n    f.write(str(x))\nprint('x after block:', x)\nwith open('tmp.txt') as f:\n    print('file contains:', repr(f.read()))\nimport os\nos.remove('tmp.txt')

@@ -1,0 +1,31 @@
+{
+  "summary": "Flags explicit uses of `undefined` where it is redundant because it is already the implicit default.",
+  "firingShapes": [
+    "let x = undefined;",
+    "const y = undefined;",
+    "function f(a = undefined) {}",
+    "function f({a = undefined}) {}",
+    "return undefined;",
+    "yield undefined;"
+  ],
+  "silentShapes": [
+    "let x;",
+    "function f(a) {}",
+    "function f(){ return; }",
+    "function f(){ yield; }",
+    "function f(): number { return undefined; }"
+  ],
+  "fixDescription": "Removes the explicit `= undefined` initializer or argument default, or replaces `return undefined;`/`yield undefined;` with `return;`/`yield;` respectively.",
+  "hazards": [
+    "Rewriting `let x = undefined;` to `let x;` changes behavior if the variable is read before assignment due to TDZ—though both initialize to `undefined`, the temporal dead zone semantics differ slightly in edge cases involving indirect eval or with statements.",
+    "In destructuring like `const {a = undefined} = obj;`, removing `= undefined` alters behavior when `obj.a` is `null` because the default only applies if the property is missing, not if it is present but `null`.",
+    "For function parameters like `function f(a = undefined)`, removing the default changes behavior when `f()` is called with no argument vs. `f(undefined)`—though both result in `a` being `undefined`, the former triggers the default parameter initialization which may have side effects if the default expression is not a literal (but here it is, so low risk; still, spec-wise distinct).",
+    "In object destructuring parameters like `function f({a = undefined})`, omitting the default breaks when the argument is `{a: null}` because the default does not apply, preserving `null` instead of converting to `undefined`.",
+    "Replacing `return undefined;` with `return;` in a function that is used as a constructor changes behavior because `new f()` returns the instance when the return value is not an object, and `undefined` is not an object, so both behave the same—however, if the function is called via `Reflect.construct` with a `newTarget`, the return value handling is identical, so no actual hazard; but per spec, any non-object return is ignored, so safe.",
+    "Replacing `yield undefined;` with `yield;` in a generator changes behavior if the generator's return value is inspected via `{value, done}` because `yield` produces `{value: undefined, done: false}` just like `yield undefined;`, so equivalent—no hazard.",
+    "If the code relies on the length of the function's parameter list for reflection (e.g., `f.length`), removing a default parameter does not change the length because parameters with defaults still count toward length—so no hazard.",
+    "In strict mode, if `undefined` is reassigned globally, the literal `undefined` might not refer to the actual undefined value, but the rule only flags syntactic defaults, and the autofix removes the reference entirely, so if `undefined` was shadowed, removing the use avoids relying on the possibly mutated binding—this could fix unintended behavior, not break it.",
+    "The autofix may drop comments attached to the `undefined` token, such as `let x = /* TODO */ undefined;`, which would be lost during rewriting.",
+    "In rare cases involving `with` statements or indirect `eval`, the scope resolution of a bare variable in `let x;` vs. an initializer could differ if `undefined` is not resolvable in the expected scope, but since the initializer is removed and the variable is still declared, the behavior remains consistent."
+  ]
+}

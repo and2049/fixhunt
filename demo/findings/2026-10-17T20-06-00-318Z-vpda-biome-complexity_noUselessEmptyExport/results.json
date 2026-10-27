@@ -1,0 +1,478 @@
+{
+  "runId": "2026-10-17T20-06-00-318Z-vpda-biome-complexity_noUselessEmptyExport",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/noUselessEmptyExport",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessEmptyExport\n- Fix: safe\n- Default severity: info\n- Available from version: 1.0.0\n- Diagnostic category: lint/complexity/noUselessEmptyExport\n- This rule is recommended\n\nDescription\n\n Disallow empty exports that don't change anything in a module file.\n\n An empty `export {}` is sometimes useful to turn a file that would otherwise be a script into a module.\n Per the [TypeScript Handbook Modules page](https://www.typescriptlang.org/docs/handbook/modules.html):\n\n > In TypeScript, just as in ECMAScript 2015,\n > any file containing a top-level import or export is considered a module.\n > Conversely, a file without any top-level import or export declarations is treated as a script\n > whose contents are available in the global scope.\n\n However, an `export {}` statement does nothing if there are any other top-level import or export in the file.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n import { A } from \"module\";\n export {};\n ```\n\n ```js,expect_diagnostic\n export const A = 0;\n export {};\n ```\n\nValid\n\n ```js\n export {};\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags unnecessary 'export {}' statements when another top-level import or export already exists in the same module.",
+    "firingShapes": [
+      "import { x } from \"mod\"; export {};",
+      "export const y = 1; export {};",
+      "export function f() {}; export {};",
+      "export class C {}; export {};",
+      "export * from \"ns\"; export {};",
+      "export default function(){}; export {};",
+      "let z = 0; export {}; // Invalid only if paired with another top-level import/export \u2014 but alone it\u2019s valid, so adjust: actually need import/export present",
+      "import \"side-effect\"; export {};"
+    ],
+    "silentShapes": [
+      "export {};",
+      "import {a} from \"m\";",
+      "export const b = 2;",
+      "/* comment */ export {}; // Only valid if no other top-level import/export"
+    ],
+    "fixDescription": "The autofix removes the 'export {}' statement entirely, leaving the rest of the file unchanged.",
+    "hazards": [
+      "Removing 'export {}' in a file with only that export turns the module into a script, potentially breaking top-level 'this' semantics and strict mode enforcement.",
+      "If the file relies on being a module for proper lexical scoping of top-level 'var' (which is not added to global in modules), removing the export could inadvertently expose 'var'-declared variables globally.",
+      "In environments sensitive to module vs script distinction (e.g., Chrome extensions, Web Workers), removing the export may alter loading behavior or security policies.",
+      "If the 'export {}' is followed by a comment that has semantic meaning (e.g., licensing, dependency metadata), its removal could strip important information even if the fix aims to preserve comments.",
+      "When using bundlers that treat empty exports as entry points or side-effect markers, removing it might affect tree-shaking or bundle inclusion logic.",
+      "If the file is intended to be imported solely for its side effects and the 'export {}' ensures module status, removing it could cause the file to be treated as a script, altering execution context.",
+      "In TypeScript, removing the empty export may affect how the file is interpreted in ambient contexts or declaration merging, though less likely at term level.",
+      "If the 'export {}' appears after a top-level await, removing it does not change module status (since await already makes it a module), but the fix still applies and is safe\u2014however, this is not a hazard; instead, note that the fix remains safe even then."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0026688,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 10
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Comment stripping hazard",
+      "hazard": "If the 'export {}' is followed by a comment that has semantic meaning (e.g., licensing, dependency metadata), its removal could strip important information even if the fix aims to preserve comments.",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessEmptyExport",
+            "severity": "info",
+            "message": "This empty export is useless because there's another export or import.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: The requested module 'fs' does not provide an export named 'x'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: The requested module 'fs' does not provide an export named 'x'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:06:08.344652809 -0400\n+++ fixed.js\t2026-10-17 16:06:08.643637460 -0400\n@@ -1,4 +1,3 @@\n // SPDX-License-Identifier: MIT\n import { x } from 'fs'; var v = 1;\n-export {}; // Copyright 2024 Example Corp\n console.log(v);\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Exception during rewrite hazard",
+      "hazard": "Exceptions thrown inside the code the fix removes or rewrites",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-00-318Z-vpda-biome-complexity_noUselessEmptyExport/r1-p002/orig.js:4\nexport {}; // This line triggers the rule\n^^^^^^\n\nSyntaxError: Unexpected token 'export'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p003",
+      "title": "Top-level var scoping hazard",
+      "hazard": "If the file relies on being a module for proper lexical scoping of top-level 'var' (which is not added to global in modules), removing the export could inadvertently expose 'var'-declared variables gl",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Null/undefined distinction hazard",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "nullish\ndefault\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "ASI and semicolon-less code hazard",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "IIFE ran\nx: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comments attached to removed code hazard",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Top-level await safety note",
+      "hazard": "If the 'export {}' appears after a top-level await, removing it does not change module status (since await already makes it a module), but the fix still applies and is safe\u2014however, this is not a haza",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-00-318Z-vpda-biome-complexity_noUselessEmptyExport/r1-p007/orig.js:4\n  export {};\n  ^^^^^^\n\nSyntaxError: Unexpected token 'export'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p008",
+      "title": "__proto__ and prototype access hazard",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "custom\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Bundler entry point / side-effect marker",
+      "hazard": "When using bundlers that treat empty exports as entry points or side-effect markers, removing it might affect tree-shaking or bundle inclusion logic.",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessEmptyExport",
+            "severity": "info",
+            "message": "This empty export is useless because there's another export or import.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '<wd>/prog imported from <wd>/prog",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "Error [ERR_MODULE_NOT_FOUND]: Cannot find module '<wd>/prog imported from <wd>/prog",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:06:14.281349820 -0400\n+++ fixed.js\t2026-10-17 16:06:14.557335829 -0400\n@@ -1,3 +1,3 @@\n-import { x } from './mod.js'; export {};\n+import { x } from './mod.js'; \n console.log('entry:', typeof x !== 'undefined');\n export const y = 42;\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Sparse arrays and holes",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "3 true true true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Arguments object and function length",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "{\"args\":1,\"len\":1,\"rest\":[]}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "ASI and semicolon-less code with leading paren/bracket",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T20-06-00-318Z-vpda-biome-complexity_noUselessEmptyExport/r2-p004/orig.js:4\n[].push.call({length:0}, 99)\n ^\n\nSyntaxError: Unexpected token ']'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p005",
+      "title": "Module-to-script conversion and top-level this",
+      "hazard": "Removing 'export {}' in a file with only that export turns the module into a script, potentially breaking top-level 'this' semantics and strict mode enforcement.",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "module undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p006",
+      "title": "This binding: arrow vs function, methods extracted",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "TypeScript ambient contexts and declaration merging",
+      "hazard": "In TypeScript, removing the empty export may affect how the file is interpreted in ambient contexts or declaration merging, though less likely at term level.",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TS-like number check passed\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Temporal Dead Zone after hoisting/reordering",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "complexity/noUselessEmptyExport",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TDZ: ReferenceError\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

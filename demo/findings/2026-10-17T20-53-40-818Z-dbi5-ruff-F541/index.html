@@ -1,0 +1,193 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff F541 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff F541 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-53-40-818Z-dbi5-ruff-F541 · fix labelled <b>unknown</b> · 16 programs, 10 fired, 10 fixed, 0 oracle-backed finding(s) · model cost $0.0040</p>
+<div class="card"><b>Rule analysis</b><p>Flags f-strings that contain no placeholder expressions.</p><p class="mut">Fix: Rewrites the f-string literal by removing the leading &#39;f&#39; (or &#39;rf&#39;/&#39;fr&#39;) prefix, converting it to a regular string literal (or raw string if applicable).</p><details><summary>10 hazards</summary><ul><li>If the f-string is part of a docstring (e.g., immediately follows a function/class definition), removing the &#39;f&#39; may preserve the docstring but Ruff marks the fix unsafe in such cases—however, if incorrectly applied, it could alter tooling that distinguishes docstrings by presence of &#39;f&#39;.</li><li>In a line-continued context using backslash (e.g., `f&quot;hello&quot; \
+    f&quot;world&quot;`), removing the &#39;f&#39; from one segment changes the type of that segment from f-string to str, potentially breaking concatenation semantics if the other segment relies on interpolation (though rule only fires when no segment has placeholders).</li><li>If the f-string contains escaped quote characters (e.g., `f&quot;He said \&quot;hi\&quot;&quot;`), the fix preserves them correctly since they are literal in both f-string and regular string contexts.</li><li>When the f-string uses triple quotes (e.g., `f&quot;&quot;&quot;hello&quot;&quot;&quot;`), the fix produces a triple-quoted regular string, which behaves identically for content without placeholders or escape dependencies.</li><li>If the f-string is a raw f-string (e.g., `rf&quot;\n&quot;`), the fix removes the &#39;f&#39; to yield `r&quot;\n&quot;`, preserving raw string behavior; however, if the original relied on f-string-specific raw processing (which doesn&#39;t differ from raw string for non-interpolated content), it is safe—but Ruff may still consider it hazardous due to prefix alteration.</li><li>If the f-string appears inside a larger expression where its type is used in overload resolution or isinstance checks (rare), changing it from f-string to str could theoretically affect behavior, though both are instances of str and share the same runtime type.</li><li>If the f-string is adjacent to another string literal without an operator (implicit concatenation) and only the f-string is modified (e.g., `f&quot;hello&quot; &quot;world&quot;` → `&quot;hello&quot; &quot;world&quot;`), the concatenation result remains unchanged as both are string literals.</li><li>If the f-string contains a comment inside (invalid syntax—comments cannot be inside string literals), this is not a concern; however, if the line has a trailing comment (e.g., `f&quot;hi&quot; # note`), the fix preserves the comment as it lies outside the literal.</li><li>If the f-string is generated via a macro or code‑generation tool that expects the &#39;f&#39; prefix for later processing, removing it could break downstream tooling, though this is outside Python semantics.</li><li>If the f-string is part of a stub file (.pyi) and the fixer runs there, altering the literal may affect type checker expectations, though f-strings without placeholders are uncommon in stubs and behave identically as str.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus operator in loop with f-string condition</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>F-string with percent formatting inside</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>F-string encoded to bytes and written to file</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>File write with f-string and truncation on reuse</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Escaped quotes in f-string preserved after fix</td><td class="mut">If the f-string contains escaped quote characters (e.g., `f&quot;He said \&quot;hi\&quot;&quot;)`, the fix pre</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Macro-generated f-string expecting prefix for processing</td><td class="mut">If the f-string is generated via a macro or code‑generation tool that expects the &#39;f&#39; pref</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Star-import and module-level side effect with f-string</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Line-continued f-string concatenation with mixed segments</td><td class="mut">In a line-continued context using backslash (e.g., `f&quot;hello&quot; \
+    f&quot;world&quot;`), removing th</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Raw f-string with escape sequence</td><td class="mut">raw f-string prefix removal alters interpretation of escapes</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Context manager with write but no close</td><td class="mut">object with write() method used as file substitute</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>File write with truncation on reuse</td><td class="mut">file mode and truncation behavior affects output</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type annotation evaluated at runtime</td><td class="mut">typing-only import used in annotation that executes at runtime</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Float coercion and rounding</td><td class="mut">numeric expression in f-string subject to rounding</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>F-string in docstring position</td><td class="mut">removing f from docstring-altering string affects tooling</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation order with side effects</td><td class="mut">side effects in f-string expression affect execution order</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus in comprehension with f-string condition</td><td class="mut">walrus operator in comprehension scoping affected by f-string rewrite</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Walrus operator in loop with f-string condition</summary><pre>results = []
+for i in range(3):
+    if (s := f&quot;count&quot;) == &quot;count&quot;:
+        results.append(i)
+        def make_closure():
+            return s
+        results.append(make_closure())
+print(results)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:53:59.061364670 -0400
++++ fixed.py	2026-10-17 16:53:59.227367318 -0400
+@@ -1,6 +1,6 @@
+ results = []
+ for i in range(3):
+<span class="del">-    if (s := f&quot;count&quot;) == &quot;count&quot;:</span>
+<span class="add">+    if (s := &quot;count&quot;) == &quot;count&quot;:</span>
+         results.append(i)
+         def make_closure():
+             return s
+</pre></details><details id="r1-p002"><summary>r1-p002 — F-string with percent formatting inside</summary><pre>template = f&quot;Hello&quot;
+value = template % {}
+print(value)
+try:
+    f&quot;{template}&quot;
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:53:59.332368993 -0400
++++ fixed.py	2026-10-17 16:53:59.494371576 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-template = f&quot;Hello&quot;</span>
+<span class="add">+template = &quot;Hello&quot;</span>
+ value = template % {}
+ print(value)
+ try:
+</pre></details><details id="r1-p003"><summary>r1-p003 — F-string encoded to bytes and written to file</summary><pre>data = f&quot;test&quot;
+with open(&#39;tmp.bin&#39;, &#39;wb&#39;) as f:
+    f.write(data.encode())
+with open(&#39;tmp.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;tmp.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:53:59.597373219 -0400
++++ fixed.py	2026-10-17 16:53:59.767375931 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-data = f&quot;test&quot;</span>
+<span class="add">+data = &quot;test&quot;</span>
+ with open(&#39;tmp.bin&#39;, &#39;wb&#39;) as f:
+     f.write(data.encode())
+ with open(&#39;tmp.bin&#39;, &#39;rb&#39;) as f:
+</pre></details><details id="r1-p004"><summary>r1-p004 — File write with f-string and truncation on reuse</summary><pre>with open(&#39;tmp.txt&#39;, &#39;w&#39;) as f:
+    f.write(f&quot;first&quot;)
+with open(&#39;tmp.txt&#39;, &#39;a&#39;) as f:
+    f.write(f&quot;second&quot;)
+with open(&#39;tmp.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;tmp.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:53:59.868377542 -0400
++++ fixed.py	2026-10-17 16:54:00.042380317 -0400
+@@ -1,7 +1,7 @@
+ with open(&#39;tmp.txt&#39;, &#39;w&#39;) as f:
+<span class="del">-    f.write(f&quot;first&quot;)</span>
+<span class="add">+    f.write(&quot;first&quot;)</span>
+ with open(&#39;tmp.txt&#39;, &#39;a&#39;) as f:
+<span class="del">-    f.write(f&quot;second&quot;)</span>
+<span class="add">+    f.write(&quot;second&quot;)</span>
+ with open(&#39;tmp.txt&#39;, &#39;r&#39;) as f:
+     print(f.read())
+ import os
+</pre></details><details id="r1-p005"><summary>r1-p005 — Escaped quotes in f-string preserved after fix</summary><pre>s = f&quot;He said \&quot;hi\&quot;&quot;
+print(s.count(&#39;\&quot;&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:54:00.150382038 -0400
++++ fixed.py	2026-10-17 16:54:00.312384620 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-s = f&quot;He said \&quot;hi\&quot;&quot;</span>
+<span class="add">+s = &quot;He said \&quot;hi\&quot;&quot;</span>
+ print(s.count(&#39;\&quot;&#39;))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Macro-generated f-string expecting prefix for processing</summary><pre>def process_fstring(src):
+    return src.startswith(&#39;f&#39;) and &#39;dynamic&#39; in src
+s = f&quot;dynamic&quot;
+print(process_fstring(s))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:54:00.412386213 -0400
++++ fixed.py	2026-10-17 16:54:00.581388907 -0400
+@@ -1,4 +1,4 @@
+ def process_fstring(src):
+     return src.startswith(&#39;f&#39;) and &#39;dynamic&#39; in src
+<span class="del">-s = f&quot;dynamic&quot;</span>
+<span class="add">+s = &quot;dynamic&quot;</span>
+ print(process_fstring(s))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Star-import and module-level side effect with f-string</summary><pre>__all__ = [&#39;VALUE&#39;]
+VALUE = f&quot;shared&quot;
+def get_value():
+    return VALUE
+print(get_value())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:54:00.677390437 -0400
++++ fixed.py	2026-10-17 16:54:00.845393114 -0400
+@@ -1,5 +1,5 @@
+ __all__ = [&#39;VALUE&#39;]
+<span class="del">-VALUE = f&quot;shared&quot;</span>
+<span class="add">+VALUE = &quot;shared&quot;</span>
+ def get_value():
+     return VALUE
+ print(get_value())
+</pre></details><details id="r1-p008"><summary>r1-p008 — Line-continued f-string concatenation with mixed segments</summary><pre>x = 42
+s = f&quot;value{&quot; +
+    f&quot;{x}&quot;}
+print(s)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Raw f-string with escape sequence</summary><pre>s = rf&#39;\n&#39;
+print(repr(s))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:54:06.414481647 -0400
++++ fixed.py	2026-10-17 16:54:06.585484359 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-s = rf&#39;\n&#39;</span>
+<span class="add">+s = r&#39;\n&#39;</span>
+ print(repr(s))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Context manager with write but no close</summary><pre>class Logger:
+    def __init__(self):
+        self.buf = []
+    def write(self, data):
+        self.buf.append(data)
+log = Logger()
+with log:
+    log.write(f&#39;hello&#39;)
+print(&#39;&#39;.join(log.buf))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:54:06.684485929 -0400
++++ fixed.py	2026-10-17 16:54:07.084492273 -0400
+@@ -5,5 +5,5 @@
+         self.buf.append(data)
+ log = Logger()
+ with log:
+<span class="del">-    log.write(f&#39;hello&#39;)</span>
+<span class="add">+    log.write(&#39;hello&#39;)</span>
+ print(&#39;&#39;.join(log.buf))
+</pre></details><details id="r2-p003"><summary>r2-p003 — File write with truncation on reuse</summary><pre>open(&#39;tmp.txt&#39;, &#39;w&#39;).write(f&#39;first&#39;)
+with open(&#39;tmp.txt&#39;, &#39;r+&#39;) as f:
+    f.write(f&#39;second&#39;)
+    f.truncate()
+with open(&#39;tmp.txt&#39;) as f:
+    print(f.read())
+import os; os.remove(&#39;tmp.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:54:07.310495855 -0400
++++ fixed.py	2026-10-17 16:54:07.477498502 -0400
+@@ -1,6 +1,6 @@
+<span class="del">-open(&#39;tmp.txt&#39;, &#39;w&#39;).write(f&#39;first&#39;)</span>
+<span class="add">+open(&#39;tmp.txt&#39;, &#39;w&#39;).write(&#39;first&#39;)</span>
+ with open(&#39;tmp.txt&#39;, &#39;r+&#39;) as f:
+<span class="del">-    f.write(f&#39;second&#39;)</span>
+<span class="add">+    f.write(&#39;second&#39;)</span>
+     f.truncate()
+ with open(&#39;tmp.txt&#39;) as f:
+     print(f.read())
+</pre></details><details id="r2-p004"><summary>r2-p004 — Type annotation evaluated at runtime</summary><pre>from typing import List
+T = List[int]
+def f() -&gt; T:
+    return [1]
+x = f()
+print(x)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Float coercion and rounding</summary><pre>val = 1.2345
+print(f&#39;{val:.2f}&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — F-string in docstring position</summary><pre>def foo():
+    &quot;&quot;&quot;This is a docstring&quot;&quot;&quot;
+    pass
+print(foo.__doc__)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Evaluation order with side effects</summary><pre>i = 0
+ref = []
+def get():
+    ref.append(i)
+    i += 1
+    return str(i)
+print(f&#39;{get()} {get()}&#39;)
+print(ref)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Walrus in comprehension with f-string condition</summary><pre>result = [(y := x*2) for x in range(3) if f&#39;{y}&#39; != &#39;0&#39;]
+print(result)
+</pre></details></body></html>

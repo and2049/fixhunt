@@ -1,0 +1,34 @@
+{
+  "summary": "Flags getattr() calls where the second argument is a literal string constant.",
+  "firingShapes": [
+    "x = getattr(a, \"b\")",
+    "y = getattr(foo(), 'bar')",
+    "z = getattr(obj.__class__, \\\"__name__\\\")",
+    "val = getattr(data, \\\"items\\\")",
+    "result = getattr(module, \\\"func\\\", None)",
+    "tmp = getattr(self, \\\"method\\\", lambda: 0)",
+    "attr = getattr(conf, \\\"setting\\\", \\\"default\\\")",
+    "out = getattr(sys, \\\"version_info\\\")"
+  ],
+  "silentShapes": [
+    "getattr(obj, var)",
+    "getattr(obj, attr_name.upper())",
+    "getattr(obj, f\\\"{prefix}_{suffix}\\\")",
+    "getattr(obj, get_key())",
+    "getattr(obj, \\\"\\\" + \\\"attr\\\")"
+  ],
+  "fixDescription": "Replaces getattr(obj, \"attr\") with obj.attr, preserving any default argument as a fallback via getattr(obj, \"attr\", default) → obj.attr if default is omitted, but note: the fix only applies when no default is provided; when a default is present, Ruff does not apply this fix per rule B009 semantics.",
+  "hazards": [
+    "Rewriting getattr(obj, \"ſ\") to obj.ſ changes behavior because Python normalizes identifiers in attribute access via NFKC, turning \"ſ\" into \"s\", so obj.ſ accesses obj.s not obj.ſ.",
+    "If the getattr call has a trailing comment like getattr(obj, \"x\")  # inline comment, the fix drops the comment as it is not transferred to obj.x.",
+    "When the attribute name is a keyword like \"class\", rewriting getattr(obj, \"class\") to obj.class causes a SyntaxError because \"class\" is a reserved word and cannot be used in dot notation.",
+    "If the object expression has side effects such as getattr(func(), \"attr\"), the fix obj.attr would evaluate func() only once in the call but the rewritten form may be subject to different evaluation ordering in larger expressions, though in simple assignment it remains one evaluation—however, in complex contexts like getattr(f(), \"a\")[i], the fix f().a[i] still evaluates f() once, so no change; but the hazard is better illustrated by: in getattr(obj, \"x\") + getattr(obj, \"y\"), fixing to obj.x + obj.y is safe, yet if the first getattr had a comment, it’s lost—already covered.",
+    "If the string literal is escaped or uses quotes that affect source layout but not value, e.g., getattr(obj, \"\\\"\\\") vs getattr(obj, '\\\"'), the fix preserves correctness but the hazard is low; however, a more relevant hazard is when the attribute name is not a simple identifier: getattr(obj, \"123\") cannot be rewritten because obj.123 is invalid syntax.",
+    "Rewriting getattr(obj, \"__\") to obj.__ is invalid syntax because attribute names cannot consist only of underscores in dot notation without a following identifier.",
+    "If the getattr is part of a larger expression like return getattr(obj, \"x\"), the fix return obj.x is equivalent, but if the call is used in a context requiring the function itself (e.g., passing getattr to map), the fix would be invalid—however, B009 only triggers on constant strings and does not apply when the result is used functionally unless the call is the whole expression; still, a hazard is: in map(getattr, [obj1, obj2], [\"a\"]), the fix would break because map expects a function, but Ruff does not fire B009 there as the first arg is not a constant string getattr pattern—so this shape doesn’t fire; thus, focus on where it does fire: when the object expression is complex and the fix moves it into a subexpression where binding changes—e.g., in getattr(obj.method(), \"attr\"), the fix obj.method().attr is equivalent in evaluation (method() called once), so no hazard; but if the object expression is a tuple indexing like getattr((a, b)[i], \"x\"), the fix (a, b)[i].attr is same evaluation.",
+    "A significant hazard is when the object expression yields a non-object that supports __getattr__ but not dot notation for the normalized name—though if the attribute exists under the original name, dot notation may fail due to normalization, as in the ſ case.",
+    "If the string contains non-ASCII that normalizes differently, e.g., \"µ\" (micro sign) normalizes to \"μ\" (Greek mu), so getattr(obj, \"µ\") fixed to obj.µ accesses obj.μ, changing the attribute accessed if obj has both µ and μ attributes.",
+    "In rare cases, if the attribute name is a string that, when normalized, becomes a different string that is a valid identifier but the original was not (e.g., a string with compatibility characters), the fix may succeed syntactically but access the wrong attribute.",
+    "If the getattr call is inside a try/except block catching AttributeError, and the fix changes which attribute is accessed (due to normalization), it may cause an AttributeError where none was expected or vice versa, altering control flow."
+  ]
+}

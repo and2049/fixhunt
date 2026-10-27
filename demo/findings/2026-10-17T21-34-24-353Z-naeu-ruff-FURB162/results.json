@@ -1,0 +1,680 @@
+{
+  "runId": "2026-10-17T21-34-24-353Z-naeu-ruff-FURB162",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB162",
+    "fixKind": "unknown",
+    "docs": "# fromisoformat-replace-z (FURB162)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for `datetime.fromisoformat()` calls\nwhere the only argument is an inline replacement\nof `Z` with a zero offset timezone.\n\n## Why is this bad?\nOn Python 3.11 and later, `datetime.fromisoformat()` can handle most [ISO 8601][iso-8601]\nformats including ones affixed with `Z`, so such an operation is unnecessary.\n\nMore information on unsupported formats\ncan be found in [the official documentation][fromisoformat].\n\n## Example\n\n```python\nfrom datetime import datetime\n\n\ndate = \"2025-01-01T00:00:00Z\"\n\ndatetime.fromisoformat(date.replace(\"Z\", \"+00:00\"))\ndatetime.fromisoformat(date[:-1] + \"-00\")\ndatetime.fromisoformat(date.strip(\"Z\", \"-0000\"))\ndatetime.fromisoformat(date.rstrip(\"Z\", \"-00:00\"))\n```\n\nUse instead:\n\n```python\nfrom datetime import datetime\n\n\ndate = \"2025-01-01T00:00:00Z\"\n\ndatetime.fromisoformat(date)\n```\n\n## Fix safety\nThe fix is always marked as unsafe,\nas it might change the program's behaviour.\n\nFor example, working code might become non-working:\n\n```python\nd = \"Z2025-01-01T00:00:00Z\"  # Note the leading `Z`\n\ndatetime.fromisoformat(d.strip(\"Z\") + \"+00:00\")  # Fine\ndatetime.fromisoformat(d)  # Runtime error\n```\n\n## References\n* [What’s New In Python 3.11 &sect; `datetime`](https://docs.python.org/3/whatsnew/3.11.html#datetime)\n* [`fromisoformat`](https://docs.python.org/3/library/datetime.html#datetime.date.fromisoformat)\n\n[iso-8601]: https://www.iso.org/obp/ui/#iso:std:iso:8601\n[fromisoformat]: https://docs.python.org/3/library/datetime.html#datetime.date.fromisoformat\n"
+  },
+  "analysis": {
+    "summary": "Flags `datetime.fromisoformat()` called with a string where `.replace('Z', '+00:00')` has been applied to remove a trailing 'Z' suffix.",
+    "firingShapes": [
+      "datetime.fromisoformat(s.replace(\"Z\", \"+00:00\"))",
+      "datetime.fromisoformat(t[:-1] + \"-00\")",
+      "datetime.fromisoformat(u.strip(\"Z\", \"-0000\"))",
+      "datetime.fromisoformat(v.rstrip(\"Z\", \"-00:00\"))"
+    ],
+    "silentShapes": [
+      "datetime.fromisoformat(w)",
+      "datetime.fromisoformat(x.replace(\"z\", \"+00:00\"))",
+      "datetime.datetime.fromisoformat(y.replace(\"Z\", \"+00:00\"))"
+    ],
+    "fixDescription": "Replace `datetime.fromisoformat(arg)` with `datetime.fromisoformat(base_string)`, where `arg` is a transformation like `s.replace(\"Z\", \"+00:00\")`, `t[:-1] + \"-00\"`, etc., and `base_string` is the original variable before transformation.",
+    "hazards": [
+      "If the base string contains internal 'Z' characters (e.g., \"Z2025-01-01T00:00:00Z\"), removing them via replace changes the input meaning and may cause parsing errors.",
+      "If the base string ends with multiple 'Z' characters, slicing off only one character (e.g., `[:-1]`) leaves trailing 'Z's, resulting in invalid ISO format.",
+      "If the base string lacks a trailing 'Z', transformations like `rstrip(\"Z\", \"-00:00\")` may still alter the string (e.g., removing trailing zeros), producing a different datetime.",
+      "If the base string is not a literal but a function call or complex expression, the rewrite may alter evaluation order or side effects if the transformation had any (though pure string methods are side-effect free, the base expression is evaluated once vs potentially multiple times in the original).",
+      "If the variable naming is reused or aliased elsewhere in the scope, the rewrite assumes the base variable is unchanged between its use in the transformation and the fromisoformat call, which may not hold if mutated in between (though unlikely for strings).",
+      "If the code relies on the transformation to normalize case (e.g., expecting lowercase 'z'), the fix does not account for that and may fail to parse.",
+      "If the string contains timezone offsets other than UTC (e.g., \"+05:30\"), the transformation incorrectly forces UTC, changing the represented time.",
+      "If the code is run under Python <3.11, `fromisoformat` cannot parse the 'Z' suffix directly, so the fix would cause a ValueError where the original code worked.",
+      "If the transformation includes additional logic beyond the simple patterns (e.g., chained replaces), the tool may not trigger, but if it did incorrectly, the fix would drop meaningful processing.",
+      "Comments attached to the transformation expression (e.g., `# workaround`) would be lost when the entire argument expression is replaced.",
+      "If the base string variable is defined later in the block (due to hoisting-like confusion in conditional blocks), the rewrite could reference it before assignment."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0040431,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Truthiness comparison",
+      "hazard": "__bool__ / __len__, None vs falsy, 'is' vs '=='",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              12,
+              32
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'X' object has no attribute 'replace'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'X' object has no attribute 'replace'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Chained replace drops meaning",
+      "hazard": "If the transformation includes additional logic beyond the simple patterns, the fix would drop meaningful processing.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "parsed: 2023-01-01T12:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Non-UTC offset corrupted",
+      "hazard": "If the string contains timezone offsets other than UTC, the transformation incorrectly forces UTC, changing the represented time.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              3,
+              35
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "wrong: 2023-01-01T12:00:00+05:30\nright: 2023-01-01T12:00:00+05:30\ndiff hours: 0.0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "wrong: 2023-01-01T12:00:00+05:30\nright: 2023-01-01T12:00:00+05:30\ndiff hours: 0.0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Comment lost in fix",
+      "hazard": "Comments attached to the transformation expression would be lost when the entire argument expression is replaced.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              5,
+              33
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "ok: 2023-01-01T12:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ok: 2023-01-01T12:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Coercion edge case",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ValueError : Invalid isoformat string: '2023-01-01T12:00:005'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Multiple trailing Z",
+      "hazard": "If the base string ends with multiple 'Z' characters, slicing off only one character leaves trailing 'Z's, resulting in invalid ISO format.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "ValueError : Invalid isoformat string: '2023-01-01T12:00:00Z-00'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Async interaction",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              9,
+              37
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "async parsed: 2023-01-01T12:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "async parsed: 2023-01-01T12:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Base string used before assignment",
+      "hazard": "If the base string variable is defined later in the block, the rewrite could reference it before assignment.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              4,
+              37
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "NameError: name 's' is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "NameError: name 's' is not defined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "shadowed builtins and names redefined later",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              5,
+              41
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              9,
+              37
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "parsed: 2024-01-01 12:00:00+00:00\nerror after del: ValueError : Invalid isoformat string: 'invalid'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "parsed: 2024-01-01 12:00:00+00:00\nerror after del: ValueError : Invalid isoformat string: 'invalid'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "int/float/bool coercion, Decimal, division and rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "parsed: 2024-01-01 00:00:00+00:00\ny: True z: 21\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "multiple trailing Z characters",
+      "hazard": "If the base string ends with multiple 'Z' characters, slicing off only one character (e.g., `[:-1]`) leaves trailing 'Z's, resulting in invalid ISO format.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              5,
+              33
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "ValueError (expected): Invalid isoformat string: '2024-01-01T00:00:00Z-00'\ncorrect parse: 2024-01-01 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ValueError (expected): Invalid isoformat string: '2024-01-01T00:00:00Z-00'\ncorrect parse: 2024-01-01 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              15,
+              33
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "bool(s): True\nreplace called\nparsed: 2024-01-01 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "bool(s): True\nreplace called\nparsed: 2024-01-01 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "base string defined later in the block",
+      "hazard": "If the base string variable is defined later in the block (due to hoisting-like confusion in conditional blocks), the rewrite could reference it before assignment.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              8,
+              33
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "parsed: 2024-01-01 00:00:00+00:00\ns is: 2024-01-01T00:00:00Z\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "parsed: 2024-01-01 00:00:00+00:00\ns is: 2024-01-01T00:00:00Z\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "comments attached to the transformation expression",
+      "hazard": "Comments attached to the transformation expression (e.g., `# workaround`) would be lost when the entire argument expression is replaced.",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              4,
+              29
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "parsed: 2024-01-01 00:00:00+00:00\nworkaround applied: Zulu time converted\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "parsed: 2024-01-01 00:00:00+00:00\nworkaround applied: Zulu time converted\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              5,
+              39
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "2024-01-01 00:00:00+00:00\n2024-01-01 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2024-01-01 00:00:00+00:00\n2024-01-01 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "FURB162",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB162",
+            "severity": "warning",
+            "message": "Unnecessary timezone replacement with zero offset",
+            "span": [
+              14,
+              39
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "property accessed\nparsed: 2024-01-01 00:00:00+00:00\nproperty accessed\nre-parsed: 2024-01-02 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "property accessed\nparsed: 2024-01-01 00:00:00+00:00\nproperty accessed\nre-parsed: 2024-01-02 00:00:00+00:00\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

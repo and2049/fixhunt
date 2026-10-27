@@ -1,0 +1,243 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RUF051 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RUF051 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-46-58-522Z-boj8-ruff-RUF051 · fix labelled <b>unknown</b> · 16 programs, 4 fired, 3 fixed, 1 oracle-backed finding(s) · model cost $0.0144</p>
+<div class="card"><b>Rule analysis</b><p>Flags &#39;if key in dict: del dict[key]&#39; patterns that can be replaced with dict.pop(key, None).</p><p class="mut">Fix: Replaces &#39;if key in dictionary: del dictionary[key]&#39; with &#39;dictionary.pop(key, None)&#39;, preserving indentation and removing the conditional block.</p><details><summary>10 hazards</summary><ul><li>The original code only deletes the key when present; pop(key, None) silently ignores missing keys but otherwise behaves identically when the key exists, so no behavioral change occurs for existing keys.</li><li>If the dictionary expression has side effects (e.g., a function call), evaluating it twice in the condition and once in the fix could change behavior if the function mutates state or returns different values.</li><li>If the key expression has side effects (e.g., a function call), evaluating it twice in the original versus once in the fix alters the number of side effects.</li><li>If the dictionary or key expression raises an exception during evaluation, the original may raise it in the condition while the fix may raise it during the pop call, changing when the exception occurs.</li><li>If the dictionary is aliased elsewhere, both versions mutate the same object, so no difference in aliasing behavior.</li><li>If the del statement is inside a try-except block that catches KeyError, replacing it with pop may silence the exception where the original would have propagated it (though the condition prevents KeyError in the original).</li><li>If the block contains comments, the fix may discard them as the rule marks fixes unsafe when comments are present in the if statement.</li><li>If the dictionary is a property or descriptor with __delitem__ side effects, pop may invoke different internal logic than direct deletion, potentially altering behavior.</li><li>If the key is unhashable, both the condition and the del/pop will raise TypeError at the same point, so no difference in error timing.</li><li>If the code relies on the KeyError being raised for missing keys (e.g., in a broader try-except), the original condition prevents entry so no error occurs, matching pop&#39;s silent ignore.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The original code catches the TypeError raised by the unhashable list key in the &#39;in&#39; check, but the fix replaces it with dct.pop(lst, None) which also raises TypeError for unhashable keys and is no longer inside the try block, causing an unhandled exception and program crash.">judge: real · high</span> Unhashable key - identical error timing<p class="mut">The original code catches the TypeError raised by the unhashable list key in the &#39;in&#39; check, but the fix replaces it with dct.pop(lst, None) which also raises TypeError for unhashable keys and is no longer inside the try block, causing an unhandled exception and program crash.</p>
+<h2>Minimized program (10→6 lines)</h2><pre>lst = [1]
+dct = {}
+try:
+    if lst in dct: del dct[lst]
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:47:13.630865416 -0400
++++ fixed.py	2026-10-17 17:47:13.800900155 -0400
+@@ -1,10 +1,10 @@
+ lst = [1]
+ dct = {}
+ try:
+<span class="del">-    if lst in dct: del dct[lst]</span>
+<span class="add">+    dct.pop(lst, None)</span>
+ except Exception as e:
+     print(f&#39;{type(e).__name__}: {e}&#39;)
+ try:
+<span class="del">-    if lst in dct: del dct[lst]</span>
+<span class="add">+    dct.pop(lst, None)</span>
+ except Exception as e:
+     print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+TypeError: cannot use &#39;list&#39; as a dict key (unhashable type: &#39;list&#39;)
+TypeError: cannot use &#39;list&#39; as a dict key (unhashable type: &#39;list&#39;)
+stdout after:
+</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/20700">astral-sh/ruff/issues/20700</a> · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dictionary expression with side effects</td><td class="mut">If the dictionary expression has side effects (e.g., a function call), evaluating it twice</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span></td><td>Del inside try-except catching KeyError</td><td class="mut">If the del statement is inside a try-except block that catches KeyError, replacing it with</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mutable default arguments and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Reliance on KeyError being raised for missing keys</td><td class="mut">If the code relies on the KeyError being raised for missing keys (e.g., in a broader try-e</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dictionary or key expression raises exception during evaluation</td><td class="mut">If the dictionary or key expression raises an exception during evaluation, the original ma</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Block contains comments</td><td class="mut">If the block contains comments, the fix may discard them as the rule marks fixes unsafe wh</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation order and side effects when expressions are merged, duplicated or deleted</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Unhashable key - identical error timing</td><td class="mut">1. If the key is unhashable, both the condition and the del/pop will raise TypeError at th</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Comment inside if-block discarded by fix</td><td class="mut">2. If the block contains comments, the fix may discard them as the rule marks fixes unsafe</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String formatting edge cases in key expression</td><td class="mut">3. string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dictionary property with __delitem__ side effects</td><td class="mut">4. If the dictionary is a property or descriptor with __delitem__ side effects, pop may in</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Key expression with side effects evaluated twice vs once</td><td class="mut">5. If the key expression has side effects (e.g., a function call), evaluating it twice in </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exceptions inside rewritten code with finally/else</td><td class="mut">6. exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Shadowed builtins and redefined names</td><td class="mut">7. shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Generator vs list consumption in key expression</td><td class="mut">8. generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Dictionary expression with side effects</summary><pre>def get_dict():
+    global counter
+    counter += 1
+    return {&#39;a&#39;: 1}
+counter = 0
+d = get_dict()
+if &#39;a&#39; in get_dict():  # Rule triggers here
+    del get_dict()[&#39;a&#39;]
+print(&#39;counter:&#39;, counter)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Del inside try-except catching KeyError</summary><pre>try:
+    if &#39;missing&#39; in d:
+        del d[&#39;missing&#39;]
+except KeyError as e:
+    print(&#39;Caught:&#39;, type(e).__name__, str(e))
+d = {}
+# This block does not trigger the rule because it&#39;s inside try-except
+# but we include it to show context; no trigger expected
+</pre></details><details id="r1-p003"><summary>r1-p003 — Mutable default arguments and aliasing</summary><pre>def f(d={&#39;x&#39;: 1}):
+    if &#39;x&#39; in d:
+        del d[&#39;x&#39;]
+    return d
+print(&#39;First call:&#39;, f())
+print(&#39;Second call:&#39;, f())
+</pre></details><details id="r1-p004"><summary>r1-p004 — Reliance on KeyError being raised for missing keys</summary><pre>d = {}
+try:
+    if &#39;key&#39; in d:
+        del d[&#39;key&#39;]
+except KeyError:
+    print(&#39;This should not print&#39;)
+else:
+    print(&#39;No error&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:47:06.738449602 -0400
++++ fixed.py	2026-10-17 17:47:06.901483294 -0400
+@@ -1,7 +1,6 @@
+ d = {}
+ try:
+<span class="del">-    if &#39;key&#39; in d:</span>
+<span class="del">-        del d[&#39;key&#39;]</span>
+<span class="add">+    d.pop(&#39;key&#39;, None)</span>
+ except KeyError:
+     print(&#39;This should not print&#39;)
+ else:
+</pre></details><details id="r1-p005"><summary>r1-p005 — Dictionary or key expression raises exception during evaluation</summary><pre>def bad_key():
+    raise ValueError(&#39;bad key&#39;)
+d = {&#39;a&#39;: 1}
+try:
+    if bad_key() in d:
+        del d[bad_key()]
+except ValueError as e:
+    print(&#39;Caught in condition:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Block contains comments</summary><pre>d = {&#39;a&#39;: 1}
+if &#39;a&#39; in d:  # Keep this comment
+    del d[&#39;a&#39;]  # And this one too
+print(&#39;d:&#39;, d)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</summary><pre>class FakeDict:
+    def __contains__(self, key):
+        return key == &#39;x&#39;
+    def __delitem__(self, key):
+        raise RuntimeError(&#39;deleted&#39;)
+d = FakeDict()
+try:
+    if &#39;x&#39; in d:
+        del d[&#39;x&#39;]
+except RuntimeError as e:
+    print(&#39;Caught:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Evaluation order and side effects when expressions are merged, duplicated or deleted</summary><pre>l = []
+def side_effect():
+    l.append(1)
+    return {&#39;a&#39;: 1}
+d = side_effect()
+if &#39;a&#39; in side_effect():  # side_effect called twice
+    del side_effect()[&#39;a&#39;]  # and again
+print(&#39;side_effect calls:&#39;, len(l))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Unhashable key - identical error timing</summary><pre>lst = [1]
+dct = {}
+try:
+    if lst in dct: del dct[lst]
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+try:
+    if lst in dct: del dct[lst]
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:47:13.630865416 -0400
++++ fixed.py	2026-10-17 17:47:13.800900155 -0400
+@@ -1,10 +1,10 @@
+ lst = [1]
+ dct = {}
+ try:
+<span class="del">-    if lst in dct: del dct[lst]</span>
+<span class="add">+    dct.pop(lst, None)</span>
+ except Exception as e:
+     print(f&#39;{type(e).__name__}: {e}&#39;)
+ try:
+<span class="del">-    if lst in dct: del dct[lst]</span>
+<span class="add">+    dct.pop(lst, None)</span>
+ except Exception as e:
+     print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Comment inside if-block discarded by fix</summary><pre>log = []
+cache = {&#39;x&#39;: 1}
+def record(msg):
+    log.append(msg)
+if &#39;x&#39; in cache:
+    # keep this note
+    del cache[&#39;x&#39;]
+    record(&#39;deleted&#39;)
+print(&#39;log:&#39;, log)
+print(&#39;cache:&#39;, cache)
+</pre></details><details id="r2-p003"><summary>r2-p003 — String formatting edge cases in key expression</summary><pre>def fmt(k): return f&#39;id-{k}&#39;
+data = {&#39;id-A&#39;: 10, &#39;id-B&#39;: 20}
+k = &#39;A&#39;
+key_expr = fmt(k)
+if key_expr in data:
+    val = data.pop(key_expr, None)
+    print(f&#39;popped {key_expr} -&gt; {val}&#39;)
+print(&#39;remaining:&#39;, data)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Dictionary property with __delitem__ side effects</summary><pre>class Store:
+    def __init__(self):
+        self._log = []
+        self._data = {&#39;a&#39;: 1}
+    @property
+    def container(self):
+        return self._data
+    def __delitem__(self, key):
+        self._log.append(f&#39;del {key}&#39;)
+        super().__delitem__(key)
+s = Store()
+if &#39;a&#39; in s.container:
+    del s.container[&#39;a&#39;]
+print(&#39;log:&#39;, s._log)
+print(&#39;data:&#39;, s._data)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Key expression with side effects evaluated twice vs once</summary><pre>counter = 0
+def next_key():
+    global counter
+    counter += 1
+    return str(counter)
+store = {}
+if next_key() in store:
+    del store[next_key()]
+print(&#39;counter after if-del:&#39;, counter)
+counter = 0
+store = {}
+if next_key() in store:
+    del store[next_key()]
+print(&#39;counter after if-del (second):&#39;, counter)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Exceptions inside rewritten code with finally/else</summary><pre>log = []
+def risky_pop(d, k):
+    log.append(&#39;pop-enter&#39;)
+    if k == &#39;bad&#39;:
+        raise ValueError(&#39;poison&#39;)
+    return d.pop(k, None)
+d = {&#39;good&#39;: 1, &#39;bad&#39;: 2}
+try:
+    if &#39;good&#39; in d:
+        val = risky_pop(d, &#39;good&#39;)
+        log.append(f&#39;got {val}&#39;)
+except ValueError as e:
+    log.append(f&#39;bad-value: {e}&#39;)
+else:
+    log.append(&#39;else: ok&#39;)
+finally:
+    log.append(&#39;finally&#39;)
+print(&#39;|&#39;.join(log))
+</pre></details><details id="r2-p007"><summary>r2-p007 — Shadowed builtins and redefined names</summary><pre>pop = lambda d, k=None: [None][0]
+d = {&#39;a&#39;: 1}
+if &#39;a&#39; in d:
+    del d[&#39;a&#39;]
+print(&#39;after del:&#39;, d)
+if &#39;a&#39; in d:
+    pop(d, &#39;a&#39;)
+print(&#39;after pop:&#39;, d)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:47:14.531049152 -0400
++++ fixed.py	2026-10-17 17:47:14.694082406 -0400
+@@ -1,7 +1,6 @@
+ pop = lambda d, k=None: [None][0]
+ d = {&#39;a&#39;: 1}
+<span class="del">-if &#39;a&#39; in d:</span>
+<span class="del">-    del d[&#39;a&#39;]</span>
+<span class="add">+d.pop(&#39;a&#39;, None)</span>
+ print(&#39;after del:&#39;, d)
+ if &#39;a&#39; in d:
+     pop(d, &#39;a&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Generator vs list consumption in key expression</summary><pre>def gen_keys():
+    yield &#39;x&#39;
+    yield &#39;y&#39;
+k_iter = gen_keys()
+container = {&#39;x&#39;: 1, &#39;y&#39;: 2}
+try:
+    if next(k_iter) in container:
+        del container[next(k_iter)]
+except StopIteration:
+    pass
+print(&#39;remaining:&#39;, container)
+print(&#39;exhausted:&#39;, list(gen_keys()))
+</pre></details></body></html>

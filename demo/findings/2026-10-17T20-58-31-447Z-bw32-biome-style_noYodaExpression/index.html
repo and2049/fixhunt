@@ -1,0 +1,224 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/noYodaExpression — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/noYodaExpression <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-58-31-447Z-bw32-biome-style_noYodaExpression · fix labelled <b>safe</b> · 16 programs, 5 fired, 5 fixed, 0 oracle-backed finding(s) · model cost $0.0036</p>
+<div class="card"><b>Rule analysis</b><p>Flags binary comparisons where the static literal/expression appears on the left-hand side (a Yoda condition).</p><p class="mut">Fix: Swaps the left and right operands of the binary operator while preserving the operator token and all surrounding syntactic context.</p><details><summary>12 hazards</summary><ul><li>Rewriting `if (\&quot;red\&quot; == value)` to `if (value == \&quot;red\&quot;)` changes operator precedence when embedded in expressions like `x &amp;&amp; \&quot;red\&quot; == value`, potentially altering evaluation order.</li><li>If the left-hand side is a getter with side effects (e.g., `if (getMagic() == value)`), swapping operands changes when the getter is invoked relative to other subexpressions.</li><li>When the right-hand side involves `void 0` or `undefined`, moving it left may trigger unintended global lookups in non-strict mode due to implicit property creation.</li><li>In `delete obj[\&quot;prop\&quot;] == value`, swapping operands produces invalid syntax because `delete` expects an unbound reference on its left, breaking parsing.</li><li>For `new Foo(5 == size)`, swapping yields `new Foo(size == 5)`, which changes argument evaluation timing if `size` is a getter with side effects.</li><li>In `if (\&quot;\&quot; + obj == value)`, moving the string literal left breaks concatenation order, yielding different intermediate values if `obj.valueOf` has side effects.</li><li>When the comparison is inside a `with` block, swapping operands may alter which object scope provides identifier resolution for the moved operand.</li><li>If the left-hand side is a comma expression like `if ((console.log(\&quot;x\&quot;), 0) == value)`, swapping moves the side effect (`console.log`) to a different evaluation point relative to surrounding expressions.</li><li>Rewriting `if (value != \&quot;red\&quot;)` preserves `!=` but if the original relied on left-to-right short-circuiting in a larger expression like `a &amp;&amp; \&quot;red\&quot; != value`, the swap changes short-circuit behavior.</li><li>In template literals such as ``if (`hello${world}` == msg)``, swapping operands is safe only if the template has no side effects in its substitutions; otherwise evaluation order shifts.</li><li>Moving a literal with attached comments (e.g., `if (\&quot;red\&quot; /* TODO */ == value)`) may detach or misplace those comments depending on how the formatter handles whitespace.</li><li>For `if ((value) == (\&quot;red\&quot;))`, excessive parentheses may be preserved or dropped inconsistently by the fixer, affecting readability though not semantics.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Null/undefined distinction with optional chaining</td><td class="mut">Rewriting &#39;null == value&#39; to &#39;value == null&#39; when value uses optional chaining can change </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>New expression with getter side effects</td><td class="mut">Swapping &#39;new Foo(5 == size)&#39; to &#39;new Foo(size == 5)&#39; changes when size getter is called—o</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Operator precedence in logical AND</td><td class="mut">Rewriting &#39;x &amp;&amp; &quot;red&quot; == value&#39; to &#39;x &amp;&amp; value == &quot;red&quot;&#39; is same, but if rule fired on int</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">invalid</span></td><td>With block scope interaction</td><td class="mut">In &#39;with (scope) { if (&quot;x&quot; == y) }&#39;, swapping to &#39;if (y == &quot;x&quot;)&#39; changes whether y is reso</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>ASI with leading parenthesis</td><td class="mut">Without semicolon, leading &#39;(&#39; on next line can be interpreted as function call. Swapping </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Inequality short-circuit in logical AND</td><td class="mut">In &#39;a &amp;&amp; &quot;red&quot; != value&#39;, if a is false, &quot;red&quot; != value is not evaluated. After swap &#39;a &amp;&amp;</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Arguments object interaction</td><td class="mut">In function with arguments, rewriting comparison may interfere with arguments aliasing in </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String concatenation with valueOf side effects</td><td class="mut">In &#39;&quot;&quot; + obj == value&#39;, swapping breaks concatenation order—if obj.valueOf has side effect</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">invalid</span></td><td>var hoisting and redeclaration</td><td class="mut">var hoisting and re-declaration inside loops or after use</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">invalid</span></td><td>arguments object interaction</td><td class="mut">arguments object, function.length, default parameters, rest parameters</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>getter side effects</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>comma expression side effect shift</td><td class="mut">If the left-hand side is a comma expression like `if ((console.log(&quot;x&quot;), 0) == value)`, sw</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span></td><td>delete operand invalid syntax</td><td class="mut">In `delete obj[&quot;prop&quot;] == value`, swapping operands produces invalid syntax because `delet</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>template literal substitution side effects</td><td class="mut">In template literals such as ``if (`hello${world}` == msg)``, swapping operands is safe on</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>async/await ordering</td><td class="mut">async/await ordering, generators and yield position</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">invalid</span></td><td>class fields interaction</td><td class="mut">class fields, static blocks, private names, super calls</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Null/undefined distinction with optional chaining</summary><pre>let obj = null;
+try {
+  if (null == obj?.prop) console.log(&#39;matched&#39;);
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+obj = {prop: null};
+if (null == obj?.prop) console.log(&#39;matched&#39;);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:58:49.574550036 -0400
++++ fixed.js	2026-10-17 16:58:49.866553869 -0400
+@@ -1,8 +1,8 @@
+ let obj = null;
+ try {
+<span class="del">-  if (null == obj?.prop) console.log(&#39;matched&#39;);</span>
+<span class="add">+  if (obj?.prop == null) console.log(&#39;matched&#39;);</span>
+ } catch (e) {
+   console.log(e.name + &#39;: &#39; + e.message);
+ }
+ obj = {prop: null};
+<span class="del">-if (null == obj?.prop) console.log(&#39;matched&#39;);</span>
+<span class="add">+if (obj?.prop == null) console.log(&#39;matched&#39;);</span>
+</pre></details><details id="r1-p002"><summary>r1-p002 — New expression with getter side effects</summary><pre>let callCount = 0;
+const size = {get value() { callCount++; return 5; }};
+class Foo {
+  constructor(x) {
+    console.log(&#39;Foo arg:&#39;, x, &#39;calls:&#39;, callCount);
+  }
+}
+new Foo(5 == size.value);
+console.log(&#39;After:&#39;);
+new Foo(size.value == 5);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:58:50.039556140 -0400
++++ fixed.js	2026-10-17 16:58:50.321559839 -0400
+@@ -5,6 +5,6 @@
+     console.log(&#39;Foo arg:&#39;, x, &#39;calls:&#39;, callCount);
+   }
+ }
+<span class="del">-new Foo(5 == size.value);</span>
+<span class="add">+new Foo(size.value == 5 );</span>
+ console.log(&#39;After:&#39;);
+ new Foo(size.value == 5);
+</pre></details><details id="r1-p003"><summary>r1-p003 — Operator precedence in logical AND</summary><pre>let value = &#39;blue&#39;;
+if (false &amp;&amp; (&quot;red&quot; == value)) {
+  console.log(&#39;unreachable&#39;);
+} else {
+  console.log(&#39;false path&#39;);
+}
+// Rule triggers on parenthesized form
+if (false &amp;&amp; (value == &quot;red&quot;)) {
+  console.log(&#39;also unreachable&#39;);
+} else {
+  console.log(&#39;false path 2&#39;);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:58:50.491562069 -0400
++++ fixed.js	2026-10-17 16:58:50.753565506 -0400
+@@ -1,5 +1,5 @@
+ let value = &#39;blue&#39;;
+<span class="del">-if (false &amp;&amp; (&quot;red&quot; == value)) {</span>
+<span class="add">+if (false &amp;&amp; (value == &quot;red&quot;)) {</span>
+   console.log(&#39;unreachable&#39;);
+ } else {
+   console.log(&#39;false path&#39;);
+</pre></details><details id="r1-p004"><summary>r1-p004 — With block scope interaction</summary><pre>const scope = {x: 1};
+let y = 2;
+with (scope) {
+  if (&quot;x&quot; == y) {
+    console.log(&#39;matched in scope&#39;);
+  } else {
+    console.log(&#39;not matched in scope:&#39;, y);
+  }
+}
+// Outside with, y is outer
+if (&quot;x&quot; == y) {
+  console.log(&#39;matched outer&#39;);
+} else {
+  console.log(&#39;not matched outer:&#39;, y);
+}
+</pre></details><details id="r1-p005"><summary>r1-p005 — ASI with leading parenthesis</summary><pre>let x = 1
+;
+(function(){ return 5; })()
+console.log(&#39;first:&#39;, x)
+x = 0
+;
+(function(){ return 6; })()
+console.log(&#39;second:&#39;, x)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Inequality short-circuit in logical AND</summary><pre>let callCount = 0;
+const obj = {get val() { callCount++; return &#39;blue&#39;; }};
+let a = true;
+if (a &amp;&amp; &quot;red&quot; != obj.val) {
+  console.log(&#39;unequal&#39;);
+}
+console.log(&#39;Calls after first:&#39;, callCount);
+a = true;
+if (a &amp;&amp; obj.val != &quot;red&quot;) {
+  console.log(&#39;unequal swapped&#39;);
+}
+console.log(&#39;Calls after second:&#39;, callCount);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:58:51.197571329 -0400
++++ fixed.js	2026-10-17 16:58:51.476574987 -0400
+@@ -1,7 +1,7 @@
+ let callCount = 0;
+ const obj = {get val() { callCount++; return &#39;blue&#39;; }};
+ let a = true;
+<span class="del">-if (a &amp;&amp; &quot;red&quot; != obj.val) {</span>
+<span class="add">+if (a &amp;&amp; obj.val != &quot;red&quot; ) {</span>
+   console.log(&#39;unequal&#39;);
+ }
+ console.log(&#39;Calls after first:&#39;, callCount);
+</pre></details><details id="r1-p007"><summary>r1-p007 — Arguments object interaction</summary><pre>function foo(a) {
+  arguments[0] = 99;
+  if (5 == a) {
+    return &#39;match&#39;;
+  }
+  return &#39;no&#39;;
+}
+console.log(foo(5));
+function bar(a) {
+  arguments[0] = 99;
+  if (a == 5) {
+    return &#39;match&#39;;
+  }
+  return &#39;no&#39;;
+}
+console.log(bar(5));
+</pre><pre class="diff">--- orig.js	2026-10-17 16:58:51.651577281 -0400
++++ fixed.js	2026-10-17 16:58:51.927580900 -0400
+@@ -1,6 +1,6 @@
+ function foo(a) {
+   arguments[0] = 99;
+<span class="del">-  if (5 == a) {</span>
+<span class="add">+  if (a == 5) {</span>
+     return &#39;match&#39;;
+   }
+   return &#39;no&#39;;
+</pre></details><details id="r1-p008"><summary>r1-p008 — String concatenation with valueOf side effects</summary><pre>let side = 0;
+const obj = {
+  valueOf() {
+    side += 1;
+    return 42;
+  }
+};
+let value = 42;
+if (&quot;&quot; + obj == value) {
+  console.log(&#39;equal, side=&#39;, side);
+}
+side = 0;
+if (value == &quot;&quot; + obj) {
+  console.log(&#39;equal swapped, side=&#39;, side);
+}
+</pre></details><details id="r2-p001"><summary>r2-p001 — var hoisting and redeclaration</summary><pre>function f() {
+  for (var i = 0; i &lt; 2; i++) {
+    if (\&quot;test\&quot; == x) console.log(&#39;match&#39;); // rule triggers here
+    var x = i;
+  }
+  console.log(&#39;x:&#39;, typeof x);
+}
+f();
+</pre></details><details id="r2-p002"><summary>r2-p002 — arguments object interaction</summary><pre>function g(a, b = 1, ...rest) {
+  if (\&quot;hi\&quot; == arguments[0]) console.log(&#39;first arg matched&#39;); // rule triggers
+  return [a, b, rest.length];
+}
+console.log(g(&#39;hi&#39;, 2, 3, 4));
+</pre></details><details id="r2-p003"><summary>r2-p003 — getter side effects</summary><pre>let val = 0;
+const obj = {
+  get x() {
+    val++;
+    return 5;
+  }
+};
+if (\&quot;5\&quot; == obj.x) console.log(&#39;equal&#39;); // rule triggers, val increments once
+console.log(&#39;val:&#39;, val);
+</pre></details><details id="r2-p004"><summary>r2-p004 — comma expression side effect shift</summary><pre>let logged = false;
+function logX() { logged = true; console.log(&#39;x&#39;); return 0; }
+let v = 0;
+if ((logX(), 0) == v) console.log(&#39;matched&#39;); // rule triggers, logs before compare
+console.log(&#39;logged:&#39;, logged);
+</pre></details><details id="r2-p005"><summary>r2-p005 — delete operand invalid syntax</summary><pre>try {
+  const obj = { prop: 1 };
+  // This line would trigger rule but is invalid after swap: delete obj[&#39;prop&#39;] == 1
+  // So we avoid trigger by using != instead (rule ignores !=)
+  if (delete obj.prop != 1) console.log(&#39;unexpected&#39;);
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+console.log(&#39;prop in obj:&#39;, &#39;prop&#39; in { prop: 1 });
+</pre></details><details id="r2-p006"><summary>r2-p006 — template literal substitution side effects</summary><pre>let worldVal = undefined;
+function getWorld() { return worldVal = &#39;substituted&#39;; }
+let msg = &#39;hellosubstituted&#39;;
+if (`hello${getWorld()}` == msg) console.log(&#39;match&#39;); // rule triggers, getWorld runs before compare
+console.log(&#39;worldVal:&#39;, worldVal);
+</pre></details><details id="r2-p007"><summary>r2-p007 — async/await ordering</summary><pre>async function seq() {
+  let a = await Promise.resolve(1);
+  if (\&quot;1\&quot; == a) console.log(&#39;equal&#39;); // rule triggers
+  return a;
+}
+seq().then(r =&gt; console.log(&#39;result:&#39;, r));
+</pre></details><details id="r2-p008"><summary>r2-p008 — class fields interaction</summary><pre>class Base {
+  constructor() {
+    if (\&quot;base\&quot; == this.kind) console.log(&#39;base match&#39;); // rule triggers
+  }
+}
+class Derived extends Base {
+  kind = &#39;base&#39;;
+}
+new Derived();
+</pre></details></body></html>

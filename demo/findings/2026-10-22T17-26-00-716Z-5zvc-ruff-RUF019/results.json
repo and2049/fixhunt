@@ -1,0 +1,399 @@
+{
+  "runId": "2026-10-22T17-26-00-716Z-5zvc-ruff-RUF019",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF019",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-key-check (RUF019)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary key checks prior to accessing a dictionary.\n\n## Why is this bad?\nWhen working with dictionaries, the `get` can be used to access a value\nwithout having to check if the dictionary contains the relevant key,\nreturning `None` if the key is not present.\n\n## Example\n```python\nif \"key\" in dct and dct[\"key\"]:\n    ...\n```\n\nUse instead:\n```python\nif dct.get(\"key\"):\n    ...\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the expression contains comments\nor may have side effects.\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant 'in' membership tests before dict indexing when the subsequent truthiness check makes the guard unnecessary.",
+    "firingShapes": [
+      "if \"x\" in d and d[\"x\"]:",
+      "while \"y\" in mapping and mapping[\"y\"]:",
+      "if \"a\" in d and d[\"a\"] > 0:",
+      "if k in d and d[k]:",
+      "if \"key\" in obj and obj[\"key\"]:",
+      "if name in data and data[name] is not None:",
+      "if item in cache and cache[item]:",
+      "if val in d and d[val]:"
+    ],
+    "silentShapes": [
+      "if \"x\" in d:",
+      "if d.get(\"x\") is None:",
+      "if \"x\" in d and d[\"x\"] == 0:",
+      "if cond and \"x\" in d and d[\"x\"]:",
+      "if \"x\" in d or d[\"x\"]:"
+    ],
+    "fixDescription": "Replaces patterns like 'if key in d and d[key]:' with 'if d.get(key):', removing the redundant membership test while preserving the truthiness evaluation of the value.",
+    "hazards": [
+      "Rewriting 'if \"x\" in d and d[\"x\"]:' changes behavior when d[\"x\"] evaluates to False-y but non-None values like 0, '', [], or False, as d.get(\"x\") would return those same values making the condition false where the original was true due to the membership test passing.",
+      "If d[\"x\"] has side effects (e.g., a property getter that logs or modifies state), moving the access into d.get() alters timing and frequency of those effects compared to the guarded evaluation.",
+      "When d is not a local variable but an expression with side effects (e.g., f()[\"x\"]), evaluating d twice in the original vs once in the fix changes behavior if f() is not idempotent or has observable effects.",
+      "If the dictionary d is aliased elsewhere and mutated between the membership test and the indexing in the original code, the fix's single evaluation via get() may observe a different state than the two-step process.",
+      "The fix drops any comments attached to the 'in' operator or the bracketed access, as the AST replacement does not preserve comment nodes attached to those specific tokens.",
+      "In cases where d[\"x\"] raises a KeyError for missing keys (impossible for standard dicts but possible for custom mappings), the original code avoids the error via the guard while d.get(\"x\") would not, though this is irrelevant for built-in dict semantics.",
+      "If the value retrieved is used later in the branch (not just tested), the fix does not provide access to the retrieved value, requiring additional changes beyond the scope of this rule's autofix.",
+      "When the condition is part of a larger boolean expression involving short-circuiting operators, replacing the subexpression may alter evaluation order relative to other side effects in the full expression.",
+      "If the dictionary key lookup relies on __missing__ or other custom dictionary behavior that differs between explicit key checking and .get(), the semantics may diverge, though .get() on standard dicts respects __missing__.",
+      "The fix may incorrectly fire on code where the truthiness check is not immediate (e.g., separated by other operations), but the pattern is limited to direct adjacency per the rule's design."
+    ]
+  },
+  "opts": {
+    "n": 6,
+    "rounds": 1,
+    "unsafe": false
+  },
+  "cost": 0.00622172,
+  "summary": {
+    "programs": 6,
+    "invalid": 0,
+    "fired": 2,
+    "fixed": 2,
+    "disputed": 3,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r1-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "class BadDict(dict):\n    def __getitem__(self, key):\n            raise ValueError('boom')\nd = BadDict({'fail': 0})\ntry:\n    if 'fail' in d and d['fail']:\n        print('yes')\nexcept ValueError as e:\n    print('finally ran')\n",
+      "lines": {
+        "before": 13,
+        "after": 9
+      },
+      "reportPath": "runs/2026-10-22T17-26-00-716Z-5zvc-ruff-RUF019/reports/r1-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/14011",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12953",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12285",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule replaces a key check plus direct access with dict.get, assuming get never raises. The program uses a dict subclass whose __getitem__ raises ValueError; the original code catches that exception, but the rewritten code calls get (which inherits the raising __getitem__) and the exception propagates out, changing program output. The documentation presents the rewrite as equivalent and marks the fix safe, so this is a real bug in the fix.",
+        "docsQuote": "the `get` can be used to access a value without having to check if the dictionary contains the relevant key, returning `None` if the key is not present",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "RUF019 fix",
+          "RUF019 dict get truthiness check",
+          "RUF019 replace membership test with get",
+          "RUF019 avoid KeyError via safe access"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "Possible false positives for RUF019",
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "state": "open",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* List of keywords you searched for before creating this issue. Write them down here so that others can find th"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "`contains_effect` should consider f-strings to have effects",
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "state": "closed",
+            "snippet": "`contains_effect` should consider f-strings to have effects because of the implicit `__str__` or `__repr__` call. This affects any rule that relies on `contains_effect`; here is an example with [RUF019](https://docs.astral.sh/ruff/rules/unnecessary-key-check/).\r\n```console\r\n$ ruff --version\r\nruff 0."
+          },
+          {
+            "source": "github",
+            "title": "False negative for RUF019 with `not` operator",
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "state": "closed",
+            "snippet": "RUF019 checks for things like `\"key\" in dct and dct[\"key\"]` in boolean contexts, like an `if` condition or the argument to `bool`. It should also detect it as the operand of `not`.\r\n```console\r\n$ ruff --version\r\nruff 0.5.1\r\n$ echo 'bool(\"key\" in dct and dct[\"key\"])' | ruff check --isolated --output-"
+          },
+          {
+            "source": "github",
+            "title": "Fixed code unformatted",
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "state": "closed",
+            "snippet": "Feel free to close if this is expected currently but the following change introduced three consecutive new lines which breaks formatting:\r\n\r\n![image](https://github.com/astral-sh/ruff/assets/9677399/6487e202-c9d6-4576-adfa-48fd0985ae40)\r\n"
+          },
+          {
+            "source": "github",
+            "title": "Add option to disable preview warnings",
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "state": "closed",
+            "snippet": "I would like to wrap Ruff without having to know which rules are under preview or not and suppress the warnings. Also, I think there are many duplicate warnings:\r\n\r\n```\r\ncmd [1] | python -m ruff check --fix --select A001,A002,A003,ARG001,ARG002,ARG003,ARG004,ARG005,ASYNC100,ASYNC101,ASYNC102,B002,B0"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/14011",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (general false positives vs custom __getitem__ side effects)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "different rule ARG001/ARG005 about unused arguments with unicode names"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12953",
+            "relation": "related",
+            "why": "same rule RUF019 and same contains_effect logic but different construct (f-strings vs custom dict __getitem__)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12285",
+            "relation": "related",
+            "why": "same rule RUF019 but different construct (not operator vs and operator with side effects)"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8619",
+            "relation": "unrelated",
+            "why": "formatting issue with consecutive new lines, not a logic defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8620",
+            "relation": "unrelated",
+            "why": "feature request for preview warning suppression, not a rule defect"
+          }
+        ],
+        "cost": 0.0021809
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:26:24.169944705 -0400\n+++ fixed.py\t2026-10-22 13:26:27.149994089 -0400\n@@ -3,7 +3,7 @@\n             raise ValueError('boom')\n d = BadDict({'fail': 0})\n try:\n-    if 'fail' in d and d['fail']:\n+    if d.get('fail'):\n         print('yes')\n except ValueError as e:\n     print('finally ran')\n",
+        "observed": "stdout before:\nfinally ran\nstdout after:\n",
+        "before": {
+          "stdout": "finally ran\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "class BadDict(dict):\n    def __getitem__(self, key):\n            raise ValueError('boom')\nd = BadDict({'fail': 0})\ntry:\n    if d.get('fail'):\n        print('yes')\nexcept ValueError as e:\n    print('finally ran')\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select RUF019 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original condition checks membership with `'fail' in d` first; since `__getitem__` raises `ValueError` only on access, the membership test succeeds without triggering the exception, so the second part `d['fail']` is evaluated, raising `ValueError`, which is caught and prints 'finally ran'. The rewritten condition uses `d.get('fail')`, which directly invokes `__getitem__` for the key 'fail', immediately raising `ValueError` before any short-circuiting can occur. This exception is still caught, but the `print('yes')` is never reached because the exception happens during condition evaluation, not after it. Thus, the output changes from 'finally ran' to nothing.",
+        "fired": 1,
+        "firedAfter": 0
+      },
+      "minimizer": {
+        "evaluations": 44,
+        "proposal": "skipped"
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Bytes vs string keys",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "str: b'ok'\nstr: b'bad'\nbytes: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Aliased dict mutation during guard evaluation",
+      "hazard": "If the dictionary d is aliased elsewhere and mutated between the membership test and the indexing in the original code, the fix's single evaluation via get() may observe a different state than the two",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "d now: {}\nad still has x? False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Exception in indexing with finally clause",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              8,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "ValueError: boom\nfinally ran\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nValueError: boom\nfinally ran\nstdout after:\nfinally ran"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally ran\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-22 13:26:13.038760317 -0400\n+++ fixed.py\t2026-10-22 13:26:16.646820072 -0400\n@@ -5,7 +5,7 @@\n         return super().__getitem__(key)\n d = BadDict({'fail': 0})\n try:\n-    if 'fail' in d and d['fail']:\n+    if d.get('fail'):\n         print('yes')\n except ValueError as e:\n     print('ValueError:', e)\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Async function with await in condition",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Mutable default argument capturing alias",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF019",
+            "severity": "warning",
+            "message": "Unnecessary key check before dictionary access",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[[99]]\n[[99], [88]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[[99]]\n[[99], [88]]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-22 13:26:13.039760333 -0400\n+++ fixed.py\t2026-10-22 13:26:15.658803708 -0400\n@@ -1,5 +1,5 @@\n def f(d, key='x', log=[]):\n-    if key in d and d[key]:\n+    if d.get(key):\n         log.append(d[key])\n         return log\n     return []\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Custom __missing__ behavior divergence",
+      "hazard": "If the dictionary key lookup relies on __missing__ or other custom dictionary behavior that differs between explicit key checking and .get(), the semantics may diverge, though .get() on standard dicts",
+      "rule": "RUF019",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "in+get: overridden\ndirect get: overridden\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    }
+  ]
+}

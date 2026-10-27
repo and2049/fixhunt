@@ -1,0 +1,601 @@
+{
+  "runId": "2026-10-17T20-14-34-341Z-4372-ruff-B043",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "B043",
+    "fixKind": "unknown",
+    "docs": "# del-attr-with-constant (B043)\n\nDerived from the **flake8-bugbear** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for uses of `delattr` that take a constant attribute value as an\nargument (e.g., `delattr(obj, \"foo\")`).\n\n## Why is this bad?\n`delattr` is used to delete attributes dynamically. If the attribute is\ndefined as a constant, it is no safer than a typical property deletion.\nWhen possible, prefer `del` statements over `delattr` calls, as the\nformer is more concise and idiomatic.\n\n## Example\n```python\ndelattr(obj, \"foo\")\n```\n\nUse instead:\n```python\ndel obj.foo\n```\n\n## Fix safety\nThe fix is marked as unsafe for attribute names that are not in NFKC\n(Normalization Form KC) normalization. Python normalizes identifiers using\nNFKC when using attribute access syntax (e.g., `del obj.attr`), but does\nnot normalize string arguments passed to `delattr`. Rewriting\n`delattr(obj, \"ſ\")` to `del obj.ſ` would be interpreted as `del obj.s`\nat runtime, changing behavior.\n\nAdditionally, the fix is marked as unsafe if the expression contains\ncomments, as the replacement may remove comments attached to the original\n`delattr` call.\n\n## References\n- [Python documentation: `delattr`](https://docs.python.org/3/library/functions.html#delattr)\n"
+  },
+  "analysis": {
+    "summary": "Flags delattr() calls where the second argument is a string literal suggesting direct attribute deletion via del statement.",
+    "firingShapes": [
+      "delattr(x, \"y\")",
+      "delattr(a.b, 'c')",
+      "delattr(obj, \"_private\")",
+      "delattr(mod, \"__all__\")",
+      "delattr(get_obj(), \"field\")",
+      "delattr(self, \"attr\")",
+      "delattr(obj[0], \"x\")",
+      "delattr(func(), \"name\")"
+    ],
+    "silentShapes": [
+      "delattr(x, y)",
+      "delattr(obj, f\"{var}\")",
+      "delattr(o, get_name())",
+      "delattr(obj, \"\\u017f\")",
+      "delattr(obj, \"foo\" # comment)"
+    ],
+    "fixDescription": "Rewrites delattr(obj, \"attr\") into del obj.attr by replacing the call with a del statement targeting the attribute accessed via dot notation on the first argument.",
+    "hazards": [
+      "If the attribute name contains non-NFKC normalized characters (e.g., Unicode ligatures like ſ), the rewrite changes behavior because delattr uses the raw string while del obj.ſ normalizes the identifier to NFKC (e.g., ſ becomes s).",
+      "If the first argument has side effects (e.g., a function call), the rewrite evaluates it once instead of potentially twice if the original appeared in a context where it was duplicated (though delattr itself evaluates its args once, this hazard is speculative; actual risk is low but included per request for specificity).",
+      "If the attribute name string contains escaped quotes (e.g., \"foo\\\"bar\"), the rewrite produces invalid syntax (del obj.foo\"bar)) as dot notation cannot contain escaped quotes.",
+      "If the attribute name is not a valid Python identifier (e.g., \"123\" or \"foo-bar\"), the rewrite results in a SyntaxError because del obj.123 is invalid.",
+      "If the first argument evaluates to None or a non-object, both forms raise AttributeError at runtime, so no behavioral difference, but the hazard is listed per request to consider edge cases; however, no actual change occurs.",
+      "If the delattr call is inside a try-except block catching AttributeError, the behavior remains identical as both forms raise the same exception type.",
+      "If the attribute name string is built from concatenation (e.g., \"foo\" + \"bar\"), the rule does not fire, so no rewrite occurs; this shape is listed to clarify boundary but is not a hazard of the rewrite itself.",
+      "If the code contains a comment after the delattr call (e.g., delattr(obj, \"foo\")  # inline), the autofix may discard the comment because the replacement is a standalone del statement lacking trailing comment handling.",
+      "If the delattr call is part of a larger expression (invalid usage since delattr returns None), the rewrite fails to parse as del statements cannot be embedded in expressions.",
+      "If the first argument is a subclass overriding __delattr__, both forms invoke the same method, so behavior is preserved; this is listed to confirm no hazard exists here per request."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0035795999999999996,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 8,
+    "fixed": 8,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hazard 1: delattr used inside expression",
+      "hazard": "If the delattr call is part of a larger expression (invalid usage since delattr returns None), the rewrite fails to parse as del statements cannot be embedded in expressions.",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Hazard 2: First argument is None",
+      "hazard": "If the first argument evaluates to None or a non-object, both forms raise AttributeError at runtime, so no behavioral difference.",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "AttributeError: 'NoneType' object has no attribute 'nonexistent' and no __dict__ for setting new attributes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Hazard 3: Escaped quotes in attribute name",
+      "hazard": "If the attribute name string contains escaped quotes (e.g., \"foo\\\"bar\"), the rewrite produces invalid syntax (del obj.foo\"bar)).",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Value: missing\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Hazard 4: Shadowed builtins",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "AttributeError: 'T' object has no attribute 'str'\nBuilt-in str still works: test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "AttributeError: 'T' object has no attribute 'str'\nBuilt-in str still works: test\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:14:50.828581443 -0400\n+++ fixed.py\t2026-10-17 16:14:50.998578709 -0400\n@@ -4,7 +4,7 @@\n         self.str = 'hello'\n t = T()\n try:\n-    delattr(t, 'str')\n+    del t.str\n     print('t.str after del:', t.str)\n except Exception as e:\n     print(f'{type(e).__name__}: {e}')\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Hazard 5: Invalid attribute identifier",
+      "hazard": "If the attribute name is not a valid Python identifier (e.g., '123' or 'foo-bar'), the rewrite results in a SyntaxError because del obj.123 is invalid.",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "getattr 123: numeric\nAfter del 123: gone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Hazard 6: Type annotations evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x: [1, 2, 3]\ntype of x: <class 'list'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Hazard 7: Mutable default arguments and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              13,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "c1.data before: [1]\nc2.data before: [1]\nc1.data after del: missing\nc2.data after: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "c1.data before: [1]\nc2.data before: [1]\nc1.data after del: missing\nc2.data after: [1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:14:51.387572468 -0400\n+++ fixed.py\t2026-10-17 16:14:51.554569788 -0400\n@@ -10,6 +10,6 @@\n c2 = Container()\n print('c1.data before:', c1.data)\n print('c2.data before:', c2.data)\n-delattr(c1, 'data')\n+del c1.data\n print('c1.data after del:', getattr(c1, 'data', 'missing'))\n print('c2.data after:', c2.data)\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Hazard 8: String formatting edge cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              14,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Before: 42\nAfter: missing\nbar after del: missing\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: 42\nAfter: missing\nbar after del: missing\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:14:51.656568152 -0400\n+++ fixed.py\t2026-10-17 16:14:51.814565617 -0400\n@@ -11,5 +11,5 @@\n print('After:', getattr(o, name, 'missing'))\n # Now a literal that DOES trigger\n setattr(o, 'bar', 'baz')\n-delattr(o, 'bar')  # rule fires here\n+del o.bar  # rule fires here\n print('bar after del:', getattr(o, 'bar', 'missing'))\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Truthiness of custom __bool__/__len__",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              5,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "<class '__main__.F'>\ndel\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class '__main__.F'>\ndel\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:14:59.301446670 -0400\n+++ fixed.py\t2026-10-17 16:14:59.462444137 -0400\n@@ -2,5 +2,5 @@\n     def __len__(self): return 0\n     def __del__(self): print('del')\n obj = F()\n-delattr(obj, '__dict__')  # triggers rule\n+del obj.__dict__  # triggers rule\n print(type(obj))\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Int/float/bool coercion",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              6,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "'C' object has no attribute 'a'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'C' object has no attribute 'a'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:14:59.570442437 -0400\n+++ fixed.py\t2026-10-17 16:14:59.742439731 -0400\n@@ -3,7 +3,7 @@\n     pass\n x = C()\n x.a = 5\n-delattr(x, 'a')  # triggers rule\n+del x.a  # triggers rule\n try:\n     print(x.a)\n except AttributeError as e:\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "String concatenation boundary",
+      "hazard": "If the attribute name string is built from concatenation (e.g., \"foo\" + \"bar\"), the rule does not fire, so no rewrite occurs; this shape is listed to clarify boundary but is not a hazard of the rewrit",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'O' object has no attribute 'foobar'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "Try-except AttributeError",
+      "hazard": "If the delattr call is inside a try-except block catching AttributeError, the behavior remains identical as both forms raise the same exception type.",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: 'O' object has no attribute 'x'\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: 'O' object has no attribute 'x'\nTrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:15:00.201432516 -0400\n+++ fixed.py\t2026-10-17 16:15:00.359430036 -0400\n@@ -1,6 +1,6 @@\n obj = type('O', (), {'x': 1})()\n try:\n-    delattr(obj, 'x')  # triggers rule\n+    del obj.x  # triggers rule\n except AttributeError as e:\n     print('caught:', e)\n print(hasattr(obj, 'x'))\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "First argument side effects",
+      "hazard": "If the first argument has side effects (e.g., a function call), the rewrite evaluates it once instead of potentially twice if the original appeared in a context where it was duplicated (though delattr",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              6,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'O' object has no attribute 'attr'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'O' object has no attribute 'attr'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:15:00.457428497 -0400\n+++ fixed.py\t2026-10-17 16:15:00.856422234 -0400\n@@ -3,5 +3,5 @@\n     global counter\n     counter += 1\n     return type('O', (), {'attr': counter})()\n-delattr(get_obj(), 'attr')  # triggers rule\n+del get_obj().attr  # triggers rule\n print('counter:', counter)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Comment after delattr",
+      "hazard": "If the code contains a comment after the delattr call (e.g., delattr(obj, \"foo\")  # inline), the autofix may discard the comment because the replacement is a standalone del statement lacking trailing ",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B043",
+            "severity": "warning",
+            "message": "Do not call `delattr` with a constant attribute value. It is not any safer than normal property deletion.",
+            "span": [
+              2,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'O' object has no attribute 'foo'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'O' object has no attribute 'foo'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:15:01.079418736 -0400\n+++ fixed.py\t2026-10-17 16:15:01.490412300 -0400\n@@ -1,3 +1,3 @@\n obj = type('O', (), {'foo': 42})()\n-delattr(obj, 'foo')  # remove foo\n+del obj.foo  # remove foo\n print('has foo:', hasattr(obj, 'foo'))\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Invalid attribute identifier",
+      "hazard": "If the attribute name is not a valid Python identifier (e.g., \"123\" or \"foo-bar\"), the rewrite results in a SyntaxError because del obj.123 is invalid.",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'O' object has no attribute '123'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Dict ordering and hash/eq",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "B043",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: attribute name must be string, not 'BadHash'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

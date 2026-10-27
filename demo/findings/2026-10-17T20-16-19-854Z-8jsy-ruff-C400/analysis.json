@@ -1,0 +1,34 @@
+{
+  "summary": "Flags unnecessary uses of list() wrapping generator expressions.",
+  "firingShapes": [
+    "list(f(x) for x in foo)",
+    "list(x for x in foo)",
+    "list((x for x in foo))",
+    "list(y for y in range(n) if y % 2)",
+    "list(g(a,b) for a in A for b in B)",
+    "list((z+1 for z in data))",
+    "list(item for item in items if cond(item))",
+    "list(expr for expr in iterable)"
+  ],
+  "silentShapes": [
+    "[f(x) for x in foo]",
+    "list(foo)",
+    "[x for x in foo if bar(x)]",
+    "(x for x in foo)",
+    "map(f, foo)"
+  ],
+  "fixDescription": "Rewrites list(<generator expression>) to [<expression> for <iteration>] when the generator has a transformation or filter; otherwise rewrites to list(<iterable>) by removing the redundant generator wrapper.",
+  "hazards": [
+    "If the generator expression contains a walrus operator (e.g., list((y := f(x)) for x in foo)), rewriting to a list comprehension may change scoping rules as the assignment expression's target becomes local to the comprehension, potentially leaking or hiding variables differently.",
+    "If the generator expression is inside a lambda or nested function and uses nonlocal or global variables, moving the logic into a list comprehension could alter closure capture timing or semantics due to differences in how comprehensions vs generator expressions handle name resolution.",
+    "If the iterable side-effectfully mutates during iteration (e.g., list(x for x in foo where foo.remove(x))), the rewrite to list(foo) or a list comprehension may iterate over a different sequence because the original generator evaluated foo at start but the fix might re-evaluate or assume stability.",
+    "If the generator expression contains a 'break' or 'continue' statement (though invalid in generator expressions, consider via trickery), the fix would be invalid as comprehensions don't support those statements, but the rule shouldn't fire on invalid syntax anyway—still, if somehow present, the fix would break.",
+    "If the generator expression is used in a context where its lazy evaluation is relied upon for early termination via an enclosing construct (e.g., any(list(f(x) for x in foo))), replacing it with a list comprehension forces full evaluation upfront, changing performance and possibly causing errors if evaluation has side effects that should be avoided after a truthy result.",
+    "If the generator expression includes a comment inside the parentheses (e.g., list(x # comment\n  for x in foo)), the autofix may drop the comment during rewrite because it only preserves tokens deemed essential, leading to loss of inline documentation.",
+    "If the generator expression is part of a larger expression where parentheses are significant for grouping (e.g., list((x for x in foo)) + 1), the fix might incorrectly simplify to list(foo) + 1, but if the inner parentheses were actually wrapping a tuple generator vs being redundant, the semantics of nesting could matter—though in practice the inner parens here are just around the generator, still, over-aggressive paren removal could theoretically affect parsing in edge cases involving complex expressions.",
+    "If the iterable is not actually a variable but a function call with side effects (e.g., list(x for x in get_foo())), rewriting to list(get_foo()) is safe, but if the fix mistakenly caches or reorders evaluation (which it shouldn't), it could call get_foo() multiple times vs once; however, the fix should preserve the single call, so this is more speculative—still, any refactoring tool must prove it doesn't introduce extra evaluations.",
+    "If the generator expression appears in a default argument or class body and relies on late binding, the fix timing of when the iterable is evaluated might shift relative to other definitions, though both generator expressions and comprehensions evaluate the iterable at the point of construction, so this is unlikely—but if the fix changed nesting depth, it could matter.",
+    "If the code contains a stray backslash for line continuation inside the generator expression (e.g., list(x\\\n  for x in foo)), the autofix might mishandle the line joining during rewrite, breaking syntax or altering meaning.",
+    "If the generator expression is written with a trailing comma making it a tuple (e.g., list((x for x in foo),)), the rule likely wouldn't fire because it's not a plain generator call, but if misapplied, the fix would break structure."
+  ]
+}

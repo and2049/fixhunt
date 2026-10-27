@@ -1,0 +1,362 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/useConsistentArrowReturn — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/useConsistentArrowReturn <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T21-00-12-077Z-lnk8-biome-style_useConsistentArrowReturn · fix labelled <b>safe</b> · 15 programs, 12 fired, 12 fixed, 0 oracle-backed finding(s) · model cost $0.0038</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags arrow functions with a block body containing only a single return statement.</p><p class="mut">Fix: Replace the block body with a concise arrow body by removing braces and the return keyword, wrapping the returned expression in parentheses if needed to avoid parsing ambiguities (e.g., object literals become ({ ... }) and comma-separated expressions remain grouped).</p><details><summary>9 hazards</summary><ul><li>Rewriting `() =&gt; { return expr, expr; }` as `() =&gt; (expr, expr)` changes evaluation order if the comma expression relies on left-to-right side effects being visible before the fix (though value is same, timing of side effects may differ in debuggers or proxies).</li><li>If the returned expression is an object literal like `{ a: 1 }`, omitting parentheses during rewrite would cause a parse error (`{` interpreted as block start), but the fix adds them—however, if the original code relied on automatic semicolon insertion after the block, adding parentheses could alter ASI boundaries in edge cases involving newlines.</li><li>When the arrow function is used as a constructor via `new`, the concise form may incorrectly return the wrapped expression instead of the newly created instance (though arrow functions aren’t constructible, this is more theoretical; if mistakenly called via `Reflect.construct`, behavior diverges).</li><li>If the return expression contains a `yield` (in generator context), rewriting breaks because arrow functions cannot be generators, but the rule doesn’t fire on generators anyway—still, if misapplied due to incorrect parsing, it would invalidate syntax.</li><li>In non-strict mode, if the function body contained a `with` statement (invalid in strict), but the rule doesn’t fire on multi-statement bodies, so not applicable—however, if a single `return with (x) {}` existed, the fix would preserve it, but `with` is deprecated and rarely used.</li><li>If the returned expression is a class declaration like `class C {}`, rewriting as `() =&gt; class C {}` is fine, but if the original relied on the block creating a lexical scope for `let`/`const` inside (which it doesn’t—returns don’t create scopes), no issue arises.</li><li>If the arrow function’s body had a trailing comment after `return` (e.g., `return x; // note`), the rule stays silent per documentation, so no fix is applied—thus no hazard from comment loss in fired cases.</li><li>If the function is part of a larger expression like `x = () =&gt; { return y }()`, the fix changes precedence grouping; however, since the arrow function call is immediate, the value is unchanged, but if the return expression were itself a function call with side effects, the timing of evaluation relative to outer expressions remains identical due to call semantics.</li><li>In TypeScript or JSX contexts, if the arrow function returns a JSX element like `&lt;div /&gt;`, rewriting as `() =&gt; (&lt;div /&gt;)` is valid, but if the original block had a comment or directive (excluded), no issue—however, tools that rely on block-body structure for formatting may reformat incorrectly post-fix.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Regular Expression with Unicode Flag</td><td class="mut">Rewriting changes regex literal precedence due to missing grouping parentheses when follow</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>This Binding in Method Extraction</td><td class="mut">Removing block braces does not affect arrow function&#39;s lexical this, but exposes reliance </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Function Declaration Inside Switch Case</td><td class="mut">Rule fires on inner arrow function; rewriting changes temporal dead zone behavior if retur</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span></td><td>Yield in Return Expression (Generator Context)</td><td class="mut">Rule does not fire on generators, but simulating misfire shows syntax error if arrow funct</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Name Collision Across Scopes After Move</td><td class="mut">Rewriting moves arrow function to outer scope, causing it to capture a different variable </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Class Declaration Returned</td><td class="mut">Rule rewrites return of class declaration; though semantically safe, we verify no scoping </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>__proto__ Key in Object Literal</td><td class="mut">Rule rewrites object literal return; ensures __proto__ key is preserved and not interprete</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Constructor Use with Reflect.construct</td><td class="mut">When the arrow function is used as a constructor via new or Reflect.construct, the concise</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Order of Evaluation with Side Effects</td><td class="mut">order of evaluation when expressions are merged, duplicated or deleted (side effects run t</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>With Statement in Non-Strict Mode (Single Return)</td><td class="mut">In non-strict mode, if the function body contained a `with` statement (invalid in strict),</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Exceptions Thrown Inside Rewritten Code</td><td class="mut">exceptions thrown inside the code the fix removes or rewrites</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Comma Expression Evaluation Order</td><td class="mut">Rewriting `() =&gt; { return expr, expr; }` as `() =&gt; (expr, expr)` changes evaluation order </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Object.defineProperty Side Effects</td><td class="mut">getters, setters and Object.defineProperty side effects</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Function Declaration Inside Block/Switch/Label</td><td class="mut">function declarations inside blocks, switch cases, labeled statements</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Strict vs Sloppy Mode Semantics</td><td class="mut">strict vs sloppy mode semantics</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Regular Expression with Unicode Flag</summary><pre>const pattern = &#39;ab&#39;;
+const matchIt = s =&gt; {
+  return new RegExp(pattern, &#39;u&#39;).test(s);
+};
+console.log(matchIt(&#39;áb&#39;));
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:25.936783184 -0400
++++ fixed.js	2026-10-17 17:00:26.230786855 -0400
+@@ -1,5 +1,3 @@
+ const pattern = &#39;ab&#39;;
+<span class="del">-const matchIt = s =&gt; {</span>
+<span class="del">-  return new RegExp(pattern, &#39;u&#39;).test(s);</span>
+<span class="del">-};</span>
+<span class="add">+const matchIt = s =&gt; new RegExp(pattern, &#39;u&#39;).test(s);</span>
+ console.log(matchIt(&#39;áb&#39;));
+</pre></details><details id="r1-p003"><summary>r1-p003 — This Binding in Method Extraction</summary><pre>const obj = {
+  value: 42,
+  getValue: function() {
+    return () =&gt; { return this.value; };
+  }
+};
+const fn = obj.getValue();
+console.log(fn()); // Should print 42
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:26.397788940 -0400
++++ fixed.js	2026-10-17 17:00:26.663792261 -0400
+@@ -1,7 +1,7 @@
+ const obj = {
+   value: 42,
+   getValue: function() {
+<span class="del">-    return () =&gt; { return this.value; };</span>
+<span class="add">+    return () =&gt; this.value;</span>
+   }
+ };
+ const fn = obj.getValue();
+</pre></details><details id="r1-p004"><summary>r1-p004 — Function Declaration Inside Switch Case</summary><pre>switch (1) {
+  case 1:
+    let x = 10;
+    const getX = () =&gt; { return x; };
+    break;
+}
+try {
+  console.log(getX());
+} catch (e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:26.840794471 -0400
++++ fixed.js	2026-10-17 17:00:27.111797854 -0400
+@@ -1,7 +1,7 @@
+ switch (1) {
+   case 1:
+     let x = 10;
+<span class="del">-    const getX = () =&gt; { return x; };</span>
+<span class="add">+    const getX = () =&gt; x;</span>
+     break;
+ }
+ try {
+</pre></details><details id="r1-p005"><summary>r1-p005 — Yield in Return Expression (Generator Context)</summary><pre>function* gen() {
+  yield 1;
+}
+const g = gen();
+console.log(g.next().value);
+</pre></details><details id="r1-p006"><summary>r1-p006 — Name Collision Across Scopes After Move</summary><pre>let x = 1;
+{
+  let x = 2;
+  const getX = () =&gt; { return x; };
+  console.log(getX()); // Prints 2
+}
+console.log(getX()); // After rewrite: prints 1 (outer x)
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:27.501802721 -0400
++++ fixed.js	2026-10-17 17:00:27.764806004 -0400
+@@ -1,7 +1,7 @@
+ let x = 1;
+ {
+   let x = 2;
+<span class="del">-  const getX = () =&gt; { return x; };</span>
+<span class="add">+  const getX = () =&gt; x;</span>
+   console.log(getX()); // Prints 2
+ }
+ console.log(getX()); // After rewrite: prints 1 (outer x)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Class Declaration Returned</summary><pre>const makeClass = () =&gt; {
+  return class {
+    constructor() { this.x = 1; }
+  };
+};
+const C = makeClass();
+const c = new C();
+console.log(c.x);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:27.937808163 -0400
++++ fixed.js	2026-10-17 17:00:28.216811643 -0400
+@@ -1,8 +1,6 @@
+<span class="del">-const makeClass = () =&gt; {</span>
+<span class="del">-  return class {</span>
+<span class="add">+const makeClass = () =&gt; class {</span>
+     constructor() { this.x = 1; }
+   };
+<span class="del">-};</span>
+ const C = makeClass();
+ const c = new C();
+ console.log(c.x);
+</pre></details><details id="r1-p008"><summary>r1-p008 — __proto__ Key in Object Literal</summary><pre>const makeObj = () =&gt; {
+  return { __proto__: null, a: 1 };
+};
+const o = makeObj();
+console.log(o.__proto__ === null &amp;&amp; o.a === 1);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:28.387813776 -0400
++++ fixed.js	2026-10-17 17:00:28.662817207 -0400
+@@ -1,5 +1,3 @@
+<span class="del">-const makeObj = () =&gt; {</span>
+<span class="del">-  return { __proto__: null, a: 1 };</span>
+<span class="del">-};</span>
+<span class="add">+const makeObj = () =&gt; ({ __proto__: null, a: 1 });</span>
+ const o = makeObj();
+ console.log(o.__proto__ === null &amp;&amp; o.a === 1);
+</pre></details><details id="r2-p001"><summary>r2-p001 — Constructor Use with Reflect.construct</summary><pre>const Target = class {
+  constructor(x) { this.value = x; }
+};
+let madeViaNew = null;
+try {
+  madeViaNew = new Target(1);
+} catch (_) {}
+console.log(&#39;madeViaNew:&#39;, madeViaNew ? madeViaNew.value : &#39;none&#39;);
+
+// Arrow function returning class - rule triggers here
+const makeTarget = (cls) =&gt; { return cls; };
+let madeViaConstruct = null;
+try {
+  // Simulate incorrect construction attempt using Reflect.construct
+  madeViaConstruct = Reflect.construct(makeTarget([Target]), []);
+} catch (e) {
+  console.error(e.name + &#39;: &#39; + e.message);
+}
+if (madeViaConstruct &amp;&amp; madeViaConstruct.value !== undefined) {
+  console.log(&#39;madeViaConstruct.value:&#39;, madeViaConstruct.value);
+} else if (madeViaConstruct instanceof Target) {
+  console.log(&#39;madeViaConstruct is instance:&#39;, madeViaConstruct.value);
+} else {
+  console.log(&#39;madeViaConstruct:&#39;, madeViaConstruct);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:36.839919001 -0400
++++ fixed.js	2026-10-17 17:00:37.127922579 -0400
+@@ -8,7 +8,7 @@
+ console.log(&#39;madeViaNew:&#39;, madeViaNew ? madeViaNew.value : &#39;none&#39;);
+ 
+ // Arrow function returning class - rule triggers here
+<span class="del">-const makeTarget = (cls) =&gt; { return cls; };</span>
+<span class="add">+const makeTarget = (cls) =&gt; cls;</span>
+ let madeViaConstruct = null;
+ try {
+   // Simulate incorrect construction attempt using Reflect.construct
+</pre></details><details id="r2-p002"><summary>r2-p002 — Order of Evaluation with Side Effects</summary><pre>let log = &#39;&#39;;
+const side = (msg) =&gt; {
+  log += msg;
+  return msg.length;
+};
+
+// Arrow with comma expression - rule triggers
+const getVals = () =&gt; { return side(&#39;a&#39;), side(&#39;b&#39;); };
+
+const first = getVals();
+log += &#39;|&#39;;
+const second = getVals();
+console.log(&#39;log:&#39;, log);
+console.log(&#39;first:&#39;, first);
+console.log(&#39;second:&#39;, second);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:37.291924616 -0400
++++ fixed.js	2026-10-17 17:00:37.578928180 -0400
+@@ -5,7 +5,7 @@
+ };
+ 
+ // Arrow with comma expression - rule triggers
+<span class="del">-const getVals = () =&gt; { return side(&#39;a&#39;), side(&#39;b&#39;); };</span>
+<span class="add">+const getVals = () =&gt; (side(&#39;a&#39;), side(&#39;b&#39;));</span>
+ 
+ const first = getVals();
+ log += &#39;|&#39;;
+</pre></details><details id="r2-p003"><summary>r2-p003 — With Statement in Non-Strict Mode (Single Return)</summary><pre>(function(){
+  &#39;use sloppy mode&#39;;
+  const obj = { x: 42 };
+  let result;
+  try {
+    // Not triggering rule because with statement makes it not a simple return
+    // But we show what happens if someone tried
+    result = (() =&gt; { with(obj) { return x; } })();
+  } catch (e) {
+    result = e.name + &#39;: &#39; + e.message;
+  }
+  console.log(&#39;result:&#39;, result);
+})();
+</pre></details><details id="r2-p004"><summary>r2-p004 — Exceptions Thrown Inside Rewritten Code</summary><pre>let threw = false;
+let errorMsg = &#39;&#39;;
+
+// Arrow function that throws - rule triggers
+const risky = () =&gt; { throw new Error(&#39;fail&#39;); };
+
+try {
+  risky();
+} catch (e) {
+  threw = true;
+  errorMsg = e.name + &#39;: &#39; + e.message;
+}
+console.log(&#39;threw:&#39;, threw);
+console.log(&#39;error:&#39;, errorMsg);
+</pre></details><details id="r2-p005"><summary>r2-p005 — Comma Expression Evaluation Order</summary><pre>let trace = &#39;&#39;;
+const step = (label) =&gt; {
+  trace += label;
+  return label.charCodeAt(0);
+};
+
+// Comma return - rule triggers here
+const seq = () =&gt; { return step(&#39;A&#39;), step(&#39;B&#39;); };
+
+const val = seq();
+console.log(&#39;trace:&#39;, trace);
+console.log(&#39;value:&#39;, val);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:38.030933795 -0400
++++ fixed.js	2026-10-17 17:00:38.302937171 -0400
+@@ -5,7 +5,7 @@
+ };
+ 
+ // Comma return - rule triggers here
+<span class="del">-const seq = () =&gt; { return step(&#39;A&#39;), step(&#39;B&#39;); };</span>
+<span class="add">+const seq = () =&gt; (step(&#39;A&#39;), step(&#39;B&#39;));</span>
+ 
+ const val = seq();
+ console.log(&#39;trace:&#39;, trace);
+</pre></details><details id="r2-p006"><summary>r2-p006 — Object.defineProperty Side Effects</summary><pre>let defined = false;
+let value = 99;
+const target = {};
+
+// Define a setter with side effect
+Object.defineProperty(target, &#39;prop&#39;, {
+  set(v) {
+    defined = true;
+    value = v * 2;
+  }
+});
+
+// Arrow returning object literal - rule triggers
+const makeObj = (v) =&gt; { return { prop: v }; };
+
+makeObj(5);
+console.log(&#39;defined:&#39;, defined);
+console.log(&#39;value:&#39;, value);
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:38.468939232 -0400
++++ fixed.js	2026-10-17 17:00:38.734942535 -0400
+@@ -11,7 +11,7 @@
+ });
+ 
+ // Arrow returning object literal - rule triggers
+<span class="del">-const makeObj = (v) =&gt; { return { prop: v }; };</span>
+<span class="add">+const makeObj = (v) =&gt; ({ prop: v });</span>
+ 
+ makeObj(5);
+ console.log(&#39;defined:&#39;, defined);
+</pre></details><details id="r2-p007"><summary>r2-p007 — Function Declaration Inside Block/Switch/Label</summary><pre>{  // Block scope
+  let x = 1;
+  // Arrow in block - rule triggers
+  const inc = () =&gt; { return x + 1; };
+  x = inc();
+  console.log(&#39;block x:&#39;, x);
+}
+
+switch(1) {
+  case 1:
+    let y = 2;
+    // Arrow in case - rule triggers
+    const double = (z) =&gt; { return z * 2; };
+    y = double(y);
+    console.log(&#39;case y:&#39;, y);
+    break;
+}
+
+label: {
+  let z = 3;
+  // Arrow in labeled block
+  const addTen = () =&gt; { return z + 10; };
+  z = addTen();
+  console.log(&#39;labeled z:&#39;, z);
+  break label;
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:38.896944546 -0400
++++ fixed.js	2026-10-17 17:00:39.187948158 -0400
+@@ -1,7 +1,7 @@
+ {  // Block scope
+   let x = 1;
+   // Arrow in block - rule triggers
+<span class="del">-  const inc = () =&gt; { return x + 1; };</span>
+<span class="add">+  const inc = () =&gt; x + 1;</span>
+   x = inc();
+   console.log(&#39;block x:&#39;, x);
+ }
+@@ -10,7 +10,7 @@
+   case 1:
+     let y = 2;
+     // Arrow in case - rule triggers
+<span class="del">-    const double = (z) =&gt; { return z * 2; };</span>
+<span class="add">+    const double = (z) =&gt; z * 2;</span>
+     y = double(y);
+     console.log(&#39;case y:&#39;, y);
+     break;
+@@ -19,7 +19,7 @@
+ label: {
+   let z = 3;
+   // Arrow in labeled block
+<span class="del">-  const addTen = () =&gt; { return z + 10; };</span>
+<span class="add">+  const addTen = () =&gt; z + 10;</span>
+   z = addTen();
+   console.log(&#39;labeled z:&#39;, z);
+   break label;
+</pre></details><details id="r2-p008"><summary>r2-p008 — Strict vs Sloppy Mode Semantics</summary><pre>(function(){
+  &#39;use strict&#39;;
+  let strictLog = &#39;&#39;;
+  const strictFn = () =&gt; { return strictLog += &#39;s&#39;; };
+  strictFn();
+  console.log(&#39;strict:&#39;, strictLog);
+})();
+
+(function(){
+  // sloppy mode
+  let sloppyLog = &#39;&#39;;
+  const sloppyFn = () =&gt; { return sloppyLog += &#39;S&#39;; };
+  sloppyFn();
+  console.log(&#39;sloppy:&#39;, sloppyLog);
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 17:00:39.356950255 -0400
++++ fixed.js	2026-10-17 17:00:39.629953642 -0400
+@@ -1,7 +1,7 @@
+ (function(){
+   &#39;use strict&#39;;
+   let strictLog = &#39;&#39;;
+<span class="del">-  const strictFn = () =&gt; { return strictLog += &#39;s&#39;; };</span>
+<span class="add">+  const strictFn = () =&gt; strictLog += &#39;s&#39;;</span>
+   strictFn();
+   console.log(&#39;strict:&#39;, strictLog);
+ })();
+@@ -9,7 +9,7 @@
+ (function(){
+   // sloppy mode
+   let sloppyLog = &#39;&#39;;
+<span class="del">-  const sloppyFn = () =&gt; { return sloppyLog += &#39;S&#39;; };</span>
+<span class="add">+  const sloppyFn = () =&gt; sloppyLog += &#39;S&#39;;</span>
+   sloppyFn();
+   console.log(&#39;sloppy:&#39;, sloppyLog);
+ })();
+</pre></details></body></html>

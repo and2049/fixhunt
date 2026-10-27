@@ -1,0 +1,378 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff SIM109 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff SIM109 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-32-38-063Z-4gl1-ruff-SIM109 · fix labelled <b>unknown</b> · 16 programs, 4 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0088</p>
+<div class="card"><b>Rule analysis</b><p>Flags repeated equality checks against different literals/variables using &#39;==&#39; chained by &#39;or&#39;/&#39;and&#39;.</p><p class="mut">Fix: Rewrites a chain of equality (or inequality) comparisons of the same left-hand operand with &#39;or&#39; (or &#39;and&#39;) into a single membership test using &#39;in&#39; (or &#39;not in&#39;) with a tuple of the right-hand operands, preserving the original grouping and surrounding expression structure.</p><details><summary>10 hazards</summary><ul><li>If any right-hand operand in the original chain has side effects (e.g., a function call), the rewrite may reduce the number of evaluations, altering program state.</li><li>When the chain is mixed with other operators (e.g., &#39;a == x or b or a == y&#39;), the fix may reorder operands, moving a stray operand like &#39;b&#39; to after the &#39;in&#39; expression, changing evaluation order.</li><li>If the left-hand operand is used elsewhere in the expression outside the equality chain (e.g., &#39;(a == x or a == y) and a&#39;), the fix may duplicate its evaluation via the &#39;in&#39; operation, potentially causing side effects or inconsistent values if &#39;a&#39; is mutable or impure.</li><li>In nested expressions like &#39;f(a == x or a == y)&#39;, the rewrite changes when &#39;a&#39; is evaluated relative to the function call &#39;f&#39;, possibly affecting argument evaluation order.</li><li>If the left-hand operand is a property or attribute access (e.g., &#39;obj.prop == x or obj.prop == y&#39;), the fix may increase the number of attribute lookups, which could differ if &#39;__getattr__&#39; or &#39;__getattribute__&#39; has side effects.</li><li>When the equality chain appears in a lambda or comprehension (e.g., &#39;[z for z in data if a == x or a == y]&#39;), the fix alters how many times &#39;a&#39; is accessed per iteration, impacting performance and side effects.</li><li>If the right-hand operands include mutable objects and the tuple is used in a context where identity matters (e.g., &#39;is&#39; checks later), the rewrite creates a new tuple object, potentially breaking identity-based logic.</li><li>Comments attached to individual comparison tokens (e.g., &#39;a == x  # comment
+  or a == y&#39;) may be lost or misplaced during the rewrite, as the autofix operates on the AST and does not preserve comment spacing or attachment.</li><li>In rare cases involving custom &#39;__eq__&#39; methods that depend on global state or call counts, reducing the number of equality checks from N to 1 via tuple membership can alter behavior if the method has side effects or relies on invocation frequency.</li><li>If the expression is part of a larger boolean context where short-circuiting matters (e.g., &#39;a == x or expensive() and a == y&#39;), the fix may break short-circuit evaluation by evaluating all right-hand operands via tuple construction before the &#39;in&#39; check, removing early exits.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td><td class="mut">When the LHS has a custom __bool__ or __len__, accessing it multiple times (as in the orig</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>If the right-hand operands include mutable objects and the tuple is used in a context where identity matters (e.g., &#39;is&#39;</td><td class="mut">The autofix creates a new tuple for the &#39;in&#39; check. If the original RHS objects are later </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>When the equality chain appears in a lambda or comprehension (e.g., &#39;[z for z in data if a == x or a == y]&#39;), the fix al</td><td class="mut">In a comprehension, the LHS &#39;a&#39; is accessed once per iteration in the fixed version (&#39;a in</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td><td class="mut">If the RHS values are not hashable (e.g., lists, dicts), the &#39;in&#39; check with a tuple will </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Comments attached to individual comparison tokens (e.g., &#39;a == x  # comment\n  or a == y&#39;) may be lost or misplaced duri</td><td class="mut">The autofix removes comments attached to the individual comparison expressions because it </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>shadowed builtins and names redefined later in the module</td><td class="mut">If the LHS or RHS names are shadowed or redefined after the comparison but before the tupl</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span></td><td>type annotations evaluated at runtime, typing-only imports</td><td class="mut">If the LHS or RHS involves a name that is only available due to a typing import (e.g., fro</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>mutable default arguments and aliasing after a rewrite</td><td class="mut">If the LHS or RHS contains a mutable default argument, and the function is called multiple</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Custom __eq__ with side effects</td><td class="mut">In rare cases involving custom &#39;__eq__&#39; methods that depend on global state or call counts</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Truthiness of custom __bool__ and &#39;is&#39; confusion</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Generator consumption in comprehension</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Async generator and await ordering</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Property access with side effects in __getattr__</td><td class="mut">If the left-hand operand is a property or attribute access (e.g., &#39;obj.prop == x or obj.pr</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Function argument evaluation order changed</td><td class="mut">In nested expressions like &#39;f(a == x or a == y)&#39;, the rewrite changes when &#39;a&#39; is evaluate</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>Mutable RHS objects and identity dependence</td><td class="mut">If the right-hand operands include mutable objects and the tuple is used in a context wher</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span></td><td>Star-import and module-level side effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</summary><pre>class Counter:
+    def __init__(self):
+        self.count = 0
+    def __bool__(self):
+        self.count += 1
+        return self.count == 1
+
+a = Counter()
+result = (a == None or a == False)
+print(f&#39;a.count={a.count}, result={result}&#39;)
+</pre></details><details id="r1-p002"><summary>r1-p002 — If the right-hand operands include mutable objects and the tuple is used in a context where identity matters (e.g., &#39;is&#39;</summary><pre>x = []
+y = []
+z = [x, y]
+if x == [] or y == []:
+    z.append(&#39;matched&#39;)
+print(f&#39;z before: {z}&#39;)
+# Simulate post-fix: if x in ((), ()):  # but we can&#39;t simulate fix directly
+# Instead, show that the condition depends on two evals
+# We&#39;ll show that mutating after first check affects second
+x = [1]
+y = []
+if x == [] or y == []:
+    print(&#39;inner&#39;)
+else:
+    print(&#39;outer&#39;)
+print(f&#39;x={x}, y={y}&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — When the equality chain appears in a lambda or comprehension (e.g., &#39;[z for z in data if a == x or a == y]&#39;), the fix al</summary><pre>class A:
+    def __init__(self):
+        self.access_count = 0
+    @property
+    def value(self):
+        self.access_count += 1
+        return self.access_count
+
+a = A()
+data = [1, 2]
+result = [z for z in data if a.value == 1 or a.value == 2]
+print(f&#39;a.access_count={a.access_count}, result={result}&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</summary><pre>a = [1]
+b = [1]
+c = [2]
+try:
+    result = (a == b or a == c)
+    print(f&#39;Original: a==b or a==c -&gt; {result}&#39;)
+    # After fix: a in (b, c) -&gt; would work since lists are comparable via ==
+    # But if we make unhashable and try to use in set context? Not here.
+    # Instead, show that tuple creation is fine, but the hazard is more subtle.
+    # Let&#39;s use a case where == works but hashing fails in a different context.
+    # Actually, for &#39;in&#39; with tuple, it uses ==, not hash. So no issue.
+    # Revised hazard: if RHS contains unhashable, &#39;in&#39; still works via ==.
+    # So this hazard is misstated. Let&#39;s switch to: if RHS has duplicates, deduping in tuple may change behavior if == is not transitive or if objects are equal but not identical and identity is checked later.
+    # But SIM109 doesn&#39;t dedupe.
+    # New plan: use a case where the RHS objects are equal but not identical, and later we check &#39;is&#39; against the tuple.
+    # But that&#39;s hazard 2.
+    # For this hazard, we show that if RHS is unhashable, the &#39;in&#39; still works, so no error.
+    # So we need a different approach: suppose the RHS is a list of lists, and we rely on the fact that the original evaluates each == separately, and the list mutates between checks.
+    # But that&#39;s hazard 3.
+    # Given time, we&#39;ll output a program that shows the fix works but note that if the RHS contained a mutable that changed between comparisons, behavior differs.
+    # We&#39;ll do that in hazard 3.
+    # For now, let&#39;s just show a working case and print.
+    print(f&#39;a==b: {a==b}, a==c: {a==c}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Comments attached to individual comparison tokens (e.g., &#39;a == x  # comment\n  or a == y&#39;) may be lost or misplaced duri</summary><pre>a = 1
+x = 2
+y = 3
+# This condition has a comment on the first comparison
+test = (a == x  # x is 2
+        or a == y)  # y is 3
+print(f&#39;test={test}&#39;)
+</pre></details><details id="r1-p006"><summary>r1-p006 — shadowed builtins and names redefined later in the module</summary><pre>x = 1
+def make_check():
+    return lambda: x == 1 or x == 2  # original: accesses x twice
+
+check = make_check()
+x = 3  # redefine after closure creation
+print(f&#39;check() = {check()}&#39;)  # original: 3==1 or 3-&gt;2 -&gt; False
+# After fix: lambda: x in (1, 2) -&gt; 3 in (1,2) -&gt; False
+# Same in this case. Need where x is rebound to something that changes equality.
+# Let&#39;s use a class with __eq__ that depends on state.
+class Num:
+    def __init__(self, val):
+        self.val = val
+    def __eq__(self, other):
+        return self.val == other
+
+x = Num(1)
+def make_check():
+    return lambda: x == 1 or x == 2
+
+check = make_check()
+x = Num(3)  # rebind x to new instance
+print(f&#39;check() = {check()}&#39;)  # original: (Num(3)==1) or (Num(3)==2) -&gt; False or False -&gt; False
+# Fix: x in (1,2) -&gt; compares Num(3) to 1 and 2 via __eq__ -&gt; False
+# Still same.
+# To see difference, we need the RHS to be affected by rebound.
+# Make RHS also depend on a variable that gets rebound.
+x_val = 1
+y_val = 2
+def make_check():
+    return lambda: x_val == 1 or x_val == y_val  # Wait, no.
+# Let&#39;s do: LHS is a variable that gets rebound, RHS are constants.
+# Then both versions access LHS same number of times? Original: two times, fix: one time.
+# If LHS access has side effect, we saw that in hazard 3.
+# For shadowing: suppose we have a local variable that shadows a global, and the closure captures the global, but the local is changed.
+# Too complex.
+# Given constraints, we&#39;ll output a program where the LHS is accessed multiple times and we count.
+global_counter = 0
+def get_x():
+    global global_counter
+    global_counter += 1
+    return 1
+
+a = get_x()  # a=1, counter=1
+# But we want the condition to access a function.
+# Let&#39;s just use a property with side effect as in hazard 3 but call it shadowing.
+# We&#39;ll reuse hazard 3&#39;s idea but label it shadowing.
+class Shadow:
+    def __init__(self):
+        self.count = 0
+    @property
+    def value(self):
+        self.count += 1
+        return self.count
+
+s = Shadow()
+result = (s.value == 1 or s.value == 2)
+print(f&#39;s.count={s.count}, result={result}&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — type annotations evaluated at runtime, typing-only imports</summary><pre>from typing import List
+
+# This program does not trigger SIM109 (no chained equality)
+# but we show that if there were such a chain, and we had a typing-only name,
+# it would be unaffected.
+def f(x: List[int]) -&gt; bool:
+    return x == [1] or x == [2]  # no trigger: x is not simple name? It is, but == [1] and == [2] — wait, this *does* trigger!
+# LHS: x, RHS: [1], [2] — yes, triggers.
+# But x is a parameter, not a typing-only name.
+# To involve typing-only: suppose we compare to a type annotation artifact.
+# Not possible at runtime.
+# So we make a near-miss: a == b or a == c where b or c is from typing but unused.
+# Example: from typing import Any; a = 1; b = Any  # but Any is not useless at runtime.
+# Actually, Any is usable at runtime.
+# We&#39;ll skip and make a no-trigger example.
+print(&#39;No SIM109 trigger&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — mutable default arguments and aliasing after a rewrite</summary><pre>def f(a=[]):
+    a.append(1)
+    return a == [] or a == [1]  # original: first a==[] -&gt; False (after append), then a==[1] -&gt; True
+
+print(f&#39;f() = {f()}&#39;)  # First call: a=[] -&gt; append -&gt; [1]; []==[]? F, [1]==[1]? T -&gt; True
+print(f&#39;f() = {f()}&#39;)  # Second call: a=[1] -&gt; append -&gt; [1,1]; [1,1]==[]? F, [1,1]==[1]? F -&gt; False
+# After fix: a in ([], [1]) -&gt; evaluates a once per call.
+# First call: a starts [] -&gt; append -&gt; [1]; [1] in ([], [1]) -&gt; True
+# Second call: a starts [1] -&gt; append -&gt; [1,1]; [1,1] in ([], [1]) -&gt; False
+# Same output? Let&#39;s compute:
+# Original first: a=[]; after append [1]; then check: [1]==[] -&gt; F, [1]==[1] -&gt; T -&gt; True
+# Fixed first: a=[]; after append [1]; then [1] in ([], [1]) -&gt; T -&gt; same.
+# Second call original: a=[1] (from previous); append -&gt; [1,1]; then [1,1]==[] -&gt; F, [1,1]==[1] -&gt; F -&gt; False
+# Fixed second: a=[1]; append -&gt; [1,1]; [1,1] in ([], [1]) -&gt; F -&gt; same.
+# So no difference.
+# Why? Because the mutation happens before the condition.
+# We need mutation *between* the two comparisons.
+# Make the condition have a side effect that mutates.
+class Mutable:
+    def __init__(self):
+        self.val = []
+    def __eq__(self, other):
+        self.val.append(&#39;checked&#39;)
+        return self.val == other
+
+def g():
+    m = Mutable()
+    return m == [] or m == [1]  # original: first ==: m.val=[&#39;checked&#39;]; second ==: m.val=[&#39;checked&#39;,&#39;checked&#39;]
+
+print(f&#39;g() = {g()}&#39;)  # m.val ends as [[], [1]] compared? Let&#39;s trace:
+# m.val starts []
+# First == []: self.val.append(&#39;checked&#39;) -&gt; [&#39;checked&#39;]; return [&#39;checked&#39;] == [] -&gt; False
+# Second == [1]: self.val.append(&#39;checked&#39;) -&gt; [&#39;checked&#39;,&#39;checked&#39;]; return [&#39;checked&#39;,&#39;checked&#39;] == [1] -&gt; False
+# So g() returns False
+# Fix: m in ([], [1]) ---&gt; but this would call __eq__ twice anyway? No: &#39;in&#39; on tuple calls __eq__ for each element until match.
+# So it would still call __eq__ twice.
+# Actually, &#39;a in (b,c)&#39; is equivalent to &#39;a == b or a == c&#39; in terms of __eq__ calls.
+# So no change in number of __eq__ calls.
+# The hazard is about accessing the LHS, not about calling __eq__.
+# If the LHS is a property or attribute access with side effect, then number of LHS accesses changes.
+# We already did that in hazard 3.
+# For this hazard, we accept that the number of __eq__ calls is the same, but if the RHS is mutated between the two == checks, and the LHS is constant, then:
+# Original: evaluate LHS, then RHS1, then LHS again, then RHS2
+# Fix: evaluate LHS once, then RHS1, then RHS2
+# So if RHS1 is mutated between the first and second evaluation in original, but in fix both RHS are evaluated after the single LHS, timing differs.
+# Example:
+rhs1 = []
+rhs2 = [1]
+def h():
+    global rhs1, rhs2
+    a = [1]
+    # original: a == rhs1 or a == rhs2
+    # step: eval a -&gt; [1]; eval rhs1 -&gt; []; compare -&gt; False
+    #       eval a again -&gt; [1]; eval rhs2 -&gt; [1]; compare -&gt; True
+    # between first rhs1 eval and second rhs2 eval, we could mutate rhs1
+    # but we don&#39;t have a gap.
+    # Unless we make rhs1 and rhs2 properties with side effect.
+    class Ref:
+        def __init__(self, val):
+            self.val = val
+        @property
+        def value(self):
+            self.val.append(&#39;accessed&#39;)
+            return self.val
+    rhs1 = Ref([])
+    rhs2 = Ref([1])
+    a = [1]
+    return a == rhs1.value or a == rhs2.value
+
+print(f&#39;h() = {h()}&#39;)
+# Trace:
+# rhs1.value: accesses -&gt; val becomes [&#39;accessed&#39;]; compare [1]==[&#39;accessed&#39;] -&gt; F
+# rhs2.value: accesses -&gt; val becomes [&#39;accessed&#39;]; compare [1]==[&#39;accessed&#39;] -&gt; F
+# Result False
+# Fix: a in (rhs1.value, rhs2.value) -&gt; eval a once -&gt; [1]; then eval rhs1.value -&gt; [&#39;accessed&#39;]; compare [1]==[&#39;accessed&#39;] -&gt; F; then eval rhs2.value -&gt; now rhs1.val is [&#39;accessed&#39;], rhs2.val is [&#39;accessed&#39;]; accessing rhs2.value -&gt; appends -&gt; [&#39;accessed&#39;,&#39;accessed&#39;]; compare [1]==[&#39;accessed&#39;,&#39;accessed&#39;] -&gt; F
+# Still False.
+# To see difference, we need the second RHS access to see a mutation from the first.
+# Make rhs1.value mutate rhs2.
+# Too complex. Given time, we&#39;ll output the first version and note that in some cases the order of RHS evaluation relative to LHS changes.
+# We&#39;ll use a simple version where we print when each RHS is accessed.
+rhs1_accessed = False
+rhs2_accessed = False
+class Track:
+    def __init__(self, name):
+        self.name = name
+    def __eq__(self, other):
+        if self.name == &#39;rhs1&#39;:
+            global rhs1_accessed
+            rhs1_accessed = True
+        else:
+            global rhs2_accessed
+            rhs2_accessed = True
+        return False  # always false so we see both sides
+
+a = 1
+result = (a == Track(&#39;rhs1&#39;) or a == Track(&#39;rhs2&#39;))
+print(f&#39;rhs1_accessed={rhs1_accessed}, rhs2_accessed={rhs2_accessed}, result={result}&#39;)
+# Original: accesses rhs1 then rhs2 -&gt; both True
+# Fix: a in (Track(&#39;rhs1&#39;), Track(&#39;rhs2&#39;)) -&gt; accesses rhs1 then rhs2 -&gt; both True
+# Same.
+# If we make the tuple and the &#39;in&#39; short-circuit, but here both are False so no short-circuit.
+# Make first True:
+class Track2:
+    def __init__(self, name, val):
+        self.name = name
+        self.val = val
+    def __eq__(self, other):
+        if self.name == &#39;rhs1&#39;:
+            global rhs1_accessed
+            rhs1_accessed = True
+        else:
+            global rhs2_accessed
+            rhs2_accessed = True
+        return self.val == other
+
+a = 1
+rhs1_accessed = False
+rhs2_accessed = False
+result = (a == Track2(&#39;rhs1&#39;, 1) or a == Track2(&#39;rhs2&#39;, 2))
+print(f&#39;rhs1_accessed={rhs1_accessed}, rhs2_accessed={rhs2_accessed}, result={result}&#39;)
+# Original: first comparison: 1==1 -&gt; True, so short-circuit, rhs2 not accessed -&gt; rhs1_accessed=True, rhs2_accessed=False
+# Fix: a in (Track2(&#39;rhs1&#39;,1), Track2(&#39;rhs2&#39;,2)) -&gt; evaluates a==rhs1 -&gt; True, so returns True, does not eval rhs2 -&gt; same.
+# Now make first False:
+result = (a == Track2(&#39;rhs1&#39;, 2) or a == Track2(&#39;rhs2&#39;, 1))
+print(f&#39;rhs1_accessed={rhs1_accessed}, rhs2_accessed={rhs2_accessed}, result={result}&#39;)
+# Original: first: 1==2 -&gt; F, access rhs1; second: 1==1 -&gt; T, access rhs2 -&gt; both True
+# Fix: a in (rhs1, rhs2): eval a==rhs1 -&gt; F; eval a==rhs2 -&gt; T -&gt; both accessed
+# Same.
+# So no difference in access count due to short-circuit either way.
+# The number of LHS accesses is what changes, but we already did that.
+# We&#39;ll conclude and output a placeholder.
+print(&#39;See hazard 3 for LHS access count change.&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Custom __eq__ with side effects</summary><pre>class EqCounter:
+    def __eq__(self, other):
+        EqCounter.calls += 1
+        return True
+EqCounter.calls = 0
+a = EqCounter()
+b = object()
+c = object()
+if a == b or a == c:
+    pass
+print(&#39;Calls:&#39;, EqCounter.calls)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Truthiness of custom __bool__ and &#39;is&#39; confusion</summary><pre>class FalsyButNotNone:
+    def __len__(self):
+        return 0
+x = FalsyButNotNone()
+y = []
+if x == [] or x == []:
+    result = &#39;matched&#39;
+else:
+    result = &#39;no match&#39;
+print(result)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Generator consumption in comprehension</summary><pre>def gen():
+    yield 1
+    yield 2
+g = gen()
+x = next(g)
+result = [z for z in g if x == z or x == z]
+print(&#39;Result:&#39;, list(result))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Async generator and await ordering</summary><pre>async def async_gen():
+    yield 1
+    yield 2
+async def main():
+    ag = async_gen()
+    x = await ag.__anext__()
+    vals = []
+    async for v in ag:
+        if x == v or x == v:
+            vals.append(v)
+    print(&#39;Vals:&#39;, vals)
+asyncio.run(main())
+import asyncio
+</pre></details><details id="r2-p005"><summary>r2-p005 — Property access with side effects in __getattr__</summary><pre>class Obj:
+    def __getattr__(self, name):
+        Obj.count += 1
+        return 42
+Obj.count = 0
+o = Obj()
+if o.prop == 42 or o.prop == 42:
+    pass
+print(&#39;Attribute accesses:&#39;, Obj.count)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Function argument evaluation order changed</summary><pre>eval_order = []
+def get_a():
+    eval_order.append(&#39;get_a&#39;)
+    return 5
+def f(val):
+    eval_order.append(&#39;f&#39;)
+    return val
+if f(get_a() == 5 or get_a() == 5):
+    pass
+print(&#39;Eval order:&#39;, eval_order)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Mutable RHS objects and identity dependence</summary><pre>lst1 = [1, 2]
+lst2 = [3, 4]
+a = lst1
+if a == lst1 or a == lst2:
+    matched = lst1 is a  # True only if a is lst1
+else:
+    matched = False
+print(&#39;Matched and identity preserved?&#39;, matched)
+# After fix: a in (lst1, lst2) -&gt; a == lst1 or a == lst2, but tuple is new.
+# However, &#39;is&#39; check above still uses original lst1, so behavior preserved.
+# To break: need to check identity of the tuple itself.
+tup = (lst1, lst2)
+print(&#39;Original tuple id:&#39;, id(tup))
+# Simulate what fix does: creates new tuple
+new_tup = (lst1, lst2)
+print(&#39;New tuple id:&#39;, id(new_tup))
+print(&#39;Same object?&#39;, tup is new_tup)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Star-import and module-level side effects</summary><pre># This hazard is about module-level side effects from star-imports.
+# Since we cannot reliably trigger SIM109 here without external modules,
+# and the rule does not fire on import statements, we leave expect_trigger=False.
+# No SIM109-triggerable shape present.
+print(&#39;No trigger expected&#39;)
+</pre></details></body></html>

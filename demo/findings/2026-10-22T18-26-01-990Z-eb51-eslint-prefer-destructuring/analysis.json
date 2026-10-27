@@ -1,0 +1,29 @@
+{
+  "summary": "Flags variable declarators where the value is a simple member expression (property/index access) and suggests using destructuring instead.",
+  "firingShapes": [
+    "const x = obj.a;",
+    "let y = arr[0];",
+    "var z = obj['b'];",
+    "const p = someObj.prop;",
+    "let q = items[index];"
+  ],
+  "silentShapes": [
+    "const x = obj[a];",
+    "const {a: x} = obj;",
+    "const [x] = arr;",
+    "obj.a = 5;",
+    "if (cond) { const x = obj.a; }"
+  ],
+  "fixDescription": "Rewrites `const v = obj.prop;` (or similar with let/var) to `const { prop: v } = obj;` when the variable name matches the property name and the property access is a simple identifier or string literal; similarly rewrites array index accesses `const v = arr[i];` to `[v] = arr;` only when i is a numeric literal and v matches the expected destructuring variable name (which it never does per rule limitations, so array fixes are not applied).",
+  "hazards": [
+    "Rewriting `const x = obj.a;` to `const { a: x } = obj;` throws if `obj` is null or undefined, whereas the original would throw only when accessing `.a` on null/undefined—same timing but different error path; however, if `obj` is falsy but not null/undefined (e.g., 0), the original accesses property `a` on the coerced object (which may exist via wrapper) while destructuring attempts to coerce `obj` to an object and then get `a`, which may differ for exotic objects.",
+    "If `obj` is a function with a getter for `a` that has side effects, the original evaluates the getter once; the rewrite also evaluates it once, so no difference—but if the getter is defined on the prototype and `obj` is undefined, the original throws immediately while destructuring first attempts coercion (still throws), so observable behavior is identical.",
+    "The fix removes any comments placed between the variable and the equals token or after the initializer on the same line, as the entire initializer is replaced.",
+    "If the variable is used later in a way that depends on the temporal dead zone (e.g., referenced before declaration in a scope where hoisting matters), moving the destructuring form does not change hoisting behavior because both forms are variable declarations with identical hoisting rules.",
+    "In strict mode, if `obj` is the global object and the property is a configurable global variable, destructuring creates a binding that is not a global variable, whereas member access refers to the global property—this could break code that later deletes the property or relies on it being configurable.",
+    "If the member access is part of a larger expression (not flagged), the fix does not apply, so no hazard there; but if mistakenly applied due to a bug, it would break parsing by creating invalid left-hand side in assignment contexts.",
+    "For array indexing like `const x = arr[0];`, the rule does not autofix even if `x` matches because the fix only applies to object destructuring per documentation; thus no rewrite occurs, eliminating hazards for array cases.",
+    "If the object has a getter that throws when accessed, both forms throw on access—no behavioral difference.",
+    "If the property name is a string literal that is not an identifier (e.g., `obj['foo-bar']`), the fix would produce `{ 'foo-bar': x }` which is invalid syntax, so the rule does not apply in such cases (property must be a simple identifier for the fix to be considered)."
+  ]
+}

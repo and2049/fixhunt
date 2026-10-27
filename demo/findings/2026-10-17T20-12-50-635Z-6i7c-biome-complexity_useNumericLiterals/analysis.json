@@ -1,0 +1,34 @@
+{
+  "summary": "The rule flags calls to parseInt() or Number.parseInt() where the first argument is a string literal representing a number in base 2, 8, or 16, suggesting replacement with numeric literals.",
+  "firingShapes": [
+    "parseInt(\"111110111\", 2);",
+    "Number.parseInt(\"767\", 8);",
+    "parseInt(\"-1f7\", 16);",
+    "Number.parseInt(\"ff\", 16);",
+    "parseInt(\"0\", 2);",
+    "Number.parseInt(\"777\", 8);",
+    "parseInt(\"-0x1\", 16);",
+    "Number.parseInt(\"1010\", 2);"
+  ],
+  "silentShapes": [
+    "parseInt(1);",
+    "parseInt(foo, 2);",
+    "Number.parseInt(bar);",
+    "a[parseInt](1,2);",
+    "parseInt(\"123\", 10);"
+  ],
+  "fixDescription": "Replace parseInt(str, radix) or Number.parseInt(str, radix) with the equivalent numeric literal: 0b... for radix 2, 0o... for radix 8, 0x... for radix 16, preserving the string content and applying the minus sign if present.",
+  "hazards": [
+    "Rewriting parseInt(\"01\", 2) to 0b01 changes behavior because \"01\" in base 2 is invalid and parseInt returns 0, while 0b01 is 1, altering the value.",
+    "If the string contains whitespace like \" 101 \", parseInt trims it and returns 5, but 0b 101 is a syntax error, breaking compilation.",
+    "When the string has invalid digits for the radix (e.g., \"2\" in base 2), parseInt returns the value parsed up to the first invalid digit (or 0), but the literal form would be a syntax error, causing a crash.",
+    "For strings like \"0x12\" passed to parseInt with radix 16, parseInt ignores the \"0x\" prefix and parses \"0x12\" as 0x12 = 18, but rewriting to 0x0x12 is invalid syntax.",
+    "If the string is empty \"\", parseInt returns NaN, but there is no numeric literal equivalent for NaN, so the rewrite would be incorrect or absent, changing behavior.",
+    "In non-strict mode, if a variable named parseInt is in scope (e.g., var parseInt = 5;), the call parseInt(\"10\",2) becomes 5(\"10\",2), which throws, but the fix would incorrectly replace it with 0b10, altering behavior and possibly hiding the error.",
+    "When Number.parseInt is used and Number has been reassigned (e.g., Number = {};), the call is already broken, but the fix would still apply and produce a literal, masking the original error and changing program flow.",
+    "Comments attached to the call expression (e.g., parseInt/*comment*/(\"101\",2)) would be lost during rewriting, as the fix replaces the entire expression.",
+    "If the string is a string object (e.g., new String(\"101\")), the rule does not fire, but if it did by mistake, the fix would ignore the object nature and produce a primitive literal, potentially altering behavior in edge cases involving [[PrimitiveValue]].",
+    "In eval contexts or with dynamic imports, replacing a function call with a literal could change timing or side effects if the call was part of a larger expression relying on its evaluation point.",
+    "Automatic semicolon insertion may be affected if the fix removes a trailing semicolon or alters token boundaries in a way that conflicts with ASI rules, though unlikely, it remains a theoretical hazard."
+  ]
+}

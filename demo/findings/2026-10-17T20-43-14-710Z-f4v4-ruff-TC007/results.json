@@ -1,0 +1,682 @@
+{
+  "runId": "2026-10-17T20-43-14-710Z-f4v4-ruff-TC007",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "TC007",
+    "fixKind": "unknown",
+    "docs": "# unquoted-type-alias (TC007)\n\nDerived from the **flake8-type-checking** linter.\n\nFix is always available.\n\n## What it does\nChecks if [PEP 613] explicit type aliases contain references to\nsymbols that are not available at runtime.\n\n## Why is this bad?\nReferencing type-checking only symbols results in a `NameError` at runtime.\n\n## Example\n```python\nfrom typing import TYPE_CHECKING, TypeAlias\n\nif TYPE_CHECKING:\n    from foo import Foo\nOptFoo: TypeAlias = Foo | None\n```\n\nUse instead:\n```python\nfrom typing import TYPE_CHECKING, TypeAlias\n\nif TYPE_CHECKING:\n    from foo import Foo\nOptFoo: TypeAlias = \"Foo | None\"\n```\n\n## Fix safety\nThis rule's fix is currently always marked as unsafe, since runtime\ntyping libraries may try to access/resolve the type alias in a way\nthat we can't statically determine during analysis and relies on the\ntype alias not containing any forward references.\n\n## References\n- [PEP 613 – Explicit Type Aliases](https://peps.python.org/pep-0613/)\n\n[PEP 613]: https://peps.python.org/pep-0613/\n"
+  },
+  "analysis": {
+    "summary": "Flags PEP 613 explicit type aliases that reference symbols unavailable at runtime due to being imported only within TYPE_CHECKING blocks.",
+    "firingShapes": [
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from mod import X\nA: TypeAlias = X",
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    class C: ...\nB: TypeAlias = C | int",
+      "import typing\nif typing.TYPE_CHECKING:\n    from pkg import Y\nZ: TypeAlias = list[Y]",
+      "from __future__ import annotations\nfrom typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from a import B\nC: TypeAlias = B",
+      "from typing import TYPE_CHECKING, TypeAlias\nif TYPE_CHECKING:\n    import foo\nD: TypeAlias = foo.Bar",
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from x import Y as Z\nE: TypeAlias = Z",
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    def f() -> int: ...\nG: TypeAlias = f()",
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from m import N\nH: TypeAlias = dict[str, N]"
+    ],
+    "silentShapes": [
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from mod import X\nA: TypeAlias = \"X\"",
+      "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from mod import X\nA = X  # not a TypeAlias",
+      "from typing import TypeAlias\nA: TypeAlias = str | int  # no TYPE_CHECKING deps",
+      "if False:\n    from mod import X\nA: TypeAlias = X  # TYPE_CHECKING false"
+    ],
+    "fixDescription": "Wraps the right-hand side of the TypeAlias assignment in double quotes to create a forward reference string, preserving all whitespace and formatting except adding quotes around the expression.",
+    "hazards": [
+      "Changes runtime evaluation: quoted string is not evaluated as an expression, breaking code that inspects the alias via __annotations__ or typing.get_type_hints().",
+      "Alters repr and str output: the alias now shows as a string literal instead of the evaluated type expression.",
+      "Breaks isinstance or issubclass checks if the alias is used at runtime, as strings are not types.",
+      "May cause misinterpretation by static tools expecting evaluated types, leading to false positives/negatives in type checking.",
+      "If the RHS contains a comment, the fix may place quotes incorrectly relative to the comment, altering comment association.",
+      "If the RHS is spread across multiple lines, quoting the entire expression may invalidate syntax if newlines are not handled correctly in string literals.",
+      "If the alias is used in a generic base class like class C(A), quoting breaks class creation as string is not a type.",
+      "If the RHS uses the | operator (Python 3.10+), quoting prevents union type formation at runtime, affecting structural pattern matching.",
+      "If the RHS includes a forward reference already quoted, double-quoting may produce malformed nested quotes or escape issues.",
+      "If the TYPE_CHECKING block is conditionally defined (e.g., inside a function), quoting may mismatch scope of the referenced symbol.",
+      "If the module is executed with typing.TYPE_CHECKING=True at runtime (non-standard), the quoted alias will not resolve to the intended type.",
+      "If the RHS contains a formatted string literal (f-string) or other expression relying on runtime values, quoting prevents its evaluation."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0047316,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 4
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "keyword-only args + TYPE_CHECKING alias",
+      "hazard": "Forward referencing via quoted alias changes evaluation timing/position of default expressions involving mutable objects; quoted strings delay evaluation until use, while unquoted evaluates at definit",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'UserList' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "generic base class with quoted alias breaking type creation",
+      "hazard": "Quoting the RHS of a TypeAlias used as a base class turns it into a string, causing `class C(A)` to fail because strings are not valid types during class creation.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              5,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'Base' is not defined. Did you mean: 'False'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'Base' is not defined. Did you mean: 'False'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "alias RHS with trailing comment misaligned by quote insertion",
+      "hazard": "When the RHS contains a comment, wrapping it in quotes may place the quote after the comment, breaking syntax or misattributing the comment to the string literal.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              4,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'X' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'X' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "context manager alias used in 'with' statement",
+      "hazard": "If the aliased context manager is quoted, using it in a `with` statement fails because strings lack `__enter__`/`__exit__` methods, even if they have `write()` but not `close()`.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              5,
+              18
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'StringWriter' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'StringWriter' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "descriptor relying on unquoted alias for __get__ type resolution",
+      "hazard": "Quoting a TypeAlias used in a descriptor's `__get__` annotation prevents proper type resolution at runtime, altering behavior when the descriptor accesses instance/class state.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              4,
+              21
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'IntVal' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'IntVal' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "docstring lost due to alias rewrite near commented block",
+      "hazard": "When a TypeAlias is near a comment or docstring, the fix's whitespace preservation may incorrectly associate or detach comments, leading to lost documentation or misleading source structure.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'TWO_PI' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "repr of quoted alias shows string instead of type",
+      "hazard": "The quoted alias appears as a string literal in `repr()` or `str()` output, breaking tools or debugging that rely on seeing the actual type expression rather than a quoted string.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              4,
+              21
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'MyInt' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'MyInt' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "shadowed built-in 'str' redefined after TYPE_CHECKING alias",
+      "hazard": "If a name like `str` is imported under TYPE_CHECKING and aliased, then later redefined in the module, the quoted alias may refer to the wrong binding or become a stale string reference.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              4,
+              23
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name '_str' is not defined. Did you mean: 'str'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name '_str' is not defined. Did you mean: 'str'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Multi-line RHS newline handling",
+      "hazard": "If the RHS is spread across multiple lines, quoting the entire expression may invalidate syntax if newlines are not handled correctly in string literals.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              6,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'deque' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'deque' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "isinstance check broken by string alias",
+      "hazard": "Breaks isinstance or issubclass checks if the alias is used at runtime, as strings are not types.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              4,
+              21
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'A' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'A' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Static tool misinterpretation of quoted alias",
+      "hazard": "May cause misinterpretation by static tools expecting evaluated types, leading to false positives/negatives in type checking.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              4,
+              27
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'List' is not defined. Did you mean: 'list'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'List' is not defined. Did you mean: 'list'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Interaction with set/dict hashing and equality",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              7,
+              24
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'HashableObj' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'HashableObj' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Conditional TYPE_CHECKING scope mismatch",
+      "hazard": "If the TYPE_CHECKING block is conditionally defined (e.g., inside a function), quoting may mismatch scope of the referenced symbol.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              5,
+              29
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "UnboundLocalError: cannot access local variable 'Inner' where it is not associated with a value",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "UnboundLocalError: cannot access local variable 'Inner' where it is not associated with a value",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Exception handling interference",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'factory' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Context manager with non-file write()-like object",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "TC007",
+            "severity": "warning",
+            "message": "Add quotes to type alias",
+            "span": [
+              5,
+              25
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'Logger' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'Logger' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "F-string RHS evaluation prevented by quoting",
+      "hazard": "If the RHS contains a formatted string literal (f-string) or other expression relying on runtime values, quoting prevents its evaluation.",
+      "rule": "TC007",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'val' is not defined. Did you mean: 'eval'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "summary": "RUF015 flags eager allocation of iterables when only the first element is accessed via indexing or pop(0), suggesting replacement with lazy next(iter(...)).",
+  "firingShapes": [
+    "lst = list(seq)[0]",
+    "tup = tuple(seq)[0]",
+    "lst = [x for x in seq][0]",
+    "tup = tuple(x for x in seq)[0]",
+    "val = list(seq).pop(0)",
+    "head = [*seq][0]",
+    "first = [expr for expr in gen][0]",
+    "item = list(map(func, seq))[0]"
+  ],
+  "silentShapes": [
+    "first = next(iter(seq))",
+    "head = seq[0] if seq else None",
+    "result = list(seq)",
+    "value = seq.pop()",
+    "items = [x for x in seq]"
+  ],
+  "fixDescription": "Replace the eager iterable construction and indexing/pop with a lazy next(iter(...)) expression, preserving the inner iterable or comprehension but removing the outer list/tuple/set constructor and the [0] or .pop(0) access.",
+  "hazards": [
+    "Rewriting list(seq)[0] to next(iter(seq)) changes the exception type from IndexError on empty input to StopIteration, breaking exception handlers that catch IndexError but not StopIteration.",
+    "The rewrite eliminates eager evaluation of seq, so any side effects (e.g., I/O, state mutation) during iteration now occur only when the iterator is consumed, potentially delaying or avoiding them entirely if the result is unused.",
+    "If seq is used elsewhere after the original code, the rewrite may alter its state because iter(seq) advances the iterator, whereas list(seq) leaves seq unchanged for reusable iterables like lists.",
+    "For non-reusable iterators (e.g., file objects, generators), the rewrite consumes the iterator permanently, while the original list(seq)[0] would have exhausted it anyway—but if the list was stored or inspected, the rewrite loses that behavior.",
+    "When seq is a list, tuple, or other sequence, list(seq)[0] creates a copy; next(iter(seq)) references the original, so mutations to the original after the call affect the result in the rewrite but not in the original.",
+    "If the comprehension or generator expression inside list(...) contains capture variables that mutate during iteration, the timing of their evaluation shifts, possibly altering values observed due to late-binding closure effects.",
+    "The rewrite may drop trailing comments attached to the closing bracket or pop(0) call, as autofix tools often discard whitespace and comments during tree reconstruction.",
+    "In code like f(list(seq)[0]), rewriting to f(next(iter(seq))) changes evaluation order: seq is no longer evaluated before f is called, but during f’s execution if it consumes the iterator, altering side-effect sequencing.",
+    "If seq is a property or function call with side effects, the rewrite may invoke it multiple times if next(iter(...)) is used in a context that re-evaluates the expression (e.g., in a loop), whereas the original computed it once.",
+    "For expressions like [i for i in seq if cond][0], the rewrite to next(i for i in seq if cond) is valid, but if cond has side effects, their timing changes relative to other code between the comprehension and the indexing.",
+    "When the iterable is a class instance with a custom __iter__ that returns a mutable iterator, sharing that iterator via list(...) vs. iter(...) can lead to aliasing issues if the iterator is retained elsewhere."
+  ]
+}

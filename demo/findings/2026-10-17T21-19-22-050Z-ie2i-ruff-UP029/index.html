@@ -1,0 +1,111 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP029 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP029 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-19-22-050Z-ie2i-ruff-UP029 · fix labelled <b>unknown</b> · 16 programs, 11 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0028</p>
+<div class="card"><b>Rule analysis</b><p>Flags imports of Python 3 builtins from compatibility modules like &#39;builtins&#39; or &#39;six.moves&#39; when they are unused after removing the import.</p><p class="mut">Fix: Removes the import statement and leaves all usages of the imported builtin unchanged, relying on the Python 3 builtin being available by default.</p><details><summary>10 hazards</summary><ul><li>Removing &#39;from builtins import str&#39; may break code if a local variable named &#39;str&#39; was intended to shadow the builtin but the import removal causes the builtin to be used instead.</li><li>If &#39;six.moves.range&#39; is imported and later reassigned to a non-callable, removing the import may cause a NameError when the builtin &#39;range&#39; is used where a different object was expected.</li><li>The fix does not account for conditional imports; if the import is inside a function or conditional block, removing it may cause a NameError when the builtin is used outside that scope.</li><li>If the imported name is used as a string in eval() or exec(), removing the import may change behavior if the name resolution depends on the import being present.</li><li>Removing the import may break code that relies on the specific type or behavior of the shimmed builtin (e.g., &#39;past.builtins.map&#39; returning a list in Python 2 style), even if the code is run on Python 3.</li><li>If the import is aliased (e.g., &#39;from six.moves import range as r&#39;), the fix may not trigger or may leave the alias unused, but if it did, removing the import would break uses of the alias.</li><li>The fix may remove a comment attached to the import line (e.g., &#39;# needed for old Python&#39;), which is considered unsafe and could lead to loss of documentation.</li><li>If the module defining the shim (e.g., &#39;six&#39;) has side effects on import (e.g., registers plugins), removing the import may alter program behavior even if the imported name is not used.</li><li>In rare cases, if a third-party module defines a &#39;builtins&#39; attribute that shadows the import, removing the import may cause a NameError due to missing attribute access.</li><li>If the code is run under a restricted environment where __builtins__ is modified, removing the import may bypass intentional builtin overrides provided by the shim.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Conditional Import Scope Hazard</td><td class="mut">Import removal ignores conditional/function scope; using builtin outside scope causes Name</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span></td><td>Star Import and __all__ Side Effect</td><td class="mut">Star import may rely on __all__ from module; removing import breaks star-imported name res</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Dict Ordering and Hash Hazard</td><td class="mut">Removing import changes dict key resolution if __hash__/__eq__ overridden and ordering mat</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>Exception Handling Interaction</td><td class="mut">Rewritten code inside try/except/finally may change exception flow if import removal alter</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Eval Exec String Dependency</td><td class="mut">Imported name used as string in eval/exec; removing import changes resolution if name not </td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Module Side Effect on Import</td><td class="mut">Importing six.moves has side effects (e.g., plugin registration); removing import alters b</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span><span class="tag warn">disputed</span></td><td>Reassignment to Non-Callable</td><td class="mut">Imported name reassigned to non-callable; later use expects callable but gets non-callable</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span></td><td>Truthiness and Identity Comparison</td><td class="mut">__bool__/__len__ or None vs falsy interacts with &#39;is&#39; vs &#39;==&#39; after import removal changes</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Runtime-evaluated type annotation using forward reference</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Generator consumed twice after import removal</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span></td><td>Third-party module with conflicting &#39;builtins&#39; attribute</td><td class="mut">In rare cases, if a third-party module defines a &#39;builtins&#39; attribute that shadows the imp</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Star import with side effect in __init__</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Conditional import inside function, used outside</td><td class="mut">The fix does not account for conditional imports; if the import is inside a function or co</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Import removed but used in duplicated expression with side effect</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>past.builtins.map returns list in Py2, but used as iterator</td><td class="mut">Removing the import may break code that relies on the specific type or behavior of the shi</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Context manager with write but no close, used in with-block</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Conditional Import Scope Hazard</summary><pre>def f():
+    if True:
+        from builtins import str
+    return str(42)
+try:
+    print(f())
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Star Import and __all__ Side Effect</summary><pre>from six.moves import *
+print(range.__module__)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Dict Ordering and Hash Hazard</summary><pre>class A:
+    def __hash__(self): return 1
+    def __eq__(self, other): return isinstance(other, A)
+from builtins import dict
+d = {A(): 1, A(): 2}
+print(len(d))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Exception Handling Interaction</summary><pre>try:
+    from builtins import len
+    x = len([1,2,3])
+except NameError:
+    x = 0
+finally:
+    print(&#39;finally&#39;, x)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Eval Exec String Dependency</summary><pre>from builtins import str
+code = &#39;str(123)&#39;
+print(eval(code))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Module Side Effect on Import</summary><pre>import sys
+if &#39;six&#39; not in sys.modules:
+    print(&#39;six not loaded&#39;)
+from six.moves import range
+print(&#39;six loaded&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Reassignment to Non-Callable</summary><pre>from six.moves import range
+range = 5
+try:
+    print(range(3))
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Truthiness and Identity Comparison</summary><pre>class X:
+    def __bool__(self): return False
+    def __len__(self): return 0
+from builtins import bool
+b = bool(X())
+print(b, b is False, b == False)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Runtime-evaluated type annotation using forward reference</summary><pre>from typing import List
+from builtins import str
+
+def f(x: &#39;List[str]&#39;) -&gt; None:
+    print(len(x))
+
+f([&#39;a&#39;, &#39;b&#39;])
+</pre></details><details id="r2-p002"><summary>r2-p002 — Generator consumed twice after import removal</summary><pre>from builtins import range
+
+gen = range(3)
+first = list(gen)
+second = list(gen)
+print(&#39;first:&#39;, first, &#39;second:&#39;, second)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Third-party module with conflicting &#39;builtins&#39; attribute</summary><pre>class DummyModule:
+    builtins = &#39;shadow&#39;
+
+import sys
+sys.modules[&#39;dummy&#39;] = DummyModule()
+
+from dummy import builtins
+print(builtins)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Star import with side effect in __init__</summary><pre>from builtins import *
+print(str(&#39;hello&#39;))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Conditional import inside function, used outside</summary><pre>def setup():
+    from builtins import str
+
+setup()
+print(str(&#39;test&#39;))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Import removed but used in duplicated expression with side effect</summary><pre>from builtins import str
+
+x = str(input := &#39;42&#39;) or 0
+print(x, input)
+</pre></details><details id="r2-p007"><summary>r2-p007 — past.builtins.map returns list in Py2, but used as iterator</summary><pre>from past.builtins import map
+
+result = map(lambda x: x*2, [1, 2, 3])
+print(&#39;type:&#39;, type(result), &#39;list:&#39;, list(result))
+</pre></details><details id="r2-p008"><summary>r2-p008 — Context manager with write but no close, used in with-block</summary><pre>from builtins import str
+
+class Logger:
+    def write(self, msg):
+        self.last = msg
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+
+with Logger() as log:
+    log.write(str(123))
+print(log.last)
+</pre></details></body></html>

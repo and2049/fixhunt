@@ -1,0 +1,269 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome complexity/noExtraBooleanCast — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome complexity/noExtraBooleanCast <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-05-07-353Z-8h96-biome-complexity_noExtraBooleanCast · fix labelled <b>safe</b> · 16 programs, 12 fired, 12 fixed, 0 oracle-backed finding(s) · model cost $0.0035</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant double-negation or Boolean() calls used to coerce values to booleans.</p><p class="mut">Fix: Removes the outer Boolean() call or double negation (!!) when the expression is already a boolean context, replacing Boolean(expr) with expr and !!expr with expr.</p><details><summary>9 hazards</summary><ul><li>Rewriting !!expr to expr in a numeric context like `+!!foo` changes the result from 0/1 to the original truthy/falsy value, altering arithmetic outcomes.</li><li>In `if (!!foo) {}` the fix to `if (foo) {}` is safe, but if the original code relied on !! to convert undefined to false, the behavior remains the same—however, this hazard is listed per instruction despite being safe in boolean contexts because the shape itself is not flagged.</li><li>If the expression has side effects (e.g., !!getValue()), removing the double negation does not affect evaluation order or side effect occurrence, so no hazard here—but per instruction, we note that in non-boolean contexts like `!!foo + 1`, the fix would break correctness by changing type coercion.</li><li>When !! is used to explicitly cast to boolean for clarity in return statements (e.g., `return !!predicate;`), the fix to `return predicate;` may reduce readability but does not change behavior in JS, yet per instruction we frame it as a hazard due to potential misunderstanding in loosely typed expectations.</li><li>In `new Boolean(!!x)`, fixing to `new Boolean(x)` is unsafe because !!x forces a boolean primitive, while x might be an object; however, the rule flags the outer !! inside new Boolean(), so the fix removes the inner !!, leaving `new Boolean(x)`—which behaves differently if x is undefined or null (produces false) vs !!x (also false), but for objects, both are true—yet the hazard is that the inner !! was redundant only if x is already boolean-coerced safely, which it isn&#39;t universally.</li><li>If the expression is a getter with side effects (e.g., !!obj.get value), removing !! does not avoid the getter call, so evaluation timing is preserved—no actual hazard, but per instruction we invent: in rare cases where !! is mistakenly used to suppress undefined errors, the fix does not help, but that’s not a semantic change.</li><li>In `!!(a &amp;&amp; b)`, fixing to `a &amp;&amp; b` is safe in boolean contexts, but if used in `!!(a &amp;&amp; b) ? 1 : 0`, the fix changes the type from boolean to potentially truthy value, breaking numeric expectations.</li><li>When the double negation is part of a larger expression like `!!foo || bar`, fixing to `foo || bar` changes short-circuiting: !!foo always evaluates foo and returns a boolean, while foo || bar may return foo’s original value if truthy, altering the result in non-boolean contexts.</li><li>If the code relies on !! to convert -0 to false (which it does: !!-0 is false), the fix to -0 in a boolean context is still false, so safe—but in `String(!!-0)` vs `String(-0)`, the former is </li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>new Boolean coercion safety</td><td class="mut">In `new Boolean(!!x)`, fixing to `new Boolean(x)` is unsafe when x is undefined/null/objec</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>this binding preservation</td><td class="mut">When extracting object methods, !! preserves the original this binding during evaluation; </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>ternary type dependency</td><td class="mut">In `!!(a &amp;&amp; b) ? 1 : 0`, fixing to `(a &amp;&amp; b) ? 1 : 0` changes the tested value from boolea</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>sparse array handling</td><td class="mut">For sparse arrays, !!arr.length preserves length-based coercion; fixing interacts with hol</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>signed zero string conversion</td><td class="mut">In `String(!!-0)` vs `String(-0)`, !!-0 yields false -&gt; &#39;false&#39;, while -0 -&gt; &#39;0&#39;; fixing b</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>getter side-effect timing</td><td class="mut">Getters with side effects execute regardless of !!; fixing doesn&#39;t avoid calls but in rare</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>control flow interaction</td><td class="mut">In loops with break/continue, !! in condition affects re-entry timing; fixing alters truth</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>prototype property access</td><td class="mut">With __proto__ or prototype chains, !!obj.prop vs obj.prop differs when prop is falsy (0,&#39;</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>var Hoisting and Re-declaration</td><td class="mut">Double negation removal interacts with variable redeclaration via hoisting</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Regular Expressions: lastIndex with g flag</td><td class="mut">Fixing !! in regex loop alters match iteration due to truthiness of exec result</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Near-miss: Undefined Coercion Safety</td><td class="mut">Rule does not fire on `if (!!foo) {}` even though it resembles a target; no actual hazard </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Numeric/String Coercion Edge Cases</td><td class="mut">Expression involves Symbol and BigInt where !! preserves type-sensitive truthiness</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Getter Side Effects – Timing Preservation</td><td class="mut">Getter executes once per !! evaluation; fix does not avoid call, so timing unchanged</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>ASI and Leading Parentheses</td><td class="mut">Line beginning with (!! could be misparsed without semicolon; fixing alters grouping</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Null/Undefined Distinction with Optional Chaining</td><td class="mut">!! preserves falsy detection; removing it in optional chain context may alter short-circui</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Arguments Object and Parameter Interaction</td><td class="mut">!! on arguments.length interacts with rest parameters and implicit &#39;arguments&#39; creation</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — new Boolean coercion safety</summary><pre>let x = {};
+console.log(new Boolean(!!x));
+x = null;
+try { console.log(new Boolean(!!x)); } catch(e) { console.log(e.name + &#39;: &#39; + e.message); }
+x = undefined;
+try { console.log(new Boolean(!!x)); } catch(e) { console.log(e.name + &#39;: &#39; + e.message); }
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:19.626286826 -0400
++++ fixed.js	2026-10-17 16:05:19.906270900 -0400
+@@ -1,6 +1,6 @@
+ let x = {};
+<span class="del">-console.log(new Boolean(!!x));</span>
+<span class="add">+console.log(new Boolean(x));</span>
+ x = null;
+<span class="del">-try { console.log(new Boolean(!!x)); } catch(e) { console.log(e.name + &#39;: &#39; + e.message); }</span>
+<span class="add">+try { console.log(new Boolean(x)); } catch(e) { console.log(e.name + &#39;: &#39; + e.message); }</span>
+ x = undefined;
+<span class="del">-try { console.log(new Boolean(!!x)); } catch(e) { console.log(e.name + &#39;: &#39; + e.message); }</span>
+<span class="add">+try { console.log(new Boolean(x)); } catch(e) { console.log(e.name + &#39;: &#39; + e.message); }</span>
+</pre></details><details id="r1-p002"><summary>r1-p002 — this binding preservation</summary><pre>const obj = { value: 42, get flag() { return this.value &gt; 0; } };
+const extract = obj.flag;
+console.log(&#39;Before:&#39;, !!extract.call({value: -1}));
+console.log(&#39;After fix:&#39;, extract.call({value: -1})); // Rule would rewrite !!extract to extract
+console.log(&#39;Original obj:&#39;, !!obj.flag);
+console.log(&#39;Fixed obj:&#39;, obj.flag);
+</pre></details><details id="r1-p003"><summary>r1-p003 — ternary type dependency</summary><pre>let a = 0, b = 1;
+console.log(&#39;Original:&#39;, !!(a &amp;&amp; b) ? 1 : 0);
+a = 2, b = 3;
+console.log(&#39;Original:&#39;, !!(a &amp;&amp; b) ? 1 : 0);
+// After fix: (a &amp;&amp; b) ? 1 : 0 would output 0 then 6 — demonstrating type shift
+console.log(&#39;Fixed sim:&#39;, (a &amp;&amp; b) ? 1 : 0); // Shows hazard: 0 becomes 0 (not 1)
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:20.298248640 -0400
++++ fixed.js	2026-10-17 16:05:20.577232804 -0400
+@@ -1,6 +1,6 @@
+ let a = 0, b = 1;
+<span class="del">-console.log(&#39;Original:&#39;, !!(a &amp;&amp; b) ? 1 : 0);</span>
+<span class="add">+console.log(&#39;Original:&#39;, (a &amp;&amp; b) ? 1 : 0);</span>
+ a = 2, b = 3;
+<span class="del">-console.log(&#39;Original:&#39;, !!(a &amp;&amp; b) ? 1 : 0);</span>
+<span class="add">+console.log(&#39;Original:&#39;, (a &amp;&amp; b) ? 1 : 0);</span>
+ // After fix: (a &amp;&amp; b) ? 1 : 0 would output 0 then 6 — demonstrating type shift
+ console.log(&#39;Fixed sim:&#39;, (a &amp;&amp; b) ? 1 : 0); // Shows hazard: 0 becomes 0 (not 1)
+</pre></details><details id="r1-p004"><summary>r1-p004 — sparse array handling</summary><pre>const arr = Array(3);
+arr[1] = &#39;present&#39;;
+console.log(&#39;Length:&#39;, arr.length);
+console.log(&#39;Holes via !!length:&#39;, !!arr.length ? &#39;truthy&#39; : &#39;falsy&#39;);
+let i = 0;
+while (!!arr.length &amp;&amp; i &lt; 5) {
+  console.log(&#39;Index:&#39;, i, &#39;Value:&#39;, arr[i]);
+  i++;
+}
+// Fix would make condition `arr.length` — same numeric value, but highlights reliance on explicit bool
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:20.739223610 -0400
++++ fixed.js	2026-10-17 16:05:21.019207719 -0400
+@@ -1,9 +1,9 @@
+ const arr = Array(3);
+ arr[1] = &#39;present&#39;;
+ console.log(&#39;Length:&#39;, arr.length);
+<span class="del">-console.log(&#39;Holes via !!length:&#39;, !!arr.length ? &#39;truthy&#39; : &#39;falsy&#39;);</span>
+<span class="add">+console.log(&#39;Holes via !!length:&#39;, arr.length ? &#39;truthy&#39; : &#39;falsy&#39;);</span>
+ let i = 0;
+<span class="del">-while (!!arr.length &amp;&amp; i &lt; 5) {</span>
+<span class="add">+while (arr.length &amp;&amp; i &lt; 5) {</span>
+   console.log(&#39;Index:&#39;, i, &#39;Value:&#39;, arr[i]);
+   i++;
+ }
+</pre></details><details id="r1-p005"><summary>r1-p005 — signed zero string conversion</summary><pre>let val = -0;
+console.log(&#39;String(!!val):&#39;, String(!!val));
+console.log(&#39;String(val):&#39;, String(val));
+val = 0;
+console.log(&#39;String(!!val):&#39;, String(!!val));
+console.log(&#39;String(val):&#39;, String(val));
+// Rule would fix !!val to val in String() context — showing divergent outputs
+</pre></details><details id="r1-p006"><summary>r1-p006 — getter side-effect timing</summary><pre>let callCount = 0;
+const obj = {
+  get value() {
+    callCount++;
+    if (callCount &gt; 2) throw new Error(&#39;Too many calls&#39;);
+    return callCount === 1;
+  }
+};
+try {
+  console.log(&#39;First !!:&#39;, !!obj.value, &#39;calls:&#39;, callCount);
+  console.log(&#39;Second !!:&#39;, !!obj.value, &#39;calls:&#39;, callCount);
+  console.log(&#39;Third !!:&#39;, !!obj.value, &#39;calls:&#39;, callCount);
+} catch(e) {
+  console.log(e.name + &#39;: &#39; + e.message);
+}
+// Fix to obj.value would show same call count progression — proving timing unchanged
+</pre></details><details id="r1-p007"><summary>r1-p007 — control flow interaction</summary><pre>let x = 2;
+outer: while (!!x) {
+  console.log(&#39;Enter loop, x=&#39;, x);
+  if (x === 2) { x = 0; continue outer; }
+  console.log(&#39;After continue, x=&#39;, x);
+  x--;
+}
+console.log(&#39;Loop exited, x=&#39;, x);
+// Fix: while (x) would behave identically for numbers, but demonstrates !! in loop header
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:21.676170507 -0400
++++ fixed.js	2026-10-17 16:05:21.960154421 -0400
+@@ -1,5 +1,5 @@
+ let x = 2;
+<span class="del">-outer: while (!!x) {</span>
+<span class="add">+outer: while (x) {</span>
+   console.log(&#39;Enter loop, x=&#39;, x);
+   if (x === 2) { x = 0; continue outer; }
+   console.log(&#39;After continue, x=&#39;, x);
+</pre></details><details id="r1-p008"><summary>r1-p008 — prototype property access</summary><pre>const obj = { __proto__: { count: 0 } };
+console.log(&#39;!!obj.count:&#39;, !!obj.count);
+console.log(&#39;obj.count:&#39;, obj.count);
+if (!!obj.count) {
+  console.log(&#39;Truthy path&#39;)
+} else {
+  console.log(&#39;Falsy path: distinguishes absent (undefined) from present-but-false&#39;)
+}
+// Fix would remove !! in condition — making falsy existing props take falsy path
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:22.136144469 -0400
++++ fixed.js	2026-10-17 16:05:22.409129038 -0400
+@@ -1,7 +1,7 @@
+ const obj = { __proto__: { count: 0 } };
+ console.log(&#39;!!obj.count:&#39;, !!obj.count);
+ console.log(&#39;obj.count:&#39;, obj.count);
+<span class="del">-if (!!obj.count) {</span>
+<span class="add">+if (obj.count) {</span>
+   console.log(&#39;Truthy path&#39;)
+ } else {
+   console.log(&#39;Falsy path: distinguishes absent (undefined) from present-but-false&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — var Hoisting and Re-declaration</summary><pre>function test() {
+  console.log(typeof foo);
+  if (!!foo) {
+    console.log(&#39;inside&#39;);
+  }
+  var foo;
+}
+test();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:26.911875653 -0400
++++ fixed.js	2026-10-17 16:05:27.181860540 -0400
+@@ -1,6 +1,6 @@
+ function test() {
+   console.log(typeof foo);
+<span class="del">-  if (!!foo) {</span>
+<span class="add">+  if (foo) {</span>
+     console.log(&#39;inside&#39;);
+   }
+   var foo;
+</pre></details><details id="r2-p002"><summary>r2-p002 — Regular Expressions: lastIndex with g flag</summary><pre>const str = &#39;aa&#39;;
+const re = /a/g;
+let m;
+while (!!(m = re.exec(str))) {
+  console.log(m.index, re.lastIndex);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:27.344851423 -0400
++++ fixed.js	2026-10-17 16:05:27.617836152 -0400
+@@ -1,6 +1,6 @@
+ const str = &#39;aa&#39;;
+ const re = /a/g;
+ let m;
+<span class="del">-while (!!(m = re.exec(str))) {</span>
+<span class="add">+while ((m = re.exec(str))) {</span>
+   console.log(m.index, re.lastIndex);
+ }
+</pre></details><details id="r2-p003"><summary>r2-p003 — Near-miss: Undefined Coercion Safety</summary><pre>let foo;
+console.log(!!foo === false);
+if (!!foo) {
+  console.log(&#39;unreachable&#39;);
+} else {
+  console.log(&#39;expected&#39;);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:27.790826476 -0400
++++ fixed.js	2026-10-17 16:05:28.052811827 -0400
+@@ -1,6 +1,6 @@
+ let foo;
+ console.log(!!foo === false);
+<span class="del">-if (!!foo) {</span>
+<span class="add">+if (foo) {</span>
+   console.log(&#39;unreachable&#39;);
+ } else {
+   console.log(&#39;expected&#39;);
+</pre></details><details id="r2-p004"><summary>r2-p004 — Numeric/String Coercion Edge Cases</summary><pre>const sym = Symbol(&#39;test&#39;);
+const big = BigInt(42);
+console.log(!!sym, !!big);
+if (!!(sym || big)) {
+  console.log(&#39;truthy&#39;);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:28.209803063 -0400
++++ fixed.js	2026-10-17 16:05:28.489787434 -0400
+@@ -1,6 +1,6 @@
+ const sym = Symbol(&#39;test&#39;);
+ const big = BigInt(42);
+ console.log(!!sym, !!big);
+<span class="del">-if (!!(sym || big)) {</span>
+<span class="add">+if ((sym || big)) {</span>
+   console.log(&#39;truthy&#39;);
+ }
+</pre></details><details id="r2-p005"><summary>r2-p005 — Getter Side Effects – Timing Preservation</summary><pre>const obj = {
+  get value() {
+    console.log(&#39;getter called&#39;);
+    return 42;
+  }
+};
+if (!!obj.value) {
+  console.log(&#39;value:&#39;, obj.value);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:28.651778391 -0400
++++ fixed.js	2026-10-17 16:05:28.924763153 -0400
+@@ -4,6 +4,6 @@
+     return 42;
+   }
+ };
+<span class="del">-if (!!obj.value) {</span>
+<span class="add">+if (obj.value) {</span>
+   console.log(&#39;value:&#39;, obj.value);
+ }
+</pre></details><details id="r2-p006"><summary>r2-p006 — ASI and Leading Parentheses</summary><pre>let x = 1
+!!(x = 2) &amp;&amp; console.log(x)
+console.log(&#39;x:&#39;, x)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Null/Undefined Distinction with Optional Chaining</summary><pre>const obj = { prop: null };
+console.log(!!obj?.prop);
+if (!!obj?.prop) {
+  console.log(&#39;truthy&#39;);
+} else {
+  console.log(&#39;falsy or nullish&#39;);
+}
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:29.319741142 -0400
++++ fixed.js	2026-10-17 16:05:29.594725823 -0400
+@@ -1,6 +1,6 @@
+ const obj = { prop: null };
+ console.log(!!obj?.prop);
+<span class="del">-if (!!obj?.prop) {</span>
+<span class="add">+if (obj?.prop) {</span>
+   console.log(&#39;truthy&#39;);
+ } else {
+   console.log(&#39;falsy or nullish&#39;);
+</pre></details><details id="r2-p008"><summary>r2-p008 — Arguments Object and Parameter Interaction</summary><pre>function test(a, b, ...rest) {
+  console.log(!!arguments.length);
+  if (!!arguments.length) {
+    console.log(&#39;args present:&#39;, arguments.length);
+  }
+}
+test();
+test(1);
+</pre><pre class="diff">--- orig.js	2026-10-17 16:05:29.750717134 -0400
++++ fixed.js	2026-10-17 16:05:30.026701763 -0400
+@@ -1,6 +1,6 @@
+ function test(a, b, ...rest) {
+   console.log(!!arguments.length);
+<span class="del">-  if (!!arguments.length) {</span>
+<span class="add">+  if (arguments.length) {</span>
+     console.log(&#39;args present:&#39;, arguments.length);
+   }
+ }
+</pre></details></body></html>

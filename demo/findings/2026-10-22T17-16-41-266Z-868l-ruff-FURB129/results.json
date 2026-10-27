@@ -1,0 +1,415 @@
+{
+  "runId": "2026-10-22T17-16-41-266Z-868l-ruff-FURB129",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB129",
+    "fixKind": "unknown",
+    "docs": "# readlines-in-for (FURB129)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `readlines()` when iterating over a file line-by-line.\n\n## Why is this bad?\nRather than iterating over all lines in a file by calling `readlines()`,\nit's more convenient and performant to iterate over the file object\ndirectly.\n\n## Example\n```python\nwith open(\"file.txt\") as fp:\n    for line in fp.readlines():\n        ...\n```\n\nUse instead:\n```python\nwith open(\"file.txt\") as fp:\n    for line in fp:\n        ...\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe if there's comments in the\n`readlines()` call, as comments may be removed.\n\nFor example, the fix would be marked as unsafe in the following case:\n```python\nwith open(\"file.txt\") as fp:\n    for line in (  # comment\n        fp.readlines()  # comment\n    ):\n        ...\n```\n\n## References\n- [Python documentation: `io.IOBase.readlines`](https://docs.python.org/3/library/io.html#io.IOBase.readlines)\n"
+  },
+  "analysis": {
+    "summary": "Flags iteration over the result of file.readlines() where direct iteration over the file object is preferred.",
+    "firingShapes": [
+      "for line in fp.readlines():",
+      "for x in f.readlines(): pass",
+      "for item in (fp.readlines()):",
+      "for line in fp . readlines () :",
+      "for line in fp.readlines( ):"
+    ],
+    "silentShapes": [
+      "for line in fp:",
+      "data = fp.readlines(); for line in data:",
+      "for line in fp.read():",
+      "for line in list(fp):",
+      "for line in getattr(fp, 'readlines')():"
+    ],
+    "fixDescription": "Replaces 'fp.readlines()' with 'fp' in the iterable position of a for loop, preserving whitespace and parentheses around the call but removing the .readlines() attribute access.",
+    "hazards": [
+      "If the file object has been assigned to a local variable via aliasing (e.g., f = fp; for line in f.readlines()), the fix would incorrectly rewrite only the original name, breaking the iteration.",
+      "If readlines is overridden in a subclass of the file object (e.g., class MyFile(TextIO): def readlines(self): return [...]), the fix changes behavior by bypassing the override and iterating directly over the file.",
+      "If the readlines call includes arguments (e.g., fp.readlines(limit)), the fix would drop the argument, altering the number of lines returned and potentially causing truncation or TypeError.",
+      "If the file object is not actually a file (e.g., a mock object with a readlines property that returns a computed value), the fix would replace the property access with the object itself, changing the iterated value.",
+      "If the readlines call is part of a larger expression (e.g., for line in fp.readlines() + []), the fix would incorrectly rewrite only the readlines part, leaving an invalid expression (fp + []).",
+      "If the code relies on readlines returning a list (e.g., for later indexing or len() inside the loop), the fix changes the type from list to _io.TextIOWrapper, breaking such operations.",
+      "If the file is opened in binary mode and readlines is used to get byte strings, the fix still works but may be misleading if the intent was to process bytes via a custom readlines override.",
+      "If there are comments attached to the readlines attribute access (e.g., fp.readlines  # inline comment), the fix would drop those comments during AST rewrite.",
+      "If the file object is deleted or reassigned within the loop body, the fix does not affect this, but the original readlines call had already evaluated the list, so the timing of file closure differs.",
+      "If the iterable is wrapped in a call to reversed(), sorted(), or similar (e.g., for line in reversed(fp.readlines())), the fix would produce reversed(fp), which iterates in reverse but may have different performance or buffering characteristics."
+    ]
+  },
+  "opts": {
+    "n": 6,
+    "rounds": 1,
+    "unsafe": false
+  },
+  "cost": 0.008313899999999999,
+  "summary": {
+    "programs": 6,
+    "invalid": 1,
+    "fired": 4,
+    "fixed": 4,
+    "disputed": 1,
+    "fix-changes-behavior": 1
+  },
+  "reports": [
+    {
+      "programId": "r1-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "with open('tmp.txt', 'w') as f:\n    f.write('apple\\nbanana\\ncherry')\nwith open('tmp.txt') as fp:\n    trace = []\n    for line in fp.readlines():  # Rule triggers here\n        try:\n            trace.append(f'{len(fp.readlines())}:{line.strip()}')\n        except AttributeError as e:\n            trace.append(f'ERR:{type(e).__name__}')\nprint(','.join(trace))\n",
+      "lines": {
+        "before": 13,
+        "after": 10
+      },
+      "reportPath": "runs/2026-10-22T17-16-41-266Z-868l-ruff-FURB129/reports/r1-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18843",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/17683",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/18231",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule rewrites `for line in fp.readlines():` to `for line in fp:`, which changes the file position semantics. In the original code, `fp.readlines()` inside the loop reads from the current position (which is at the start of the next line after the `for` loop's implicit `readline()`), returning the remaining lines. After the fix, the `for` loop consumes lines one by one via iteration, so the internal `fp.readlines()` sees fewer remaining lines each iteration, producing different output. The documentation presents the rewrite as equivalent for simple iteration but does not account for nested reads on the same file object.",
+        "docsQuote": "iterate over the file object directly",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "FURB129 fix",
+          "FURB129 readlines iteration variable reuse",
+          "FURB129 file iterator exhaustion bug",
+          "FURB129 fp.readlines() inside loop"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "[`refurb`] `FURB129` fix can delete comments",
+            "url": "https://github.com/astral-sh/ruff/issues/18843",
+            "state": "closed",
+            "snippet": "### Summary\n\nThe fix for [readlines-in-for (FURB129)](https://docs.astral.sh/ruff/rules/readlines-in-for/#readlines-in-for-furb129) can delete comments. It should be an unsafe fix in this case. [playground](https://play.ruff.rs/7bc42e09-a6ae-4151-85b0-0f03b908746f)\n```\nPS ~\\Desktop\\New_folder\\ruff>G"
+          },
+          {
+            "source": "github",
+            "title": "FURB129 fix should add spaces between tokens",
+            "url": "https://github.com/astral-sh/ruff/issues/17683",
+            "state": "closed",
+            "snippet": "### Summary\n\nThe fix for [`readlines-in-for` (FURB129)](https://docs.astral.sh/ruff/rules/readlines-in-for/) can introduce a syntax error when `.readlines()` is followed immediately by a keyword without white space.\n```console\n$ cat >furb129.py <<'# EOF'\nwith open(\"furb129.py\") as f:\n    print([line"
+          },
+          {
+            "source": "github",
+            "title": "FURB129 fix fails when the variable is parenthesized",
+            "url": "https://github.com/astral-sh/ruff/issues/18231",
+            "state": "closed",
+            "snippet": "### Summary\n\nThe fix for [`readlines-in-for` (FURB129)](https://docs.astral.sh/ruff/rules/readlines-in-for/) fails because of a syntax error when the file variable is parenthesized.\n\n```console\n$ cat >furb129.py <<'# EOF'\nwith open(\"furb129.py\") as f:\n    for line in (f).readlines():\n        pass\n# "
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "Report concerns unused argument linting with Unicode variable names, completely different rule and defect class"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18843",
+            "relation": "related",
+            "why": "Same FURB129 rule but different defect: comment deletion during fix rather than behavior change from readlines() consumption"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/17683",
+            "relation": "related",
+            "why": "Same FURB129 rule but different defect: missing whitespace around tokens causing syntax error rather than semantic behavior change"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/18231",
+            "relation": "related",
+            "why": "Same FURB129 rule but different defect: parenthesized variable causing syntax error rather than readlines() exhaustion changing loop semantics"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "Meta-issue tracking multiple fuzzer-found autofix problems, not a specific FURB129 defect report"
+          }
+        ],
+        "cost": 0.0021834
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:44:17.594345801 -0400\n+++ fixed.py\t2026-10-22 13:44:19.523354486 -0400\n@@ -2,7 +2,7 @@\n     f.write('apple\\nbanana\\ncherry')\n with open('tmp.txt') as fp:\n     trace = []\n-    for line in fp.readlines():  # Rule triggers here\n+    for line in fp:  # Rule triggers here\n         try:\n             trace.append(f'{len(fp.readlines())}:{line.strip()}')\n         except AttributeError as e:\n",
+        "observed": "stdout before:\n0:apple,0:banana,0:cherry\nstdout after:\n2:apple",
+        "before": {
+          "stdout": "0:apple,0:banana,0:cherry\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "2:apple\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "with open('tmp.txt', 'w') as f:\n    f.write('apple\\nbanana\\ncherry')\nwith open('tmp.txt') as fp:\n    trace = []\n    for line in fp:  # Rule triggers here\n        try:\n            trace.append(f'{len(fp.readlines())}:{line.strip()}')\n        except AttributeError as e:\n            trace.append(f'ERR:{type(e).__name__}')\nprint(','.join(trace))\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select FURB129 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original loop iterates over lines from `fp.readlines()`, which returns all remaining lines each time it’s called; inside the loop, `fp.readlines()` consumes the rest of the file on the first iteration, returning two more lines (so length 2), then exhausts the file, making subsequent calls return empty lists (length 0). After fixing to iterate directly over `fp`, the loop yields one line per iteration, but `fp.readlines()` now reads from the current file position onward: on the first iteration it reads the remaining two lines (length 2), advancing the file pointer to end‑of‑file, so later iterations see zero remaining lines. Hence only the first iteration produces output (`2:apple`), changing behavior.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Mock Object with Custom readlines Property",
+      "hazard": "If the file object is not actually a file (e.g., a mock object with a readlines property that returns a computed value), the fix would replace the property access with the object itself, changing the ",
+      "rule": "FURB129",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 'list' object is not callable",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Walrus Assignment in Loop Condition Affecting Scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB129",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB129",
+            "severity": "warning",
+            "message": "Instead of calling `readlines()`, iterate over file object directly",
+            "span": [
+              11,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a|b|a|b\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a|b|a|b\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-22 13:16:52.515694669 -0400\n+++ fixed.py\t2026-10-22 13:16:55.858746898 -0400\n@@ -8,7 +8,7 @@\n         trace.append(line.strip())\n     # Reset and trigger rule\n     fp.seek(0)\n-    for x in fp.readlines():  # Rule triggers here\n+    for x in fp:  # Rule triggers here\n         trace.append(x.strip())\n         if len(trace) >= 4:\n             break\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Reliance on readlines Returning a List for Indexing Inside Loop",
+      "hazard": "If the code relies on readlines returning a list (e.g., for later indexing or len() inside the loop), the fix changes the type from list to _io.TextIOWrapper, breaking such operations.",
+      "rule": "FURB129",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB129",
+            "severity": "warning",
+            "message": "Instead of calling `readlines()`, iterate over file object directly",
+            "span": [
+              6,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "0:apple,0:banana\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n0:apple,0:banana\nstdout after:\n2:apple"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2:apple\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-22 13:16:52.516694685 -0400\n+++ fixed.py\t2026-10-22 13:16:56.477756573 -0400\n@@ -3,7 +3,7 @@\n \n with open('tmp.txt') as fp:\n     trace = []\n-    for line in fp.readlines():  # Rule triggers here\n+    for line in fp:  # Rule triggers here\n         try:\n             trace.append(f'{len(fp.readlines())}:{line.strip()}')\n         except AttributeError as e:\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Boolean Coercion in Loop Context After Fix",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "FURB129",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB129",
+            "severity": "warning",
+            "message": "Instead of calling `readlines()`, iterate over file object directly",
+            "span": [
+              6,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "True,True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True,True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-22 13:16:52.516694685 -0400\n+++ fixed.py\t2026-10-22 13:16:56.775761231 -0400\n@@ -3,7 +3,7 @@\n \n with open('tmp.txt') as fp:\n     trace = []\n-    for line in fp.readlines():  # Rule triggers here\n+    for line in fp:  # Rule triggers here\n         trace.append(str(bool(fp)))  # bool(fp) is True for open file\n         if len(trace) >= 2:\n             break\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Binary Mode readlines Returns bytes, Fix Breaks Encoding Assumption",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "FURB129",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Type Annotation Evaluated at Runtime Depending on Iteration",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB129",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB129",
+            "severity": "warning",
+            "message": "Instead of calling `readlines()`, iterate over file object directly",
+            "span": [
+              12,
+              17
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'tmp.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "FileNotFoundError: [Errno 2] No such file or directory: 'tmp.txt'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-22 13:16:52.517694701 -0400\n+++ fixed.py\t2026-10-22 13:16:55.036734053 -0400\n@@ -9,7 +9,7 @@\n # Separate loop where rule DOES trigger\n with open('tmp.txt') as fp:\n     trace = []\n-    for line in fp.readlines():  # Rule triggers here\n+    for line in fp:  # Rule triggers here\n         trace.append(line.strip())\n         if len(trace) >= 2:\n             break\n"
+      }
+    }
+  ]
+}

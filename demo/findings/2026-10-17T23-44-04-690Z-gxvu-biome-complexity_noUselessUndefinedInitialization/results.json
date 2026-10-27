@@ -1,0 +1,204 @@
+{
+  "runId": "2026-10-17T23-44-04-690Z-gxvu-biome-complexity_noUselessUndefinedInitialization",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/noUselessUndefinedInitialization",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessUndefinedInitialization\n- Fix: safe\n- Default severity: info\n- Available from version: 1.7.2\n- Diagnostic category: lint/complexity/noUselessUndefinedInitialization\n- This rule is recommended\n\nDescription\n\n Disallow initializing variables to `undefined`.\n\n A variable that is declared and not initialized to any value automatically gets the value of `undefined`.\n It\u2019s considered a best practice to avoid initializing variables to `undefined`.\n\n Please note that any inline comments attached to the initialization value or variable will be moved at the end of the variable declaration on auto-fix.\n Please be also aware that this differs from Eslint's behaviour.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n var a = undefined;\n ```\n ```js,expect_diagnostic\n let b = undefined, c = 1, d = 2;\n ```\n ```js,expect_diagnostic\n for (let i = 0; i < 100; i++) {\n \tlet i = undefined;\n }\n ```\n ```js,expect_diagnostic\n let f = /**/undefined/**/ ;\n ```\nValid\n\n ```js\n var a = 1;\n ```\n ```js\n class Foo {\n \tbar = undefined;\n }\n ```\n\n Exported variables are not flagged because in some frameworks (e.g., Svelte 4),\n initializing exported variables to `undefined` is used to declare optional props.\n\n ```js\n export let x = undefined;\n ```\n ```js\n let y = undefined;\n export { y };\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags initializations where a variable is explicitly set to `undefined`, since uninitialized variables already have that value.",
+    "firingShapes": [
+      "var a = undefined;",
+      "let b = undefined, c = 1;",
+      "for (let i = 0; i < 10; i++) { let j = undefined; }",
+      "const k = /* comment */ undefined /* comment */ ;",
+      "function f() { let x = undefined; return x; }",
+      "{ let scope = undefined; }",
+      "try { let err = undefined; } catch (e) {}",
+      "while (false) { let z = undefined; }"
+    ],
+    "silentShapes": [
+      "export let opt = undefined;",
+      "let y = undefined; export { y};",
+      "class C { prop = undefined; }",
+      "let a; // no initializer",
+      "Object.defineProperty(obj, 'key', { value: undefined });"
+    ],
+    "fixDescription": "Removes the `= undefined` initializer from the variable declaration, leaving only the declaration (and any other declarators in the same statement), preserving leading/trailing whitespace but moving any inline comments attached to the initializer or declarator to the end of the full declaration statement.",
+    "hazards": [
+      "In a `for` loop initializer like `for (let i = 0, j = undefined; i < n; i++)`, removing `j = undefined` changes the loop step syntax if `j` is the last declarator, potentially creating invalid syntax.",
+      "If the variable is declared in a comma expression such as `(x = 1, y = undefined)`, removing `= undefined` alters the expression\u2019s value and side-effect timing.",
+      "In destructuring patterns like `[a = undefined] = []`, removing the default value changes matching behavior when the source array has fewer elements.",
+      "When the initializer is part of a larger expression like `if ((let x = undefined) === null)`, the removal breaks grammar because `let` cannot appear in that position without an initializer in older syntax interpretations.",
+      "If the variable name is `undefined` itself (e.g., `let undefined = 42;` in non-strict mode), the fix would leave `let undefined;` which is a syntax error in strict mode and changes meaning in sloppy mode.",
+      "In conditional declarations like `if (true) let x = undefined;`, the autofix produces `if (true) let x;` which is invalid syntax because `let` declarations in statement position require a block.",
+      "When the declaration includes a trailing comma like `let a = undefined,`, removing the initializer leaves `let a,` which is a syntax error due to the dangling comma.",
+      "If the variable is declared in a `with` object property initializer like `with ({ get x() { return undefined } }) let x = undefined;`, removing the initializer may affect lookup timing due to changes in when the binding is instantiated.",
+      "In cases where the initializer contains a comment with a closing brace like `let x = undefined /* } */ ;`, moving the comment to the end of the statement could unintentionally comment out subsequent code if not properly wrapped.",
+      "If the declaration is the sole content of a loop body like `for (; ;) let x = undefined;`, the fix results in `for (; ;) let x;` which is invalid because `let` declarations cannot appear directly in loop bodies without a block."
+    ]
+  },
+  "opts": {
+    "n": 4,
+    "rounds": 1,
+    "unsafe": false
+  },
+  "cost": 0.0014166,
+  "summary": {
+    "programs": 4,
+    "invalid": 0,
+    "fired": 3,
+    "fixed": 3,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "null/undefined distinction affecting optional chaining",
+      "hazard": "Removing `= undefined` changes initialization timing, causing optional chaining to short-circuit incorrectly due to ReferenceError instead of undefined.",
+      "rule": "complexity/noUselessUndefinedInitialization",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "fallback\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Order of evaluation with comma operator and side effects",
+      "hazard": "Removing initializer deletes a side-effect expression in a comma sequence, altering evaluation order and omitting a function call.",
+      "rule": "complexity/noUselessUndefinedInitialization",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessUndefinedInitialization",
+            "severity": "info",
+            "message": "It's not necessary to initialize b to undefined.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1,2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1,2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 19:44:11.634847476 -0400\n+++ fixed.js\t2026-10-17 19:44:11.797843208 -0400\n@@ -1,6 +1,6 @@\n (() => {\n   let log = [];\n   const f = v => { log.push(v); return v; };\n-  let a = f(1), b = undefined, c = f(2); // Rule triggers on b\n+  let a = f(1), b , c = f(2); // Rule triggers on b\n   console.log(log.join(','));\n })();\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Comment displacement changing source meaning",
+      "hazard": "Moving an inline comment after declaration alters its interpretation\u2014here, turning a TODO into dead code via accidental line comment.",
+      "rule": "complexity/noUselessUndefinedInitialization",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessUndefinedInitialization",
+            "severity": "info",
+            "message": "It's not necessary to initialize y to undefined.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "unset\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "unset\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 19:44:11.888840825 -0400\n+++ fixed.js\t2026-10-17 19:44:12.035836977 -0400\n@@ -1,4 +1,4 @@\n (() => {\n-  let y = undefined; // TODO: initialize properly\n+  let y ; // TODO: initialize properly\n   console.log(y !== undefined ? 'set' : 'unset');\n })();\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Strict mode error from undeclared variable due to early removal",
+      "hazard": "In strict mode, removing initializer causes a temporary dead zone reference before declaration, throwing ReferenceError.",
+      "rule": "complexity/noUselessUndefinedInitialization",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessUndefinedInitialization",
+            "severity": "info",
+            "message": "It's not necessary to initialize z to undefined.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'z' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'z' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 19:44:12.121834725 -0400\n+++ fixed.js\t2026-10-17 19:44:12.264830982 -0400\n@@ -1,6 +1,6 @@\n \"use strict\";\n (() => {\n   console.log(typeof z); // Error if z not declared yet\n-  let z = undefined; // Rule triggers\n+  let z ; // Rule triggers\n   console.log(z);\n })();\n"
+      }
+    }
+  ]
+}

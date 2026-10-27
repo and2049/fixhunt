@@ -1,0 +1,321 @@
+{
+  "runId": "2026-10-17T20-12-19-048Z-mhta-ruff-B011",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "B011",
+    "fixKind": "unknown",
+    "docs": "# assert-false (B011)\n\nDerived from the **flake8-bugbear** linter.\n\nFix is always available.\n\n## What it does\nChecks for uses of `assert False`.\n\n## Why is this bad?\nPython removes `assert` statements when running in optimized mode\n(`python -O`), making `assert False` an unreliable means of\nraising an `AssertionError`.\n\nInstead, raise an `AssertionError` directly.\n\n## Example\n```python\nassert False\n```\n\nUse instead:\n```python\nraise AssertionError\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as changing an `assert` to a\n`raise` will change the behavior of your program when running in\noptimized mode (`python -O`).\n\n## References\n- [Python documentation: `assert`](https://docs.python.org/3/reference/simple_stmts.html#the-assert-statement)\n"
+  },
+  "analysis": {
+    "summary": "The rule flags any use of 'assert False' because assertions are removed in optimized mode, making them unreliable for raising errors.",
+    "firingShapes": [
+      "assert False",
+      "assert False, \"message\"",
+      "if cond: assert False",
+      "def f(): assert False",
+      "class C: assert False",
+      "try: assert False\\nexcept: pass",
+      "lambda: assert False",
+      "[x for x in y if assert False]"
+    ],
+    "silentShapes": [
+      "assert True",
+      "assert x",
+      "assert x == y",
+      "raise AssertionError",
+      "if __debug__: assert False"
+    ],
+    "fixDescription": "Replace 'assert False' with 'raise AssertionError', preserving any message argument as the error's argument if present.",
+    "hazards": [
+      "In optimized mode (-O), the original 'assert False' would be ignored and do nothing, while the fix raises an exception, changing program behavior from silent continuation to explicit error.",
+      "If 'assert False' appears inside a lambda or list comprehension, replacing it with 'raise AssertionError' may break the expression context, as raise is a statement and cannot be used where an expression is expected (e.g., in a list comprehension filter or lambda body), causing a SyntaxError.",
+      "When 'assert False' is used in a try block, the fix changes which exceptions are caught: the original would be skipped in -O mode, but the fix always raises, potentially altering exception handling flow even in normal mode if other exceptions are expected.",
+      "If 'assert False' is followed by a comment on the same line, the autofix may drop or misplace the comment during rewriting, especially if the tool does not preserve trailing comments.",
+      "In a class or module scope, 'assert False' is executed during definition; replacing it with 'raise AssertionError' changes the timing and visibility of the error—now raised at import time unconditionally, whereas in -O mode the original would be removed and no error raised.",
+      "If 'assert False' is part of a larger expression via short-circuiting (e.g., 'assert False or x'), removing the assert changes evaluation: the original would short-circuit to False in normal mode (but be removed in -O), while the fix always raises, breaking any reliance on the assert returning None or enabling short-circuit.",
+      "When 'assert False' has a message (e.g., 'assert False, msg'), the fix correctly passes msg to AssertionError, but if msg has side effects (e.g., a function call), those are now evaluated unconditionally, whereas in -O mode the original assert would be removed and the side effects would not occur.",
+      "If the code relies on the fact that 'assert False' raises AssertionError only in non-optimized mode to conditionally disable checks, replacing it with a permanent raise breaks that intentional optimization-aware behavior.",
+      "In nested functions, if 'assert False' is used and the fix is applied, the raised exception may interfere with introspection or debugging tools that expect AssertionError to originate from assert statements specifically.",
+      "If 'assert False' appears in a string or comment (as text), the linter should not flag it, but if the autofix incorrectly modifies such occurrences (due to faulty pattern matching), it would corrupt documentation or example code."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0018276,
+  "summary": {
+    "programs": 8,
+    "invalid": 2,
+    "fired": 4,
+    "fixed": 0,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r2-p001",
+      "title": "Trailing comment preservation",
+      "hazard": "If 'assert False' is followed by a comment on the same line, the autofix may drop or misplace the comment.",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B011",
+            "severity": "warning",
+            "message": "Do not `assert False` (`python -O` removes these calls), raise `AssertionError()`",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "AssertionError",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AssertionError",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Exception chaining in finally block",
+      "hazard": "Exceptions raised inside the rewritten code may interfere with finally/else clauses or exception chaining expectations.",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B011",
+            "severity": "warning",
+            "message": "Do not `assert False` (`python -O` removes these calls), raise `AssertionError()`",
+            "span": [
+              2,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "AssertionError caught: \nfinally ran\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "AssertionError caught: \nfinally ran\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Lambda expression context",
+      "hazard": "If 'assert False' appears inside a lambda, replacing it with 'raise AssertionError' breaks expression context, causing SyntaxError.",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Non-file context manager interaction",
+      "hazard": "Context managers that are not files but have write() without close() may be misused if assert is replaced in __exit__ logic.",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B011",
+            "severity": "warning",
+            "message": "Do not `assert False` (`python -O` removes these calls), raise `AssertionError()`",
+            "span": [
+              9,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Silenced AssertionError\nafter context\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Silenced AssertionError\nafter context\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Short-circuiting in expression",
+      "hazard": "If 'assert False' is part of a larger expression via short-circuiting, removing it changes evaluation (returns None vs always raising).",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p006",
+      "title": "Optimization-dependent behavior",
+      "hazard": "If code relies on 'assert False' being removed in -O to disable checks, replacing with permanent raise breaks that intent.",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B011",
+            "severity": "warning",
+            "message": "Do not `assert False` (`python -O` removes these calls), raise `AssertionError()`",
+            "span": [
+              3,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: cannot assign to __debug__",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: cannot assign to __debug__",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "False positive in string literal",
+      "hazard": "If 'assert False' appears in a string or comment, the linter should not flag it, but faulty pattern matching may corrupt it.",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "string contains: assert False  # inline comment\nno modification to string or comment\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p008",
+      "title": "Type annotation evaluated at runtime",
+      "hazard": "If 'assert False' appears in a type annotation evaluated at runtime (e.g., via string annotation), replacing it breaks evaluation.",
+      "rule": "B011",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "annotation value: 'assert False'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+// Written without semicolons; the lone block keeps the next line from being read as an index expression.
+export function run(log) {
+  const items = [1, 2]
+  {
+    [0, 1].forEach((i) => log(items[i]))
+  }
+  return log
+}

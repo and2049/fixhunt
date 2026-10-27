@@ -1,0 +1,591 @@
+{
+  "runId": "2026-10-17T20-46-25-989Z-q9wc-ruff-FLY002",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FLY002",
+    "fixKind": "unknown",
+    "docs": "# static-join-to-f-string (FLY002)\n\nDerived from the **flynt** linter.\n\nFix is always available.\n\n## What it does\nChecks for `str.join` calls that can be replaced with f-strings.\n\n## Why is this bad?\nf-strings are more readable and generally preferred over `str.join` calls.\n\n## Example\n```python\n\" \".join((foo, bar))\n```\n\nUse instead:\n```python\nf\"{foo} {bar}\"\n```\n\n## Fix safety\nThe fix is always marked unsafe because the evaluation of the f-string\nexpressions will default to calling the `__format__` method of each\nobject, whereas `str.join` expects each object to be an instance of\n`str` and uses the corresponding string. Therefore it is possible for\nthe values of the resulting strings to differ, or for one expression\nto raise an exception while the other does not.\n\n## References\n- [Python documentation: f-strings](https://docs.python.org/3/reference/lexical_analysis.html#f-strings)\n"
+  },
+  "analysis": {
+    "summary": "Flags str.join() calls where all arguments are simple variables or literals and suggests replacing them with equivalent f-strings.",
+    "firingShapes": [
+      "\" \".join((a, b))",
+      "\"\".join([x, y, z])",
+      "''.join((p, q))",
+      ", \".join((item1, item2, item3))",
+      "\"\\n\".join((line1, line2))",
+      "\", \".join((name, age))",
+      "' '.join((x,))",
+      "\"\".join((a, b, c, d))"
+    ],
+    "silentShapes": [
+      "\" \".join(a + b)",
+      "\" \".join(map(str, items))",
+      "\" \".join(get_items())",
+      "\" \".join((a for a in b))",
+      "\" \".join(obj.method())"
+    ],
+    "fixDescription": "Rewrites str.join(separator, iterable) into an f-string where each element from the iterable is placed literally separated by the separator, preserving order and literal separator content.",
+    "hazards": [
+      "If any joined element is not a string, the f-string will invoke its __format__ method (default str) while str.join requires actual strings, potentially changing output or raising AttributeError.",
+      "If an element defines a custom __format__ that differs from its __str__, the f-string output will diverge from the join result.",
+      "If evaluating any element has side effects (e.g., function calls), the f-string evaluates them once during formatting, same as join, but if the join argument is an iterator consumed elsewhere, behavior may differ due to consumption timing.",
+      "If the separator contains replacement field syntax like '{' or '}', the f-string will interpret it as a format specifier, altering output or causing ValueError.",
+      "If the iterable is not a tuple/list (e.g., set, dict_keys), the f-string preserves iteration order but join may have used arbitrary order (for sets), leading to non-deterministic output changes.",
+      "If any element equals None, str.join raises TypeError while f-string converts it to 'None', changing behavior from exception to string output.",
+      "If the iterable is empty, both produce empty string, but if the separator is invalid in an f-string context (e.g., unbalanced braces), the f-string may raise ValueError where join succeeds.",
+      "Comments inside the join call parentheses or on the same line may be lost during rewrite, as the autofix replaces the entire expression without preserving internal comments.",
+      "If the join call is part of a larger expression and the f-string introduces unintended line breaks or changes precedence due to formatting, it could alter grouping.",
+      "If any element is an object with a __format__ method that returns non-string (e.g., bytes), the f-string result may be bytes while join expects strings, causing type errors downstream."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0053259,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 7,
+    "fixed": 0,
+    "disputed": 8
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Side effect evaluation consistency",
+      "hazard": "If evaluating any element has side effects (e.g., function calls), the f-string evaluates them once during formatting, same as join, but if the join argument is an iterator consumed elsewhere, behavio",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "A\nB\nA\nB\na b|a b\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Precedence change in larger expression",
+      "hazard": "If the join call is part of a larger expression and the f-string introduces unintended line breaks or changes precedence due to formatting, it could alter grouping.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FLY002",
+            "severity": "warning",
+            "message": "Consider `f'{a} {b}'` instead of string join",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "True\n123|123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\n123|123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Non-string elements and __format__ vs str()",
+      "hazard": "If any joined element is not a string, the f-string will invoke its __format__ method (default str) while str.join requires actual strings, potentially changing output or raising AttributeError.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FLY002",
+            "severity": "warning",
+            "message": "Consider `f'{a}{b}'` instead of string join",
+            "span": [
+              11,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "join:TypeError: sequence item 0: expected str instance, NotStr found|fstring:<x><y>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "join:TypeError: sequence item 0: expected str instance, NotStr found|fstring:<x><y>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Mutable defaults and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a b|a b\n2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Set iteration order non-determinism",
+      "hazard": "If the iterable is not a tuple/list (e.g., set, dict_keys), the f-string preserves iteration order but join may have used arbitrary order (for sets), leading to non-deterministic output changes.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r1-p006",
+      "title": "Generators consumed once vs eager",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "join1:xy|join2:|fstring:xy\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Exceptions in rewritten code and finally/else",
+      "hazard": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FLY002",
+            "severity": "warning",
+            "message": "Consider `f'ok:{fails()}'` instead of string join",
+            "span": [
+              4,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "join:ValueError: bad|fstring:ValueError: bad\n_finally_join\n_finally_fstring\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "join:ValueError: bad|fstring:ValueError: bad\n_finally_join\n_finally_fstring\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Async def/await ordering and async generators",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "done done|done done\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Walrus and comprehension scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sequence item 0: expected str instance, int found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "None element behavior difference",
+      "hazard": "If any element equals None, str.join raises TypeError while f-string converts it to 'None', changing behavior from exception to string output.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FLY002",
+            "severity": "warning",
+            "message": "Consider `f'{a} {b}'` instead of string join",
+            "span": [
+              4,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError: sequence item 0: expected str instance, NoneType found\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: sequence item 0: expected str instance, NoneType found\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Custom __format__ divergence",
+      "hazard": "If an element defines a custom __format__ that differs from its __str__, the f-string output will diverge from the join result.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FLY002",
+            "severity": "warning",
+            "message": "Consider `f'{c}'` instead of string join",
+            "span": [
+              7,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sequence item 0: expected str instance, Custom found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sequence item 0: expected str instance, Custom found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Mutable default arguments and aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sequence item 0: expected str instance, int found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Separator with brace syntax",
+      "hazard": "If the separator contains replacement field syntax like '{' or '}', the f-string will interpret it as a format specifier, altering output or causing ValueError.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "'Alice{name}Bob'\nF-string gives: 'Alice{name}Bob'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Shadowed builtins",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FLY002",
+            "severity": "warning",
+            "message": "Consider `f'{str}{str}'` instead of string join",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError: sequence item 0: expected str instance, function found\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: sequence item 0: expected str instance, function found\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Empty iterable with invalid separator braces",
+      "hazard": "If the iterable is empty, both produce empty string, but if the separator is invalid in an f-string context (e.g., unbalanced braces), the f-string may raise ValueError where join succeeds.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "''\nThis should not print\n'{'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "__format__ returns non-string",
+      "hazard": "If any element is an object with a __format__ method that returns non-string (e.g., bytes), the f-string result may be bytes while join expects strings, causing type errors downstream.",
+      "rule": "FLY002",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FLY002",
+            "severity": "warning",
+            "message": "Consider `f'{obj}'` instead of string join",
+            "span": [
+              8,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Join error: TypeError: sequence item 0: expected str instance, BytesReturn found\nF-string downstream: TypeError: __format__ must return a str, not bytes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Join error: TypeError: sequence item 0: expected str instance, BytesReturn found\nF-string downstream: TypeError: __format__ must return a str, not bytes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

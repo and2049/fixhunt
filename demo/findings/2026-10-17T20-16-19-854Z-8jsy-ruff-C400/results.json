@@ -1,0 +1,681 @@
+{
+  "runId": "2026-10-17T20-16-19-854Z-8jsy-ruff-C400",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C400",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-generator-list (C400)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary generators that can be rewritten as list\ncomprehensions (or with `list()` directly).\n\n## Why is this bad?\nIt is unnecessary to use `list()` around a generator expression, since\nthere are equivalent comprehensions for these types. Using a\ncomprehension is clearer and more idiomatic.\n\nFurther, if the comprehension can be removed entirely, as in the case of\n`list(x for x in foo)`, it's better to use `list(foo)` directly, since it's\neven more direct.\n\n## Example\n```python\nlist(f(x) for x in foo)\nlist(x for x in foo)\nlist((x for x in foo))\n```\n\nUse instead:\n```python\n[f(x) for x in foo]\nlist(foo)\nlist(foo)\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it may occasionally drop comments\nwhen rewriting the call. In most cases, though, comments will be preserved.\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary uses of list() wrapping generator expressions.",
+    "firingShapes": [
+      "list(f(x) for x in foo)",
+      "list(x for x in foo)",
+      "list((x for x in foo))",
+      "list(y for y in range(n) if y % 2)",
+      "list(g(a,b) for a in A for b in B)",
+      "list((z+1 for z in data))",
+      "list(item for item in items if cond(item))",
+      "list(expr for expr in iterable)"
+    ],
+    "silentShapes": [
+      "[f(x) for x in foo]",
+      "list(foo)",
+      "[x for x in foo if bar(x)]",
+      "(x for x in foo)",
+      "map(f, foo)"
+    ],
+    "fixDescription": "Rewrites list(<generator expression>) to [<expression> for <iteration>] when the generator has a transformation or filter; otherwise rewrites to list(<iterable>) by removing the redundant generator wrapper.",
+    "hazards": [
+      "If the generator expression contains a walrus operator (e.g., list((y := f(x)) for x in foo)), rewriting to a list comprehension may change scoping rules as the assignment expression's target becomes local to the comprehension, potentially leaking or hiding variables differently.",
+      "If the generator expression is inside a lambda or nested function and uses nonlocal or global variables, moving the logic into a list comprehension could alter closure capture timing or semantics due to differences in how comprehensions vs generator expressions handle name resolution.",
+      "If the iterable side-effectfully mutates during iteration (e.g., list(x for x in foo where foo.remove(x))), the rewrite to list(foo) or a list comprehension may iterate over a different sequence because the original generator evaluated foo at start but the fix might re-evaluate or assume stability.",
+      "If the generator expression contains a 'break' or 'continue' statement (though invalid in generator expressions, consider via trickery), the fix would be invalid as comprehensions don't support those statements, but the rule shouldn't fire on invalid syntax anyway—still, if somehow present, the fix would break.",
+      "If the generator expression is used in a context where its lazy evaluation is relied upon for early termination via an enclosing construct (e.g., any(list(f(x) for x in foo))), replacing it with a list comprehension forces full evaluation upfront, changing performance and possibly causing errors if evaluation has side effects that should be avoided after a truthy result.",
+      "If the generator expression includes a comment inside the parentheses (e.g., list(x # comment\n  for x in foo)), the autofix may drop the comment during rewrite because it only preserves tokens deemed essential, leading to loss of inline documentation.",
+      "If the generator expression is part of a larger expression where parentheses are significant for grouping (e.g., list((x for x in foo)) + 1), the fix might incorrectly simplify to list(foo) + 1, but if the inner parentheses were actually wrapping a tuple generator vs being redundant, the semantics of nesting could matter—though in practice the inner parens here are just around the generator, still, over-aggressive paren removal could theoretically affect parsing in edge cases involving complex expressions.",
+      "If the iterable is not actually a variable but a function call with side effects (e.g., list(x for x in get_foo())), rewriting to list(get_foo()) is safe, but if the fix mistakenly caches or reorders evaluation (which it shouldn't), it could call get_foo() multiple times vs once; however, the fix should preserve the single call, so this is more speculative—still, any refactoring tool must prove it doesn't introduce extra evaluations.",
+      "If the generator expression appears in a default argument or class body and relies on late binding, the fix timing of when the iterable is evaluated might shift relative to other definitions, though both generator expressions and comprehensions evaluate the iterable at the point of construction, so this is unlikely—but if the fix changed nesting depth, it could matter.",
+      "If the code contains a stray backslash for line continuation inside the generator expression (e.g., list(x\\\n  for x in foo)), the autofix might mishandle the line joining during rewrite, breaking syntax or altering meaning.",
+      "If the generator expression is written with a trailing comma making it a tuple (e.g., list((x for x in foo),)), the rule likely wouldn't fire because it's not a plain generator call, but if misapplied, the fix would break structure."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032832000000000004,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "dict ordering, duplicate keys, __hash__/__eq__ overrides",
+      "hazard": "Rewriting `list(...)` as `[...]` does not affect dictionary construction from key-value pairs generated lazily versus eagerly, which can alter duplicate key resolution timing.",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "eq 1\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Iterable side-effectful mutation during iteration",
+      "hazard": "When the source iterable mutates during iteration (e.g., list removes items), converting `list(x for x in foo where condition)` to `list(foo)` changes which elements are seen due to shifted indices or",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `list()`)",
+            "span": [
+              8,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2, 3, 4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2, 3, 4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Lazy evaluation for early termination via enclosing construct",
+      "hazard": "Replacing `list(f(x) for x in foo)` with `[f(x) for x in foo]` inside `any()` forces full evaluation even after a truthy value is found, changing side effect execution and potentially raising avoidabl",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a list comprehension)",
+            "span": [
+              7,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "f 0\nf 1\nf 2\nValueError: bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "f 0\nf 1\nf 2\nValueError: bad\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "async def/await ordering, async generators",
+      "hazard": "The rule does not apply to async generators, but if mistakenly used, rewriting would break await syntax; however we test a sync case near async code to show isolation.",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[0, 1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "comments and docstrings attached to the removed or moved code",
+      "hazard": "When the rule removes the generator expression and rewraps the iterable, inline comments on the generator are lost, potentially removing documentation or TODO markers.",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a list comprehension)",
+            "span": [
+              3,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[4]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "hazard": "If the generator expression contains a function call with side effects in its iterable part, moving it inside a list comprehension may change evaluation order relative to other expressions.",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a list comprehension)",
+            "span": [
+              5,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "side: ['get_data']\nresult: [2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "side: ['get_data']\nresult: [2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "hazard": "If the generator expression raises an exception during iteration, the timing of when it is caught (e.g., in a surrounding try) may differ between lazy and eager evaluation, affecting finally block exe",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: ZeroDivisionError division by zero\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "hazard": "When the generator expression produces bytes or strings involved in encoding/decoding, eager vs lazy evaluation may change intermediate states when I/O operations are interleaved.",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a list comprehension)",
+            "span": [
+              3,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "decoded: ['hello', 'world']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "decoded: ['hello', 'world']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Generator consumption order matters",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `list()`)",
+            "span": [
+              6,
+              5
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `list()`)",
+            "span": [
+              7,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a: [1, 2] b: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a: [1, 2] b: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Comment lost during rewrite",
+      "hazard": "comments and docstrings attached to the removed or moved code",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `list()`)",
+            "span": [
+              2,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Side effect in iterable function call",
+      "hazard": "If the iterable is not actually a variable but a function call with side effects",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `list()`)",
+            "span": [
+              8,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "counter: 1 lst: [10, 20]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "counter: 1 lst: [10, 20]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Inline comment stripped in comprehension",
+      "hazard": "If the generator expression includes a comment inside the parentheses",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a list comprehension)",
+            "span": [
+              2,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mutable default argument capture",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite using `list()`)",
+            "span": [
+              4,
+              16
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2]\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2]\n[1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "File write truncation behavior",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a list comprehension)",
+            "span": [
+              2,
+              17
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Break-like trick invalidates comprehension",
+      "hazard": "If the generator expression contains a 'break' or 'continue' statement",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Type annotation evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "C400",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C400",
+            "severity": "warning",
+            "message": "Unnecessary generator (rewrite as a list comprehension)",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

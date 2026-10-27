@@ -1,0 +1,1 @@
+let relAttr = 'noopener noreferrer'; const a = document.createElement('a'); a.href = '#'; a.target = '_blank'; a.rel = relAttr; console.log(a.rel); // current: 'noopener noreferrer', after fix: 'noopener noreferrer noopener'

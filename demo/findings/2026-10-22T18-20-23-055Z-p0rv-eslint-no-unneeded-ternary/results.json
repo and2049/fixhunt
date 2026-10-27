@@ -1,0 +1,571 @@
+{
+  "runId": "2026-10-22T18-20-23-055Z-p0rv-eslint-no-unneeded-ternary",
+  "tool": "eslint",
+  "ext": "js",
+  "version": "9.39.5",
+  "rule": {
+    "tool": "eslint",
+    "rule": "no-unneeded-ternary",
+    "fixKind": "safe",
+    "docs": "Rule: no-unneeded-ternary\nFixable: code\nType: suggestion\nDeprecated: no\nDescription: Disallow ternary operators when simpler alternatives exist\nDocs: https://eslint.org/docs/latest/rules/no-unneeded-ternary\n\n---\ntitle: no-unneeded-ternary\nrule_type: suggestion\nrelated_rules:\n- no-ternary\n- no-nested-ternary\n---\n\n\n\nIt's a common mistake in JavaScript to use a conditional expression to select between two Boolean values instead of using `!` to convert the test to a Boolean.\nHere are some examples:\n\n```js\n// Bad\nconst isYes = answer === 1 ? true : false;\n\n// Good\nconst isYes = answer === 1;\n\n// Bad\nconst isNo = answer === 1 ? false : true;\n\n// Good\nconst isNo = answer !== 1;\n```\n\nAnother common mistake is using a single variable as both the conditional test and the consequent. In such cases, the logical `OR` can be used to provide the same functionality.\nHere is an example:\n\n```js\n// Bad\nfoo(bar ? bar : 1);\n\n// Good\nfoo(bar || 1);\n```\n\n## Rule Details\n\nThis rule disallow ternary operators when simpler alternatives exist.\n\nExamples of **incorrect** code for this rule:\n\n::: incorrect\n\n```js\n/*eslint no-unneeded-ternary: \"error\"*/\n\nconst a = x === 2 ? true : false;\n\nconst b = x ? true : false;\n```\n\n:::\n\nExamples of **correct** code for this rule:\n\n::: correct\n\n```js\n/*eslint no-unneeded-ternary: \"error\"*/\n\nconst a = x === 2 ? \"Yes\" : \"No\";\n\nconst b = x !== false;\n\nconst c = x ? \"Yes\" : \"No\";\n\nconst d = x ? y : x;\n\nf(x ? x : 1); // default assignment - would be disallowed if defaultAssignment option set to false. See option details below.\n```\n\n:::\n\n## Options\n\nThis rule has an object option:\n\n* `\"defaultAssignment\": true` (default) allows the conditional expression as a default assignment pattern\n* `\"defaultAssignment\": false` disallows the conditional expression as a default assignment pattern\n\n### defaultAssignment\n\nWhen set to `true`, which it is by default, The `defaultAssignment` option allows expressions of the form `x ? x : expr` (where `x` is any identifier and `expr` is any expression).\n\nExamples of additional **incorrect** code for this rule with the `{ \"defaultAssignment\": false }` option:\n\n::: incorrect\n\n```js\n/*eslint no-unneeded-ternary: [\"error\", { \"defaultAssignment\": false }]*/\n\nconst a = x ? x : 1;\n\nf(x ? x : 1);\n```\n\n:::\n\nNote that `defaultAssignment: false` still allows expressions of the form `x ? expr : x` (where the identifier is on the right hand side of the ternary).\n\n## When Not To Use It\n\nYou can turn this rule off if you are not concerned with unnecessary complexity in conditional expressions.\n"
+  },
+  "analysis": {
+    "summary": "Flags ternary expressions where the condition selects between identical literals/variables or redundant boolean conversions.",
+    "firingShapes": [
+      "a = x === 2 ? true : false;",
+      "b = x ? true : false;",
+      "c = x ? false : true;",
+      "d = foo(bar ? bar : 1);",
+      "e = f(x ? x : 1);",
+      "g = x ? y : x;",
+      "h = i ? j : i;",
+      "k = l ? m : n; /* only if l===m && n===l */"
+    ],
+    "silentShapes": [
+      "p = x === 2 ? 'yes' : 'no';",
+      "q = r ? s : t;",
+      "u = v ? w : x; /* requires v!==w && u!==x */",
+      "y = z ? !a : b;",
+      "c1 = d2 ? e3 : f4;"
+    ],
+    "fixDescription": "Rewrites ternary to simpler equivalent: replaces `cond ? true : false` with `!!cond` or `cond` (if already boolean), `cond ? false : true` with `!cond`, `var ? var : expr` with `var || expr`, and `cond ? var : var` with `var`.",
+    "hazards": [
+      "Replacing `x ? true : false` with `x` fails if `x` is not already a boolean (e.g., `x=0` yields `false` vs `0`).",
+      "Replacing `x ? false : true` with `!x` fails if `x` is not boolean (e.g., `x=0` yields `true` vs `1`).",
+      "Replacing `x ? x : 1` with `x || 1` changes behavior when `x` is `-0` or `NaN` (both falsy but `x||1` gives `1` while ternary gives `-0`/`NaN`).",
+      "Replacing `x ? y : x` with `x` fails if `x` and `y` are different values (e.g., `x=0,y=1` yields `0` vs `1`).",
+      "The fix may break if the ternary is inside a larger expression where operator precedence changes after rewrite (e.g., `a + (b ? b : 0)` vs `a + (b || 0)` are equivalent, but `a * (b ? b : 0)` vs `a * (b || 0)` differ when `b=0`).",
+      "If the ternary's consequent or alternate has side effects (e.g., function calls), removing them alters behavior (though rule typically doesn't fire there).",
+      "Comments attached to the ternary operator or its branches may be lost during rewrite.",
+      "In strict mode, if `x` is `undefined` and used in `x ? x : 1`, the rewrite `x || 1` is safe, but if `x` is `null`, both behave same; however, if `x` is a non-standard falsy object like `document.all`, behavior may differ in legacy browsers."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0043023,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 6,
+    "fixed": 6,
+    "disputed": 9
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Hazard 1: Ternary with Side Effects",
+      "hazard": "If the ternary's consequent or alternate has side effects (e.g., function calls), removing them alters behavior.",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "side\nresult: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p002",
+      "title": "Hazard 2: Non-Boolean Condition Rewrite",
+      "hazard": "Replacing `x ? true : false` with `x` fails if `x` is not already a boolean (e.g., `x=0` yields `false` vs `0`).",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-unneeded-ternary",
+            "severity": "{\"ruleId\":\"no-unneeded-ternary\",\"severity\":2,\"message\":\"Unnecessary use of boolean literals in conditional expression.\",\"line\":2,\"column\":9,\"nodeType\":\"ConditionalExpression\",\"messageId\":\"unnecessaryConditionalExpression\",\"endLine\":2,\"endColumn\":25,\"fix\":{\"range\":[19,35],\"text\":\"!!x\"}}",
+            "message": "Unnecessary use of boolean literals in conditional expression.",
+            "span": [
+              2,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a: false (type: boolean)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a: false (type: boolean)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:20:35.452958311 -0400\n+++ fixed.js\t2026-10-22 14:20:39.185110177 -0400\n@@ -1,4 +1,4 @@\n let x = 0;\n-let a = x ? true : false; // triggers rule: x?true:false -> should become x\n+let a = !!x; // triggers rule: x?true:false -> should become x\n console.log('a:', a, '(type:', typeof a + ')');\n // If rewritten as 'let a = x;' by unsafe fix, a would be 0, not false\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Hazard 3: Arguments Object Interaction",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-unneeded-ternary",
+            "severity": "{\"ruleId\":\"no-unneeded-ternary\",\"severity\":2,\"message\":\"Unnecessary use of boolean literals in conditional expression.\",\"line\":3,\"column\":11,\"nodeType\":\"ConditionalExpression\",\"messageId\":\"unnecessaryConditionalExpression\",\"endLine\":3,\"endColumn\":27,\"fix\":{\"range\":[69,85],\"text\":\"!!x\"}}",
+            "message": "Unnecessary use of boolean literals in conditional expression.",
+            "span": [
+              3,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "y: false | args: [ 0, 2, 3 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "y: false | args: [ 0, 2, 3 ]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:20:35.453958352 -0400\n+++ fixed.js\t2026-10-22 14:20:39.187110258 -0400\n@@ -1,6 +1,6 @@\n function test(a, b = 1, ...rest) {\n   let x = arguments[0];\n-  let y = x ? true : false; // triggers rule\n+  let y = !!x; // triggers rule\n   console.log('y:', y, '| args:', [].slice.call(arguments));\n }\n test(0, 2, 3); // x=0 -> y=false; if rewritten as y=x, y=0 (differs)\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Hazard 4: Temporal Dead Zone",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-unneeded-ternary",
+            "severity": "{\"ruleId\":\"no-unneeded-ternary\",\"severity\":2,\"message\":\"Unnecessary use of boolean literals in conditional expression.\",\"line\":4,\"column\":11,\"nodeType\":\"ConditionalExpression\",\"messageId\":\"unnecessaryConditionalExpression\",\"endLine\":4,\"endColumn\":27,\"fix\":{\"range\":[109,125],\"text\":\"!!x\"}}",
+            "message": "Unnecessary use of boolean literals in conditional expression.",
+            "span": [
+              4,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'x' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'x' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:20:35.454958393 -0400\n+++ fixed.js\t2026-10-22 14:20:37.554043770 -0400\n@@ -1,6 +1,6 @@\n (() => {\n   console.log(typeof x); // TDZ: ReferenceError if let x not yet initialized\n   let x = 0;\n-  let y = x ? true : false; // triggers rule\n+  let y = !!x; // triggers rule\n   console.log('y:', y);\n })();\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Hazard 5: Prototype and __proto__ Access",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-unneeded-ternary",
+            "severity": "{\"ruleId\":\"no-unneeded-ternary\",\"severity\":2,\"message\":\"Unnecessary use of boolean literals in conditional expression.\",\"line\":8,\"column\":12,\"nodeType\":\"ConditionalExpression\",\"messageId\":\"unnecessaryConditionalExpression\",\"endLine\":8,\"endColumn\":28,\"fix\":{\"range\":[409,425],\"text\":\"!!x\"}}",
+            "message": "Unnecessary use of boolean literals in conditional expression.",
+            "span": [
+              8,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "str: proto\nflag: true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "str: proto\nflag: true\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:20:35.454958393 -0400\n+++ fixed.js\t2026-10-22 14:20:37.566044258 -0400\n@@ -5,5 +5,5 @@\n // Rule does NOT fire here (x?expr:fallback not x?true:false form)\n // But if we had: let y = !!x; that would be different hazard\n // Adjusting to hit rule: need x?true:false\n-let flag = x ? true : false; // triggers rule: x is truthy -> flag=true\n+let flag = !!x; // triggers rule: x is truthy -> flag=true\n console.log('flag:', flag);\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Hazard 6: This Binding",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-unneeded-ternary",
+            "severity": "{\"ruleId\":\"no-unneeded-ternary\",\"severity\":2,\"message\":\"Unnecessary use of boolean literals in conditional expression.\",\"line\":11,\"column\":9,\"nodeType\":\"ConditionalExpression\",\"messageId\":\"unnecessaryConditionalExpression\",\"endLine\":11,\"endColumn\":25,\"fix\":{\"range\":[340,356],\"text\":\"!!x\"}}",
+            "message": "Unnecessary use of boolean literals in conditional expression.",
+            "span": [
+              11,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "y: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "y: false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:20:35.455958433 -0400\n+++ fixed.js\t2026-10-22 14:20:39.805135437 -0400\n@@ -8,7 +8,7 @@\n // Let's make it return 0 to falsify\n obj.value = 0;\n x = obj.check(); // returns 0\n-let y = x ? true : false; // triggers rule\n+let y = !!x; // triggers rule\n console.log('y:', y); // should be false\n // If rewritten as y = x, y=0 (still falsy, but 0 !== false)\n // We'll see difference in type\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Hazard 7: document.all and Non-Standard Falsy Objects",
+      "hazard": "In strict mode, if `x` is `undefined` and used in `x ? x : 1`, the rewrite `x || 1` is safe, but if `x` is `null`, both behave same; however, if `x` is a non-standard falsy object like `document.all`,",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a: 1\na (null): 1\na (0): 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Hazard 8: Control Flow and Finally",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-unneeded-ternary",
+            "severity": "{\"ruleId\":\"no-unneeded-ternary\",\"severity\":2,\"message\":\"Unnecessary use of boolean literals in conditional expression.\",\"line\":6,\"column\":13,\"nodeType\":\"ConditionalExpression\",\"messageId\":\"unnecessaryConditionalExpression\",\"endLine\":6,\"endColumn\":29,\"fix\":{\"range\":[119,135],\"text\":\"!!x\"}}",
+            "message": "Unnecessary use of boolean literals in conditional expression.",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "fy:true|f\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "fy:true|f\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:20:39.755133400 -0400\n+++ fixed.js\t2026-10-22 14:20:42.970264513 -0400\n@@ -3,7 +3,7 @@\n   try {\n     if (i === 0) continue outer;\n     let x = i;\n-    let y = x ? true : false; // triggers rule only when i=1 (x=1 -> y=true)\n+    let y = !!x; // triggers rule only when i=1 (x=1 -> y=true)\n     log += 'y:' + y + '|';\n   } finally {\n     log += 'f';\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Hazard 1: -0 and NaN preservation in x||1",
+      "hazard": "Replacing `x ? x : 1` with `x || 1` changes behavior when `x` is `-0` or `NaN`",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x=0: orig=1, fixed=1\nx=NaN: orig=1, fixed=1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Hazard 2: Regex flags and lastIndex interaction",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "match1 lastIndex: 1\nmatch2 lastIndex: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Hazard 3: Var hoisting and redeclaration",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "i=0, x=99\ni=1, x=1\nfinal x: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Hazard 4: Precedence change in multiplication",
+      "hazard": "The fix may break if the ternary is inside a larger expression where operator precedence changes after rewrite",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b=0: orig=0, fixed=0\nb=2: orig=10, fixed=10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Hazard 5: This binding in extracted method",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Hazard 6: Null vs undefined in optional chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of null (reading 'prop')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Hazard 7: Sparse array hole preservation",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "sumOrig=4, sumFixed=4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Hazard 8: Arguments object interaction",
+      "hazard": "arguments object, function.length, default parameters, rest parameters",
+      "rule": "no-unneeded-ternary",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "args.length: 0\nfunction.length: 1\nx=undefined: orig=2, fixed=2\nargs.length: 1\nfunction.length: 1\nx=0: orig=2, fixed=2\nargs.length: 1\nfunction.length: 1\nx=0: orig=2, fixed=2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

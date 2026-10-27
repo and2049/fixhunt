@@ -1,0 +1,960 @@
+{
+  "runId": "2026-10-17T20-08-24-819Z-hi5g-biome-complexity_noUselessThisAlias",
+  "tool": "biome",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "complexity/noUselessThisAlias",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noUselessThisAlias\n- Fix: safe\n- Default severity: info\n- Available from version: 1.0.0\n- Diagnostic category: lint/complexity/noUselessThisAlias\n- This rule is recommended\n\nDescription\n\n Disallow useless `this` aliasing.\n\n Arrow functions inherits `this` from their enclosing scope;\n this makes `this` aliasing useless in this situation.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n class A {\n     method() {\n         const self = this;\n         return () => {\n             return self;\n         }\n     }\n }\n ```\n\nValid\n\n ```js\n class A {\n     method() {\n         const self = this;\n         return function() {\n             this.g();\n             return self;\n         }\n     }\n }\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary aliases to 'this' when used only within arrow functions that inherit the outer 'this'.",
+    "firingShapes": [
+      "const self = this; return () => { return self; };",
+      "let that = this; setTimeout(() => console.log(that), 0);",
+      "var _this = this; [...array].map(item => item + _this.prop);",
+      "const $this = this; Promise.resolve().then(() => $this.value++);",
+      "let me = this; document.addEventListener('click', e => me.handle(e));",
+      "var self = this; new Proxy(target, { get: (_, p) => self[p] });",
+      "const _self = this; () => { return _self.method(); }();",
+      "let that$ = this; Array.from({length: 3}, (_, i) => that$.data[i]);"
+    ],
+    "silentShapes": [
+      "const self = this; return function() { return self; };",
+      "let that = this; if (condition) { () => that; } else { that = null; }",
+      "var _this = this; eval('console.log(_this.x)');",
+      "const self = this; window.setInterval(function() { self.tick(); }, 1000);",
+      "let me = this; ({ get value() { return me._value; } });"
+    ],
+    "fixDescription": "Removes the variable declaration and replaces all references to the aliased variable with 'this'.",
+    "hazards": [
+      "If the alias variable is reassigned after its initial assignment, replacing references with 'this' will use the current 'this' value instead of the captured value, changing behavior.",
+      "If the alias variable is used in a nested function that is not an arrow function (e.g., regular function or eval), the replacement may break due to differing 'this' binding.",
+      "If the alias variable is used outside the scope where it was declared (e.g., returned or closed over in a way that escapes), removing the declaration causes a ReferenceError.",
+      "If the alias variable name conflicts with a variable in an inner scope, removing the outer declaration may cause inner references to resolve to a different variable.",
+      "If the alias variable is used in a dynamic context like 'with' or indirect eval, static replacement cannot accurately determine usage, leading to incorrect refactoring.",
+      "If the alias variable is declared with 'var' and hoisted, removing it may affect the temporal dead zone or hoisting behavior in ways that change execution if referenced before declaration.",
+      "If the alias variable is part of a comma-separated declaration (e.g., 'const self = this, other = expr;'), the fix may incorrectly remove the entire declaration or mishandle the separator.",
+      "If the alias variable is used in a type annotation or JSDoc comment (e.g., '/** @type {Any} */ const self = this;'), removing the declaration may strip useful type information.",
+      "If the alias variable is used in a destructuring pattern or default parameter, the simple replacement fails to account for complex binding structures.",
+      "If the alias variable is referenced in a string literal (e.g., for code generation or logging), textual replacement is not performed, leading to mismatches between code and strings."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0378212,
+  "summary": {
+    "programs": 15,
+    "invalid": 0,
+    "fired": 9,
+    "fixed": 9,
+    "fix-changes-behavior": 1,
+    "disputed": 4
+  },
+  "reports": [
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "function test() {\n  console.log(typeof _this);\n  var _this = this;\n}\ntry {\n  console.log(test.call({value: 'ok'}));\n} catch (e) {\n}\n",
+      "lines": {
+        "before": 10,
+        "after": 8
+      },
+      "reportPath": "runs/2026-10-17T20-08-24-819Z-hi5g-biome-complexity_noUselessThisAlias/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/1633",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule removed the variable declaration `var _this = this` and replaced the read of `_this` with `this`, but the read occurs before the declaration in the original code. In the original, `typeof _this` evaluates to 'undefined' due to hoisting; after the fix, `typeof this` evaluates to the bound `this` value ('object'), changing the program's output. The documentation only mentions arrow functions, yet the fix was applied to a regular function where `this` is not lexically inherited, making the rewrite unsound for this construct.",
+        "docsQuote": "Arrow functions inherits this from their enclosing scope; this makes this aliasing useless in this situation.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noUselessThisAlias fix",
+          "complexity noUselessThisAlias alias usage",
+          "typeof undefined variable reference",
+          "test call context binding"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 noDuplicateTestHooks: false positive on a local function named `before` called twice in a test",
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.15\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           windows\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 The fix of noUselessThisAlias adds an extra semicolon when removing the alias definition · Issue #1633 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1633",
+            "snippet": "Issue body actions\n\n### Environment information\n\n```\ntrue unset unset\"xterm-256color\" \" \"\"v20.9.0\" \" \" \"node\" \" \" unset unset\n```\n\n### Rule name\n\nnoUselessThisAlias\n\n### Playground link\n\nThe playground which demonstrates the issue.\n\n### Expected result\n\nNo extra semicolon.  \n The issue can be observ"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code · Issue #11351 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "snippet": "- #​11969 `865cd30` Thanks @​AlbinoGeek! - Fixed #​11962: `noUnknownTypeSelector` no longer reports view transition names inside view transition pseudo-elements, such as `page` in `::view-transition-group(page)`.\n   - #​11914 `06ff47b` Thanks @​dyc3! - Fixed #​11897: the safe fix for `noUselessStrin"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUselessTernary double space in quick fix · Issue #11092 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "snippet": "added a commit that references this issue on Jul 27, 2026\n\n   fix(lint): remove double space in noUselessTernary quick fix ([biomejs…](\n\n   c4c9fb8\n7. ematipico\n\n   closed this as completedin #11105on Jul 28, 2026\n8. OIRNOIR\n\n   added 2 commits that reference this issue on Aug 4, 2026 [...] ## Issue"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 lint/nursery/noUselessUndefined fix is unsafe for functions with union return types · Issue #6906 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6906",
+            "snippet": "Copy link\n\nCopy link\n\nClosed as not planned\n\nBug\n\nClosed as not planned\n\n💅 lint/nursery/noUselessUndefined fix is unsafe for functions with union return types#6906\n\nBug\n\nCopy link\n\nLabels\n\nS-Needs triageStatus: this issue needs to be triagedStatus: this issue needs to be triaged\n\n## Description\n\n@r"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `noThisInStatic` safe fix is still not safe in more complex scenarios · Issue #10278 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/10278",
+            "snippet": "```\n   - #​11435 `7754894` Thanks @​levrik! - Fixed: Variables and imports used as custom Vue directives are no longer reported as unused.\n   For example:\n   ```vue [...] ```\n   - #​11435 `7754894` Thanks @​levrik! - Fixed: Variables and imports used as custom Vue directives are no longer reported a"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUselessEscapeInString escapes wrongly by default as safe fix in css · Issue #8274 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8274",
+            "snippet": "### Rule name\n\nnoUselessEscapeInString\n\n### Playground link\n\n### Expected result\n\nhe changes  \n content: \"\\E107\";  \n to  \n content: \"E107\";  \n but this is a needed unicode key in my css file adressing a specific character in my icon font\n\n### Code of Conduct\n\n I agree to follow Biome's Code of Condu"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `noThisInStatic` safe fix is not safe · Issue #10011 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "snippet": "#prop = 123;\n    constructor() {\n    console.log(this.#prop);\n    }\n    }\n    ```\n    - #​10141 `46a77d0` Thanks @​minseong0324! - Improved `noUnnecessaryConditions` to detect conditions that are always truthy because they check built-in global class instances such as `Date`, `Map`, `Set`, `WeakMap`"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noUnusedImports - fix breaks code · Issue #3383 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3383",
+            "snippet": "anyone who is interested is welcome to tackle this). [...] I agree to follow Biome's Code of Conduct\n\nReactions are currently unavailable\n\n## Activity\n\n1. ### Sec-antcommentedon Jul 8, 2024\n\n   @Sec-ant\n\n   Sec-ant\n\n   on Jul 8, 2024\n\n   Contributor\n\n   More actions\n\n   We were tracking this in #157"
+          },
+          {
+            "source": "github",
+            "title": "💅 noDuplicateTestHooks should consider `context` blocks (Cypress and Mocha code) as well as `describe`",
+            "url": "https://github.com/biomejs/biome/issues/3602",
+            "state": "closed",
+            "snippet": "### Environment information\r\n\r\n```bash\r\nCLI:\r\n  Version:                      1.8.3\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             x86_64\r\n  OS:                           windows\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                 "
+          },
+          {
+            "source": "github",
+            "title": "incorrect detection of unused imports",
+            "url": "https://github.com/biomejs/biome/issues/4449",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\r\n  Version:                      1.9.4\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             aarch64\r\n  OS:                           macos\r\n\r\nEnvironment:\r\n  BIOME_LOG_PATH:               unset\r\n  BIOME_LOG_PREFIX_NAME:        "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 False positive `lint/nursery/noUnknownPseudoElement` with `::view-transition-new(<pt-name-selector>)` · Issue #5998 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/5998",
+            "snippet": "complexity/noUselessLoneBlockStatements complexity/noUselessRename complexity/noUselessStringRaw complexity/noUselessSwitchCase complexity/noUselessTernary complexity/noUselessThisAlias complexity/noUselessTypeConstraint complexity/noUselessUndefinedInitialization complexity/noWith complexity/useArr"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biome not skipping excluded, generated, file in Monorepo configuration · Issue #7372 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7372",
+            "snippet": "complexity/noUselessEmptyExport complexity/noUselessEscapeInRegex complexity/noUselessFragments complexity/noUselessLabel complexity/noUselessLoneBlockStatements complexity/noUselessRename complexity/noUselessStringRaw complexity/noUselessSwitchCase complexity/noUselessTernary complexity/noUselessTh"
+          },
+          {
+            "source": "tavily",
+            "title": "One does not simply enable just one lint rule · Issue #1768 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1768",
+            "snippet": "\"noUselessThisAlias\": \"off\",\n\"noUselessTypeConstraint\": \"off\",\n\"noVoid\": \"off\",\n\"noWith\": \"off\",\n\"useArrowFunction\": \"off\",\n\"useFlatMap\": \"error\", // this one is enabled\n\"useLiteralKeys\": \"off\",\n\"useOptionalChain\": \"off\",\n\"useSimpleNumberKeys\": \"off\",\n\"useSimplifiedLogicExpression\": \"off\"\n}\n}` [...]"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `lint/complexity/noForEach` should not throw on `Effect.forEach` (or be configurable) · Issue #3351 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3351",
+            "snippet": "None yet\n\nNo branches or pull requests\n\n## Issue actions\n\nYou can’t perform that action at this time. [...] added\n\n    S-Good first issueStatus: Good for newcomersStatus: Good for newcomers\n\n    S-Help-wantedStatus: you're familiar with the code base and want to help the projectStatus: you're famili"
+          },
+          {
+            "source": "github",
+            "title": "💅 useOptionalChain causes crashes when applied to global variables",
+            "url": "https://github.com/biomejs/biome/issues/7517",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.2.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "github",
+            "title": "noImportCycles doesn't ignore types",
+            "url": "https://github.com/biomejs/biome/issues/6799",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.1.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          },
+          {
+            "source": "tavily",
+            "title": "💅noDelete suggest assigning undefined instead of delete for process.env vars · Issue #4093 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/4093",
+            "snippet": "Reacted by Naoki Ikeguchi and Kareem Daggash\n15. added a commit that references this issue on Apr 1, 2026\n\n    fix: noDelete should not suggest undefined assignment for process.env\n\n    This issue will close once commit 6167d26 is merged into the 'main' branch.\n    6167d26\n16. ematipico\n\n    closed "
+          },
+          {
+            "source": "github",
+            "title": "📎 Embedded language formatting",
+            "url": "https://github.com/biomejs/biome/issues/3334",
+            "state": "closed",
+            "snippet": "## Preface\r\n\r\nSome popular libraries allow code snippets in other languages to be embedded within JavaScript code. Users want to format these embedded code snippets within JavaScript to enhance the development experience.\r\n\r\n## Design\r\n\r\nSimply put, the idea is to extract the code snippets from temp"
+          },
+          {
+            "source": "github",
+            "title": "☂️ Prettier code challenge hub",
+            "url": "https://github.com/biomejs/biome/issues/720",
+            "state": "closed",
+            "snippet": "### Description\r\n\r\n>[!IMPORTANT]\r\n> Please read the [final compatibility report](https://github.com/biomejs/biome/blob/main/crates/biome_js_formatter/report-challenge.md).\r\n\r\n> [!WARNING]  \r\n> We are preparing the submission to the challenge. If you are currently working on a fix, please submit a Pu"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12231",
+            "relation": "unrelated",
+            "why": "different rule (noDuplicateTestHooks) and different construct (test hook function)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and different construct (CSS property ordering)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and different construct (Sass variable declarations)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "different rule (useSortedProperties) and different construct (nested CSS rules)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and different construct (overloaded call with undefined default)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule (noSkippedTests) and different construct (test skipping)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "different rule (unused private method detection) and different construct (private method usage)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "different rule (React StrictMode component detection) and different construct (React component export)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and different construct (callback overload)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "different rule (useAnchorContent) and different construct (PascalCase component allowance)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1633",
+            "relation": "related",
+            "why": "same rule (noUselessThisAlias) but different defect (extra semicolon vs behavior change from hoisting)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule (useSimplifiedLogicExpression) and different construct (logic expression simplification)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule (noUselessTernary) and different construct (ternary expression)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6906",
+            "relation": "unrelated",
+            "why": "different rule (noUselessUndefined) and different construct (union return types)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10278",
+            "relation": "unrelated",
+            "why": "different rule (noThisInStatic) and different construct (static method this usage)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8274",
+            "relation": "unrelated",
+            "why": "different rule (noUselessEscapeInString) and different construct (CSS escape sequences)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "relation": "unrelated",
+            "why": "different rule (noThisInStatic) and different construct (static method this usage)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3383",
+            "relation": "unrelated",
+            "why": "different rule (noUnusedImports) and different construct (import usage detection)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3602",
+            "relation": "unrelated",
+            "why": "different rule (noDuplicateTestHooks) and different construct (test hook context blocks)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4449",
+            "relation": "unrelated",
+            "why": "different rule (unused imports detection) and different construct (import detection)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/5998",
+            "relation": "unrelated",
+            "why": "different rule (noUnknownPseudoElement) and different construct (CSS pseudo-elements)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7372",
+            "relation": "unrelated",
+            "why": "different rule (monorepo file exclusion) and different construct (file exclusion logic)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1768",
+            "relation": "unrelated",
+            "why": "different rule (configuration) and different construct (lint rule enabling)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3351",
+            "relation": "unrelated",
+            "why": "different rule (noForEach) and different construct (forEach method detection)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7517",
+            "relation": "unrelated",
+            "why": "different rule (useOptionalChain) and different construct (optional chaining on globals)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6799",
+            "relation": "unrelated",
+            "why": "different rule (noImportCycles) and different construct (import cycle detection)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4093",
+            "relation": "unrelated",
+            "why": "different rule (noDelete) and different construct (process.env assignment)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3334",
+            "relation": "unrelated",
+            "why": "different rule (embedded language formatting) and different construct (code snippet formatting)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/720",
+            "relation": "unrelated",
+            "why": "different rule (Prettier compatibility) and different construct (formatter challenge)"
+          }
+        ],
+        "cost": 0.008024
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:25:51.361401561 -0400\n+++ fixed.js\t2026-10-22 13:25:53.421435635 -0400\n@@ -1,6 +1,5 @@\n function test() {\n-  console.log(typeof _this);\n-  var _this = this;\n+  console.log(typeof this);\n }\n try {\n   console.log(test.call({value: 'ok'}));\n",
+        "observed": "stdout before:\nundefined\nundefined\nstdout after:\nobject\nundefined",
+        "before": {
+          "stdout": "undefined\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "object\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "function test() {\n  console.log(typeof this);\n}\ntry {\n  console.log(test.call({value: 'ok'}));\n} catch (e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=complexity/noUselessThisAlias --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original code logs typeof _this before declaring var _this; due to hoisting, _this exists but is uninitialized (undefined), so typeof yields \"undefined\". After fixing, typeof this refers to the function’s this value directly. When called via .call({value:'ok'}), this becomes the passed object, so typeof returns \"object\". The second log remains undefined because test returns nothing. Thus the change alters behavior by moving the reference before the declaration, changing what _this denotes.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Dynamic context via indirect eval",
+      "hazard": "If the alias variable is used in a dynamic context like 'with' or indirect eval, static replacement cannot accurately determine usage, leading to incorrect refactoring.",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: that is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: that is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:33.184245752 -0400\n+++ fixed.js\t2026-10-17 16:08:33.474234810 -0400\n@@ -1,4 +1,4 @@\n-let that = this;\n+\n const obj = { x: 1, y: 2 };\n (() => {\n   'use strict';\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Regex with global flag and lastIndex mutation",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot set properties of undefined (setting 'lastMatch')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot set properties of undefined (setting 'lastMatch')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:33.642228472 -0400\n+++ fixed.js\t2026-10-17 16:08:33.896218888 -0400\n@@ -1,8 +1,8 @@\n-let self = this;\n-self.lastMatch = '';\n+\n+this.lastMatch = '';\n const str = 'a1b2';\n [...str].forEach(() => {\n   const match = /\\d/g.exec(str);\n-  self.lastMatch += match ? match[0] : '_';\n+  this.lastMatch += match ? match[0] : '_';\n });\n-console.log(self.lastMatch);\n+console.log(this.lastMatch);\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Comments on removed declaration",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:34.057212818 -0400\n+++ fixed.js\t2026-10-17 16:08:34.335202352 -0400\n@@ -1,4 +1,3 @@\n-// important: capture this\n-let me = this;\n+\n // used in handler\n-[1,2].forEach(() => console.log(me));\n+[1,2].forEach(() => console.log(this));\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Escaped alias causing ReferenceError",
+      "hazard": "If the alias variable is used outside the scope where it was declared (e.g., returned or closed over in a way that escapes), removing the declaration causes a ReferenceError.",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:34.512195688 -0400\n+++ fixed.js\t2026-10-17 16:08:34.780185598 -0400\n@@ -1,6 +1,5 @@\n function outer() {\n-  var self = this;\n-  return () => self;\n+  return () => this;\n }\n const f = outer.call({x:1});\n try {\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Alias in destructuring parameter",
+      "hazard": "If the alias variable is used in a destructuring pattern or default parameter, the simple replacement fails to account for complex binding structures.",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "{ value: 42 }\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p007",
+      "title": "Var hoisting and TDZ interaction",
+      "hazard": "If the alias variable is declared with 'var' and hoisted, removing it may affect the temporal dead zone or hoisting behavior in ways that change execution if referenced before declaration.",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\nok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nundefined\nok\nstdout after:\nobject\nok"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "object\nok\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:35.139172094 -0400\n+++ fixed.js\t2026-10-17 16:08:35.417161650 -0400\n@@ -1,7 +1,6 @@\n function test() {\n-  console.log(typeof _this);\n-  var _this = this;\n-  return _this.value;\n+  console.log(typeof this);\n+  return this.value;\n }\n try {\n   console.log(test.call({value: 'ok'}));\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Sparse array with holes and lastIndex-like access",
+      "hazard": "sparse arrays, holes, Array(n) vs [n], array-likes",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot set properties of undefined (setting 'data')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot set properties of undefined (setting 'data')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:35.576155676 -0400\n+++ fixed.js\t2026-10-17 16:08:35.832146059 -0400\n@@ -1,4 +1,4 @@\n-let self = this;\n-self.data = [10, , 30];\n-const result = Array.from({length: 3}, (_, i) => self.data[i] ?? -1);\n+\n+this.data = [10, , 30];\n+const result = Array.from({length: 3}, (_, i) => this.data[i] ?? -1);\n console.log(result.join(','));\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Inner scope variable conflict",
+      "hazard": "If the alias variable name conflicts with a variable in an inner scope, removing the outer declaration may cause inner references to resolve to a different variable.",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:39.410012256 -0400\n+++ fixed.js\t2026-10-17 16:08:39.687001939 -0400\n@@ -1,8 +1,7 @@\n const self = 42;\n function outer() {\n-  const self = this;\n   return () => {\n-    console.log(self);\n+    console.log(this);\n   };\n }\n outer()(100);\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "__proto__ keys and prototype access",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Type annotation/JSDoc comment stripping",
+      "hazard": "If the alias variable is used in a type annotation or JSDoc comment (e.g., '/** @type {Any} */ const self = this;'), removing the declaration may strip useful type information.",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "Var hoisting and re-declaration in loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Getter/setter/Object.defineProperty side effects",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Comments attached to removed/moved code",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:40.853958542 -0400\n+++ fixed.js\t2026-10-17 16:08:41.130948257 -0400\n@@ -1,4 +1,3 @@\n-// important note\n-const self = this;\n+\n // another comment\n-(() => console.log(self))();\n+(() => console.log(this))();\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Nested non-arrow function usage",
+      "hazard": "If the alias variable is used in a nested function that is not an arrow function (e.g., regular function or eval), the replacement may break due to differing 'this' binding.",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "10\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Function declarations inside blocks/switch/labeled",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "complexity/noUselessThisAlias",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "complexity/noUselessThisAlias",
+            "severity": "info",
+            "message": "This aliasing of this is unnecessary.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:08:41.554932533 -0400\n+++ fixed.js\t2026-10-17 16:08:41.792923707 -0400\n@@ -1,6 +1,5 @@\n switch (1) {\n   case 1:\n-    const self = this;\n-    (() => self)();\n+    (() => this)();\n     break;\n }\n"
+      }
+    }
+  ]
+}

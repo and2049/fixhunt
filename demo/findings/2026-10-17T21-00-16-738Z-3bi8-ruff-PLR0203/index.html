@@ -1,0 +1,319 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLR0203 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLR0203 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-00-16-738Z-3bi8-ruff-PLR0203 · fix labelled <b>unknown</b> · 16 programs, 11 fired, 11 fixed, 0 oracle-backed finding(s) · model cost $0.0038</p>
+<div class="card"><b>Rule analysis</b><p>Flags assignments where a function defined earlier in the same class body is reassigned via `staticmethod(func)` as a method replacement.</p><p class="mut">Fix: Replace the assignment `name = staticmethod(name)` with the decorator `@staticmethod` placed directly above the function definition of `name`, preserving the function&#39;s name, parameters, body, and decorators, and removing the reassignment line.</p><details><summary>11 hazards</summary><ul><li>If the function name is used in an annotation within its own body (e.g., `def f(x: f) -&gt; int:`), moving the decorator above may cause a NameError because `f` is not yet defined at annotation evaluation time.</li><li>If the function defines a nested function that references the outer function&#39;s name via closure (e.g., `def f(): def g(): return f`), the rewrite breaks the closure because the original function object is replaced by a staticmethod wrapper before the nested function is defined.</li><li>If the function is referenced in a default argument of a later-defined function in the same class body (e.g., `def f(): pass
+def g(x=f): pass`), the rewrite changes when the staticmethod wrapper is applied, potentially altering the value captured in the default if the wrapper has side effects (though it doesn&#39;t, the timing of binding changes relative to other class body statements).</li><li>If the assignment line carries a comment (e.g., `f = staticmethod(f)  # workaround`), the rewrite drops that comment entirely, as the fix only preserves comments attached to the function definition.</li><li>If the function is decorated with other decorators (e.g., `@property
+ def f(): pass
+ f = staticmethod(f)`), the rewrite incorrectly places `@staticmethod` above `@property`, reversing decorator order and changing semantics (property vs staticmethod).</li><li>If the function name is deleted after the assignment (e.g., `f = staticmethod(f); del f`), the rewrite leaves the function accessible via its original name, whereas the original code intended to remove it after wrapping.</li><li>If the function is aliased before reassignment (e.g., `orig = f; f = staticmethod(f)`), the rewrite does not update the alias `orig`, which remains bound to the unwrapped function, diverging from the original behavior where `orig` and `f` both pointed to the same unwrapped function before reassignment.</li><li>If the function definition contains a `yield` expression and is used in a generator expression within its own defaults (e.g., `def f(x=(yield 42)): pass; f = staticmethod(f)`), the rewrite changes the timing of when the staticmethod wrapper is applied relative to the first invocation, affecting generator state initialization.</li><li>If the class is defined inside a function or loop and the staticmethod assignment relies on the enclosing scope for nonlocal variables accessed in the function body, the rewrite is safe but may interact poorly with tools that expect the decorator form for static analysis.</li><li>If the function name is the same as a class variable or imported name in the class scope (e.g., `f = 1
+ def f(): pass
+ f = staticmethod(f)`), the rewrite may confuse linters or readers about which `f` is being decorated, though runtime behavior is preserved.</li><li>If the assignment uses a qualified name like `C.f = staticmethod(f)` inside the class body (invalid syntax but sometimes seen in generated code), the fix does not apply and the rule may not fire, but if it did, the rewrite would be incorrect.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Closure capture broken by premature staticmethod wrapping</td><td class="mut">If the function defines a nested function that references the outer function&#39;s name via cl</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Name shadowing confusion between class var and function</td><td class="mut">If the function name is the same as a class variable or imported name in the class scope (</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>File write with partial data and non-str input after staticmethod rewrite</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">invalid</span></td><td>Property descriptor side effects confused with staticmethod</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Walrus and late binding in comprehension capturing reassigned name</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Type annotation evaluated at runtime referencing reassigned function</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Exception in finally block after staticmethod rewrite</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Keyword-only args with default evaluated once, affected by reassignment timing</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Annotation self-reference causes NameError after fix</td><td class="mut">If the function name is used in an annotation within its own body (e.g., `def f(x: f) -&gt; i</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Default argument captures pre-wrapper function due to timing shift</td><td class="mut">If the function is referenced in a default argument of a later-defined function in the sam</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Context manager-like object with write but no close used in function body</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">invalid</span></td><td>Decorator order reversed when combining @property and staticmethod reassignment</td><td class="mut">If the function is decorated with other decorators (e.g., `@property
+ def f(): pass
+ f = s</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span></td><td>Qualified assignment C.f = staticmethod(f) not handled by fix</td><td class="mut">If the assignment uses a qualified name like `C.f = staticmethod(f)` inside the class body</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Nested function accesses nonlocal from enclosing function scope</td><td class="mut">If the class is defined inside a function or loop and the staticmethod assignment relies o</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Alias to function remains bound to original after reassignment</td><td class="mut">If the function is aliased before reassignment (e.g., `orig = f; f = staticmethod(f)`), th</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Function return value used in truthiness context after reassignment</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Closure capture broken by premature staticmethod wrapping</summary><pre>class C:
+    def f():
+        def g():
+            return f
+        return g
+    f = staticmethod(f)
+
+c = C()
+g = c.f()
+print(type(g()))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:30.979846091 -0400
++++ fixed.py	2026-10-17 17:00:31.379851074 -0400
+@@ -1,9 +1,9 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def f():
+         def g():
+             return f
+         return g
+<span class="del">-    f = staticmethod(f)</span>
+ 
+ c = C()
+ g = c.f()
+</pre></details><details id="r1-p002"><summary>r1-p002 — Name shadowing confusion between class var and function</summary><pre>class C:
+    f = 99
+    def f():
+        return &#39;function&#39;
+    f = staticmethod(f)
+
+print(C.f)
+print(C.f())
+</pre></details><details id="r1-p003"><summary>r1-p003 — File write with partial data and non-str input after staticmethod rewrite</summary><pre>class C:
+    def log(msg):
+        with open(&#39;test.txt&#39;, &#39;w&#39;) as fp:
+            fp.write(msg)  # expects str
+            fp.write(b&#39;\n&#39;)  # error: bytes not str
+    log = staticmethod(log)
+
+try:
+    C.log(&#39;hello&#39;)
+except Exception as e:
+    print(type(e).__name__, str(e))
+finally:
+    import os
+    if os.path.exists(&#39;test.txt&#39;):
+        os.remove(&#39;test.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:31.684854873 -0400
++++ fixed.py	2026-10-17 17:00:31.853856978 -0400
+@@ -1,9 +1,9 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def log(msg):
+         with open(&#39;test.txt&#39;, &#39;w&#39;) as fp:
+             fp.write(msg)  # expects str
+             fp.write(b&#39;\n&#39;)  # error: bytes not str
+<span class="del">-    log = staticmethod(log)</span>
+ 
+ try:
+     C.log(&#39;hello&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Property descriptor side effects confused with staticmethod</summary><pre>class C:
+    _val = 0
+    @property
+    def score(self):
+        C._val += 1
+        return C._val
+    score = staticmethod(score)  # rule triggers: replaces property with staticmethod
+
+c = C()
+try:
+    print(c.score)
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Walrus and late binding in comprehension capturing reassigned name</summary><pre>class C:
+    def make():
+        return [lambda: f for _ in range(1) if (f := lambda: 42) is not None]
+    make = staticmethod(make)
+
+funcs = C.make()
+print(funcs[0]())
+</pre></details><details id="r1-p006"><summary>r1-p006 — Type annotation evaluated at runtime referencing reassigned function</summary><pre>class C:
+    def f() -&gt; &#39;return_f()&#39;:
+        pass
+    def return_f():
+        return f
+    f = staticmethod(f)
+
+try:
+    C.f()
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:32.143860589 -0400
++++ fixed.py	2026-10-17 17:00:32.309862656 -0400
+@@ -1,9 +1,9 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def f() -&gt; &#39;return_f()&#39;:
+         pass
+     def return_f():
+         return f
+<span class="del">-    f = staticmethod(f)</span>
+ 
+ try:
+     C.f()
+</pre></details><details id="r1-p007"><summary>r1-p007 — Exception in finally block after staticmethod rewrite</summary><pre>class C:
+    def fails():
+        try:
+            raise ValueError(&#39;bad&#39;)
+        finally:
+            raise RuntimeError(&#39;worse&#39;)
+    fails = staticmethod(fails)
+
+try:
+    C.fails()
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:32.417864001 -0400
++++ fixed.py	2026-10-17 17:00:32.583866067 -0400
+@@ -1,10 +1,10 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def fails():
+         try:
+             raise ValueError(&#39;bad&#39;)
+         finally:
+             raise RuntimeError(&#39;worse&#39;)
+<span class="del">-    fails = staticmethod(fails)</span>
+ 
+ try:
+     C.fails()
+</pre></details><details id="r1-p008"><summary>r1-p008 — Keyword-only args with default evaluated once, affected by reassignment timing</summary><pre>class C:
+    default = []
+    def append_val(x, *, lst=default):
+        lst.append(x)
+        return lst
+    append_val = staticmethod(append_val)
+
+print(C.append_val(1))
+print(C.append_val(2))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:32.689867387 -0400
++++ fixed.py	2026-10-17 17:00:32.847869355 -0400
+@@ -1,9 +1,9 @@
+ class C:
+     default = []
+<span class="add">+    @staticmethod</span>
+     def append_val(x, *, lst=default):
+         lst.append(x)
+         return lst
+<span class="del">-    append_val = staticmethod(append_val)</span>
+ 
+ print(C.append_val(1))
+ print(C.append_val(2))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Annotation self-reference causes NameError after fix</summary><pre>class C:
+    def f(x: f) -&gt; int:
+        return x
+    f = staticmethod(f)
+try:
+    c = C()
+    print(c.f(1))
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:38.834943776 -0400
++++ fixed.py	2026-10-17 17:00:39.012945986 -0400
+@@ -1,7 +1,7 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def f(x: f) -&gt; int:
+         return x
+<span class="del">-    f = staticmethod(f)</span>
+ try:
+     c = C()
+     print(c.f(1))
+</pre></details><details id="r2-p002"><summary>r2-p002 — Default argument captures pre-wrapper function due to timing shift</summary><pre>class C:
+    def f():
+        return 9
+    def g(x=f):
+        return x()
+    f = staticmethod(f)
+print(C().g())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:39.119947314 -0400
++++ fixed.py	2026-10-17 17:00:39.556952737 -0400
+@@ -1,7 +1,7 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def f():
+         return 9
+     def g(x=f):
+         return x()
+<span class="del">-    f = staticmethod(f)</span>
+ print(C().g())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Context manager-like object with write but no close used in function body</summary><pre>class Writer:
+    def write(self, s):
+        print(s, end=&#39;&#39;)
+class C:
+    def log(msg):
+        w = Writer()
+        w.write(msg)
+    log = staticmethod(log)
+C.log(&#39;hello&#39;)
+print(&#39;done&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:39.777955479 -0400
++++ fixed.py	2026-10-17 17:00:39.946957576 -0400
+@@ -2,9 +2,9 @@
+     def write(self, s):
+         print(s, end=&#39;&#39;)
+ class C:
+<span class="add">+    @staticmethod</span>
+     def log(msg):
+         w = Writer()
+         w.write(msg)
+<span class="del">-    log = staticmethod(log)</span>
+ C.log(&#39;hello&#39;)
+ print(&#39;done&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Decorator order reversed when combining @property and staticmethod reassignment</summary><pre>class C:
+    @property
+    def f():
+        return 42
+    f = staticmethod(f)
+try:
+    print(C().f)
+except Exception as e:
+    print(type(e).__name__, str(e))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Qualified assignment C.f = staticmethod(f) not handled by fix</summary><pre>class C:
+    def f():
+        return 1
+    # This line is invalid syntax; we cannot execute it.
+    # Instead, we show that the rule does not trigger on valid code.
+    pass
+print(&#39;no trigger&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Nested function accesses nonlocal from enclosing function scope</summary><pre>def make_class():
+    x = 10
+    class C:
+        def get():
+            nonlocal x
+            return x
+        get = staticmethod(get)
+    return C
+C = make_class()
+print(C().get())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:40.264961521 -0400
++++ fixed.py	2026-10-17 17:00:40.429963567 -0400
+@@ -1,10 +1,10 @@
+ def make_class():
+     x = 10
+     class C:
+<span class="add">+        @staticmethod</span>
+         def get():
+             nonlocal x
+             return x
+<span class="del">-        get = staticmethod(get)</span>
+     return C
+ C = make_class()
+ print(C().get())
+</pre></details><details id="r2-p007"><summary>r2-p007 — Alias to function remains bound to original after reassignment</summary><pre>class C:
+    def f():
+        return &#39;original&#39;
+    orig = f
+    f = staticmethod(f)
+print(&#39;orig:&#39;, orig())
+print(&#39;f:&#39;, C().f())
+print(&#39;same?&#39;, orig is C.__dict__[&#39;f&#39;])
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:40.526964770 -0400
++++ fixed.py	2026-10-17 17:00:40.921969669 -0400
+@@ -1,8 +1,8 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def f():
+         return &#39;original&#39;
+     orig = f
+<span class="del">-    f = staticmethod(f)</span>
+ print(&#39;orig:&#39;, orig())
+ print(&#39;f:&#39;, C().f())
+ print(&#39;same?&#39;, orig is C.__dict__[&#39;f&#39;])
+</pre></details><details id="r2-p008"><summary>r2-p008 — Function return value used in truthiness context after reassignment</summary><pre>class C:
+    def f():
+        return []
+    f = staticmethod(f)
+result = C().f()
+if result:
+    print(&#39;truthy&#39;)
+else:
+    print(&#39;falsy&#39;)
+print(&#39;len:&#39;, len(result))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:00:41.132972286 -0400
++++ fixed.py	2026-10-17 17:00:41.299974356 -0400
+@@ -1,7 +1,7 @@
+ class C:
+<span class="add">+    @staticmethod</span>
+     def f():
+         return []
+<span class="del">-    f = staticmethod(f)</span>
+ result = C().f()
+ if result:
+     print(&#39;truthy&#39;)
+</pre></details></body></html>

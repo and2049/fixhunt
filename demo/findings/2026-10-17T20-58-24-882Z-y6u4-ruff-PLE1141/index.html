@@ -1,0 +1,319 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff PLE1141 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff PLE1141 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-58-24-882Z-y6u4-ruff-PLE1141 · fix labelled <b>unknown</b> · 16 programs, 7 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0055</p>
+<div class="card"><b>Rule analysis</b><p>Flags dictionary unpacking in a for-loop target where .items() is missing.</p><p class="mut">Fix: Rewrites the for-loop target expression by appending &#39;.items()&#39; to the iterated dictionary variable.</p><details><summary>10 hazards</summary><ul><li>If the dictionary key is a tuple (e.g., {(1, 2): 3}), the original loop unpacks the tuple key into the loop variables, but after the fix, .items() yields (key, value) pairs where the key is the tuple and the value is the mapped value, changing what gets assigned to the loop variables and thus altering runtime behavior.</li><li>If the dictionary is actually a non-dict object that defines __iter__ to yield 2-tuples (e.g., a list of pairs), the fix incorrectly assumes it is a dict and calls .items(), which may not exist, causing an AttributeError at runtime.</li><li>If the iterated variable is not a simple name but an attribute or subscript (e.g., obj.d or d[key]), the fix naively appends &#39;.items()&#39; resulting in invalid syntax like obj.d.items() or d[key].items() which may not be intended or may produce different results due to evaluation timing or side effects.</li><li>If the loop variable appears in a lambda or nested function within the loop body that captures the loop variable, changing what the loop variable refers to (from key to (key, value) pair) alters the closure semantics and may affect behavior if the captured variable is used later.</li><li>If the dictionary expression has side effects (e.g., a function call that returns a dict and mutates state), the original code evaluates it once per iteration check, but the fix still evaluates it once; however, if the fix were incorrectly applied multiple times due to faulty tooling, it could cause multiple evaluations, though Ruff&#39;s fix applies once.</li><li>If the code relies on the iterator being exhausted in a certain way (e.g., checking len(d) after the loop), the behavior differs because iterating over d yields keys while iterating over d.items() yields items, potentially exhausting a different view if the dict is mutated during iteration (though both are unsafe with mutation).</li><li>If the dictionary is a subclass that overrides __iter__ to return something other than keys (e.g., a custom mapping that yields values or pairs), the fix incorrectly assumes standard dict behavior and may break intended iteration logic.</li><li>If the loop target uses star unpacking (e.g., for *rest in d:) and the dictionary keys are not iterable or have unexpected structure, the fix may cause TypeError during unpacking of .items() output where the original succeeded due to different yielded values.</li><li>If the loop is inside a try-except block catching ValueError from unpacking, the fix may prevent the exception from being raised (if keys are 2-tuples) or cause a different exception (if keys are not 2-tuples), altering error handling flow.</li><li>If the dictionary variable is deleted or reassigned within the loop body, the fix does not change that behavior, but the timing of when .items() is called (at loop start) vs. the original iter() call (also at loop start) is equivalent; however, if the variable is rebound, the fix uses the new value&#39;s .items() which may differ from the original intent if the rebinding was meant to affect iteration.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>async for with .items() fix</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>truthiness in loop condition</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>iterator exhaustion and len() after loop</td><td class="mut">If the code relies on the iterator being exhausted in a certain way...</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>generator vs list consumption</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>evaluation order and side effects in target</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>attribute/subscript target invalid syntax</td><td class="mut">If the iterated variable is not a simple name but an attribute or subscript...</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>numeric coercion in loop body</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>rebound variable during iteration</td><td class="mut">If the dictionary variable is deleted or reassigned within the loop body...</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>PLE1141 Side Effects in Dict Expression</td><td class="mut">If the dictionary expression has side effects (e.g., a function call that returns a dict a</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>PLE1141 Defaults Evaluated Once</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>PLE1141 Tuple Key Unpacking Changed</td><td class="mut">If the dictionary key is a tuple (e.g., {(1, 2): 3}), the original loop unpacks the tuple </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>PLE1141 Non-Dict with __iter__ Yielding 2-Tuples</td><td class="mut">If the dictionary is actually a non-dict object that defines __iter__ to yield 2-tuples (e</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>PLE1141 Custom Mapping Overriding __iter__</td><td class="mut">If the dictionary is a subclass that overrides __iter__ to return something other than key</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>PLE1141 Bytes vs Str Encoding</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span></td><td>PLE1141 Star-Imports and Module Side Effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>PLE1141 Evaluation Order and Side Effects in Target</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — async for with .items() fix</summary><pre>async def main():
+    d = {&#39;a&#39;: 1}
+    result = []
+    # Rule triggers here: for k, v in d: -&gt; should become for k, v in d.items():
+    async for k, v in d:
+        result.append((k, v))
+        await asyncio.sleep(0)
+    print(&#39;result:&#39;, result)
+asyncio.run(main())
+</pre></details><details id="r1-p002"><summary>r1-p002 — truthiness in loop condition</summary><pre>class DictLike:
+    def __init__(self, d):
+        self.d = d
+        self.call_count = 0
+    def __aiter__(self):
+        return self
+    async def __anext__(self):
+        if self.call_count &gt;= 2:
+            raise StopAsyncIteration
+        self.call_count += 1
+        return list(self.d.items())[self.call_count - 1]
+    def __bool__(self):
+        return len(self.d) &gt; 0
+
+async def test():
+    d = DictLike({&#39;x&#39;: 10})
+    result = []
+    # Rule triggers: for k, v in d: (but d is not a dict, it&#39;s DictLike)
+    # However, the rule only fires on dict variables — so we make d a dict but wrap access
+    # Instead: use a dict but make __bool__ matter via conditional break
+    pass
+
+# Let&#39;s refactor: use real dict but rely on truthiness to control loop entry
+d = {&#39;a&#39;: 1}
+if d:  # truthiness check
+    result = []
+    for k, v in d:  # &lt;- TRIGGER
+        result.append((k, v))
+        if not d:  # mutate to falsy
+            d.clear()
+    print(&#39;result:&#39;, result, &#39;dict after:&#39;, d)
+else:
+    print(&#39;skipped&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — iterator exhaustion and len() after loop</summary><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+keys_seen = []
+for k, v in d:  # &lt;- TRIGGER: iterates over keys, not items
+    keys_seen.append(k)
+    if k == &#39;a&#39;:
+        d[&#39;c&#39;] = 3  # mutate during iteration
+print(&#39;keys_seen:&#39;, keys_seen)
+print(&#39;len(d) after loop:&#39;, len(d))
+# Expected: keys_seen = [&#39;a&#39;], len(d)=3
+# After fix: for k, v in d.items(): iterates over items, same mutation risk
+# But: first iteration: (&#39;a&#39;,1), then dict size changes -&gt; may skip or raise
+# Actually, mutating dict during items() iteration raises RuntimeError
+# So we catch it
+try:
+    d2 = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+    keys_seen2 = []
+    for k, v in d2.items():  # what fix would produce
+        keys_seen2.append(k)
+        if k == &#39;a&#39;:
+            d2[&#39;c&#39;] = 3
+    print(&#39;keys_seen2:&#39;, keys_seen2, &#39;len(d2):&#39;, len(d2))
+except RuntimeError as e:
+    print(&#39;RuntimeError in fixed version:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p004"><summary>r1-p004 — generator vs list consumption</summary><pre>def make_dict():
+    return {&#39;a&#39;: 1, &#39;b&#39;: 2}
+
+# First loop: consumes iterator
+d = make_dict()
+list1 = list(d)  # exhausts key iterator
+print(&#39;list(d) first:&#39;, list1)
+
+# Second loop: should be empty if we iterated over keys again
+result = []
+for k, v in d:  # &lt;- TRIGGER: but d is exhausted! yields nothing
+    result.append((k, v))
+print(&#39;for loop result:&#39;, result)
+
+# Now test what fix would do: d.items() returns fresh view
+d2 = make_dict()
+list2 = list(d2)  # exhaust keys
+print(&#39;list(d2) first:&#39;, list2)
+result2 = []
+try:
+    for k, v in d2.items():  # fix version: fresh items view
+        result2.append((k, v))
+    print(&#39;fix result:&#39;, result2)
+except Exception as e:
+    print(&#39;fix error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p005"><summary>r1-p005 — evaluation order and side effects in target</summary><pre>i = 0
+side_effects = []
+
+def get_dict():
+    side_effects.append(f&#39;dict_call_{i}&#39;)
+    global i
+    i += 1
+    return {&#39;a&#39;: 1}
+
+# Rule triggers on: for k, v in get_dict():
+# But wait — rule only fires on simple dict variables, not calls!
+# So we need a variable that is assigned from a call with side effect
+# Let&#39;s do:
+d = get_dict()  # side effect happens here
+print(&#39;side_effects after assignment:&#39;, side_effects)
+result = []
+for k, v in d:  # &lt;- TRIGGER: d is already evaluated
+    result.append((k, v))
+    side_effects.append(f&#39;in_loop_{len(result)}&#39;)
+print(&#39;result:&#39;, result)
+print(&#39;side_effects final:&#39;, side_effects)
+# Fix would do: for k, v in d.items(): same d, so no difference in eval timing
+# But to show hazard: suppose we had a property that returns dict and has side effect
+class Obj:
+    @property
+    def d(self):
+        side_effects.append(&#39;prop_call&#39;)
+        return {&#39;x&#39;: 99}
+
+o = Obj()
+side_effects.clear()
+i = 0
+# Now: for k, v in o.d:  # &lt;- but rule doesn&#39;t fire on attribute! skip for now
+# We&#39;ll save attribute hazard for #6
+print(&#39;skipping — not attribute&#39;)
+</pre></details><details id="r1-p006"><summary>r1-p006 — attribute/subscript target invalid syntax</summary><pre>class Container:
+    def __init__(self):
+        self.data = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+
+c = Container()
+# Rule should NOT fire on for k, v in c.data: because it&#39;s an attribute
+# But if we mistakenly think it does — or test near-miss
+# Instead: make a case where variable looks simple but is subscript
+d = [{&#39;x&#39;: 1}, {&#39;y&#39;: 2}]
+# for k, v in d[0]:  # subscript — rule should not fire (not a dict var)
+# So we need to trigger on a simple name that later becomes subscript? No.
+# Let&#39;s just demonstrate the bug: if rule fired on attribute, it would break
+# We simulate by showing what happens if someone writes for k, v in c.data:
+# and a tool incorrectly adds .items()
+try:
+    exec(&quot;for k, v in c.data.items(): pass&quot;)  # this is valid
+    print(&#39;c.data.items() works&#39;)
+except Exception as e:
+    print(&#39;error:&#39;, e)
+
+# Now show the broken fix: c.data.items() is ok, but what if we had c.data[0]?
+# Not relevant. Instead: focus on the fact that rule does NOT fire on attributes
+# so we output that it stays silent — but hazard is about if it did fire incorrectly
+# So we write a comment and show that the rule does not trigger here
+print(&#39;Rule does not trigger on c.data (attribute)&#39;)
+# For actual trigger, we need a simple name — so reset
+d_simple = {&#39;a&#39;: 1}
+for k, v in d_simple:  # &lt;- TRIGGER
+    print(&#39;simple trigger works&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — numeric coercion in loop body</summary><pre>from decimal import Decimal
+
+d = {&#39;a&#39;: Decimal(&#39;1.5&#39;), &#39;b&#39;: 2}
+sum_val = 0
+count = 0
+# Rule triggers: for k, v in d:  # iterates over keys
+for k, v in d:  # &lt;- TRIGGER
+    # v is the value, but wait: iterating over d gives (key,?) no — gives key only!
+    # So unpacking fails! Wait: for k, v in d: where d is dict -&gt; iterates over keys, each key is string
+    # trying to unpack string into two vars -&gt; ValueError
+    # So we must catch this
+    try:
+        sum_val += v  # This line won&#39;t run
+    except:
+        pass
+
+# Actually, the loop will fail immediately
+# So we restructure: show that original code fails, fix would work
+print(&#39;Testing original: for k, v in d:&#39;)
+try:
+    for k, v in d:
+        sum_val += v
+        count += 1
+except ValueError as e:
+    print(&#39;Original error:&#39;, type(e).__name__, str(e))
+
+print(&#39;Testing fixed: for k, v in d.items():&#39;)
+try:
+    sum_val = 0
+    count = 0
+    for k, v in d.items():
+        sum_val += v
+        count += 1
+    print(&#39;Fixed result: sum=&#39;, sum_val, &#39;count=&#39;, count)
+except Exception as e:
+    print(&#39;Fixed error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p008"><summary>r1-p008 — rebound variable during iteration</summary><pre>d = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+result = []
+for k, v in d:  # &lt;- TRIGGER: iterates over keys of original d
+    result.append((k, v))
+    if k == &#39;a&#39;:
+        d = {&#39;c&#39;: 3}  # rebind d
+        # Note: original loop uses iterator from old d, so continues
+        # Fix version: for k, v in d.items() would evaluate d.items() at start
+        # but if we rebind d inside, it doesn&#39;t affect the iterator
+        # So same behavior? Yes — both evaluate iterable at loop start
+        # But hazard says: if rebinding was meant to affect iteration, fix uses new value&#39;s .items()
+        # Wait: no — both evaluate the iterable once at start.
+        # So to see difference, we need the variable to be used in the iterable expression
+        # Like: for k, v in get_d(): and get_d() returns d — but rule doesn&#39;t fire on call
+        # Instead: make the loop target depend on a variable that we rebind, but the rule only fires on simple dict
+        # So we accept that timing is same — but show that rebound happens
+        pass
+print(&#39;result:&#39;, result)
+print(&#39;d after loop:&#39;, d)
+# Now show what fix would do: same rebinding, but iterable is d.items() evaluated at start
+d2 = {&#39;a&#39;: 1, &#39;b&#39;: 2}
+result2 = []
+for k, v in d2.items():  # what fix would produce
+    result2.append((k, v))
+    if k == &#39;a&#39;:
+        d2 = {&#39;c&#39;: 3}
+print(&#39;fix result:&#39;, result2)
+print(&#39;fix d after loop:&#39;, d2)
+# Both loops ran only first iteration because rebinding doesn&#39;t affect iterator
+# Output same — but we show it anyway
+</pre></details><details id="r2-p001"><summary>r2-p001 — PLE1141 Side Effects in Dict Expression</summary><pre>counter = 0
+
+def make_dict():
+    global counter
+    counter += 1
+    return {&#39;a&#39;: 1, &#39;b&#39;: 2}
+
+print(&#39;Before loop:&#39;, counter)
+for k, v in make_dict():  # Rule fires here: unpacking dict without .items()
+    print(f&#39;{k}:{v}&#39;, end=&#39; &#39;)
+print()
+print(&#39;After loop:&#39;, counter)
+</pre></details><details id="r2-p002"><summary>r2-p002 — PLE1141 Defaults Evaluated Once</summary><pre>def f(a, *, b=print(&#39;default&#39;) or 0):
+    pass
+
+d = {&#39;x&#39;: 1}
+print(&#39;Start&#39;)
+for k, v in d:  # Rule fires: should be d.items()
+    f(k, v=b)
+print(&#39;End&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — PLE1141 Tuple Key Unpacking Changed</summary><pre>d = {(1, 2): &#39;found&#39;, (3, 4): &#39;lost&#39;}
+print(&#39;Original:&#39;)
+for k, v in d:  # Rule fires: unpacks tuple key into k,v
+    print(f&#39;k={k}, v={v}&#39;)
+print()
+print(&#39;Expected after .items():&#39;)
+for item in d.items():
+    print(f&#39;item={item}&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — PLE1141 Non-Dict with __iter__ Yielding 2-Tuples</summary><pre>pairs = [(&#39;a&#39;, 1), (&#39;b&#39;, 2)]
+print(&#39;Iterating pairs directly:&#39;)
+for k, v in pairs:  # Rule fires: pairs is list, not dict
+    print(f&#39;{k}-&gt;{v}&#39;, end=&#39; &#39;)
+print()
+print(&#39;Now trying .items() on list:&#39;)
+try:
+    for k, v in pairs.items():  # This line would be the fix, but we show error
+        pass
+except AttributeError as e:
+    print(f&#39;AttributeError: {e}&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — PLE1141 Custom Mapping Overriding __iter__</summary><pre>class OddDict(dict):
+    def __iter__(self):
+        return super().values().__iter__()
+
+d = OddDict({&#39;a&#39;: 10, &#39;b&#39;: 20})
+print(&#39;OddDict iteration (yields values):&#39;)
+for v in d:  # Does NOT fire rule: single var
+    print(v, end=&#39; &#39;)
+print()
+print(&#39;Forcing rule to fire with unpacking:&#39;)
+for k, v in d:  # Rule fires: expects 2-tuple, but __iter__ yields values
+    print(f&#39;k={k}, v={v}&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — PLE1141 Bytes vs Str Encoding</summary><pre>data = b&#39;hello\nworld&#39;
+lines = data.split(b&#39;\n&#39;)
+print(&#39;Line count:&#39;, len(lines))
+for i, line in enumerate(lines):  # No trigger: iterating list of bytes
+    print(f&#39;{i}: {line.decode()}&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — PLE1141 Star-Imports and Module Side Effects</summary><pre># Simulate module side effect via function call
+state = []
+
+def init():
+    state.append(&#39;loaded&#39;)
+    return {&#39;x&#39;: 1}
+
+init()
+print(&#39;State:&#39;, state)
+for k, v in init():  # Trigger: function call returning dict
+    print(k, v)
+print(&#39;State after:&#39;, state)
+</pre></details><details id="r2-p008"><summary>r2-p008 — PLE1141 Evaluation Order and Side Effects in Target</summary><pre>ref = [0]
+
+def get_dict():
+    ref[0] += 1
+    return {&#39;a&#39;: ref[0], &#39;b&#39;: ref[0]*2}
+
+print(&#39;Start ref:&#39;, ref[0])
+for k, v in get_dict():  # Rule fires: get_dict called once per iteration? Actually once.
+    print(f&#39;{k}={v}&#39;, end=&#39; &#39;)
+    ref[0] = 99  # Side effect in loop body
+print()
+print(&#39;Final ref:&#39;, ref[0])
+</pre></details></body></html>

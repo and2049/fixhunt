@@ -1,0 +1,2267 @@
+{
+  "runId": "2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "style/useNumberNamespace",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: useNumberNamespace\n- Fix: safe\n- Default severity: info\n- Available from version: 1.5.0\n- Diagnostic category: lint/style/useNumberNamespace\n\n\nDescription\n\n Use the `Number` properties instead of global ones.\n\n _ES2015_ moved some globals into the `Number` properties for consistency.\n\n The rule doesn't report the globals `isFinite` and `isNaN` because they have a slightly different behavior to their corresponding `Number`'s properties `Number.isFinite` and `Number.isNaN`.\n You can use the dedicated rules [noGlobalIsFinite](https://biomejs.dev/linter/rules/no-global-is-finite/) and  [noGlobalIsNan](https://biomejs.dev/linter/rules/no-global-is-nan/) to enforce the use of `Number.isFinite` and `Number.isNaN`.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n parseInt(\"1\"); // true\n ```\n\n ```js,expect_diagnostic\n parseFloat(\"1.1\"); // true\n ```\n\n ```js,expect_diagnostic\n NaN; // true\n ```\n\n ```js,expect_diagnostic\n Infinity; // true\n ```\n\n ```js,expect_diagnostic\n -Infinity; // true\n ```\n\nValid\n\n ```js\n Number.parseInt(\"1\"); // false\n ```\n\n ```js\n Number.parseFloat(\"1.1\"); // false\n ```\n\n ```js\n Number.NaN; // false\n ```\n\n ```js\n Number.POSITIVE_INFINITY; // false\n ```\n\n ```js\n Number.NEGATIVE_INFINITY; // false\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "The rule flags usage of global numeric functions and constants (`parseInt`, `parseFloat`, `NaN`, `Infinity`, `-Infinity`) without the `Number.` namespace prefix.",
+    "firingShapes": [
+      "parseInt(\"1\");",
+      "parseFloat(\"1.1\");",
+      "let x = NaN;",
+      "const y = Infinity;",
+      "var z = -Infinity;",
+      "return parseInt(s);",
+      "if (x === NaN)",
+      "while (y < Infinity)"
+    ],
+    "silentShapes": [
+      "Number.parseInt(\"1\");",
+      "Number.NaN;",
+      "Math.PI;",
+      "window.parseInt(\"1\");",
+      "Object.hasOwnProperty.call(obj, \"prop\")"
+    ],
+    "fixDescription": "Replace the global identifier with its equivalent property on the `Number` object (e.g., `parseInt` → `Number.parseInt`, `NaN` → `Number.NaN`, `Infinity` → `Number.POSITIVE_INFINITY`, `-Infinity` → `Number.NEGATIVE_INFINITY`).",
+    "hazards": [
+      "Rewriting `parseInt` as `Number.parseInt` changes behavior if a local variable named `Number` exists in scope, causing a ReferenceError or accessing the wrong object.",
+      "If `Number` is reassigned (e.g., `let Number = 42;`), the fix will reference the reassigned value instead of the built-in Number constructor, altering semantics.",
+      "In strict mode, if `Number` is not declared, the fix assumes it refers to the global Number constructor, but if a with-block shadows Number, the lookup may resolve incorrectly.",
+      "The fix removes any comments attached to the original token (e.g., `parseInt/*foo*/(\"1\");` becomes `Number.parseInt(\"1\");` with the comment lost).",
+      "When used in new expressions like `new parseInt()`, rewriting to `new Number.parseInt()` is invalid syntax because `Number.parseInt` is not a constructor, causing a TypeError at runtime.",
+      "If the code relies on the global `parseInt` being accessed via the global object (e.g., in a sandbox where `globalThis.parseInt` is mocked), replacing it with `Number.parseInt` bypasses the mock and uses the real built-in.",
+      "In environments where `Number` is not defined (e.g., some old or minimal JS environments), the fix would throw a ReferenceError where the original code worked.",
+      "If `Infinity` is used as a property name (e.g., `obj.Infinity`), the fix would incorrectly rewrite it to `obj.Number.POSITIVE_INFINITY`, which is a different property and likely undefined.",
+      "When `-Infinity` appears in a template literal (e.g., \"-Infinity\"), the fix does not apply because it’s a string, but if mistakenly applied, it would corrupt the string literal.",
+      "If the code depends on the global `NaN` being identical to `window.NaN` in a browser context, and `Number.NaN` is used instead, it remains equivalent in value but may break identity checks in realms with multiple global contexts (e.g., iframes).",
+      "In eval() or Function constructor contexts, the rewritten code may be parsed in a different lexical scope, causing `Number` to resolve differently than the original global lookup."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0853589,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 14,
+    "fixed": 14,
+    "fix-changes-behavior": 5,
+    "disputed": 2
+  },
+  "reports": [
+    {
+      "programId": "r1-p002",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "let Number = { parseInt: s => s + 'reassigned' };\nconsole.log(parseInt('1'));\n",
+      "lines": {
+        "before": 3,
+        "after": 2
+      },
+      "reportPath": "runs/2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace/reports/r1-p002.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/1228",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3578",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/2075",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "medium",
+        "why": "The rule rewrites the global `parseInt` call to `Number.parseInt`, but the program declares a local variable named `Number` that shadows the global namespace. The documentation assumes the global `Number` object, so the fix changes the function being called and alters the program's output.",
+        "docsQuote": "Use the `Number` properties instead of global ones.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useNumberNamespace fix",
+          "style/useNumberNamespace global shadowing",
+          "parseInt call without namespace qualifier",
+          "Number variable reassignment affecting built-in"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 noLeakedRender false positive when using useState<boolean>",
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.0\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 Performance regression in noFloatingPromises in 2.5.6+ (and is still an issue in 2.5.11)",
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nnpx biome rage --linter\nCLI:\n  Version:                      2.5.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  B"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Implement `lint/useNumberNamespace` - `eslint-unicorn/prefer-number-properties` · Issue #1228 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "snippet": "### Description\n\nImplement prefer-number-properties\n\nBiome already provides noGlovalIsFinite and noGlobalIsNan because the global and Number-namespaced functions have not the same semantic. Thus, the new rule should ignore these two functions.\n\nThe new rule could provide a safe fix. [...] ## Metadat"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Astro JSX-like syntax can't be parsed without errors · Issue #7871 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "snippet": "\" \"fix\" \"safe\" \" \" \"style\" \"useConst\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"useNumberNamespace\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"html\" \"experimentalFullSupportEnabled\" true \"css\" \"parser\" \"tailwindDirectives\" true \"formatter\" \"javascript\" \"formatter\" \"semicolons\" \"asNeeded\" \" \" \"trailingCommas\" \""
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "npx biome lint --skip=style/useImportType --skip=complexity/useArrowFunction --skip=complexity/noUselessFragments --skip=style/useNodejsImportProtocol --skip=style/useAsConstAssertion --skip=style/useSelfClosingElements --skip=suspicious/noArrayIndexKey --skip=correctness/useJsxKeyInIterable --skip="
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Incorrect error message when type `Infinity` · Issue #3578 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "snippet": "```\ntrue unset unset unset\"v20.15.0\" \" \" \"node\" \" \" unset false false false true true true false true false\n```\n\n### Rule name\n\nlint/style/useNumberNamespace\n\n### Playground link\n\n### Expected result\n\nThe error message is `Use Number.Infinity instead of the equivalent global.`. But Number.Infinity d"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biome replaces isNan by Number.isNan, which is a different function · Issue #2075 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "snippet": "Copy link\n\nClosed as not planned\n\nClosed as not planned\n\n💅 Biome replaces isNan by Number.isNan, which is a different function#2075\n\nCopy link\n\n## Description\n\n@yann-combarnous\n\nyann-combarnous\n\nopened on Mar 13, 2024\n\nIssue body actions\n\n### Environment information\n\n```\nWhen applying fixes, I noti"
+          },
+          {
+            "source": "tavily",
+            "title": "fix(linter): detect substr/substring calls in variable declarations by vasilytrofimchuk · Pull Request #9282 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/9282",
+            "snippet": "Contributor\n\nThere was a problem hiding this comment.\n\n### Choose a reason for hiding this comment\n\nThe reason will be displayed to describe this comment to others. Learn more.\n\nthese don't emit any diagnostics. your fix didn't do anything. I would expect to see an updated snapshot with new diagnost"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 noSubstr not detecting errors on variable usage · Issue #9279 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9279",
+            "snippet": "S-Bug-confirmedStatus: report has been confirmed as a valid bugStatus: report has been confirmed as a valid bug\n\n   on Feb 28, 2026\n4. github-actions\n\n   removed\n\n   S-Needs triageStatus: this issue needs to be triagedStatus: this issue needs to be triaged\n\n   on Feb 28, 2026\n5. vasilytrofimchuk\n\n  "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biomo throw useExhaustiveDependencies error when variable outside the component is used in useMemo · Issue #1781 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1781",
+            "snippet": "L-JavaScriptLanguage: JavaScript and super languagesLanguage: JavaScript and super languages\n\n   S-Bug-confirmedStatus: report has been confirmed as a valid bugStatus: report has been confirmed as a valid bug\n\n   on Feb 14, 2024\n2. arendjr\n\n   closed this as completedin #1966on Mar 5, 2024\n\nSign up "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 React TypeScript issue on `The React variable is undeclared` · Issue #3998 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3998",
+            "snippet": "More actions\n\n   Have you suggestions to solve the issue? We could add metadata to globals (if it is a type, a writable flobal, ...).\n\n   Also, we have a `jsxRuntime` configuration. i am unsure if we could leverage it in some way.\n4. ### arendjrcommentedon Sep 19, 2024\n\n   @arendjr\n\n   arendjr\n\n   o"
+          },
+          {
+            "source": "tavily",
+            "title": "challenge(formatter): handle let variable name in non-strict mode by Conaclos · Pull Request #814 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/814",
+            "snippet": "## Navigation Menu\n\n## Repository navigation\n\n# challenge(formatter): handle let variable name in non-strict mode - #814\n\n## challenge(formatter): handle let variable name in non-strict mode#814 Conaclos merged 1 commit into mainbiomejs/biome:mainfrom conaclos/challenge/handle-let-var-namebiomejs/bi"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 @theme At-Rule with Tailwind CSS internal variable (--*: initial;) causes multiple CSS parser errors · Issue #7843 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7843",
+            "snippet": "# 🐛 @theme At-Rule with Tailwind CSS internal variable (--\\: initial;) causes multiple CSS parser errors #7843\n\nCopy link\n\nCopy link\n\nClosed\n\nBug\n\n#7842\n\n#7852\n\nClosed\n\n🐛 @theme At-Rule with Tailwind CSS internal variable (--\\: initial;) causes multiple CSS parser errors#7843\n\nBug\n\n#7842\n\n#7852\n\nC"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and different construct (overloaded call with undefined default)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule (noSkippedTests) and different construct (conditional skip fix suggestion)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "unrelated",
+            "why": "different rule (useLiteralKeys) and different construct (__proto__ in computed member expression)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "different rule (extension performance) and different construct (large files)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "relation": "unrelated",
+            "why": "different rule (noLeakedRender) and different construct (useState<boolean>)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule (noUnusedImports) and different construct (uses inside comments)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule (useSimplifiedLogicExpression) and different construct (logic expression simplification)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule (useExplicitLengthCheck) and different construct (length check)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "relation": "unrelated",
+            "why": "different rule (noFloatingPromises) and different construct (performance regression)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule (noUselessTernary) and different construct (double space in quick fix)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but different construct (implementation request vs shadowing bug)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "relation": "unrelated",
+            "why": "different rule (parser) and different construct (Astro JSX-like syntax)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "different rule (CLI --write/--only) and different construct (fix application)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but different construct (Infinity error message vs parseInt shadowing)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but different construct (isNaN semantic difference vs parseInt shadowing)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/9282",
+            "relation": "unrelated",
+            "why": "different rule (noSubstr) and different construct (substr/substring detection)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9279",
+            "relation": "unrelated",
+            "why": "different rule (noSubstr) and different construct (variable usage detection)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1781",
+            "relation": "unrelated",
+            "why": "different rule (useExhaustiveDependencies) and different construct (React useMemo)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3998",
+            "relation": "unrelated",
+            "why": "different rule (React variable undeclared) and different construct (TypeScript/JSX)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/814",
+            "relation": "unrelated",
+            "why": "different rule (formatter) and different construct (let variable name in non-strict mode)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7843",
+            "relation": "unrelated",
+            "why": "different rule (CSS parser) and different construct (Tailwind CSS at-rule)"
+          }
+        ],
+        "cost": 0.006069199999999999
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:35:26.136021210 -0400\n+++ fixed.js\t2026-10-22 13:35:28.122054720 -0400\n@@ -1,2 +1,2 @@\n let Number = { parseInt: s => s + 'reassigned' };\n-console.log(parseInt('1'));\n+console.log(Number.parseInt('1'));\n",
+        "observed": "stdout before:\n1\nstdout after:\n1reassigned",
+        "before": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "1reassigned\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "let Number = { parseInt: s => s + 'reassigned' };\nconsole.log(Number.parseInt('1'));\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/useNumberNamespace --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original code calls the global `parseInt` function, which converts `'1'` to the number `1`. After rewriting, it calls `Number.parseInt`, a method on the locally defined object that returns the string `'1reassigned'`. Since these are different functions with distinct behaviors, the change alters program output and is not semantics‑preserving.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "const g = Function('return this')();\ndefineProperty(g, 'Number', { value: undefined });\ntry {\n  console.log(parseInt('1'));\n} catch (e) {\n}\nfunction defineProperty(obj, name, desc) { Object.defineProperty(obj, name, desc); }\n",
+      "lines": {
+        "before": 9,
+        "after": 7
+      },
+      "reportPath": "runs/2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace/reports/r1-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/1228",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3578",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/2075",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "medium",
+        "why": "The rule rewrites global parseInt to Number.parseInt assuming the global Number object, but the program explicitly defines Number as undefined on the global object. This causes a runtime ReferenceError in the fixed code where the original succeeded, which is a semantic change not documented as intended.",
+        "docsQuote": "Use the `Number` properties instead of global ones.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useNumberNamespace fix",
+          "style/useNumberNamespace parseInt call",
+          "useNumberNamespace global Number methods",
+          "style useNumberNamespace built-in functions"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 noLeakedRender false positive when using useState<boolean>",
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.0\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 Performance regression in noFloatingPromises in 2.5.6+ (and is still an issue in 2.5.11)",
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nnpx biome rage --linter\nCLI:\n  Version:                      2.5.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  B"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Implement `lint/useNumberNamespace` - `eslint-unicorn/prefer-number-properties` · Issue #1228 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "snippet": "### Description\n\nImplement prefer-number-properties\n\nBiome already provides noGlovalIsFinite and noGlobalIsNan because the global and Number-namespaced functions have not the same semantic. Thus, the new rule should ignore these two functions.\n\nThe new rule could provide a safe fix. [...] ## Metadat"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Astro JSX-like syntax can't be parsed without errors · Issue #7871 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "snippet": "\" \"fix\" \"safe\" \" \" \"style\" \"useConst\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"useNumberNamespace\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"html\" \"experimentalFullSupportEnabled\" true \"css\" \"parser\" \"tailwindDirectives\" true \"formatter\" \"javascript\" \"formatter\" \"semicolons\" \"asNeeded\" \" \" \"trailingCommas\" \""
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "npx biome lint --skip=style/useImportType --skip=complexity/useArrowFunction --skip=complexity/noUselessFragments --skip=style/useNodejsImportProtocol --skip=style/useAsConstAssertion --skip=style/useSelfClosingElements --skip=suspicious/noArrayIndexKey --skip=correctness/useJsxKeyInIterable --skip="
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Incorrect error message when type `Infinity` · Issue #3578 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "snippet": "```\ntrue unset unset unset\"v20.15.0\" \" \" \"node\" \" \" unset false false false true true true false true false\n```\n\n### Rule name\n\nlint/style/useNumberNamespace\n\n### Playground link\n\n### Expected result\n\nThe error message is `Use Number.Infinity instead of the equivalent global.`. But Number.Infinity d"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biome replaces isNan by Number.isNan, which is a different function · Issue #2075 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "snippet": "Copy link\n\nClosed as not planned\n\nClosed as not planned\n\n💅 Biome replaces isNan by Number.isNan, which is a different function#2075\n\nCopy link\n\n## Description\n\n@yann-combarnous\n\nyann-combarnous\n\nopened on Mar 13, 2024\n\nIssue body actions\n\n### Environment information\n\n```\nWhen applying fixes, I noti"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 lineWidth doesn't wrap comments · Issue #7075 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7075",
+            "snippet": "true \"style\" \"noNonNullAssertion\" \"off\" \" \" \"noParameterAssign\" \"error\" \" \" \"useAsConstAssertion\" \"error\" \" \" \"useDefaultParameterLast\" \"error\" \" \" \"useEnumInitializers\" \"error\" \" \" \"useSelfClosingElements\" \"error\" \" \" \"useSingleVarDeclarator\" \"error\" \" \" \"noUnusedTemplateLiteral\" \"error\" \" \" \"useNu"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Formatter breaks dot notation in Svelte component names · Issue #9300 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9300",
+            "snippet": "\"clsx\" \" \" \"cva\" \" \" \"cn\" \" \" \"style\" \"noParameterAssign\" \"error\" \" \" \"useAsConstAssertion\" \"error\" \" \" \"useDefaultParameterLast\" \"error\" \" \" \"useEnumInitializers\" \"error\" \" \" \"useSelfClosingElements\" \"error\" \" \" \"useSingleVarDeclarator\" \"error\" \" \" \"noUnusedTemplateLiteral\" \"error\" \" \" \"useNumberNa"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `useNodejsImportProtocol` gets thrown although a npm package is installed with the same name  · Issue #3066 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3066",
+            "snippet": "Hi, sorry for the late reply. I found this behavior in a super old repo where I haven't been working on a lot, so I don't know the in's and out's of this code. In the codebase we're actually using it in the web (via import syntax). I didn't want to look into weird behavior differences between the no"
+          },
+          {
+            "source": "github",
+            "title": "🐛 Memory leak in `biome.exe`",
+            "url": "https://github.com/biomejs/biome/issues/6784",
+            "state": "closed",
+            "snippet": "### VS Code version\n\n1.202.0\n\n### Extension version\n\n3.1.0\n\n### Biome version\n\n2.1.0\n\n### Operating system\n\n- [x] Windows\n- [ ] macOS\n- [ ] Linux\n\n### Description\n\nFound performance issues on my PC, randomly checked task manager, and found `biome.exe` uses 23 GB of memory, and growing little by litt"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `2.3.14` introduces incorrect behavior to `useExhaustiveDeps` · Issue #8958 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8958",
+            "snippet": "This issue will close once commit c2fa48f is merged into the 'main' branch.\n    c2fa48f\n12. ### mdevilscommentedon Feb 9, 2026\n\n    @mdevils\n\n    mdevils\n\n    on Feb 9, 2026\n\n    Contributor\n\n    More actions\n\n    Thank you for providing all the information, @jakeleventhal @amruthpillai.\n\n    We've "
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `noFloatingPromises` inconsistent behavior in 2.5.8+ · Issue #11529 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11529",
+            "snippet": "`.\n   - #​11581 `f4e5ebb` Thanks @​dyc3! - Added the nursery rule `useModernMathApis`. The rule reports legacy mathematical patterns that have direct modern `Math` equivalents.\n   ```js\n   Math.sqrt(a \\ a + b \\ b);\n   ```\n   - #​11597 `a20f44a` Thanks @​Netail! - Added the nursery rule `noBunModules"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Unused imports when the import is used inside JSDoc syntax · Issue #4677 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/4677",
+            "snippet": "added\n\n   S-Needs triageStatus: this issue needs to be triagedStatus: this issue needs to be triaged\n\n   on Dec 2, 2024\n2. ### arendjrcommentedon Dec 2, 2024\n\n   @arendjr\n\n   arendjr\n\n   on Dec 2, 2024\n\n   Contributor\n\n   More actions\n\n   Thanks, this seems like a valid request.\n\n   Please be aware "
+          },
+          {
+            "source": "tavily",
+            "title": "2.0.0-beta.1 too agressive role",
+            "url": "https://github.com/biomejs/biome/issues/5446",
+            "snippet": "The 2.0.0-beta.1 version of this rule is too aggressive, it's removing roles from li elements. This is wrong, as the official W3C Tree View examples all have"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and different construct (overloaded call with undefined default)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule (noSkippedTests) about conditionally skipping fix suggestions"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "unrelated",
+            "why": "different rule (useLiteralKeys) about __proto__ in computed member expressions"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "performance issue with large files, not a rule fix defect"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "relation": "unrelated",
+            "why": "different rule (noLeakedRender) about useState<boolean> false positive"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule (noUnusedImports) about imports in comments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule (useSimplifiedLogicExpression) breaking code with safe fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule (useExplicitLengthCheck) false positive and broken fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "relation": "unrelated",
+            "why": "performance regression in noFloatingPromises, not a fix correctness issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule (noUselessTernary) about double space in quick fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but about implementing the rule, not a fix-changes-behavior defect on parseInt"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "relation": "unrelated",
+            "why": "parsing issue with Astro JSX-like syntax, not a fix defect"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "CLI bug where --write ignores --only, not a rule fix defect"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but about incorrect error message for Infinity, not parseInt fix changing behavior"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but about isNaN replacement being a different function, not parseInt"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7075",
+            "relation": "unrelated",
+            "why": "formatter issue with lineWidth not wrapping comments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9300",
+            "relation": "unrelated",
+            "why": "formatter breaking dot notation in Svelte component names"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3066",
+            "relation": "unrelated",
+            "why": "different rule (useNodejsImportProtocol) about npm package detection"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6784",
+            "relation": "unrelated",
+            "why": "memory leak in biome.exe, not a rule fix defect"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8958",
+            "relation": "unrelated",
+            "why": "different rule (useExhaustiveDeps) incorrect behavior"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11529",
+            "relation": "unrelated",
+            "why": "different rule (noFloatingPromises) inconsistent behavior"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4677",
+            "relation": "unrelated",
+            "why": "different rule (noUnusedImports) about JSDoc syntax imports"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/5446",
+            "relation": "unrelated",
+            "why": "different rule about aggressive role removal in 2.0.0-beta.1"
+          }
+        ],
+        "cost": 0.0065176
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:35:30.844100649 -0400\n+++ fixed.js\t2026-10-22 13:35:32.800133656 -0400\n@@ -1,7 +1,7 @@\n const g = Function('return this')();\n defineProperty(g, 'Number', { value: undefined });\n try {\n-  console.log(parseInt('1'));\n+  console.log(Number.parseInt('1'));\n } catch (e) {\n }\n function defineProperty(obj, name, desc) { Object.defineProperty(obj, name, desc); }\n",
+        "observed": "stdout before:\n1\nstdout after:\n",
+        "before": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "const g = Function('return this')();\ndefineProperty(g, 'Number', { value: undefined });\ntry {\n  console.log(Number.parseInt('1'));\n} catch (e) {\n}\nfunction defineProperty(obj, name, desc) { Object.defineProperty(obj, name, desc); }\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/useNumberNamespace --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original `parseInt` refers to the global function, which remains unaffected because `g.Number` is set on a separate object (`g`) that does not shadow the global `Number`. After rewriting to `Number.parseInt`, the call accesses the `parseInt` method on the global `Number` object, but since `g.Number` was set to `undefined` and `g` is the global object (via `Function('return this')()`), the global `Number` constructor is overridden with `undefined`, making `Number.parseInt` inaccessible and causing a TypeError that is caught, resulting in no output. Thus, the change alters which `Number` is accessed, breaking semantics.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p003",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "let Number = 42;\ntry {\n  console.log(typeof parseInt('1'));\n} catch (e) {\n}\n",
+      "lines": {
+        "before": 6,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace/reports/r2-p003.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/1228",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3578",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/2075",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "medium",
+        "why": "The rule rewrites global parseInt to Number.parseInt, but the program declares a local variable named Number that shadows the global Number object. After the fix, Number.parseInt attempts to access a property on the number 42, which is undefined, causing a TypeError that is caught silently, so nothing is printed. The documentation does not mention this shadowing scenario, and the construct (a local variable named Number) is legal and plausible.",
+        "docsQuote": "Use the `Number` properties instead of global ones.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useNumberNamespace fix",
+          "style useNumberNamespace global variable shadowing",
+          "style useNumberNamespace built-in method call rewrite",
+          "style useNumberNamespace typeof expression transformation"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 noLeakedRender false positive when using useState<boolean>",
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.0\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 Performance regression in noFloatingPromises in 2.5.6+ (and is still an issue in 2.5.11)",
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nnpx biome rage --linter\nCLI:\n  Version:                      2.5.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  B"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Implement `lint/useNumberNamespace` - `eslint-unicorn/prefer-number-properties` · Issue #1228 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "snippet": "### Description\n\nImplement prefer-number-properties\n\nBiome already provides noGlovalIsFinite and noGlobalIsNan because the global and Number-namespaced functions have not the same semantic. Thus, the new rule should ignore these two functions.\n\nThe new rule could provide a safe fix. [...] ## Metadat"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Astro JSX-like syntax can't be parsed without errors · Issue #7871 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "snippet": "\" \"fix\" \"safe\" \" \" \"style\" \"useConst\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"useNumberNamespace\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"html\" \"experimentalFullSupportEnabled\" true \"css\" \"parser\" \"tailwindDirectives\" true \"formatter\" \"javascript\" \"formatter\" \"semicolons\" \"asNeeded\" \" \" \"trailingCommas\" \""
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "npx biome lint --skip=style/useImportType --skip=complexity/useArrowFunction --skip=complexity/noUselessFragments --skip=style/useNodejsImportProtocol --skip=style/useAsConstAssertion --skip=style/useSelfClosingElements --skip=suspicious/noArrayIndexKey --skip=correctness/useJsxKeyInIterable --skip="
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Incorrect error message when type `Infinity` · Issue #3578 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "snippet": "```\ntrue unset unset unset\"v20.15.0\" \" \" \"node\" \" \" unset false false false true true true false true false\n```\n\n### Rule name\n\nlint/style/useNumberNamespace\n\n### Playground link\n\n### Expected result\n\nThe error message is `Use Number.Infinity instead of the equivalent global.`. But Number.Infinity d"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biome replaces isNan by Number.isNan, which is a different function · Issue #2075 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "snippet": "Copy link\n\nClosed as not planned\n\nClosed as not planned\n\n💅 Biome replaces isNan by Number.isNan, which is a different function#2075\n\nCopy link\n\n## Description\n\n@yann-combarnous\n\nyann-combarnous\n\nopened on Mar 13, 2024\n\nIssue body actions\n\n### Environment information\n\n```\nWhen applying fixes, I noti"
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 invalid value: string \"[object Object]\", expected relative URL without a base · Issue #6321 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/6321",
+            "snippet": "\"error\", \"noUselessElse\": \"error\", \"useAsConstAssertion\": \"error\", \"useDefaultParameterLast\": \"error\", \"useEnumInitializers\": \"error\", \"useNumberNamespace\": \"error\", \"useSelfClosingElements\": \"error\", \"useSingleVarDeclarator\": \"error\" }, \"suspicious\": { \"noConsole\": \"error\", \"noExplicitAny\": \"off\" }"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 useConsistentTypeDefinitions should ignore interfaces in global declarations · Issue #8449 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8449",
+            "snippet": "style/useExponentiationOperator style/useExportType style/useFilenamingConvention style/useForOf style/useFragmentSyntax style/useGraphqlNamingConvention style/useGroupedAccessorPairs style/useImportType style/useLiteralEnumMembers style/useNodeAssertStrict style/useNodejsImportProtocol style/useNum"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 useNamingConvention is a bit too aggressive · Issue #7575 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7575",
+            "snippet": "Ah! That's helpful. I was under the impression you had it on by default. I'll file and issue with ultracite and reference this one.\n\nSign up for free to join this conversation on GitHub. Already have an account? Sign in to comment\n\n## Metadata\n\n## Metadata\n\nNo one assigned\n\n### Labels\n\nS-Needs triag"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `2.3.14` introduces incorrect behavior to `useExhaustiveDeps` · Issue #8958 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/8958",
+            "snippet": "closed this as completedin #9017on Feb 10, 2026\n15. ### ematipicocommentedon Feb 10, 2026\n\n    @ematipico\n\n    ematipico\n\n    on Feb 10, 2026\n\n    Member\n\n    More actions\n\n    We'll ship a patch later this week\n\n    Reacted by Scoolnik and Fabien Deborde\n16. pull\n\n    added a commit that references"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `lint/correctness/noStringCaseMismatch` false positives · Issue #3134 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3134",
+            "snippet": "Copy link\n\nClosed\n\n#3156\n\nClosed\n\n💅 `lint/correctness/noStringCaseMismatch` false positives#3134\n\n#3156\n\nCopy link\n\nAssignees\n\nConaclos\n\nLabels\n\nA-LinterArea: linterArea: linterL-JavaScriptLanguage: JavaScript and super languagesLanguage: JavaScript and super languagesS-Bug-confirmedStatus: report "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `useNamingConvention` fix breaks code · Issue #4873 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/4873",
+            "snippet": "@Leptopoda\n\n   Leptopoda\n\n   on Jan 21, 2025\n\n   Author\n\n   More actions\n\n   The issue is not that I want to change the behavior of the lint it's about the lint advertising a safe fix but applying the fix in this case breaks our code.\n\n   This mens that the fix is not safe and should be fixed or mar"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Transform a function with generics to arrow function by biome linter will not safe. · Issue #3292 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3292",
+            "snippet": "Copy link\n\nCopy link\n\nClosed\n\nClosed\n\n💅 Transform a function with generics to arrow function by biome linter will not safe.#3292\n\n#3300 (+4)\n\nCopy link\n\nAssignees\n\nSec-ant\n\nLabels\n\nA-LinterArea: linterArea: linterL-JavaScriptLanguage: JavaScript and super languagesLanguage: JavaScript and super lan"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule noUnnecessaryConditions and Vue inject overload"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule noSkippedTests about conditional skip fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "unrelated",
+            "why": "different rule useLiteralKeys and __proto__ conflict"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "extension performance on large files"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "relation": "unrelated",
+            "why": "different rule noLeakedRender with useState<boolean>"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule noUnusedImports and comment usage"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule useSimplifiedLogicExpression safe fix break"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule useExplicitLengthCheck false positive"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "relation": "unrelated",
+            "why": "performance regression in noFloatingPromises"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule noUselessTernary double space fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "relation": "related",
+            "why": "same rule useNumberNamespace implementation tracking"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "relation": "unrelated",
+            "why": "Astro JSX parsing unrelated to Number namespace"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "--write applies fixes ignoring --only flag"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "relation": "related",
+            "why": "same rule useNumberNamespace but different construct Infinity property"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "relation": "related",
+            "why": "same rule useNumberNamespace but different construct isNaN function"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6321",
+            "relation": "unrelated",
+            "why": "invalid value error across multiple rules"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8449",
+            "relation": "unrelated",
+            "why": "different rule useConsistentTypeDefinitions interfaces"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7575",
+            "relation": "unrelated",
+            "why": "different rule useNamingConvention aggressiveness"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8958",
+            "relation": "unrelated",
+            "why": "different rule useExhaustiveDeps behavior regression"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3134",
+            "relation": "unrelated",
+            "why": "different rule noStringCaseMismatch false positives"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4873",
+            "relation": "unrelated",
+            "why": "different rule useNamingConvention fix breaks code"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3292",
+            "relation": "unrelated",
+            "why": "different rule arrow function generics transform"
+          }
+        ],
+        "cost": 0.0057827
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:35:37.193207789 -0400\n+++ fixed.js\t2026-10-22 13:35:39.157240934 -0400\n@@ -1,5 +1,5 @@\n let Number = 42;\n try {\n-  console.log(typeof parseInt('1'));\n+  console.log(typeof Number.parseInt('1'));\n } catch (e) {\n }\n",
+        "observed": "stdout before:\nnumber\nstdout after:\n",
+        "before": {
+          "stdout": "number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "let Number = 42;\ntry {\n  console.log(typeof Number.parseInt('1'));\n} catch (e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/useNumberNamespace --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original `parseInt` refers to the global function; rewriting it as `Number.parseInt` accesses a property on the local variable `Number`, which holds the number 42 and has no such method, causing `undefined` to be passed to `typeof`. Since `typeof undefined` yields `\"undefined\"` instead of `\"function\"`, the output changes from `\"number\"` to nothing, altering program behavior. This substitution is invalid because it assumes `Number` denotes the built‑in constructor, but the program shadows it with a numeric value.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p004",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "for (var i = 0; i < 2; i++) {\n  var Number = i;\n  console.log(typeof parseInt('1'));\n}\n",
+      "lines": {
+        "before": 4,
+        "after": 4
+      },
+      "reportPath": "runs/2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace/reports/r2-p004.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/1228",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3578",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/2075",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "medium",
+        "why": "The rule rewrites `parseInt` to `Number.parseInt` assuming `Number` refers to the global namespace, but the program declares a local variable `Number` that shadows it. After the fix, `Number.parseInt` attempts to access a property on the loop variable (a number), causing a TypeError. The documentation does not mention this shadowing scenario, so the fix is not safe for this construct.",
+        "docsQuote": "Use the `Number` properties instead of global ones.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useNumberNamespace fix",
+          "style/useNumberNamespace global variable shadowing",
+          "parseInt call reassignment to local Number",
+          "typeof check of built-in function after override"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 noLeakedRender false positive when using useState<boolean>",
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.0\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 Performance regression in noFloatingPromises in 2.5.6+ (and is still an issue in 2.5.11)",
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nnpx biome rage --linter\nCLI:\n  Version:                      2.5.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  B"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Implement `lint/useNumberNamespace` - `eslint-unicorn/prefer-number-properties` · Issue #1228 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "snippet": "### Description\n\nImplement prefer-number-properties\n\nBiome already provides noGlovalIsFinite and noGlobalIsNan because the global and Number-namespaced functions have not the same semantic. Thus, the new rule should ignore these two functions.\n\nThe new rule could provide a safe fix. [...] ## Metadat"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Astro JSX-like syntax can't be parsed without errors · Issue #7871 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "snippet": "\" \"fix\" \"safe\" \" \" \"style\" \"useConst\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"useNumberNamespace\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"html\" \"experimentalFullSupportEnabled\" true \"css\" \"parser\" \"tailwindDirectives\" true \"formatter\" \"javascript\" \"formatter\" \"semicolons\" \"asNeeded\" \" \" \"trailingCommas\" \""
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "npx biome lint --skip=style/useImportType --skip=complexity/useArrowFunction --skip=complexity/noUselessFragments --skip=style/useNodejsImportProtocol --skip=style/useAsConstAssertion --skip=style/useSelfClosingElements --skip=suspicious/noArrayIndexKey --skip=correctness/useJsxKeyInIterable --skip="
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Incorrect error message when type `Infinity` · Issue #3578 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "snippet": "```\ntrue unset unset unset\"v20.15.0\" \" \" \"node\" \" \" unset false false false true true true false true false\n```\n\n### Rule name\n\nlint/style/useNumberNamespace\n\n### Playground link\n\n### Expected result\n\nThe error message is `Use Number.Infinity instead of the equivalent global.`. But Number.Infinity d"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biome replaces isNan by Number.isNan, which is a different function · Issue #2075 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "snippet": "Copy link\n\nClosed as not planned\n\nClosed as not planned\n\n💅 Biome replaces isNan by Number.isNan, which is a different function#2075\n\nCopy link\n\n## Description\n\n@yann-combarnous\n\nyann-combarnous\n\nopened on Mar 13, 2024\n\nIssue body actions\n\n### Environment information\n\n```\nWhen applying fixes, I noti"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biome encountered an unexpected error when setting noExplicitAny=off in an override in CLI · Issue #1349 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1349",
+            "snippet": "I would like provide a playground reproduction but i don't found a way to define the config there.\n6. ### ematipicocommentedon Jan 16, 2024\n\n   @ematipico\n\n   ematipico\n\n   on Jan 16, 2024\n\n   Member\n\n   More actions\n\n   Use our Codesandbox template: \n7. ### bc-mcommentedon Jan 16, 2024\n\n   @bc-m\n\n "
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 LSP daemon initial scan never converges: AddedOrChanged(Index(InitialScan)) cascade re-indexes the same files forever at ~350% CPU · Issue #11520 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11520",
+            "snippet": "After overriding both to `\"off\"` — leaving zero `project`/`types`-domain rules enabled — the resolved scan falls back to `KnownFiles`, and on the very same tree that live-locked 6 out of 6 daemon spawns an hour earlier:\n\n    initial scan: ~3 CPU-seconds total (vs 10+ CPU-minutes and climbing forever"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `noUselessUndefined` safe fix removes `= undefined` parameter defaults, changing `arguments` and `length` · Issue #11934 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/11934",
+            "snippet": "Tool Use Disclaimer: Claude Code using Anthropic Opus 5.5 helped build the reproduction.\n\nReactions are currently unavailable\n\n## Activity\n\n1. dyc3\n\n   added the\n\n   Bug\n\n   issue type on Sep 24, 2026\n2. dyc3\n\n   added\n\n   A-LinterArea: linterArea: linter\n\n   L-JavaScriptLanguage: JavaScript and sup"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and construct (overloaded call with undefined default)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule (noSkippedTests) about conditional test skipping"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "unrelated",
+            "why": "different rule (useLiteralKeys) and construct (__proto__ in computed member)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "performance issue with large files, not a rule fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "relation": "unrelated",
+            "why": "different rule (noLeakedRender) and construct (useState<boolean>)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule (noUnusedImports) and construct (imports in comments)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule (useSimplifiedLogicExpression) and construct (logic expression simplification)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule (useExplicitLengthCheck) and construct (length check)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "relation": "unrelated",
+            "why": "performance regression in noFloatingPromises"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule (noUselessTernary) and construct (ternary spacing)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but tracking implementation, not this specific broken fix on shadowed Number"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "relation": "unrelated",
+            "why": "parser issue with Astro JSX syntax"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "CLI flag (--write/--only) behavior, not a rule fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but different construct (Infinity property vs parseInt method)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but different construct (isNaN function vs parseInt method)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1349",
+            "relation": "unrelated",
+            "why": "CLI config override issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11520",
+            "relation": "unrelated",
+            "why": "LSP daemon performance issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11934",
+            "relation": "unrelated",
+            "why": "different rule (noUselessUndefined) and construct (parameter defaults)"
+          }
+        ],
+        "cost": 0.0051409
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:35:42.934304679 -0400\n+++ fixed.js\t2026-10-22 13:35:45.079340882 -0400\n@@ -1,4 +1,4 @@\n for (var i = 0; i < 2; i++) {\n   var Number = i;\n-  console.log(typeof parseInt('1'));\n+  console.log(typeof Number.parseInt('1'));\n }\n",
+        "observed": "stdout before:\nnumber\nnumber\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: TypeError: Number.parseInt is not a function",
+        "before": {
+          "stdout": "number\nnumber\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "TypeError: Number.parseInt is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "fixed": "for (var i = 0; i < 2; i++) {\n  var Number = i;\n  console.log(typeof Number.parseInt('1'));\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/useNumberNamespace --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The variable declaration `var Number = i;` creates a local binding that shadows the global constructor `Number`. Inside the loop body, any reference to `Number` resolves to this local variable holding numeric values (`0` then `1`). Replacing `parseInt` with `Number.parseInt` attempts to access a method on those numbers, which do not possess such a property, causing a runtime type error whereas the original code correctly invoked the global `parseInt` function each iteration. This change alters observable behavior by introducing an exception where none existed before.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p008",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "{\n  const Number = { parseInt: () => 999 };\n  console.log(parseInt('1'));\n}\n",
+      "lines": {
+        "before": 4,
+        "after": 4
+      },
+      "reportPath": "runs/2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace/reports/r2-p008.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/1228",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/3578",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/2075",
+          "relation": "duplicate"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "medium",
+        "why": "The rule rewrites global parseInt to Number.parseInt assuming the global Number object, but the program declares a local const Number that shadows it. The documentation does not mention this shadowing case, so the fix changes behavior in plausible code where a variable named Number exists in scope.",
+        "docsQuote": "Use the `Number` properties instead of global ones.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "useNumberNamespace fix",
+          "style useNumberNamespace global parseInt",
+          "style useNumberNamespace shadowing Number",
+          "style useNumberNamespace local variable conflict"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "Extension chokes on large files",
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "state": "open",
+            "snippet": "### VS Code version\r\n\r\n1.93.1\r\n\r\n### Extension version\r\n\r\n2.3.0\r\n\r\n### Biome version\r\n\r\n1.8.3\r\n\r\n### Operating system\r\n\r\n- [X] Windows\r\n- [ ] macOS\r\n- [ ] Linux\r\n\r\n### Description\r\n\r\nFormatting takes forever, which pretty much makes extension non-responsive, i.e. it has a constant high processor usa"
+          },
+          {
+            "source": "github",
+            "title": "💅 noLeakedRender false positive when using useState<boolean>",
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.0\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `lint/correctness/noUnusedImports` does not consider uses inside comments that precede non-declaration statements (start/end of file, etc.)",
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.3.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:      "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSimplifiedLogicExpression` \"safe\" fix breaks code",
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useExplicitLengthCheck` false positive and broken fix",
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.8\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:           "
+          },
+          {
+            "source": "github",
+            "title": "💅 Performance regression in noFloatingPromises in 2.5.6+ (and is still an issue in 2.5.11)",
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nnpx biome rage --linter\nCLI:\n  Version:                      2.5.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  B"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUselessTernary double space in quick fix",
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.5\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:          "
+          },
+          {
+            "source": "tavily",
+            "title": "📎 Implement `lint/useNumberNamespace` - `eslint-unicorn/prefer-number-properties` · Issue #1228 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "snippet": "### Description\n\nImplement prefer-number-properties\n\nBiome already provides noGlovalIsFinite and noGlobalIsNan because the global and Number-namespaced functions have not the same semantic. Thus, the new rule should ignore these two functions.\n\nThe new rule could provide a safe fix. [...] ## Metadat"
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Astro JSX-like syntax can't be parsed without errors · Issue #7871 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "snippet": "\" \"fix\" \"safe\" \" \" \"style\" \"useConst\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"useNumberNamespace\" \"level\" \"warn\" \" \" \"fix\" \"safe\" \" \" \"html\" \"experimentalFullSupportEnabled\" true \"css\" \"parser\" \"tailwindDirectives\" true \"formatter\" \"javascript\" \"formatter\" \"semicolons\" \"asNeeded\" \" \" \"trailingCommas\" \""
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 `--write` applies fixes to all rules ignoring `--only` · Issue #3470 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "snippet": "npx biome lint --skip=style/useImportType --skip=complexity/useArrowFunction --skip=complexity/noUselessFragments --skip=style/useNodejsImportProtocol --skip=style/useAsConstAssertion --skip=style/useSelfClosingElements --skip=suspicious/noArrayIndexKey --skip=correctness/useJsxKeyInIterable --skip="
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Incorrect error message when type `Infinity` · Issue #3578 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "snippet": "```\ntrue unset unset unset\"v20.15.0\" \" \" \"node\" \" \" unset false false false true true true false true false\n```\n\n### Rule name\n\nlint/style/useNumberNamespace\n\n### Playground link\n\n### Expected result\n\nThe error message is `Use Number.Infinity instead of the equivalent global.`. But Number.Infinity d"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 Biome replaces isNan by Number.isNan, which is a different function · Issue #2075 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "snippet": "Copy link\n\nClosed as not planned\n\nClosed as not planned\n\n💅 Biome replaces isNan by Number.isNan, which is a different function#2075\n\nCopy link\n\n## Description\n\n@yann-combarnous\n\nyann-combarnous\n\nopened on Mar 13, 2024\n\nIssue body actions\n\n### Environment information\n\n```\nWhen applying fixes, I noti"
+          },
+          {
+            "source": "tavily",
+            "title": "biome migrate --write accesses the whole filesystem, takes minutes · Issue #7361 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7361",
+            "snippet": "{ \"recommended\": true, \"style\": { \"noNonNullAssertion\": \"off\", \"useConsistentArrayType\": { \"level\": \"error\", \"options\": { \"syntax\": \"generic\" } }, \"useLiteralEnumMembers\": \"error\", \"useNodejsImportProtocol\": \"error\", \"useAsConstAssertion\": \"error\", \"useEnumInitializers\": \"error\", \"useSelfClosingElem"
+          },
+          {
+            "source": "tavily",
+            "title": "unknownAtRules error for tailwind v4 · Issue #7223 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7223",
+            "snippet": "More actions\n\n    Take a look here: tailwindlabs/tailwindcss#5258 (comment)\n25. ### mssngrcommentedon Nov 11, 2025\n\n    @mssngr\n\n    mssngr\n\n    on Nov 11, 2025\n\n    More actions\n\n    EDIT: Looks like this is because I was using Tailwind v3, which wasn't supported in this fix.\n\n    I have biome 2.3."
+          },
+          {
+            "source": "tavily",
+            "title": "`Astro`: multiple new lint errrors from `v2.4.7` or newer · Issue #9589 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/9589",
+            "snippet": "changed the title ~~[-]`Astro`: multiple new lint errrors from`v2.4.7` or newer[/-]~~ [+]`Astro`: multiple new lint errrors from `v2.4.7` or newer[/+] on Mar 22, 2026\n5. ### tomkelcommentedon Mar 23, 2026\n\n   @tomkel\n\n   tomkel\n\n   on Mar 23, 2026\n\n   More actions\n\n   Yes, biome seems to now incorre"
+          },
+          {
+            "source": "tavily",
+            "title": "💅 @tailwind directive warns in Biome 2.3 even with `css.parser.tailwindDirectives` enabled · Issue #7899 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7899",
+            "snippet": "### Code of Conduct\n\n I agree to follow Biome's Code of Conduct\n\nReactions are currently unavailable\n\n## Activity\n\n1. delucis\n\n   added the\n\n   Bug\n\n   issue type on Oct 27, 2025\n2. delucis\n\n   added\n\n   S-Needs triageStatus: this issue needs to be triagedStatus: this issue needs to be triaged\n\n   o"
+          },
+          {
+            "source": "github",
+            "title": "💅 `nusery/noShadow` should not flag parameter names of function types",
+            "url": "https://github.com/biomejs/biome/issues/9482",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.7\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:   "
+          },
+          {
+            "source": "tavily",
+            "title": "💅 `nursery/noShadow` incorrectly flags Typescript constructor overload parameters in constructor implementation, class methods · Issue #7125 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7125",
+            "snippet": "To clarify, something like this should probably still error:\n\n```\nclass foo{constructor(a string); constructor(a number); constructor(a unknown){// shadows `a` in overload implementation parameter let a = 4;}}\n```\n\n, merely that THIS shouldn't:\n\n```\nclass foo{constructor(a string); constructor(a num"
+          },
+          {
+            "source": "tavily",
+            "title": "[Beta 2.0] False positive for lint/correctness/noUnusedImports",
+            "url": "https://github.com/biomejs/biome/issues/6144",
+            "snippet": "The import statement should not be reported as unused. This only happens for when the parameter is shadowing the import statement. Code of Conduct."
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "different rule (noUnnecessaryConditions) and construct (overloaded call with undefined default)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "different rule (noSkippedTests) about conditional skip of fix suggestion"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "unrelated",
+            "why": "different rule (useLiteralKeys) flagging __proto__ in computed member expression"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3860",
+            "relation": "unrelated",
+            "why": "performance issue with large files in VS Code extension"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10790",
+            "relation": "unrelated",
+            "why": "different rule (noLeakedRender) false positive with useState<boolean>"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8762",
+            "relation": "unrelated",
+            "why": "different rule (noUnusedImports) about imports in comments"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11351",
+            "relation": "unrelated",
+            "why": "different rule (useSimplifiedLogicExpression) safe fix breaking code"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11558",
+            "relation": "unrelated",
+            "why": "different rule (useExplicitLengthCheck) false positive and broken fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11534",
+            "relation": "unrelated",
+            "why": "performance regression in noFloatingPromises"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11092",
+            "relation": "unrelated",
+            "why": "different rule (noUselessTernary) double space in quick fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/1228",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but about implementing the rule, not a fix-changes-behavior defect"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7871",
+            "relation": "unrelated",
+            "why": "parsing issue with Astro JSX-like syntax"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3470",
+            "relation": "unrelated",
+            "why": "CLI flag (--write) applying fixes to all rules ignoring --only"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3578",
+            "relation": "related",
+            "why": "same rule (useNumberNamespace) but about incorrect error message for Infinity, not fix-changes-behavior on parseInt"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/2075",
+            "relation": "duplicate",
+            "why": "same rule (useNumberNamespace) and same defect class: fix replaces global isNaN/parseInt with Number.namespaced version which has different semantics when Number is shadowed"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7361",
+            "relation": "unrelated",
+            "why": "migrate --write filesystem performance issue"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7223",
+            "relation": "unrelated",
+            "why": "unknownAtRules error for Tailwind v4"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9589",
+            "relation": "unrelated",
+            "why": "multiple new lint errors from Astro in v2.4.7+"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7899",
+            "relation": "unrelated",
+            "why": "@tailwind directive warns even with css.parser.tailwindDirectives enabled"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9482",
+            "relation": "unrelated",
+            "why": "different rule (nursery/noShadow) about parameter names of function types"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7125",
+            "relation": "unrelated",
+            "why": "different rule (nursery/noShadow) about TypeScript constructor overload parameters"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6144",
+            "relation": "unrelated",
+            "why": "different rule (noUnusedImports) false positive with parameter shadowing import"
+          }
+        ],
+        "cost": 0.0061144
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:35:48.301395265 -0400\n+++ fixed.js\t2026-10-22 13:35:50.839438106 -0400\n@@ -1,4 +1,4 @@\n {\n   const Number = { parseInt: () => 999 };\n-  console.log(parseInt('1'));\n+  console.log(Number.parseInt('1'));\n }\n",
+        "observed": "stdout before:\n1\nstdout after:\n999",
+        "before": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "999\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "{\n  const Number = { parseInt: () => 999 };\n  console.log(Number.parseInt('1'));\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=style/useNumberNamespace --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original call `parseInt('1')` refers to the global built-in function because no local variable named `parseInt` exists in scope; it returns 1. After rewriting, `Number.parseInt('1')` accesses the property of the locally declared constant `Number`, which overrides the global `Number` constructor and defines `parseInt` to return 999, changing the output. The rewrite alters which function is invoked due to the local binding of `Number`.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Shadowed Number via with statement",
+      "hazard": "If `Number` is shadowed by a with-block, the fix resolves to the wrong object.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-17T21-04-15-156Z-qk6e-biome-style_useNumberNamespace/r1-p001/orig.js:3\nwith (obj) {\n^^^^\n\nSyntaxError: Strict mode code may not include a with statement\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r1-p002",
+      "title": "Reassigned Number variable",
+      "hazard": "If `Number` is reassigned, the fix uses the reassigned value instead of the built-in constructor.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n1\nstdout after:\n1reassigned"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1reassigned\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:25.492627017 -0400\n+++ fixed.js\t2026-10-17 17:04:25.766630125 -0400\n@@ -1,3 +1,3 @@\n \"use strict\";\n let Number = { parseInt: s => s + 'reassigned' };\n-console.log(parseInt('1'));\n+console.log(Number.parseInt('1'));\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Function declaration inside block scope",
+      "hazard": "The rule fires inside a block-scoped function; the fix may capture a different Number due to hoisting or TDZ-like effects.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:25.937632064 -0400\n+++ fixed.js\t2026-10-17 17:04:26.222635296 -0400\n@@ -1,7 +1,7 @@\n \"use strict\";\n {\n   function f() {\n-    return parseInt('1');\n+    return Number.parseInt('1');\n   }\n   console.log(f());\n }\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Temporal Dead Zone after hoisting simulation",
+      "hazard": "Simulates TDZ by declaring Number after use in a closure that captures the uninitialized binding.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:26.392637224 -0400\n+++ fixed.js\t2026-10-17 17:04:26.638640013 -0400\n@@ -1,7 +1,7 @@\n \"use strict\";\n (() => {\n   try {\n-    return parseInt('1');\n+    return Number.parseInt('1');\n   } catch (e) {\n     return e instanceof ReferenceError ? 'TDZ' : 'other';\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Order of evaluation with side effects",
+      "hazard": "The fix duplicates the argument expression due to macro-like expansion, causing side effects to run twice.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:26.787641703 -0400\n+++ fixed.js\t2026-10-17 17:04:27.061644809 -0400\n@@ -1,4 +1,4 @@\n \"use strict\";\n let i = 0;\n function next() { return ++i; }\n-console.log(parseInt(String(next())));\n+console.log(Number.parseInt(String(next())));\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Environment where Number is undefined",
+      "hazard": "In an environment without global Number, the fix throws ReferenceError while original works (if global parseInt exists).",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n1\nstdout after:\nTypeError: Cannot read properties of undefined (reading 'parseInt')"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: Cannot read properties of undefined (reading 'parseInt')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:27.232646748 -0400\n+++ fixed.js\t2026-10-17 17:04:27.500649785 -0400\n@@ -2,7 +2,7 @@\n const g = Function('return this')();\n defineProperty(g, 'Number', { value: undefined });\n try {\n-  console.log(parseInt('1'));\n+  console.log(Number.parseInt('1'));\n } catch (e) {\n   console.log(e.name + ': ' + e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Async/await interaction with rewritten expression",
+      "hazard": "The fix occurs inside an async function; await ordering may be affected if the expression has side effects.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:27.673651746 -0400\n+++ fixed.js\t2026-10-17 17:04:27.938654750 -0400\n@@ -2,7 +2,7 @@\n async function f() {\n   let x = 0;\n   const inc = () => ++x;\n-  const v = await Promise.resolve(parseInt(String(inc())));\n+  const v = await Promise.resolve(Number.parseInt(String(inc())));\n   return v + x;\n }\n f().then(console.log);\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Label/break/continue with finally and early return",
+      "hazard": "The fix is inside a loop with labeled break and finally; altered control flow changes how many times the body runs.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "0\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "0\nfinally\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:28.105656643 -0400\n+++ fixed.js\t2026-10-17 17:04:28.373659679 -0400\n@@ -3,7 +3,7 @@\n   for (let i = 0; i < 3; i++) {\n     if (i === 1) break outer;\n     try {\n-      console.log(parseInt(String(i)));\n+      console.log(Number.parseInt(String(i)));\n     } finally {\n       console.log('finally');\n     }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "__proto__ assignment affects Number resolution",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:33.572718544 -0400\n+++ fixed.js\t2026-10-17 17:04:33.853721723 -0400\n@@ -1,3 +1,3 @@\n const obj = {};\n obj.__proto__ = { Number: { parseInt: (s) => 'shadow' } };\n-console.log(parseInt('123')); // Should be 'shadow', fixed becomes 123\n+console.log(Number.parseInt('123')); // Should be 'shadow', fixed becomes 123\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Comment preservation during replacement",
+      "hazard": "comments attached to the removed or moved code",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:34.023723646 -0400\n+++ fixed.js\t2026-10-17 17:04:34.290726665 -0400\n@@ -1,3 +1,3 @@\n /* comment before */\n-let x = parseInt(/* arg comment */ '42'); /* comment after */\n+let x = Number.parseInt(/* arg comment */ '42'); /* comment after */\n console.log(x);\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Reassigned Number variable breaks fix",
+      "hazard": "If `Number` is reassigned (e.g., `let Number = 42;`), the fix will reference the reassigned value instead of the built-in Number constructor, altering semantics.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nnumber\nstdout after:\nTypeError: Number.parseInt is not a function"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: Number.parseInt is not a function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:34.452728497 -0400\n+++ fixed.js\t2026-10-17 17:04:34.725731585 -0400\n@@ -1,6 +1,6 @@\n let Number = 42;\n try {\n-  console.log(typeof parseInt('1'));\n+  console.log(typeof Number.parseInt('1'));\n } catch (e) {\n   console.log(e.name + ': ' + e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Var hoisting and redeclaration in loop",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "number\nnumber\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nnumber\nnumber\nstdout after:\n\nexit 0 → 1\nstderr before: (none)\nstderr after: TypeError: Number.parseInt is not a function"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Number.parseInt is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:34.895733507 -0400\n+++ fixed.js\t2026-10-17 17:04:35.164736549 -0400\n@@ -1,4 +1,4 @@\n for (var i = 0; i < 2; i++) {\n   var Number = i;\n-  console.log(typeof parseInt('1'));\n+  console.log(typeof Number.parseInt('1'));\n }\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Label/break/continue with finally and early return",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "finally\nafter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "finally\nafter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:35.339738528 -0400\n+++ fixed.js\t2026-10-17 17:04:35.614741637 -0400\n@@ -1,7 +1,7 @@\n outer: {\n   try {\n     if (true) break outer;\n-    console.log(parseInt('1'));\n+    console.log(Number.parseInt('1'));\n   } finally {\n     console.log('finally');\n   }\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Global NaN identity vs Number.NaN in realm-like check",
+      "hazard": "If the code depends on the global `NaN` being identical to `window.NaN` in a browser context, and `Number.NaN` is used instead, it remains equivalent in value but may break identity checks in realms w",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.NaN instead of the equivalent global.",
+            "span": null
+          },
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.NaN instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:35.778743491 -0400\n+++ fixed.js\t2026-10-17 17:04:36.055746622 -0400\n@@ -1,2 +1,2 @@\n-console.log(NaN === Number.NaN);\n-console.log(Object.is(NaN, Number.NaN));\n+console.log(Number.NaN === Number.NaN);\n+console.log(Object.is(Number.NaN, Number.NaN));\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Eval context changes Number resolution",
+      "hazard": "In eval() or Function constructor contexts, the rewritten code may be parsed in a different lexical scope, causing `Number` to resolve differently than the original global lookup.",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "number\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Name collision after move due to shadowing",
+      "hazard": "name collisions across scopes after a move (shadowing)",
+      "rule": "style/useNumberNamespace",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "style/useNumberNamespace",
+            "severity": "info",
+            "message": "Use Number.parseInt instead of the equivalent global.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\n1\nstdout after:\n999"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "999\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:04:36.450751086 -0400\n+++ fixed.js\t2026-10-17 17:04:36.715754081 -0400\n@@ -1,4 +1,4 @@\n {\n   const Number = { parseInt: () => 999 };\n-  console.log(parseInt('1'));\n+  console.log(Number.parseInt('1'));\n }\n"
+      }
+    }
+  ]
+}

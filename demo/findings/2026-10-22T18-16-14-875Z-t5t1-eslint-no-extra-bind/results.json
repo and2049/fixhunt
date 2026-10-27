@@ -1,0 +1,517 @@
+{
+  "runId": "2026-10-22T18-16-14-875Z-t5t1-eslint-no-extra-bind",
+  "tool": "eslint",
+  "ext": "js",
+  "version": "9.39.5",
+  "rule": {
+    "tool": "eslint",
+    "rule": "no-extra-bind",
+    "fixKind": "safe",
+    "docs": "Rule: no-extra-bind\nFixable: code\nType: suggestion\nDeprecated: no\nDescription: Disallow unnecessary calls to `.bind()`\nDocs: https://eslint.org/docs/latest/rules/no-extra-bind\n\n---\ntitle: no-extra-bind\nrule_type: suggestion\nfurther_reading:\n- https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind\n- https://www.smashingmagazine.com/2014/01/understanding-javascript-function-prototype-bind/\n---\n\n\n\nThe `bind()` method is used to create functions with specific `this` values and, optionally, binds arguments to specific values. When used to specify the value of `this`, it's important that the function actually uses `this` in its function body. For example:\n\n```js\nconst boundGetName = (function getName() {\n    return this.name;\n}).bind({ name: \"ESLint\" });\n\nconsole.log(boundGetName());      // \"ESLint\"\n```\n\nThis code is an example of a good use of `bind()` for setting the value of `this`.\n\nSometimes during the course of code maintenance, the `this` value is removed from the function body. In that case, you can end up with a call to `bind()` that doesn't accomplish anything:\n\n```js\n// useless bind\nconst boundGetName = (function getName() {\n    return \"ESLint\";\n}).bind({ name: \"ESLint\" });\n\nconsole.log(boundGetName());      // \"ESLint\"\n```\n\nIn this code, the reference to `this` has been removed but `bind()` is still used. In this case, the `bind()` is unnecessary overhead (and a performance hit) and can be safely removed.\n\n## Rule Details\n\nThis rule is aimed at avoiding the unnecessary use of `bind()` and as such will warn whenever an immediately-invoked function expression (IIFE) is using `bind()` and doesn't have an appropriate `this` value. This rule won't flag usage of `bind()` that includes function argument binding.\n\n**Note:** Arrow functions can never have their `this` value set using `bind()`. This rule flags all uses of `bind()` with arrow functions as a problem\n\nExamples of **incorrect** code for this rule:\n\n::: incorrect\n\n```js\n/*eslint no-extra-bind: \"error\"*/\n\nconst x = function () {\n    foo();\n}.bind(bar);\n\nconst y = (() => {\n    foo();\n}).bind(bar);\n\nconst z = (() => {\n    this.foo();\n}).bind(bar);\n\nconst a = function () {\n    (function () {\n      this.foo();\n    }());\n}.bind(bar);\n\nconst b = function () {\n    function foo() {\n      this.bar();\n    }\n}.bind(baz);\n```\n\n:::\n\nExamples of **correct** code for this rule:\n\n::: correct\n\n```js\n/*eslint no-extra-bind: \"error\"*/\n\nconst x = function () {\n    this.foo();\n}.bind(bar);\n\nconst y = function (a) {\n    return a + 1;\n}.bind(foo, bar);\n```\n\n:::\n\n## Options\n\nThis rule has no options.\n\n## When Not To Use It\n\nIf you are not concerned about unnecessary calls to `bind()`, you can safely disable this rule.\n"
+  },
+  "analysis": {
+    "summary": "Flags unnecessary .bind() calls where the function does not reference 'this' and no arguments are pre-bound.",
+    "firingShapes": [
+      "const x = function () { foo(); }.bind(bar);",
+      "const y = (() => { foo(); }).bind(bar);",
+      "const z = (() => { this.foo(); }).bind(bar);",
+      "const a = function () { (function () { this.foo(); }()); }.bind(bar);",
+      "const b = function () { function foo() { this.bar(); } }.bind(baz);"
+    ],
+    "silentShapes": [
+      "const x = function () { this.foo(); }.bind(bar);",
+      "const y = function (a) { return a + 1; }.bind(foo, bar);",
+      "const z = function () { return this.prop; }.bind(obj);"
+    ],
+    "fixDescription": "Removes the trailing .bind(callExpr) when the function body contains no 'this' references and no arguments are bound beyond the thisArg.",
+    "hazards": [
+      "Removing .bind() changes the function's identity, breaking equality checks (e.g., ===) against the original bound function.",
+      "If the bound function is used as a constructor, removing .bind() alters instance creation behavior since bound functions cannot be constructors.",
+      "The rewrite may expose the function to accidental 'this' binding from surrounding context if used as a method.",
+      "If the function relies on lexical scoping via bind() to capture outer variables (unrelated to this), removal breaks closure semantics—though rare, this is possible if bind() was misused for closure-like behavior.",
+      "Comments attached to the .bind() call (e.g., // ignore this) are discarded during autofix, potentially removing developer intent.",
+      "In strict mode, removing .bind() may alter 'this' value from undefined to the global object if the function is called indirectly.",
+      "If the bound function is passed to higher-order functions that depend on its specific length or name (e.g., for debugging), removal may break those dependencies.",
+      "When bind() is chained (e.g., .bind().bind()), removing only the outer bind() may leave an inner unnecessary bind(), requiring multiple passes; the autofix does not handle nested cases."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0028506,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 4,
+    "fixed": 4,
+    "disputed": 8
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Comments attached to .bind() are lost",
+      "hazard": "1. Comments attached to the .bind() call are discarded during autofix",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<ref *1> Object [global] {\n  global: [Circular *1],\n  clearImmediate: [Function: clearImmediate],\n  setImmediate: [Function: setImmediate] {\n    [Symbol(nodejs.util.promisify.custom)]: [Getter]\n  },\n  clearInterval: [Function: clearInterval],\n  clearTimeout: [Function: clearTimeout],\n  setInterval: [Function: setInterval],\n  setTimeout: [Function: setTimeout] {\n    [Symbol(nodejs.util.promisify.custom)]: [Getter]\n  },\n  queueMicrotask: [Function: queueMicrotask],\n  structuredClone: [Function: structuredClone],\n  atob: [Getter/Setter],\n  btoa: [Getter/Setter],\n  performance: [Getter/Setter],\n  fetch: [Function: fetch],\n  crypto: [Getter]\n}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Class field captures broken bind",
+      "hazard": "2. Class fields, static blocks, private names, super calls",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Method context hijack after fix",
+      "hazard": "3. Rewrite exposes function to accidental this binding from surrounding context",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Arguments object and length exposed",
+      "hazard": "4. Arguments object, function.length, default parameters, rest parameters",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "3 def 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Var hoisting interferes with rebind",
+      "hazard": "5. Var hoisting and re-declaration inside loops or after use",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-bind",
+            "severity": "{\"ruleId\":\"no-extra-bind\",\"severity\":2,\"message\":\"The function binding is unnecessary.\",\"line\":4,\"column\":5,\"nodeType\":\"CallExpression\",\"messageId\":\"unexpected\",\"endLine\":4,\"endColumn\":9,\"fix\":{\"range\":[71,82],\"text\":\"\"}}",
+            "message": "The function binding is unnecessary.",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:22.999714841 -0400\n+++ fixed.js\t2026-10-22 14:16:25.267785352 -0400\n@@ -1,6 +1,6 @@\n for (var i = 0; i < 2; i++) {\n   var g = function () {\n     return i;\n-  }.bind(null);\n+  };\n }\n console.log(g());\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Coercion via + vs template literal",
+      "hazard": "6. Numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\nobj\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Getter side effect broken by fix",
+      "hazard": "7. Getters, setters and Object.defineProperty side effects",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "yes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "ASI hazard with leading paren",
+      "hazard": "8. ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-22T18-16-14-875Z-t5t1-eslint-no-extra-bind/r1-p008/orig.js:2\n(y = function () { return 2 })\n^\n\nSyntaxError: Unexpected token '('\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Control Flow Hazard: break/continue/finally",
+      "hazard": "label/break/continue control flow, finally blocks, early returns in nested blocks",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-22T18-16-14-875Z-t5t1-eslint-no-extra-bind/r2-p001/orig.js:5\n        if (i === 1) continue LOOP;\n                              ^^^^\n\nSyntaxError: Undefined label 'LOOP'\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode.js v26.8.1\n"
+    },
+    {
+      "id": "r2-p002",
+      "title": "Strict Mode Indirect Call 'this' Shift",
+      "hazard": "In strict mode, removing .bind() may alter 'this' value from undefined to the global object if the function is called indirectly.",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "object\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Bind Comment Discarded During Autofix",
+      "hazard": "Comments attached to the .bind() call (e.g., // ignore this) are discarded during autofix, potentially removing developer intent.",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-bind",
+            "severity": "{\"ruleId\":\"no-extra-bind\",\"severity\":2,\"message\":\"The function binding is unnecessary.\",\"line\":3,\"column\":4,\"nodeType\":\"CallExpression\",\"messageId\":\"unexpected\",\"endLine\":3,\"endColumn\":8,\"fix\":{\"range\":[60,76],\"text\":\"\"}}",
+            "message": "The function binding is unnecessary.",
+            "span": [
+              3,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:37.782179809 -0400\n+++ fixed.js\t2026-10-22 14:16:40.654271608 -0400\n@@ -1,4 +1,4 @@\n const log = (function () {\n   console.log('no this used');\n-}).bind(undefined); // preserve comment\n+}); // preserve comment\n console.log(typeof log);\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "ASI Hazard: Leading Paren After Semicolon-less Line",
+      "hazard": "ASI and semicolon-less code, leading ( or [ on the next line",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: 1 is not a function",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p005",
+      "title": "Constructor Use: Bound Function Cannot Construct",
+      "hazard": "If the bound function is used as a constructor, removing .bind() alters instance creation behavior since bound functions cannot be constructors.",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "constructed\nundefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "RegExp lastIndex and Unicode Flag Interaction",
+      "hazard": "regular expressions: escapes, unicode flag, lastIndex with the g flag",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: /home/sun/dev/diaghunt/runs/2026-10-22T18-16-14-875Z-t5t1-eslint-no-extra-bind/r2-p006/orig.js:1\nconst regex = /\\\\u{1f600}/gu;\n              ^^^^^^^^^^^^^^\n\nSyntaxError: Invalid regular expression: /\\\\u{1f600}/gu: Incomplete quantifier\n    at checkSyntax (node:internal/main/check_syntax:84:5)\n\nNode."
+    },
+    {
+      "id": "r2-p007",
+      "title": "Class Fields and Private Names Capture Broken by Fix",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-bind",
+            "severity": "{\"ruleId\":\"no-extra-bind\",\"severity\":2,\"message\":\"The function binding is unnecessary.\",\"line\":6,\"column\":35,\"nodeType\":\"CallExpression\",\"messageId\":\"unexpected\",\"endLine\":6,\"endColumn\":39,\"fix\":{\"range\":[117,128],\"text\":\"\"}}",
+            "message": "The function binding is unnecessary.",
+            "span": [
+              6,
+              35
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:37.827181243 -0400\n+++ fixed.js\t2026-10-22 14:16:41.193288886 -0400\n@@ -3,7 +3,7 @@\n   getX() { return this.#x; }\n }\n class Derived extends Base {\n-  getXBound = (() => this.getX()).bind(this);\n+  getXBound = (() => this.getX());\n }\n const d = new Derived();\n console.log(d.getXBound());\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Order of Evaluation: Side Effects Duplicated or Lost",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "no-extra-bind",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "no-extra-bind",
+            "severity": "{\"ruleId\":\"no-extra-bind\",\"severity\":2,\"message\":\"The function binding is unnecessary.\",\"line\":4,\"column\":4,\"nodeType\":\"CallExpression\",\"messageId\":\"unexpected\",\"endLine\":4,\"endColumn\":8,\"fix\":{\"range\":[66,77],\"text\":\"\"}}",
+            "message": "The function binding is unnecessary.",
+            "span": [
+              4,
+              4
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "3\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-22 14:16:37.830181338 -0400\n+++ fixed.js\t2026-10-22 14:16:41.892311318 -0400\n@@ -1,5 +1,5 @@\n let counter = 0;\n const inc = (function () {\n   return ++counter;\n-}).bind(null);\n+});\n console.log(inc() + inc());\n"
+      }
+    }
+  ]
+}

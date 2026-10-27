@@ -1,0 +1,306 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RUF046 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RUF046 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-45-18-816Z-cile-ruff-RUF046 · fix labelled <b>unknown</b> · 16 programs, 11 fired, 9 fixed, 1 oracle-backed finding(s) · model cost $0.0151</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant int() casts around expressions that are already guaranteed to be integers.</p><p class="mut">Fix: Removes the outer int() call, leaving only the inner expression unchanged.</p><details><summary>10 hazards</summary><ul><li>Rewriting int(len(x)) to len(x) changes behavior if len(x) returns a non-integer type like a custom class with __len__ returning float, breaking type expectations.</li><li>Rewriting int(abs(y)) to abs(y) is unsafe if abs(y) returns a non-integer (e.g., Decimal or Fraction), altering numeric type and downstream operations.</li><li>Rewriting int(True) to True changes the type from int to bool, which may break isinstance(x, int) checks or arithmetic relying on int subclass behavior.</li><li>Rewriting int(False) to False similarly changes type from int to bool, potentially breaking logic that distinguishes 0 from False via type.</li><li>Rewriting int(__import__(&#39;sys&#39;).maxsize) to __import__(&#39;sys&#39;).maxsize is unsafe if the import has side effects or if the attribute lookup is expected to occur in a different context due to refactoring.</li><li>Rewriting int(5 + 3) to 5 + 3 is generally safe but may affect code relying on the explicit int conversion for documentation or type assertion purposes, though no semantic change occurs in standard integers.</li><li>Rewriting int(round(z)) to round(z) is unsafe if z defines __round__ returning a non-integer (e.g., float), as the int() cast would have truncated it to int, but removing it leaves a float, changing value and type.</li><li>Rewriting int(math.floor(w)) to math.floor(w) is unsafe if w defines __floor__ returning a non-integer (e.g., np.float64), as math.floor(w) would return that type, but the original int() cast forced it to int, altering subsequent integer-dependent operations.</li><li>The fix may disrupt formatting-dependent tools or linters that expect the int() call to be present for style consistency, even if semantically equivalent in simple cases.</li><li>If the int() call appears in a larger expression like int(f()) + 1, removing it could alter evaluation order if f() has side effects and the surrounding code relies on left-to-right execution, though pure expression replacement preserves order — hazard arises only if the fix is incorrectly applied to non-isolated calls.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p005"><b>r1-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The program uses inspect.getsource to read the source text of a lambda, then prints the length of that source. The fix rewrites int(5 + 3) to (5 + 3), which shortens the source text and therefore changes the printed length. This difference exists only because the program introspects its own rewritten source code.">judge: introspection-only · low</span> Formatting Tool Dependency<p class="mut">The program uses inspect.getsource to read the source text of a lambda, then prints the length of that source. The fix rewrites int(5 + 3) to (5 + 3), which shortens the source text and therefore changes the printed length. This difference exists only because the program introspects its own rewritten source code.</p>
+<h2>Minimized program (9→3 lines)</h2><pre>import inspect
+src = inspect.getsource(lambda: int(5 + 3))
+print(&#39;Source length of int(5+3):&#39;, len(src.strip()))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:45:34.478890819 -0400
++++ fixed.py	2026-10-17 17:45:34.693889435 -0400
+@@ -1,9 +1,9 @@
+ # This line&#39;s length affects flake8 or black line length scoring
+<span class="del">-val = int(5 + 3)  # kept for formatting</span>
+<span class="add">+val = 5 + 3  # kept for formatting</span>
+ print(&#39;Value:&#39;, val)
+ # If removed: &#39;val = 5 + 3&#39; is shorter; tools may reformat differently
+ # We show the line length as proxy
+ import inspect
+ import textwrap
+<span class="del">-src = inspect.getsource(lambda: int(5 + 3))</span>
+<span class="add">+src = inspect.getsource(lambda: (5 + 3))</span>
+ print(&#39;Source length of int(5+3):&#39;, len(src.strip()))
+</pre>
+<h2>Observed</h2><pre>stdout before:
+Value: 8
+Source length of int(5+3): 43
+stdout after:
+Value: 8
+Source length of int(5+3): 40</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15263">astral-sh/ruff/issues/15263</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15226">astral-sh/ruff/issues/15226</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14793">astral-sh/ruff/issues/14793</a> · <a href="reports/r1-p005.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Generators vs Lists</td><td class="mut">Rewriting int(len(x)) when x is a generator consumes it, breaking subsequent use; list pre</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Bool Subtype Hazard</td><td class="mut">Rewriting int(True) to True changes type from int to bool, breaking isinstance checks expe</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Import Side Effect</td><td class="mut">Rewriting int(__import__(&#39;sys&#39;).maxsize) assumes import is pure; but module init may have </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Round Returns Float</td><td class="mut">Rewriting int(round(z)) to round(z) is unsafe if __round__ returns float; int() truncates,</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Formatting Tool Dependency</td><td class="mut">Rewriting int(5+3) may break formatters that rely on the int() call for alignment or style</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Descriptor Side Effects</td><td class="mut">Rewriting int(getattr(obj, &#39;x&#39;, 0)) is silent, but if getattr triggers a descriptor with s</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Context Manager Write Only</td><td class="mut">Rewriting int(len(context_manager)) is nonsensical, but we show a case where int() fires o</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Pathlib vs os.path</td><td class="mut">Rewriting int(len(path)) where path is a pathlib.Path or os.path string; but len() behaves</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Documentation intent via int() on literal sum</td><td class="mut">Rewriting int(5 + 3) to 5 + 3 is generally safe but may affect code relying on the explici</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>String formatting with % operator and int()</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Dict ordering with duplicate keys and hash</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation order with side effects in argument</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Generator consumed by len() in int()</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>Mutable default argument and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Unsafe removal of int() around round() with float return</td><td class="mut">Rewriting int(round(z)) to round(z) is unsafe if z defines __round__ returning a non-integ</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>int() in larger expression with side effect</td><td class="mut">If the int() call appears in a larger expression like int(f()) + 1, removing it could alte</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Generators vs Lists</summary><pre>def f():
+    yield 1
+    yield 2
+
+g = f()
+lst = list(f())
+a = int(len(g))
+b = len(g)
+c = int(len(lst))
+d = len(lst)
+print(&#39;gen len after int:&#39;, a, &#39;remaining:&#39;, b)
+print(&#39;list len after int:&#39;, c, &#39;remaining:&#39;, d)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:33.447897457 -0400
++++ fixed.py	2026-10-17 17:45:33.836894952 -0400
+@@ -4,9 +4,9 @@
+ 
+ g = f()
+ lst = list(f())
+<span class="del">-a = int(len(g))</span>
+<span class="add">+a = len(g)</span>
+ b = len(g)
+<span class="del">-c = int(len(lst))</span>
+<span class="add">+c = len(lst)</span>
+ d = len(lst)
+ print(&#39;gen len after int:&#39;, a, &#39;remaining:&#39;, b)
+ print(&#39;list len after int:&#39;, c, &#39;remaining:&#39;, d)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Bool Subtype Hazard</summary><pre>def check_int(x):
+    return isinstance(x, int) and not isinstance(x, bool)
+
+v = int(True)
+print(&#39;int(True) is int?&#39;, isinstance(v, int))
+print(&#39;int(True) passes check_int?&#39;, check_int(v))
+print(&#39;type(int(True)):&#39;, type(v))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Import Side Effect</summary><pre>import sys
+counter = [0]
+orig_import = __import__
+def side_effect_import(name, *args, **kwargs):
+    if name == &#39;sys&#39;:
+        counter[0] += 1
+    return orig_import(name, *args, **kwargs)
+
+# Temporarily replace __import__ to observe side effects
+builtins = __import__(&#39;builtins&#39;)
+builtins.__import__ = side_effect_import
+try:
+    v = int(__import__(&#39;sys&#39;).maxsize)
+    print(&#39;sys imported&#39;, counter[0], &#39;times&#39;)
+    print(&#39;value:&#39;, v)
+except Exception as e:
+    print(&#39;error:&#39;, type(e).__name__, str(e))
+finally:
+    builtins.__import__ = orig_import
+</pre></details><details id="r1-p004"><summary>r1-p004 — Round Returns Float</summary><pre>class FloatRound:
+    def __round__(self, ndigits=0):
+        return 3.14
+
+z = FloatRound()
+v = int(round(z))
+print(&#39;int(round(z)):&#39;, v, type(v))
+# After fix: round(z) -&gt; 3.14 (float)
+# So we simulate by showing what round(z) gives
+print(&#39;round(z):&#39;, round(z), type(round(z)))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Formatting Tool Dependency</summary><pre># This line&#39;s length affects flake8 or black line length scoring
+val = int(5 + 3)  # kept for formatting
+print(&#39;Value:&#39;, val)
+# If removed: &#39;val = 5 + 3&#39; is shorter; tools may reformat differently
+# We show the line length as proxy
+import inspect
+import textwrap
+src = inspect.getsource(lambda: int(5 + 3))
+print(&#39;Source length of int(5+3):&#39;, len(src.strip()))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:34.478890819 -0400
++++ fixed.py	2026-10-17 17:45:34.693889435 -0400
+@@ -1,9 +1,9 @@
+ # This line&#39;s length affects flake8 or black line length scoring
+<span class="del">-val = int(5 + 3)  # kept for formatting</span>
+<span class="add">+val = 5 + 3  # kept for formatting</span>
+ print(&#39;Value:&#39;, val)
+ # If removed: &#39;val = 5 + 3&#39; is shorter; tools may reformat differently
+ # We show the line length as proxy
+ import inspect
+ import textwrap
+<span class="del">-src = inspect.getsource(lambda: int(5 + 3))</span>
+<span class="add">+src = inspect.getsource(lambda: (5 + 3))</span>
+ print(&#39;Source length of int(5+3):&#39;, len(src.strip()))
+</pre></details><details id="r1-p006"><summary>r1-p006 — Descriptor Side Effects</summary><pre>class Descriptor:
+    def __get__(self, obj, objtype):
+        print(&#39;Descriptor accessed&#39;)
+        return 42
+
+class Obj:
+    x = Descriptor()
+
+o = Obj()
+# Rule does NOT fire on getattr because argument not plain int-compatible
+# But we show a firing case with side effects in argument: len([descr access])
+def get_list():
+    print(&#39;get_list called&#39;)
+    return [o.x]  # accessing descriptor
+
+try:
+    v = int(len(get_list()))
+    print(&#39;Result:&#39;, v)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:34.814888657 -0400
++++ fixed.py	2026-10-17 17:45:34.984887563 -0400
+@@ -14,7 +14,7 @@
+     return [o.x]  # accessing descriptor
+ 
+ try:
+<span class="del">-    v = int(len(get_list()))</span>
+<span class="add">+    v = len(get_list())</span>
+     print(&#39;Result:&#39;, v)
+ except Exception as e:
+     print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Context Manager Write Only</summary><pre>class ListManager:
+    def __enter__(self):
+        self.data = [1, 2, 3]
+        return self.data
+    def __exit__(self, *exc):
+        pass
+
+with ListManager() as lm:
+    a = int(len(lm))
+    b = len(lm)
+    print(&#39;int(len(lm)):&#39;, a, &#39;type:&#39;, type(a))
+    print(&#39;len(lm):&#39;, b, &#39;type:&#39;, type(b))
+# After fix: a = len(lm) -&gt; same value, but type int either way
+# So we show that without int(), if someone expects bool from non-zero? No.
+# Instead: show that the value is used in a context where type matters
+print(&#39;a is int:&#39;, isinstance(a, int))
+print(&#39;b is int:&#39;, isinstance(b, int))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:35.078886958 -0400
++++ fixed.py	2026-10-17 17:45:35.247885871 -0400
+@@ -6,7 +6,7 @@
+         pass
+ 
+ with ListManager() as lm:
+<span class="del">-    a = int(len(lm))</span>
+<span class="add">+    a = len(lm)</span>
+     b = len(lm)
+     print(&#39;int(len(lm)):&#39;, a, &#39;type:&#39;, type(a))
+     print(&#39;len(lm):&#39;, b, &#39;type:&#39;, type(b))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Pathlib vs os.path</summary><pre>import os
+import pathlib
+# Create a temporary file
+with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;hello&#39;)
+
+# Rule fires on int(len(...)) if we use len on something that is not plain int-compatible? No.
+# Instead, we show int() on a path-derived int that is safe, but we use it in a loop
+for i in range(2):
+    if i == 0:
+        l = int(len(os.path.abspath(&#39;test.txt&#39;)))
+    else:
+        l = int(len(str(pathlib.Path(&#39;test.txt&#39;).resolve())))
+    print(f&#39;Iter {i}: length = {l}&#39;)
+
+# Cleanup
+os.remove(&#39;test.txt&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:35.345885241 -0400
++++ fixed.py	2026-10-17 17:45:35.544883961 -0400
+@@ -8,9 +8,9 @@
+ # Instead, we show int() on a path-derived int that is safe, but we use it in a loop
+ for i in range(2):
+     if i == 0:
+<span class="del">-        l = int(len(os.path.abspath(&#39;test.txt&#39;)))</span>
+<span class="add">+        l = len(os.path.abspath(&#39;test.txt&#39;))</span>
+     else:
+<span class="del">-        l = int(len(str(pathlib.Path(&#39;test.txt&#39;).resolve())))</span>
+<span class="add">+        l = len(str(pathlib.Path(&#39;test.txt&#39;).resolve()))</span>
+     print(f&#39;Iter {i}: length = {l}&#39;)
+ 
+ # Cleanup
+</pre></details><details id="r2-p001"><summary>r2-p001 — Documentation intent via int() on literal sum</summary><pre>def get_value():
+    return int(5 + 3)
+
+print(get_value(), type(get_value()))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:39.971855526 -0400
++++ fixed.py	2026-10-17 17:45:40.132854494 -0400
+@@ -1,4 +1,4 @@
+ def get_value():
+<span class="del">-    return int(5 + 3)</span>
+<span class="add">+    return 5 + 3</span>
+ 
+ print(get_value(), type(get_value()))
+</pre></details><details id="r2-p002"><summary>r2-p002 — String formatting with % operator and int()</summary><pre>x = 42
+result = &#39;%d&#39; % int(5 + 3)
+print(result)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:40.239853808 -0400
++++ fixed.py	2026-10-17 17:45:40.395852807 -0400
+@@ -1,3 +1,3 @@
+ x = 42
+<span class="del">-result = &#39;%d&#39; % int(5 + 3)</span>
+<span class="add">+result = &#39;%d&#39; % (5 + 3)</span>
+ print(result)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Dict ordering with duplicate keys and hash</summary><pre>class BadHash:
+    def __init__(self, v): self.v = v
+    def __hash__(self): return int(5 + 3)
+    def __eq__(self, other): return self.v == other.v
+
+d = {BadHash(1): &#39;a&#39;, BadHash(2): &#39;b&#39;}
+print(len(d))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:40.500852134 -0400
++++ fixed.py	2026-10-17 17:45:40.658851121 -0400
+@@ -1,6 +1,6 @@
+ class BadHash:
+     def __init__(self, v): self.v = v
+<span class="del">-    def __hash__(self): return int(5 + 3)</span>
+<span class="add">+    def __hash__(self): return 5 + 3</span>
+     def __eq__(self, other): return self.v == other.v
+ 
+ d = {BadHash(1): &#39;a&#39;, BadHash(2): &#39;b&#39;}
+</pre></details><details id="r2-p004"><summary>r2-p004 — Evaluation order with side effects in argument</summary><pre>counter = 0
+
+def side_effect():
+    global counter
+    counter += 1
+    return 5
+
+print(int(side_effect() + 3), counter)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Generator consumed by len() in int()</summary><pre>def gen():
+    yield 1
+    yield 2
+    yield 3
+
+g = gen()
+print(int(len(list(g))))
+print(list(g))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:45:40.888849646 -0400
++++ fixed.py	2026-10-17 17:45:41.050848608 -0400
+@@ -4,5 +4,5 @@
+     yield 3
+ 
+ g = gen()
+<span class="del">-print(int(len(list(g))))</span>
+<span class="add">+print(len(list(g)))</span>
+ print(list(g))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Mutable default argument and aliasing</summary><pre>def f(x=[]):
+    x.append(1)
+    return len(x)
+
+print(f())
+print(f())
+</pre></details><details id="r2-p007"><summary>r2-p007 — Unsafe removal of int() around round() with float return</summary><pre>class FloatRound:
+    def __round__(self, ndigits):
+        return 3.5
+
+z = FloatRound()
+print(int(round(z)), type(int(round(z))))
+print(round(z), type(round(z)))
+</pre></details><details id="r2-p008"><summary>r2-p008 — int() in larger expression with side effect</summary><pre>counter = 0
+
+def f():
+    global counter
+    counter += 1
+    return 5
+
+print(int(f()) + 1, counter)
+</pre></details></body></html>

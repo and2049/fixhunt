@@ -1,0 +1,738 @@
+{
+  "runId": "2026-10-17T20-13-12-213Z-d042-ruff-B013",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "B013",
+    "fixKind": "unknown",
+    "docs": "# redundant-tuple-in-exception-handler (B013)\n\nDerived from the **flake8-bugbear** linter.\n\nFix is always available.\n\n## What it does\nChecks for single-element tuples in exception handlers (e.g.,\n`except (ValueError,):`).\n\nNote: Single-element tuples consisting of a starred expression\nare allowed.\n\n## Why is this bad?\nA tuple with a single element can be more concisely and idiomatically\nexpressed as a single value.\n\n## Example\n```python\ntry:\n    ...\nexcept (ValueError,):\n    ...\n```\n\nUse instead:\n```python\ntry:\n    ...\nexcept ValueError:\n    ...\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the exception handler contains comments.\n\n## References\n- [Python documentation: `except` clause](https://docs.python.org/3/reference/compound_stmts.html#except-clause)\n"
+  },
+  "analysis": {
+    "summary": "Flags single-element tuples in except clauses like 'except (ValueError,)'.",
+    "firingShapes": [
+      "except (ValueError,):",
+      "except (KeyError, ): pass",
+      "except (RuntimeError,) as e:",
+      "except (IndexError,   ) :",
+      "except (TypeError,)\n:",
+      "except (AttributeError,) :\n    raise",
+      "except (StopIteration,) as exc:\n    print(exc)",
+      "except (OSError,):\n    if True:\n        break"
+    ],
+    "silentShapes": [
+      "except ValueError:",
+      "except (ValueError, TypeError):",
+      "except (*args,):",
+      "except (ValueError,) # comment:",
+      "except (ValueError,):  # inline comment"
+    ],
+    "fixDescription": "Rewrites 'except (SingleException,):' to 'except SingleException:' by removing the parentheses and trailing comma while preserving any 'as' alias, indentation, and following colon.",
+    "hazards": [
+      "Removing parentheses around a single exception type changes nothing semantically but may drop inline or end-of-line comments attached to the parentheses or comma, altering source code documentation.",
+      "If the except clause spans multiple lines due to formatting, the fix may collapse vertical whitespace, potentially affecting readability but not execution.",
+      "When the single element is a starred expression like '(*args,)', the rule correctly does not fire, so no rewrite occurs; however, misidentifying a starred expression as a regular tuple would lead to incorrect removal of parentheses, breaking unpacking semantics.",
+      "In rare cases where the exception tuple is generated via a macro or code-generation tool that relies on the syntactic presence of a one-tuple for parsing, removing it could interfere with tooling (though this does not affect runtime behavior).",
+      "If the except clause is part of a larger compound statement where parentheses were mistakenly believed to be necessary for disambiguation (e.g., confused with tuple displays in other contexts), removal is still safe because Python grammar unambiguously binds the except clause.",
+      "The fix does not touch the 'as' target, so aliasing remains intact; however, if comments are interleaved between the exception and the 'as' keyword (e.g., 'except (ValueError, ) # note\n    as e:'), the rewrite may disturb comment attachment though this is a formatting hazard, not semantic.",
+      "Should the single element be an expression with side effects (e.g., a function call), evaluating it once versus as a one-tuple makes no difference, so no semantic change occurs.",
+      "If the code is parsed by a tool that treats one-tuples distinctly in AST transformation (e.g., for refactoring), removing the tuple structure could alter the AST shape, potentially breaking downstream tools that expect a Tuple node with one element."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.004865400000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 14,
+    "fixed": 14,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Macro/code-generation dependency on one-tuple syntax",
+      "hazard": "Code generation tools may inspect source syntax for one-tuples in except clauses; removing parentheses breaks their parsing even if runtime behavior is unchanged.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p002",
+      "title": "pathlib vs os.path behavior on relative paths, symlinks, missing files",
+      "hazard": "Path resolution differences between pathlib and os.path when handling symlinks or missing files in except logic.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              9,
+              8
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              15,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Path.stat caught: FileNotFoundError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Path.stat caught: FileNotFoundError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:36.449889456 -0400\n+++ fixed.py\t2026-10-17 16:13:36.636885870 -0400\n@@ -6,13 +6,13 @@\n \n try:\n     st = os.lstat('tmp/link')  # Follows symlink by default? No, lstat doesn't.\n-except (FileNotFoundError,) as e:\n+except FileNotFoundError as e:\n     print('os.lstat caught:', type(e).__name__)\n \n try:\n     p = Path('tmp/link')\n     p.stat()  # Follows symlink\n-except (FileNotFoundError,) as e:\n+except FileNotFoundError as e:\n     print('Path.stat caught:', type(e).__name__)\n \n # Cleanup\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Multiline except clause collapsing vertical whitespace",
+      "hazard": "When the except clause is formatted across multiple lines, the fix removes newlines and indentation, affecting readability though not execution.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Caught: fail\nType: <class 'RuntimeError'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: fail\nType: <class 'RuntimeError'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:36.747883742 -0400\n+++ fixed.py\t2026-10-17 16:13:36.896880885 -0400\n@@ -1,7 +1,5 @@\n try:\n     raise RuntimeError('fail')\n-except (\n-    RuntimeError,\n-) as e:\n+except RuntimeError as e:\n     print('Caught:', e)\n     print('Type:', type(e))\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Star-imports, module-level side effects, __all__",
+      "hazard": "Module-level side effects from star imports or __all__ manipulation interact with except flow; rewriting may obscure intent in complex modules.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              9,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Caught in func: module side effect\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught in func: module side effect\n1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:36.999878910 -0400\n+++ fixed.py\t2026-10-17 16:13:37.159875849 -0400\n@@ -6,7 +6,7 @@\n def func():\n     try:\n         raise CustomError('module side effect')\n-    except (CustomError,) as e:\n+    except CustomError as e:\n         print('Caught in func:', e)\n         return len(__all__)\n \n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "hazard": "Default argument evaluation occurs at function definition; except logic may be involved in retry loops where default mutability matters.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              5,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[1]\n[1]\n[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1]\n[1]\n[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:37.257873974 -0400\n+++ fixed.py\t2026-10-17 16:13:37.419870875 -0400\n@@ -2,7 +2,7 @@\n     try:\n         if not y:\n             raise ValueError('empty')\n-    except (ValueError,) as e:\n+    except ValueError as e:\n         y.append(x)\n         return y\n     return y\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Walrus, comprehensions scoping, late binding in closures and lambdas",
+      "hazard": "Walrus in except or comprehension scoping interacts with lambda capture; rewriting may change when locals are bound in nested scopes.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              6,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:37.514869058 -0400\n+++ fixed.py\t2026-10-17 16:13:37.681865863 -0400\n@@ -3,7 +3,7 @@\n     try:\n         if (val := i) == 1:\n             raise KeyError('one')\n-    except (KeyError,) as e:\n+    except KeyError as e:\n         funs.append(lambda: val + i)  # Captures i and val\n \n for f in funs:\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "AST transformation tools expecting Tuple node with one element",
+      "hazard": "Tools that transform AST and rely on except clause being a Tuple node (even with one element) may break when it's changed to a Name node.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Found except tuple with 1 element(s)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exceptions inside rewritten code, finally/else clauses, exception chaining",
+      "hazard": "Interaction with else/finally clauses or exception chains (__cause__) where rewriting affects control flow or nesting depth.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              6,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Caught: second\nCause: ValueError\nFinally ran\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Caught: second\nCause: ValueError\nFinally ran\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:37.933861043 -0400\n+++ fixed.py\t2026-10-17 16:13:38.095857948 -0400\n@@ -1,9 +1,9 @@\n try:\n     try:\n         raise ValueError('first')\n-    except (ValueError,) as e:\n+    except ValueError as e:\n         raise RuntimeError('second') from e\n-except (RuntimeError,) as e:\n+except RuntimeError as e:\n     print('Caught:', e)\n     print('Cause:', type(e.__cause__).__name__ if e.__cause__ else None)\n else:\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Compound statement ambiguity resolved correctly after fix",
+      "hazard": "If the except clause is part of a larger compound statement where parentheses were mistakenly believed to be necessary for disambiguation (e.g., confused with tuple displays in other contexts), remova",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:45.683714277 -0400\n+++ fixed.py\t2026-10-17 16:13:45.846711217 -0400\n@@ -1,6 +1,6 @@\n def f():\n     try:\n         raise ValueError\n-    except (ValueError,):\n+    except ValueError:\n         return 42\n print(f())\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Descriptor interaction with instance attribute access in handler",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              10,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "descriptor\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "descriptor\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:45.946709339 -0400\n+++ fixed.py\t2026-10-17 16:13:46.110706266 -0400\n@@ -7,5 +7,5 @@\n try:\n     c.x  # triggers descriptor\n     raise KeyError\n-except (KeyError,):\n+except KeyError:\n     print(c.x)\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Bytes vs str encoding in error context",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              7,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "UnicodeDecodeError 70\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "UnicodeDecodeError 70\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:46.208704430 -0400\n+++ fixed.py\t2026-10-17 16:13:46.362701546 -0400\n@@ -1,8 +1,8 @@\n try:\n     b'\\xff'.decode('utf-8')\n-except (UnicodeDecodeError,) as e:\n+except UnicodeDecodeError as e:\n     print(type(e).__name__, len(str(e)))\n try:\n     ''.encode('utf-8').decode('latin-1')\n-except (UnicodeEncodeError,) as e:\n+except UnicodeEncodeError as e:\n     print(type(e).__name__, len(str(e)))\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Keyword-only and positional-only argument forwarding in recovery",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              6,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "15\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "15\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:46.456699785 -0400\n+++ fixed.py\t2026-10-17 16:13:46.631696507 -0400\n@@ -3,5 +3,5 @@\n try:\n     f(1, 2, c=3)  # works\n     raise TypeError\n-except (TypeError,) as e:\n+except TypeError as e:\n     print(f(4, 5, c=6))\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Inline comment stripped during parentheses removal alters documentation",
+      "hazard": "Removing parentheses around a single exception type changes nothing semantically but may drop inline or end-of-line comments attached to the parentheses or comma, altering source code documentation.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              3,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "caught: ZeroDivisionError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: ZeroDivisionError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:46.726694728 -0400\n+++ fixed.py\t2026-10-17 16:13:46.881691824 -0400\n@@ -1,4 +1,4 @@\n try:\n     1 / 0\n-except (ZeroDivisionError,) as e:  # handle division by zero\n+except ZeroDivisionError as e:  # handle division by zero\n     print('caught:', type(e).__name__)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "File write mode and truncation behavior preserved after fix",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              6,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'hello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:46.983689914 -0400\n+++ fixed.py\t2026-10-17 16:13:47.150686793 -0400\n@@ -3,7 +3,7 @@\n     with open('test.tmp', 'wb') as f:\n         f.write(b'hello')\n         raise OSError\n-except (OSError,) as e:\n+except OSError as e:\n     with open('test.tmp', 'rb') as f:\n         print(f.read())\n finally:\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Function call with side effects in except clause evaluated once",
+      "hazard": "Should the single element be an expression with side effects (e.g., a function call), evaluating it once versus as a one-tuple makes no difference, so no semantic change occurs.",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              10,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "state: 2 exc: ValueError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "state: 2 exc: ValueError\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:47.243685055 -0400\n+++ fixed.py\t2026-10-17 16:13:47.397682177 -0400\n@@ -7,5 +7,5 @@\n \n try:\n     raise get_exc()\n-except (get_exc(),) as e:\n+except get_exc() as e:\n     print('state:', state, 'exc:', type(e).__name__)\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Numeric coercion and rounding behavior unchanged after fix",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "B013",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "B013",
+            "severity": "warning",
+            "message": "A length-one tuple literal is redundant in exception handlers",
+            "span": [
+              7,
+              8
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 16:13:47.496680327 -0400\n+++ fixed.py\t2026-10-17 16:13:47.684676815 -0400\n@@ -4,6 +4,6 @@\n     x = Decimal('1') / Decimal('3')\n     if x > Decimal('0.33'):\n         raise TypeError\n-except (TypeError,) as e:\n+except TypeError as e:\n     y = float(Decimal('2.5'))\n     print(int(y), bool(y))\n"
+      }
+    }
+  ]
+}

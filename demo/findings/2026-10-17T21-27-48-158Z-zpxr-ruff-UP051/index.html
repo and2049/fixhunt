@@ -1,0 +1,402 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP051 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP051 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-27-48-158Z-zpxr-ruff-UP051 · fix labelled <b>unknown</b> · 16 programs, 5 fired, 5 fixed, 0 oracle-backed finding(s) · model cost $0.0046</p>
+<div class="card"><b>Rule analysis</b><p>Flags usage of deprecated abstract base class decorators `@abc.abstractclassmethod`, `@abc.abstractstaticmethod`, and `@abc.abstractproperty`.</p><p class="mut">Fix: Replaces `@abc.abstractclassmethod` with `@classmethod` followed by `@abc.abstractmethod`, `@abc.abstractstaticmethod` with `@staticmethod` followed by `@abc.abstractmethod`, and `@abc.abstractproperty` with `@property` followed by `@abc.abstractmethod`, preserving decorator order where applicable.</p><details><summary>10 hazards</summary><ul><li>Rewriting `@abc.abstractproperty` to `@property\n@abc.abstractmethod` changes evaluation order if other decorators are present above, potentially altering wrapper semantics.</li><li>If `@abc.abstractclassmethod` is used with a metaclass that intercepts `__new__`, replacing it may alter class creation behavior due to differing descriptor protocol timing.</li><li>The fix may duplicate existing `@classmethod` or `@staticmethod` decorators when they already precede the deprecated decorator, resulting in redundant or conflicting decorator stacks.</li><li>Comments placed between the deprecated decorator and the function definition may be lost or misattributed during rewrite if the tool does not preserve inter-decorator formatting.</li><li>In code using string annotations (`from __future__ import annotations`), moving decorators could theoretically affect runtime evaluation if decorators depend on annotation resolution—though unlikely, it introduces a theoretical hazard.</li><li>If `@abc.abstractproperty` is applied to a non-method (e.g., a module-level variable), the rewrite to `@property` will fail at runtime because `@property` requires a getter method.</li><li>When the deprecated decorator is used in a dynamically generated class via `type()`, the rewrite may not preserve the intended decoration order if the autofix assumes static structure.</li><li>If an alias like `ac = abc.abstractclassmethod` is used, the rule may not fire (due to missing name match), but if it did fire incorrectly, the fix would produce invalid syntax by inserting `@classmethod` and `@abc.abstractmethod` without context.</li><li>Applying the fix to nested functions inside other functions may break scoping if the autofix incorrectly lifts or reorders decorators relative to `nonlocal` or `global` statements.</li><li>In code that relies on the deprecated decorator’s specific `__isabstractmethod__` behavior (now emulated), subtle differences in introspection could affect frameworks that inspect ABCs directly.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Evaluation Order Hazard</td><td class="mut">Side effects in expression merging during rewrite can alter evaluation sequence.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Async Def/Await Ordering</td><td class="mut">Rewriting @abc.abstractclassmethod on async methods disrupts await/order semantics.</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span></td><td>Abstract Property on Variable</td><td class="mut">@property rewrite fails when applied to non-method (module-level variable).</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">invalid</span></td><td>Alias Decorator Misfire</td><td class="mut">Incorrect fix on aliased decorator produces invalid syntax due to missing context.</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Comments and Docstrings</td><td class="mut">Comments/docstrings on removed decorator are lost or misplaced after rewrite.</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">invalid</span></td><td>Exceptions and Finally Clauses</td><td class="mut">Exceptions in rewritten methods interact incorrectly with finally/else due to wrapper orde</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>File Modes and Truncation</td><td class="mut">Side effects in abstract method (e.g., file write) are altered by wrapper order in fix.</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Isabstractmethod Introspection</td><td class="mut">Rewrite changes __isabstractmethod__ behavior, affecting framework introspection.</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation Order Hazard - Abstract Property Rewrite</td><td class="mut">Rewriting `@abc.abstractproperty` to `@property\n@abc.abstractmethod` changes evaluation o</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span></td><td>Alias Decorator Misfire - Abstract Classmethod Alias</td><td class="mut">If an alias like `ac = abc.abstractclassmethod` is used, incorrect fix would produce inval</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus and Comprehension Scoping Hazard</td><td class="mut">Walrus operator, comprehensions scoping, late binding in closures and lambdas affected by </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>File Modes and Truncation Hazard</td><td class="mut">Side effects in abstract method (e.g., file write) altered by wrapper order after rewrite </td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dynamic Class Creation via type() Hazard</td><td class="mut">When deprecated decorator used in dynamically generated class via `type()`, rewrite may no</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable Default Arguments and Aliasing Hazard</td><td class="mut">Mutable default arguments and aliasing after rewrite cause shared state across calls.</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">invalid</span></td><td>String Annotations Evaluation Order Hazard</td><td class="mut">In code using string annotations, moving decorators could theoretically affect runtime eva</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Truthiness and Identity Comparison Hazard</td><td class="mut">Truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39; affected by decorator r</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Evaluation Order Hazard</summary><pre>import abc
+counter = [0]
+def inc():
+    counter[0] += 1
+    return counter[0]
+@abc.abstractclassmethod
+    def cls_meth(cls):
+        return inc() + inc()
+print(&#39;Result:&#39;, cls_meth.__func__(type(&#39;T&#39;, (), {})))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Async Def/Await Ordering</summary><pre>import abc
+async def async_val():
+    return 42
+@abc.abstractclassmethod
+    async def async_cls_meth(cls):
+        x = await async_val()
+        y = await async_val()
+        return x + y
+obj = type(&#39;Obj&#39;, (), {})
+print(&#39;Async result:&#39;, asyncio.run(async_cls_meth.__func__(type(obj))))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Abstract Property on Variable</summary><pre>import abc
+value = 123
+try:
+    exec(&#39;@abc.abstractproperty\nvalue&#39;)
+except SyntaxError as e:
+    print(&#39;SyntaxError:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Alias Decorator Misfire</summary><pre>import abc
+ac = abc.abstractclassmethod
+# Rule does not fire here; if it did incorrectly, fix would be invalid
+@ac
+    def fake_method(cls): pass
+# Simulate what incorrect fix would produce: @classmethod\n@abc.abstractmethod\n# This would be valid syntax but semantically wrong—we test validity via try
+try:
+    exec(&#39;@classmethod\n@abc.abstractmethod\ndef fake_method(cls): pass&#39;)
+    print(&#39;No syntax error from simulated fix&#39;)
+except SyntaxError as e:
+    print(&#39;SyntaxError from simulated fix:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Comments and Docstrings</summary><pre>import abc
+# This comment should stay
+@abc.abstractclassmethod
+    &quot;&quot;&quot;This docstring should be preserved.&quot;&quot;&quot;
+    def meth(cls):
+        return &#39;preserved&#39;
+print(&#39;Docstring:&#39;, meth.__func__.__doc__)
+# Check if comment proximity affects anything—no runtime effect, but we trace via doc
+</pre></details><details id="r1-p006"><summary>r1-p006 — Exceptions and Finally Clauses</summary><pre>import abc
+log = []
+@abc.abstractclassmethod
+    def faulty(cls):
+        try:
+            log.append(&#39;try&#39;)
+            raise ValueError(&#39;error&#39;)
+        except ValueError as e:
+            log.append(&#39;except&#39;)
+            raise RuntimeError(&#39;chained&#39;) from e
+        else:
+            log.append(&#39;else&#39;)
+        finally:
+            log.append(&#39;finally&#39;)
+try:
+    faulty.__func__(type(&#39;T&#39;, (), {}))
+except RuntimeError as e:
+    print(&#39;Log:&#39;, log)
+    print(&#39;Exception:&#39;, type(e).__name__, str(e))
+    if e.__cause__:
+        print(&#39;Cause:&#39;, type(e.__cause__).__name__, str(e.__cause__))
+</pre></details><details id="r1-p007"><summary>r1-p007 — File Modes and Truncation</summary><pre>import abc
+import os
+fname = &#39;test_file.txt&#39;
+if os.path.exists(fname):
+    os.remove(fname)
+@abc.abstractclassmethod
+    def writer(cls):
+        with open(fname, &#39;w&#39;) as f:
+            f.write(&#39;first&#39;)
+        with open(fname, &#39;a&#39;) as f:
+            f.write(&#39;second&#39;)
+writer.__func__(type(&#39;W&#39;, (), {}))
+with open(fname, &#39;r&#39;) as f:
+    content = f.read()
+print(&#39;File content:&#39;, repr(content))
+os.remove(fname)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Isabstractmethod Introspection</summary><pre>import abc
+from inspect import isabstract
+@abc.abstractclassmethod
+    def amethod(cls): pass
+@classmethod
+@abc.abstractmethod
+    def bmethod(cls): pass
+print(&#39;amethod isabstract:&#39;, isabstract(amethod))
+print(&#39;bmethod isabstract:&#39;, isabstract(bmethod))
+print(&#39;amethod.__isabstractmethod__:&#39;, getattr(amethod, &#39;__isabstractmethod__&#39;, &#39;missing&#39;))
+print(&#39;bmethod.__isabstractmethod__:&#39;, getattr(bmethod, &#39;__isabstractmethod__&#39;, &#39;missing&#39;))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Evaluation Order Hazard - Abstract Property Rewrite</summary><pre>import abc
+log = []
+def make_dec(name):
+    log.append(f&#39;dec_{name}&#39;)
+    def dec(f):
+        log.append(f&#39;apply_{name}&#39;)
+        return f
+    return dec
+
+@make_dec(&#39;outer&#39;)
+@abc.abstractproperty
+@make_dec(&#39;inner&#39;)
+def prop(self):
+    log.append(&#39;prop_body&#39;)
+    return 42
+
+class C(abc.ABC):
+    pass
+C.prop = prop
+
+try:
+    c = C()
+    _ = c.prop  # triggers descriptor
+    log.append(&#39;accessed&#39;)
+except Exception as e:
+    log.append(f&#39;{type(e).__name__}:{e}&#39;)
+
+print(&#39;|&#39;.join(log))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:28:07.936573495 -0400
++++ fixed.py	2026-10-17 17:28:08.110569960 -0400
+@@ -8,7 +8,8 @@
+     return dec
+ 
+ @make_dec(&#39;outer&#39;)
+<span class="del">-@abc.abstractproperty</span>
+<span class="add">+@property</span>
+<span class="add">+@abc.abstractmethod</span>
+ @make_dec(&#39;inner&#39;)
+ def prop(self):
+     log.append(&#39;prop_body&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Alias Decorator Misfire - Abstract Classmethod Alias</summary><pre>import abc
+ac = abc.abstractclassmethod  # alias
+
+# This line should NOT trigger UP051 because ac is not abc.abstractclassmethod
+@ac
+def cls_method(cls):
+    return &#39;cls_result&#39;
+
+# Verify it works as abstractclassmethod
+class Base(abc.ABC):
+    pass
+
+try:
+    Base.cls_method = cls_method
+    b = Base()
+    result = b.cls_method()
+    print(f&#39;success:{result}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}:{e}&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Walrus and Comprehension Scoping Hazard</summary><pre>import abc
+
+records = []
+
+@abc.abstractstaticmethod
+def make_counter():
+    n = 0
+    def counter():
+        nonlocal n
+        n += 1
+        records.append((&#39;call&#39;, n))
+        return n
+    return counter
+
+# Rewrite should become @staticmethod\n@abc.abstractmethod
+counter_func = make_counter()
+
+class CounterBase(abc.ABC):
+    pass
+CounterBase.get_count = counter_func
+
+# Use walrus in comprehension
+results = [x for y in range(3) if (x := CounterBase().get_count()) &gt; 0]
+
+# Late-binding lambda hazard
+funcs = []
+for i in range(2):
+    funcs.append(lambda: CounterBase().get_count() + i)
+
+try:
+    f1, f2 = funcs
+    late = f1()  # should be 1 + 0 = 1 if i captured, else 1+1=2
+    records.append((&#39;late&#39;, late))
+except Exception as e:
+    records.append((&#39;error&#39;, str(e)))
+
+print(&#39;,&#39;.join(map(str, records)))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:28:08.344565208 -0400
++++ fixed.py	2026-10-17 17:28:08.736557247 -0400
+@@ -2,7 +2,8 @@
+ 
+ records = []
+ 
+<span class="del">-@abc.abstractstaticmethod</span>
+<span class="add">+@staticmethod</span>
+<span class="add">+@abc.abstractmethod</span>
+ def make_counter():
+     n = 0
+     def counter():
+</pre></details><details id="r2-p004"><summary>r2-p004 — File Modes and Truncation Hazard</summary><pre>import abc
+
+class FileLogger(abc.ABC):
+    @abc.abstractproperty
+    def log_path(self):
+        &#39;Should return path, but has side effect&#39;
+
+# Simulate rewrite: @property\n@abc.abstractmethod
+# This changes when __set_name__ or descriptor setup happens
+
+path_written = []
+
+class ConcreteLogger(FileLogger):
+    def __init__(self):
+        self._path = &#39;/tmp/test.txt&#39;
+
+    @property
+    def log_path(self):
+        # Side effect: truncate file on access
+        open(self._path, &#39;w&#39;).close()
+        path_written.append(self._path)
+        return self._path
+
+logger = ConcreteLogger()
+try:
+    _ = logger.log_path  # first access truncates
+    with open(logger.log_path, &#39;a&#39;) as f:
+        f.write(&#39;data&#39;)
+    _ = logger.log_path  # second access truncates again!
+    with open(logger.log_path) as f:
+        content = f.read()
+    print(f&#39;truncates:{len(path_written)} content:{repr(content)}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}:{e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:28:08.944553023 -0400
++++ fixed.py	2026-10-17 17:28:09.104549777 -0400
+@@ -1,7 +1,8 @@
+ import abc
+ 
+ class FileLogger(abc.ABC):
+<span class="del">-    @abc.abstractproperty</span>
+<span class="add">+    @property</span>
+<span class="add">+    @abc.abstractmethod</span>
+     def log_path(self):
+         &#39;Should return path, but has side effect&#39;
+ 
+</pre></details><details id="r2-p005"><summary>r2-p005 — Dynamic Class Creation via type() Hazard</summary><pre>import abc
+
+decorator_log = []
+
+def logged_abstractclassmethod(func):
+    decorator_log.append(&#39;wrap_acm&#39;)
+    return abc.abstractclassmethod(func)
+
+# Build class dynamically
+attrs = {
+    &#39;__module__&#39;: &#39;__main__&#39;,
+    &#39;dynamic_method&#39;: logged_abstractclassmethod(lambda cls: &#39;dynamic&#39;)
+}
+
+DynamicCls = type(&#39;DynamicCls&#39;, (abc.ABC,), attrs)
+
+# Now simulate what autofix would do: replace with @classmethod + @abstractmethod
+# But order matters: if abstractmethod goes first, it breaks
+try:
+    obj = DynamicCls()
+    result = obj.dynamic_method()
+    decorator_log.append(f&#39;result:{result}&#39;)
+except Exception as e:
+    decorator_log.append(f&#39;{type(e).__name__}:{e}&#39;)
+
+print(&#39;|&#39;.join(decorator_log))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Mutable Default Arguments and Aliasing Hazard</summary><pre>import abc
+
+registry = []
+
+@abc.abstractstaticmethod
+def register(item, storage=[]):
+    storage.append(item)
+    registry.append(tuple(storage))  # snapshot
+    return storage
+
+# After rewrite: @staticmethod\n@abc.abstractmethod
+class Storage(abc.ABC):
+    pass
+Storage.register = register
+
+try:
+    s = Storage()
+    s.register(&#39;a&#39;)  # storage=[&#39;a&#39;]
+    s.register(&#39;b&#39;)  # storage=[&#39;a&#39;,&#39;b&#39;] due to mutable default
+    s.register(&#39;c&#39;)  # storage=[&#39;a&#39;,&#39;b&#39;,&#39;c&#39;]
+    print(f&#39;registry:{len(registry)} last:{registry[-1] if registry else []}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}:{e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:28:09.339545011 -0400
++++ fixed.py	2026-10-17 17:28:09.500541747 -0400
+@@ -2,7 +2,8 @@
+ 
+ registry = []
+ 
+<span class="del">-@abc.abstractstaticmethod</span>
+<span class="add">+@staticmethod</span>
+<span class="add">+@abc.abstractmethod</span>
+ def register(item, storage=[]):
+     storage.append(item)
+     registry.append(tuple(storage))  # snapshot
+</pre></details><details id="r2-p007"><summary>r2-p007 — String Annotations Evaluation Order Hazard</summary><pre>from __future__ import annotations
+import abc
+
+ eval_order = []
+
+def annotate_side_effect():
+    eval_order.append(&#39;annotated&#39;)
+    return str
+
+@abc.abstractproperty
+def annotated_prop(self) -&gt; &#39;annotate_side_effect()&#39;:  # string ann
+    eval_order.append(&#39;prop_body&#39;)
+    return &#39;value&#39;
+
+# After rewrite: @property\n@abc.abstractmethod
+class PropHolder(abc.ABC):
+    pass
+PropHolder.annotated_prop = annotated_prop
+
+try:
+    obj = PropHolder()
+    # Access triggers descriptor; annotation not evaluated at call time
+    # but if decorator order affected __set_name__ timing...
+    val = obj.annotated_prop
+    eval_order.append(f&#39;accessed:{val}&#39;)
+except Exception as e:
+    eval_order.append(f&#39;{type(e).__name__}:{e}&#39;)
+
+print(&#39;|&#39;.join(eval_order))
+</pre></details><details id="r2-p008"><summary>r2-p008 — Truthiness and Identity Comparison Hazard</summary><pre>import abc
+
+class BoolTracker:
+    instances = []
+    def __init__(self, val):
+        self.val = val
+        BoolTracker.instances.append(self)
+    def __bool__(self):
+        return bool(self.val)
+    def __len__(self):
+        return len(str(self.val))
+
+@abc.abstractproperty
+def truth_value(self):
+    BoolTracker.accessed = getattr(BoolTracker, &#39;accessed&#39;, 0) + 1
+    return BoolTracker(self.val) if hasattr(self, &#39;val&#39;) else BoolTracker(None)
+
+class ValueHolder(abc.ABC):
+    pass
+ValueHolder.truth_value = truth_value
+
+# Test truthiness
+obj = ValueHolder()
+obj.val = []  # falsy
+
+try:
+    prop = obj.truth_value  # returns BoolTracker instance
+    truth = bool(prop)
+    length = len(prop)
+    is_none = prop is None
+    eq_none = prop == None
+    accessed = getattr(BoolTracker, &#39;accessed&#39;, 0)
+    print(f&#39;truth:{truth} len:{length} isNone:{is_none} eqNone:{eq_none} accessed:{accessed}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}:{e}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:28:09.737536941 -0400
++++ fixed.py	2026-10-17 17:28:09.898533677 -0400
+@@ -10,7 +10,8 @@
+     def __len__(self):
+         return len(str(self.val))
+ 
+<span class="del">-@abc.abstractproperty</span>
+<span class="add">+@property</span>
+<span class="add">+@abc.abstractmethod</span>
+ def truth_value(self):
+     BoolTracker.accessed = getattr(BoolTracker, &#39;accessed&#39;, 0) + 1
+     return BoolTracker(self.val) if hasattr(self, &#39;val&#39;) else BoolTracker(None)
+</pre></details></body></html>

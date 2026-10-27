@@ -1,0 +1,218 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff SIM202 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff SIM202 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-34-01-810Z-vxcq-ruff-SIM202 · fix labelled <b>unknown</b> · 16 programs, 15 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0047</p>
+<div class="card"><b>Rule analysis</b><p>Flags negated inequality expressions (`not x != y`) to suggest replacing them with equality checks (`x == y`).</p><p class="mut">Fix: Replaces `not X != Y` with `X == Y`, preserving the surrounding expression structure but removing the outer `not` and inverting the inequality operator to equality.</p><details><summary>10 hazards</summary><ul><li>If `X.__ne__` returns a non-boolean (e.g., int, None), `not X != Y` may be truthy/falsy based on that value, while `X == Y` invokes `__eq__` which may return a different non-boolean, altering truthiness.</li><li>If `X.__eq__` has side effects (e.g., logging, state mutation), the fix introduces those where none occurred before, as the original only evaluated `__ne__`.</li><li>If `X` or `Y` is a property with side effects in its getter, the fix may evaluate it once (for `==`) vs twice (once for `!=` in `not ...`), changing side effect count.</li><li>In expressions like `not x != y if cond else z`, the fix alters grouping: original parses as `not (x != y) if cond else z`, fix produces `x == y if cond else z`, which is equivalent, but if misparsed due to low precedence of `if-else`, could risk misgrouping—though Ruff respects precedence, this notes developer confusion potential.</li><li>If `X` or `Y` overloads `__ne__` to return a custom truthy/falsey object (e.g., always returns `1`), `not X != Y` is `False`, while `X == Y` may invoke `__eq__` returning `0` → still `False`, but if `__eq__` returns `2`, both false; however, if `__ne__` returns `0` (falsey) → `not 0` is `True`, but `__eq__` returns `None` → `not None` is `True` only if fixed to `X == Y` then `not` removed—wait: fix removes `not`, so `X == Y` directly: if `__eq__` returns `None`, it&#39;s falsey → `False`, whereas original `not (X != Y)` with `__ne__` returning `0` (falsey) → `not falsey` → `True`. So divergence when `__ne__` returns falsey non-bool and `__eq__` returns falsey non-bool but different falsiness nuance? Actually: original: `not (X != Y)`. If `X != Y` returns `0` → `not 0` → `True`. Fix: `X == Y`. If `X == Y` returns `None` → falsey → `False`. So behavior differs. Hazard: return types of `__ne__`/`__eq__` affect truth value after `not` vs direct eval.</li><li>If `X` is `NaN` (float), `X != X` is `True`, so `not X != X` is `False`; `X == X` is `False` (since `NaN != NaN`), so fix gives `False` → same. But if `__eq__` overridden to return `True` for `NaN`, then fix diverges. Covered by non-boolean return, but worth noting: even boolean-returning overrides can break if they violate reflexivity/symmetry expectations assumed by the fix.</li><li>If the expression contains a `# type: ignore` comment on the `!=` token, the fix may drop it when rewriting the operator, losing suppression.</li><li>If the code relies on the syntactic form `not ... != ...` for searchability or tooling (e.g., regex-based refactors), the fix alters the source pattern, breaking such tools.</li><li>If `X` or `Y` is a tuple/list comparison, `not X != Y` is equivalent to `X == Y` only if `__ne__` and `__eq__` are consistent; but if one is overridden and not the other (e.g., `__ne__` returns `NotImplemented` leading to fallback, `__eq__` overridden), the fix may not mirror fallback behavior.</li><li>In rare cases where `X != Y` raises an exception (e.g., `AttributeError` in `__ne__`), the original `not X != Y` propagates it; the fix `X == Y` may not raise (if `__eq__` handles it) or raise a different exception, altering error flow.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Runtime Type Annotation Evaluation</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Parameter Passing Edge Cases</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>String Formatting Edge Cases</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Mutable Default Arguments and Aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Inconsistent __eq__ and __ne__ Override</td><td class="mut">If `X` or `Y` is a tuple/list comparison, `not X != Y` is equivalent to `X == Y` only if `</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Conditional Expression Grouping Clarity</td><td class="mut">In expressions like `not x != y if cond else z`, the fix alters grouping: original parses </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Property Getter Side Effects</td><td class="mut">If `X` or `Y` is a property with side effects in its getter, the fix may evaluate it once </td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>File Modes and Truncation</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Precedence interaction with conditional expression</td><td class="mut">In expressions like `not x != y if cond else z`, the fix alters grouping: original parses </td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>__ne__ returns non-boolean affecting truthiness under not</td><td class="mut">If `X.__ne__` returns a non-boolean (e.g., int, None), `not X != Y` may be truthy/falsy ba</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Syntactic form relied upon for tooling/regex</td><td class="mut">If the code relies on the syntactic form `not ... != ...` for searchability or tooling (e.</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>bytes vs str, encoding and newline handling</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>context managers that are not files, objects with write() but no close()</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>__ne__ returns falsey non-bool, __eq__ returns different falsey non-bool</td><td class="mut">If `X` or `Y` overloads `__ne__` to return a custom truthy/falsey object (e.g., always ret</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>NaN with overridden __eq__ returning True</td><td class="mut">If `X` is `NaN` (float), `X != X` is `True`, so `not X != X` is `False`; `X == X` is `Fals</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Custom __bool__ and len, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Runtime Type Annotation Evaluation</summary><pre>import typing
+T = int
+def f(x: &#39;T&#39;) -&gt; None:
+    val = not x != 5
+    print(&#39;val:&#39;, val)
+f(5)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Parameter Passing Edge Cases</summary><pre>def g(a, /, b, *, c=not 1 != 1, d):
+    print(c, d)
+g(1, 2, d=3)
+</pre></details><details id="r1-p003"><summary>r1-p003 — String Formatting Edge Cases</summary><pre>name = &#39;world&#39;
+msg = f&#39;Hello {not &quot;hi&quot; != &quot;hi&quot;} {name}&#39;
+print(msg)
+print(&#39;%s&#39; % (not &#39;a&#39; != &#39;a&#39;))
+</pre></details><details id="r1-p004"><summary>r1-p004 — Mutable Default Arguments and Aliasing</summary><pre>def append_val(x, lst=[]):
+    if not x != 5:
+        lst.append(x)
+    return lst
+print(append_val(5))
+print(append_val(5))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Inconsistent __eq__ and __ne__ Override</summary><pre>class A:
+    def __eq__(self, other):
+        return True
+    def __ne__(self, other):
+        return NotImplemented
+class B:
+    pass
+a = A()
+b = B()
+print(&#39;not a != b:&#39;, not a != b)
+print(&#39;a == b:&#39;, a == b)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Conditional Expression Grouping Clarity</summary><pre>x = 5
+y = 5
+z = 0
+result = not x != y if True else z
+print(&#39;result:&#39;, result)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Property Getter Side Effects</summary><pre>class Counter:
+    def __init__(self):
+        self.count = 0
+    @property
+    def value(self):
+        self.count += 1
+        return 5
+c = Counter()
+print(&#39;before:&#39;, c.count)
+expr = not c.value != 5
+print(&#39;after:&#39;, c.count, &#39;expr:&#39;, expr)
+</pre></details><details id="r1-p008"><summary>r1-p008 — File Modes and Truncation</summary><pre>with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    if not &#39;&#39; != &#39;&#39;:
+        f.write(&#39;hello&#39;)
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+</pre></details><details id="r2-p001"><summary>r2-p001 — Precedence interaction with conditional expression</summary><pre>def f():
+    x, y = 1, 2
+    cond = True
+    z = 99
+    result = (not x != y) if cond else z
+    print(&#39;orig:&#39;, result)
+    # After fix: becomes x == y if cond else z
+    result_fixed = (x == y) if cond else z
+    print(&#39;fixed:&#39;, result_fixed)
+    assert result == result_fixed
+f()
+</pre></details><details id="r2-p002"><summary>r2-p002 — __ne__ returns non-boolean affecting truthiness under not</summary><pre>class A:
+    def __ne__(self, other):
+        return 0  # falsey
+    def __eq__(self, other):
+        return None  # falsey
+
+a = A()
+b = A()
+print(&#39;not a != b:&#39;, not a != b)
+print(&#39;a == b:&#39;, a == b)
+# After fix: not a != b  -&gt;  a == b
+print(&#39;Fixed value (a == b):&#39;, a == b)
+# Original was True, fixed is False -&gt; divergence
+assert not a != b == True
+assert a == b == None
+print(&#39;Divergence detected&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Syntactic form relied upon for tooling/regex</summary><pre>import re
+pattern = r&#39;not\s+.+!=&#39;
+source = &#39;&#39;&#39;not a != b
+not(x != y)
+&#39;&#39;&#39;
+matches = re.findall(pattern, source)
+print(&#39;Matches before fix:&#39;, len(matches))
+# Simulate after fix: replace not X != Y with X == Y
+source_fixed = re.sub(r&#39;not\s+\((.+?)!=(.+?)\)&#39;, r&#39;\1 == \2&#39;, source)
+source_fixed = re.sub(r&#39;not\s+(.+?)!=(.+)&#39;, r&#39;\1 == \2&#39;, source_fixed)
+matches_after = re.findall(pattern, source_fixed)
+print(&#39;Matches after fix:&#39;, len(matches_after))
+print(&#39;Change in matches:&#39;, len(matches) - len(matches_after))
+</pre></details><details id="r2-p004"><summary>r2-p004 — bytes vs str, encoding and newline handling</summary><pre>b1 = b&#39;hello\n&#39;
+b2 = b&#39;hello\n&#39;
+s1 = &#39;hello\n&#39;
+s2 = &#39;hello\n&#39;
+print(&#39;not b1 != b2:&#39;, not b1 != b2)
+print(&#39;b1 == b2:&#39;, b1 == b2)
+print(&#39;not s1 != s2:&#39;, not s1 != s2)
+print(&#39;s1 == s2:&#39;, s1 == s2)
+# After fix: not x != y -&gt; x == y
+print(&#39;Fixed b comparison:&#39;, b1 == b2)
+print(&#39;Fixed s comparison:&#39;, s1 == s2)
+# Same here, but show we checked
+assert (not b1 != b2) == (b1 == b2)
+assert (not s1 != s2) == (s1 == s2)
+print(&#39;Byte/str comparisons consistent&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — context managers that are not files, objects with write() but no close()</summary><pre>class SilentWriter:
+    def __init__(self):
+        self.data = &#39;&#39;
+    def write(self, s):
+        self.data += s
+    def __enter__(self):
+        return self
+    def __exit__(self, *args):
+        pass
+
+w = SilentWriter()
+with w as f:
+    f.write(&#39;test&#39;)
+# Simulate a comparison involving the object
+class CmpObj:
+    def __init__(self, val):
+        self.val = val
+    def __ne__(self, other):
+        return self.val != other.val
+    def __eq__(self, other):
+        return self.val == other.val
+
+a = CmpObj(1)
+b = CmpObj(1)
+print(&#39;not a != b:&#39;, not a != b)
+print(&#39;After fix (a == b):&#39;, a == b)
+assert (not a != b) == (a == b)
+print(&#39;Context manager and comparison stable&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — __ne__ returns falsey non-bool, __eq__ returns different falsey non-bool</summary><pre>class X:
+    def __ne__(self, other):
+        return 0  # falsey -&gt; not 0 = True
+    def __eq__(self, other):
+        return None  # falsey, but when used directly -&gt; False
+
+class Y:
+    pass
+
+x = X()
+y = Y()
+orig = not x != y
+fixed = x == y
+print(&#39;not x != y:&#39;, orig)
+print(&#39;x == y:&#39;, fixed)
+print(&#39;Types:&#39;, type(orig), type(fixed))
+if orig != fixed:
+    print(&#39;Divergence: original&#39;, orig, &#39;vs fixed&#39;, fixed)
+else:
+    print(&#39;No divergence&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — NaN with overridden __eq__ returning True</summary><pre>class Nanoid(float):
+    def __eq__(self, other):
+        return True  # violates NaN expectations
+    def __ne__(self, other):
+        return not super().__eq__(other)
+
+x = Nanoid(float(&#39;nan&#39;))
+print(&#39;x != x:&#39;, x != x)
+print(&#39;not x != x:&#39;, not x != x)
+print(&#39;x == x:&#39;, x == x)
+# Original: not (x != x) -&gt; not True -&gt; False
+# Fixed: x == x -&gt; True
+orig = not x != x
+fixed = x == x
+print(&#39;Original result:&#39;, orig)
+print(&#39;Fixed result:&#39;, fixed)
+if orig != fixed:
+    print(&#39;Divergence due to __eq__ override&#39;)
+else:
+    print(&#39;Same result&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Custom __bool__ and len, None vs falsy, &#39;is&#39; vs &#39;==&#39;</summary><pre>class EmptyListLike:
+    def __len__(self):
+        return 0
+    def __bool__(self):
+        return False
+    def __ne__(self, other):
+        return len(self) != len(other) if hasattr(other, &#39;__len__&#39;) else True
+    def __eq__(self, other):
+        return len(self) == len(other) if hasattr(other, &#39;__len__&#39;) else False
+
+a = EmptyListLike()
+b = EmptyListLike()
+c = []
+print(&#39;not a != b:&#39;, not a != b)
+print(&#39;a == b:&#39;, a == b)
+print(&#39;not a != c:&#39;, not a != c)
+print(&#39;a == c:&#39;, a == c)
+print(&#39;a is []:&#39;, a is [])
+print(&#39;bool(a):&#39;, bool(a))
+# After fix: not x != y -&gt; x == y
+print(&#39;Fixed a==b:&#39;, a == b)
+print(&#39;Fixed a==c:&#39;, a == c)
+assert (not a != b) == (a == b)
+assert (not a != c) == (a == c)
+print(&#39;Custom bool/len comparisons consistent&#39;)
+</pre></details></body></html>

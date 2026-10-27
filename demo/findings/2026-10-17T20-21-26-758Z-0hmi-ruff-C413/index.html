@@ -1,0 +1,243 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C413 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C413 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-21-26-758Z-0hmi-ruff-C413 · fix labelled <b>unknown</b> · 16 programs, 9 fired, 6 fixed, 1 oracle-backed finding(s) · model cost $0.0141</p>
+<div class="card"><b>Rule analysis</b><p>Flags unnecessary list() or reversed() wrappers around sorted() calls.</p><p class="mut">Fix: Replaces list(sorted(...)) with sorted(...) and reversed(sorted(...)) with sorted(..., reverse=True).</p><details><summary>8 hazards</summary><ul><li>For reversed(sorted(...)), the fix changes behavior when a custom key function is used because reversed() reverses the final list while sorted(..., reverse=True) performs a reverse sort that may reorder equal elements differently.</li><li>If the sorted call uses a custom comparator via functools.cmp_to_key, reversed() and reverse=True are not equivalent due to differing stability properties.</li><li>When the iterable passed to sorted is not a list (e.g., a generator), removing list() in list(sorted(...)) changes the return type from list to an iterator, breaking code that expects a list.</li><li>If the result of list(sorted(...)) is assigned to a variable and later mutated, the fix may affect aliasing if other references expect a list but now get an iterator.</li><li>Comments inside the list() or reversed() call (e.g., list(sorted(# comment
+x))) would be dropped by the rewrite as they are not preserved in the simplified expression.</li><li>If sorted() is called with side-effecting key or reverse expressions (e.g., sorted(x, key=print(len(i)))), the evaluation order of those expressions is unchanged, but the outer call removal could affect debugging or profiling tools that count function invocations.</li><li>In rare cases where sorted returns a subclass of list (e.g., from a user-defined class overriding __sorted__), removing list() could change the exact type returned, affecting isinstance checks.</li><li>If the code relies on the fact that list(sorted(...)) creates a new list object (which it does), and sorted(...) also creates a new list, there is no behavioral difference—but if sorted were overridden to return a singleton or cached result, the fix could expose that, though sorted is built-in and not overridable in standard Python.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p006"><b>r2-p006</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes a `list()` call around `sorted()`, which is documented as safe because `sorted()` already returns a list. However, the program monkey-patches `builtins.sorted` to return a cached list instance, so `list(sorted(x))` creates a new list while `sorted(x)` returns the cached instance, changing the identity check `a is b` from `False` to `True`.">judge: real · medium</span> singleton_sorted_return_exposure<p class="mut">The fix removes a `list()` call around `sorted()`, which is documented as safe because `sorted()` already returns a list. However, the program monkey-patches `builtins.sorted` to return a cached list instance, so `list(sorted(x))` creates a new list while `sorted(x)` returns the cached instance, changing the identity check `a is b` from `False` to `True`.</p>
+<h2>Minimized program (13→12 lines)</h2><pre>import builtins
+original_sorted = builtins.sorted
+cache = []
+def cached_sorted(*args, **kwargs):
+    if not cache:
+        cache.append(original_sorted(*args, **kwargs))
+    return cache[0]
+builtins.sorted = cached_sorted
+x = [3, 1, 2]
+a = list(sorted(x))
+b = sorted(x)
+print(a is b)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:21:49.098491615 -0400
++++ fixed.py	2026-10-17 16:21:49.261490804 -0400
+@@ -7,7 +7,7 @@
+     return cache[0]
+ builtins.sorted = cached_sorted
+ x = [3, 1, 2]
+<span class="del">-a = list(sorted(x))</span>
+<span class="add">+a = sorted(x)</span>
+ b = sorted(x)
+ print(a is b)
+ print(a == b)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+False
+True
+stdout after:
+True
+True</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/10245">astral-sh/ruff/issues/10245</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/20632">astral-sh/ruff/issues/20632</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2772">astral-sh/ruff/issues/2772</a> · <a href="reports/r2-p006.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>reversed_sorted_key_behavior_change</td><td class="mut">For reversed(sorted(...)), the fix changes behavior when a custom key function is used bec</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>class_attribute_property_side_effect</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>star_import_module_side_effects_all</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>side_effecting_key_expression_evaluation_order</td><td class="mut">If sorted() is called with side-effecting key or reverse expressions (e.g., sorted(x, key=</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>walrus_comprehension_scoping_late_binding</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span></td><td>bytes_vs_str_encoding_newline_handling</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>mutable_default_arguments_aliasing_after_rewrite</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>evaluation_order_side_effects_merged_deleted</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>shadowed_builtins_redefinition</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>mutation_aliasing_after_fix</td><td class="mut">If the result of list(sorted(...)) is assigned to a variable and later mutated, the fix ma</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>cmp_to_key_stability_difference</td><td class="mut">If the sorted call uses a custom comparator via functools.cmp_to_key, reversed() and rever</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>custom_key_reverse_equivalence</td><td class="mut">For reversed(sorted(...)), the fix changes behavior when a custom key function is used bec</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>evaluation_order_side_effects_merged</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>singleton_sorted_return_exposure</td><td class="mut">If the code relies on the fact that list(sorted(...)) creates a new list object (which it </td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>coercion_and_rounding_edge</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>walrus_lambda_late_binding</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — reversed_sorted_key_behavior_change</summary><pre>data = [(&#39;a&#39;, 1), (&#39;b&#39;, 1), (&#39;c&#39;, 2)]
+result_before = list(reversed(sorted(data, key=lambda x: x[1])))
+sorted_direct = sorted(data, key=lambda x: x[1], reverse=True)
+print(&#39;Before fix:&#39;, result_before)
+print(&#39;After fix :&#39;, sorted_direct)
+print(&#39;Equal?&#39;, result_before == sorted_direct)
+</pre></details><details id="r1-p002"><summary>r1-p002 — class_attribute_property_side_effect</summary><pre>class A:
+    _val = 0
+    @property
+    def val(self):
+        A._val += 1
+        return self._x
+    def __init__(self, x):
+        self._x = x
+lst = [A(1), A(2)]
+sorted_lst = sorted(lst, key=lambda i: i.val)
+list_wrapped = list(sorted_lst)
+print(&#39;Access count via property:&#39;, A._val)
+print(&#39;Sorted result:&#39;, [(i._x, i.val) for i in list_wrapped])
+</pre></details><details id="r1-p003"><summary>r1-p003 — star_import_module_side_effects_all</summary><pre>import sys
+mod = sys.modules[&#39;__main__&#39;]
+mod.COUNTER = 0
+class Dummy:
+    def __init__(self):
+        mod.COUNTER += 1
+    def __lt__(self, other):
+        return True
+from __main__ import *
+data = [Dummy(), Dummy()]
+sorted_data = sorted(data)
+list_wrapped = list(sorted_data)
+print(&#39;COUNTER after list(sorted):&#39;, mod.COUNTER)
+print(&#39;Length:&#39;, len(list_wrapped))
+</pre></details><details id="r1-p004"><summary>r1-p004 — side_effecting_key_expression_evaluation_order</summary><pre>calls = []
+def key_fn(x):
+    calls.append((&#39;key&#39;, x))
+    return x
+data = [3, 1, 2]
+sorted_once = sorted(data, key=key_fn)
+list_wrapped = list(sorted_once)
+print(&#39;Key call log:&#39;, calls)
+print(&#39;List wrapped:&#39;, list_wrapped)
+print(&#39;Same as sorted?&#39;, list_wrapped == sorted_once)
+</pre></details><details id="r1-p005"><summary>r1-p005 — walrus_comprehension_scoping_late_binding</summary><pre>funcs = []
+for i in range(3):
+    if (tmp := sorted([i, 0])):
+        f = lambda: tmp
+        funcs.append(f)
+list_wrapped = list(sorted([0]))
+print(&#39;Closure results:&#39;, [f() for f in funcs])
+print(&#39;List wrapped:&#39;, list_wrapped)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:21:40.281536202 -0400
++++ fixed.py	2026-10-17 16:21:40.442535376 -0400
+@@ -3,6 +3,6 @@
+     if (tmp := sorted([i, 0])):
+         f = lambda: tmp
+         funcs.append(f)
+<span class="del">-list_wrapped = list(sorted([0]))</span>
+<span class="add">+list_wrapped = sorted([0])</span>
+ print(&#39;Closure results:&#39;, [f() for f in funcs])
+ print(&#39;List wrapped:&#39;, list_wrapped)
+</pre></details><details id="r1-p006"><summary>r1-p006 — bytes_vs_str_encoding_newline_handling</summary><pre>import tempfile
+with tempfile.NamedTemporaryFile(mode=&#39;w&#39;, delete=False) as f:
+    f.write(&#39;a\nb\nc&#39;)
+    fname = f.name
+with open(fname, &#39;r&#39;) as f:
+    lines = f.readlines()
+sorted_lines = sorted(lines)
+print(&#39;Sorted lines:&#39;, [repr(l) for l in sorted_lines])
+import os
+os.unlink(fname)
+</pre></details><details id="r1-p007"><summary>r1-p007 — mutable_default_arguments_aliasing_after_rewrite</summary><pre>def f(x, lst=[]):
+    lst.append(x)
+    return lst
+data = [3, 1, 2]
+sorted_data = sorted(data, key=f)
+list_wrapped = list(sorted_data)
+print(&#39;Default arg state after key calls:&#39;, f.__defaults__[0])
+print(&#39;Wrapped list:&#39;, list_wrapped)
+</pre></details><details id="r1-p008"><summary>r1-p008 — evaluation_order_side_effects_merged_deleted</summary><pre>ref = []
+def side_effect(x):
+    ref.append(x)
+    return -x
+data = [1, 2, 3]
+transformed = [side_effect(x) for x in data]
+sorted_transformed = sorted(transformed)
+list_wrapped = list(sorted_transformed)
+print(&#39;Side effect log:&#39;, ref)
+print(&#39;List wrapped:&#39;, list_wrapped)
+print(&#39;Sum of wrapped:&#39;, sum(list_wrapped))
+</pre></details><details id="r2-p001"><summary>r2-p001 — shadowed_builtins_redefinition</summary><pre>sorted = lambda x, **kw: [1]
+result = list(sorted([3, 2]))
+sorted = list
+print(result)
+</pre></details><details id="r2-p002"><summary>r2-p002 — mutation_aliasing_after_fix</summary><pre>x = [3, 1, 2]
+a = b = list(sorted(x))
+a[0] = 99
+print(b)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:21:48.216496016 -0400
++++ fixed.py	2026-10-17 16:21:48.379495202 -0400
+@@ -1,4 +1,4 @@
+ x = [3, 1, 2]
+<span class="del">-a = b = list(sorted(x))</span>
+<span class="add">+a = b = sorted(x)</span>
+ a[0] = 99
+ print(b)
+</pre></details><details id="r2-p003"><summary>r2-p003 — cmp_to_key_stability_difference</summary><pre>from functools import cmp_to_key
+def cmp(a, b):
+    return (a &gt; 0) - (b &gt; 0)
+data = [-1, 1, -2, 2]
+r1 = list(reversed(sorted(data, key=cmp_to_key(cmp))))
+r2 = sorted(data, key=cmp_to_key(cmp), reverse=True)
+print(r1, r2, sep=&#39;\n&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — custom_key_reverse_equivalence</summary><pre>data = [(1, &#39;a&#39;), (2, &#39;b&#39;), (1, &#39;c&#39;)]
+r1 = list(reversed(sorted(data, key=lambda x: x[0])))
+r2 = sorted(data, key=lambda x: x[0], reverse=True)
+print(r1)
+print(r2)
+</pre></details><details id="r2-p005"><summary>r2-p005 — evaluation_order_side_effects_merged</summary><pre>counter = 0
+def inc():
+    global counter
+    counter += 1
+    return counter
+x = [inc(), inc()]
+r = list(sorted(x))
+counter = 0
+r2 = sorted(x)
+print(r, counter)
+print(r2, counter)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:21:48.822492991 -0400
++++ fixed.py	2026-10-17 16:21:48.996492123 -0400
+@@ -4,7 +4,7 @@
+     counter += 1
+     return counter
+ x = [inc(), inc()]
+<span class="del">-r = list(sorted(x))</span>
+<span class="add">+r = sorted(x)</span>
+ counter = 0
+ r2 = sorted(x)
+ print(r, counter)
+</pre></details><details id="r2-p006"><summary>r2-p006 — singleton_sorted_return_exposure</summary><pre>import builtins
+original_sorted = builtins.sorted
+cache = []
+def cached_sorted(*args, **kwargs):
+    if not cache:
+        cache.append(original_sorted(*args, **kwargs))
+    return cache[0]
+builtins.sorted = cached_sorted
+x = [3, 1, 2]
+a = list(sorted(x))
+b = sorted(x)
+print(a is b)
+print(a == b)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:21:49.098491615 -0400
++++ fixed.py	2026-10-17 16:21:49.261490804 -0400
+@@ -7,7 +7,7 @@
+     return cache[0]
+ builtins.sorted = cached_sorted
+ x = [3, 1, 2]
+<span class="del">-a = list(sorted(x))</span>
+<span class="add">+a = sorted(x)</span>
+ b = sorted(x)
+ print(a is b)
+ print(a == b)
+</pre></details><details id="r2-p007"><summary>r2-p007 — coercion_and_rounding_edge</summary><pre>from decimal import Decimal
+x = [Decimal(&#39;1.5&#39;), Decimal(&#39;1.4&#39;)]
+r = list(sorted(x))
+print(type(r[0]), r[0])
+</pre><pre class="diff">--- orig.py	2026-10-17 16:21:49.364490292 -0400
++++ fixed.py	2026-10-17 16:21:49.538489426 -0400
+@@ -1,4 +1,4 @@
+ from decimal import Decimal
+ x = [Decimal(&#39;1.5&#39;), Decimal(&#39;1.4&#39;)]
+<span class="del">-r = list(sorted(x))</span>
+<span class="add">+r = sorted(x)</span>
+ print(type(r[0]), r[0])
+</pre></details><details id="r2-p008"><summary>r2-p008 — walrus_lambda_late_binding</summary><pre>fs = []
+for i in range(2):
+    if (x := list(sorted([i, 0]))) is not None:
+        fs.append(lambda: x)
+print([f() for f in fs])
+</pre><pre class="diff">--- orig.py	2026-10-17 16:21:49.637488934 -0400
++++ fixed.py	2026-10-17 16:21:49.803488108 -0400
+@@ -1,5 +1,5 @@
+ fs = []
+ for i in range(2):
+<span class="del">-    if (x := list(sorted([i, 0]))) is not None:</span>
+<span class="add">+    if (x := sorted([i, 0])) is not None:</span>
+         fs.append(lambda: x)
+ print([f() for f in fs])
+</pre></details></body></html>

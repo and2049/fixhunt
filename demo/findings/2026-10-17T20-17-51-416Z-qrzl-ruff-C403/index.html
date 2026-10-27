@@ -1,0 +1,382 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C403 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C403 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-17-51-416Z-qrzl-ruff-C403 · fix labelled <b>unknown</b> · 8 programs, 4 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0057</p>
+<div class="card"><b>Rule analysis</b><p>Flags set() calls wrapping list comprehensions where the elements do not depend on iteration variables.</p><p class="mut">Fix: Rewrites set([expr for vars in iters if conds]) into {expr for vars in iters if conds}, preserving the comprehension&#39;s structure but changing the container from list to set literal.</p><details><summary>10 hazards</summary><ul><li>The rewrite may drop inline or block comments attached to the opening bracket, closing bracket, or within the list literal, as Ruff&#39;s autofix does not preserve them reliably.</li><li>If the list comprehension is used elsewhere in the same scope (e.g., assigned to a variable before passing to set()), the refactor breaks that usage by eliminating the list entirely.</li><li>In rare cases involving ambiguous grammar (e.g., set([...]) * 2), removing brackets could alter precedence and change the expression&#39;s meaning.</li><li>If the comprehension contains a walrus operator (:=) that binds a variable used after the set() call, the refactor may prematurely end the variable&#39;s scope or alter its lifetime.</li><li>When the list comprehension is part of a larger expression (e.g., in a return statement or argument list), the autofix might inadvertently affect formatting or line continuation in ways that break syntax.</li><li>If the code relies on the list being mutable (e.g., passed to a function that mutates it before set() consumes it), the refactor removes that mutation opportunity, though set() construction already makes this irrelevant—still, any intermediate mutation would be lost.</li><li>In Python versions prior to 3.6, set literals with comprehensions were not guaranteed to preserve insertion order, but since the original list comprehension also had no order guarantee for set(), this is not a behavioral change—however, if the code mistakenly assumed list order mattered for debugging or side-effect logging, the refactor could obscure intent.</li><li>If the list comprehension is written across multiple lines with trailing commas or hanging indentation, the autofix may normalize whitespace in a way that conflicts with project style guides (e.g., black vs. Ruff), causing formatting churn.</li><li>If the set() call is part of a macro-like pattern via eval or exec, the static rewrite could produce invalid code when the string is later executed.</li><li>If the comprehension includes a conditional expression that raises an exception during evaluation, the refactor does not change evaluation order or short-circuiting, so no semantic hazard arises—but if the list was being inspected for partial results before completion (e.g., in a debugger), that observation capability is lost.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>class attributes vs instance attributes, descriptors, properties with side effects</td><td class="mut">Descriptor __get__ called twice due to double evaluation in set([...]) versus single evalu</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>int/float/bool coercion, Decimal, division and rounding</td><td class="mut">Decimal context changes precision mid-comprehension; list vs set construction timing affec</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>walrus operator binding lifetime</td><td class="mut">Walrus-assigned variable leaked from list comprehension scope in Python 3.8+, but set comp</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">invalid</span></td><td>set literals insertion order pre-3.6 (debugging/logging intent obscured)</td><td class="mut">Code assumes set construction order reflects list order for logging; refactor obscures tha</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">invalid</span></td><td>conditional expression raising exception during evaluation</td><td class="mut">Exception in conditional expression occurs at same time in both forms; no semantic change,</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>set() call in macro-like pattern via eval or exec</td><td class="mut">Static rewrite produces invalid code when string contains set([...]) that is later execute</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>code relies on list being mutable before set() consumption</td><td class="mut">Intermediate list mutation opportunity removed; though set() construction makes it irrelev</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>evaluation order and side effects when expressions are merged, duplicated or deleted</td><td class="mut">Evaluation order unchanged, but if expression had side effects that depended on temporary </td></tr></table>
+<h2>Sources</h2><details id="r2-p001"><summary>r2-p001 — class attributes vs instance attributes, descriptors, properties with side effects</summary><pre>class T:
+    def __init__(self):
+        self.x = None
+    def __get__(self, obj, owner):
+        return f&#39;got-{id(obj)}&#39;
+class Descriptor:
+    value = 0
+    def __get__(self, obj, owner):
+        self.value += 1
+        return [self.value]
+d = Descriptor()
+s = set([d.value for _ in [0]])  # Triggers rule; d.value accessed once? But set builds list first.
+print(&#39;list-based:&#39;, s)
+d = Descriptor()
+s2 = {d.value for _ in [0]}       # After fix; still one access.
+print(&#39;set-literal:&#39;, s2)
+# Hazard: if descriptor had side effect on obj state, list build might retain ref? Not here.
+# Instead, make descriptor mutate owner class attr.
+class Meta(type):
+    log = []
+    def __get__(cls, obj, owner):
+        cls.log.append(id(cls))
+        return 42
+class C(metaclass=Meta):
+    pass
+print(&#39;pre-fix accesses:&#39;, C.Meta.log)
+s = set([C.Meta for _ in [0, 1]])  # Two accesses via list comp
+print(&#39;post list-comp:&#39;, C.Meta.log)
+s2 = {C.Meta for _ in [0, 1]}      # Two accesses via set comp
+print(&#39;post set-comp:&#39;, C.Meta.log)
+</pre></details><details id="r2-p002"><summary>r2-p002 — int/float/bool coercion, Decimal, division and rounding</summary><pre>from decimal import Decimal, getcontext
+getcontext().prec = 28
+def gen():
+    getcontext().prec = 2  # Lower precision during iteration
+    yield Decimal(&#39;1&#39;) / Decimal(&#39;3&#39;)
+    getcontext().prec = 28  # Restore
+    yield Decimal(&#39;2&#39;) / Decimal(&#39;3&#39;)
+g = gen()
+s1 = set([str(x) for x in g])  # List built: first two yields seen at low prec, then high? No: gen exhausted in list comp.
+print(&#39;list-based:&#39;, s1)
+g = gen()  # Reset
+s2 = {str(x) for x in g}         # Set comp: same exhaustion order
+print(&#39;set-literal:&#39;, s2)
+# Hazard: if context read during set() call vs during iter? Both same.
+# Instead: make expression depend on mutable global that changes during iteration.
+precision_log = []
+def get_prec():
+    precision_log.append(getcontext().prec)
+    return getcontext().prec
+class Proxy:
+    def __init__(self, v): self.v = v
+    def __truediv__(self, other):
+        return Decimal(self.v) / Decimal(other.v)
+    def __str__(self): return str(self.v)
+getcontext().prec = 10
+items = [Proxy(&#39;1&#39;), Proxy(&#39;2&#39;)]
+def gen_items():
+    for i in items:
+        getcontext().prec += 2  # Mutate during iteration
+        yield i
+s1 = set([str(x / Proxy(&#39;3&#39;)) for x in gen_items()])  # List comp: prec logged during build
+print(&#39;prec log (list):&#39;, precision_log)
+print(&#39;result:&#39;, s1)
+precision_log.clear()
+s2 = {str(x / Proxy(&#39;3&#39;)) for x in gen_items()}  # Set comp: same log order
+print(&#39;prec log (set):&#39;, precision_log)
+print(&#39;result:&#39;, s2)
+</pre></details><details id="r2-p003"><summary>r2-p003 — walrus operator binding lifetime</summary><pre># Walrus in comprehension: target leaks in list comp scope (but not in set comp) in Py3.8+
+# However, in function scope, neither leaks. Use class scope to see leak.
+class ScopeTest:
+    pass
+# In class scope, list comprehension leaks walrus var; set comp does not.
+# Rule rewrites set([...]) -&gt; {...}, removing leak.
+try:
+    ScopeTest.walrus_var = None  # Initialize
+    s = set([(ScopeTest.walrus_var := i) for i in [1, 2, 3]])
+    print(&#39;After list-based set:&#39;, hasattr(ScopeTest, &#39;walrus_var&#39;), ScopeTest.walrus_var)
+except Exception as e:
+    print(&#39;Error in list-based:&#39;, type(e).__name__, e)
+try:
+    ScopeTest.walrus_var = None  # Reset
+    s2 = {(ScopeTest.walrus_var := i) for i in [1, 2, 3]}  # After fix
+    print(&#39;After set-literal:&#39;, hasattr(ScopeTest, &#39;walrus_var&#39;), ScopeTest.walrus_var)
+except Exception as e:
+    print(&#39;Error in set-literal:&#39;, type(e).__name__, e)
+# Output: list-based leaks walrus_var=3; set-literal does not (or leaks? Actually, in class scope, set comp also leaks?)
+# Correction: in class scope, both leak. Need function scope.
+# Redo in function.
+def test():
+    walrus_var = None
+    s = set([(walrus_var := i) for i in [1, 2, 3]])
+    return walrus_var  # Unbound in Py3.8+ if leaked? Actually, list comp does NOT leak in function scope.
+# Walrus never leaks in function scope comprehensions. So hazard is misstated.
+# Actual hazard: walrus in condition? Use assignment expression in filter.
+# Ref: https://stackoverflow.com/questions/52854790/assignment-expression-in-list-comprehension
+# In function scope: walrus does NOT leak. So no hazard? But rule says &quot;may prematurely end variable&#39;s scope&quot;
+# Perhaps: if walrus used AFTER set() call, and list comp kept it alive longer? No.
+# Instead: make walrus bind a resource that needs cleanup; list comp holds ref longer via list.
+class Resource:
+    def __init__(self, id): self.id = id
+    def __del__(self): print(f&#39;Resource {self.id} cleaned&#39;)
+def make_resources():
+    for i in range(2):
+        yield Resource(i)
+gen = make_resources()
+# List comp: holds full list in memory during set() call; resources live until set built.
+# Set comp: resources may be freed earlier? Not guaranteed.
+s1 = set([r for r in gen])  # List built first
+print(&#39;After list-based set creation&#39;)
+gen = make_resources()
+s2 = {r for r in gen}      # Set comp
+print(&#39;After set-literal creation&#39;)
+# Print order of __del__ may differ.
+</pre></details><details id="r2-p004"><summary>r2-p004 — set literals insertion order pre-3.6 (debugging/logging intent obscured)</summary><pre>construction_order = []
+class Logger:
+    def __init__(self, name):
+        self.name = name
+    def __repr__(self):
+        return f&#39;&lt;{self.name}&gt;&#39;
+    def __hash__(self):
+        return hash(self.name)
+    def __eq__(self, other):
+        return isinstance(other, Logger) and self.name == other.name
+items = [Logger(&#39;a&#39;), Logger(&#39;b&#39;), Logger(&#39;c&#39;)]
+# Build set via list comp: order of evaluation is items order, but set discards duplicates.
+# No duplicates here, so set() will have arbitrary order, but list comp ran in order.
+s1 = set([str(obj.name) for obj in items])  # List comp: logs in items order via str()? No, str doesn&#39;t log.
+# Make __str__ log construction order.
+def log_name(obj):
+    construction_order.append(obj.name)
+    return obj.name
+s1 = set([log_name(obj) for obj in items])  # Logs a,b,c in order
+print(&#39;Construction order (list-based):&#39;, construction_order)
+construction_order.clear()
+s2 = {log_name(obj) for obj in items}     # Logs a,b,c in order (same)
+print(&#39;Construction order (set-literal):&#39;, construction_order)
+# To see hazard: if code later iterated set expecting list order.
+# But set order is arbitrary; logging during construction same.
+# Hazard: developer thought set() preserved list order for debugging, but refactor makes it look intentional.
+# Add duplicate to force non-trivial set building.
+items = [Logger(&#39;a&#39;), Logger(&#39;b&#39;), Logger(&#39;a&#39;), Logger(&#39;c&#39;)]
+construction_order.clear()
+s1 = set([log_name(obj) for obj in items])  # Logs a,b,a,c
+print(&#39;With dup - construction order (list-based):&#39;, construction_order)
+print(&#39;Result:&#39;, s1)
+construction_order.clear()
+s2 = {log_name(obj) for obj in items}     # Logs a,b,a,c
+print(&#39;With dup - construction order (set-literal):&#39;, construction_order)
+print(&#39;Result:&#39;, s2)
+# Same logs. No behavioral change.
+# Instead: make hazard about relying on list() intermediate for inspection.
+# Example: debug prints list before set conversion.
+items = [1,2,3]
+temp = [x*2 for x in items]  # Not rewritten
+print(&#39;Intermediate list (for debugging):&#39;, temp)
+s = set(temp)                 # Not a comprehension inside set()
+print(&#39;Final set:&#39;, s)
+# Rule doesn&#39;t fire here.
+# Make it fire: set([x*2 for x in items])
+construction_order.clear()
+def record(x):
+    construction_order.append(x)
+    return x*2
+items = [1,2,3]
+s1 = set([record(x) for x in items])  # Logs 1,2,3
+print(&#39;Intermediate values recorded (list-based):&#39;, construction_order)
+construction_order.clear()
+s2 = {record(x) for x in items}       # Logs 1,2,3
+print(&#39;Intermediate values recorded (set-literal):&#39;, construction_order)
+# Still same.
+# Conclusion: no semantic hazard, but we output as required.
+</pre></details><details id="r2-p005"><summary>r2-p005 — conditional expression raising exception during evaluation</summary><pre>results = []
+exceptions_caught = []
+def maybe_fail(x):
+    if x == 2:
+        raise ValueError(&#39;fail at 2&#39;)
+    return x * 10
+items = [0, 1, 2, 3]
+try:
+    # List comp: builds list; exception during build stops list creation
+    s = set([maybe_fail(x) for x in items if x != 1])  # Fails at x=2
+    print(&#39;This should not print&#39;)
+except Exception as e:
+    exceptions_caught.append((type(e).__name__, str(e)))
+    print(&#39;Caught in list-based:&#39;, exceptions_caught[-1])
+# After fix: set comp fails same point.
+exceptions_caught.clear()
+try:
+    s2 = {maybe_fail(x) for x in items if x != 1}
+    print(&#39;This should not print&#39;)
+except Exception as e:
+    exceptions_caught.append((type(e).__name__, str(e)))
+    print(&#39;Caught in set-literal:&#39;, exceptions_caught[-1])
+# To see intermediate results: need to catch exception and inspect partial list.
+# But list comp inside set() is not accessible.
+# Instead: make conditional expression that may fail, but we wrap in try/except inside comp.
+def safe_maybe_fail(x):
+    try:
+        return maybe_fail(x)
+    except ValueError as e:
+        return f&#39;caught: {e}&#39;
+items = [0,1,2,3]
+s1 = set([safe_maybe_fail(x) for x in items])  # No exception escapes
+print(&#39;List-based result:&#39;, s1)
+s2 = {safe_maybe_fail(x) for x in items}
+print(&#39;Set-literal result:&#39;, s2)
+# Same.
+# Hazard: if code relied on catching exception OUTSIDE to get partial list.
+# Impossible because list is transient.
+# We output trace showing same behavior.
+</pre></details><details id="r2-p006"><summary>r2-p006 — set() call in macro-like pattern via eval or exec</summary><pre>template = &#39;set([x*2 for x in range(3)])&#39;  # Pattern to be rewritten by rule if in source
+# But rule only fires on actual source, not strings.
+# Hazard: if developer writes code that generates set([...]) strings, and linter rewrites the template.
+# Example: linter runs on this file, sees set([...]) in string? No, rule ignores strings.
+# So we must put the pattern in actual code that gets eval&#39;d, but rule rewrites it prematurely.
+# Make the string contain the pattern, and rule fires on it because it&#39;s in source.
+# Then when eval&#39;d, it&#39;s invalid because set literal with comp requires braces.
+code_string = &quot;set([x*2 for x in range(3)])&quot;  # This line triggers rule
+# After fix, becomes: {x*2 for x in range(3)}
+# But if this string is meant to be executed later, the rewritten version is wrong.
+# However, the rule rewrites the source, so the string literal changes.
+# We show: before fix, eval works; after fix, eval fails.
+# But we can&#39;t show both in one run.
+# Instead: demonstrate that rewritten string fails eval.
+try:
+    # This is the fixed version: {x*2 for x in range(3)} inside quotes
+    s = eval(&quot;{x*2 for x in range(3)}&quot;)  # Valid set comp
+    print(&#39;Eval of set-literal string:&#39;, s)
+except Exception as e:
+    print(&#39;Eval failed:&#39;, type(e).__name__, e)
+# Now the broken version: set([x*2 for x in range(3)]) as string
+try:
+    s = eval(&quot;set([x*2 for x in range(3)])&quot;)  # Valid
+    print(&#39;Eval of list-based string:&#39;, s)
+except Exception as e:
+    print(&#39;Eval failed:&#39;, type(e).__name__, e)
+# To show hazard: suppose we have a function that expects the old pattern.
+def process_pattern(pattern_str):
+    # Expects pattern that uses set([...])
+    return eval(pattern_str)
+# If linter rewrote the pattern_str in source, it breaks.
+pattern = &quot;set([x*2 for x in range(3)])&quot;  # This line may be rewritten
+# After fix, pattern becomes &quot;{x*2 for x in range(3)}&quot;
+# But if process_pattern expects the old form, it still works because both are valid.
+# Actually, both forms are valid in eval.
+# Hazard only if string is used in context requiring list, not set.
+# Example: code that does list(set([...])) expects list intermediate.
+# But set([...]) is used to make set, not list.
+# We conclude: hazard is that eval(string) may break if string assumes list comp semantics.
+# But set([...]) and {...} both make sets.
+# Unless the string is part of a larger expression.
+# Let&#39;s use: &quot;list(set([x for x in range(3)]))&quot;
+# Rule does NOT fire on set([...]) inside list()? It does: set([...]) is inner.
+# After fix: list({x for x in range(3)}) which is valid.
+# Still works.
+# Give up and show that rewritten string is different.
+original = &quot;set([x*2 for x in range(3)])&quot;
+rewritten = &quot;{x*2 for x in range(3)}&quot;
+print(&#39;Original pattern:&#39;, original)
+print(&#39;Rewritten pattern:&#39;, rewritten)
+print(&#39;Are they equal?&#39;, original == rewritten)
+# Eval both:
+print(&#39;Eval original:&#39;, eval(original))
+print(&#39;Eval rewritten:&#39;, eval(rewritten))
+</pre></details><details id="r2-p007"><summary>r2-p007 — code relies on list being mutable before set() consumption</summary><pre>mutations = []
+class MutableItem:
+    def __init__(self, value):
+        self.value = value
+    def __repr__(self):
+        return f&#39;Item({self.value})&#39;
+    def mutate(self):
+        self.value *= 10
+        mutations.append(id(self))
+items = [MutableItem(i) for i in range(3)]
+# During list comprehension build, we could mutate items if we had access.
+# But comp expression only sees each item.
+# Instead: make comprehension expression mutate a global.
+counter = [0]
+def increment_and_return(x):
+    counter[0] += 1
+    return x * counter[0]
+s1 = set([increment_and_return(i) for i in [1,2,3]])  # List comp: increment called 1,2,3 in order
+print(&#39;Mutation log (list-based):&#39;, counter[0])
+print(&#39;Result:&#39;, s1)
+counter[0] = 0
+s2 = {increment_and_return(i) for i in [1,2,3]}     # Set comp: same call order
+print(&#39;Mutation log (set-literal):&#39;, counter[0])
+print(&#39;Result:&#39;, s2)
+# Same.
+# Hazard: if list was built and then mutated before set() call.
+# Example: lst = [expr for ...]; lst.append(...); s = set(lst)
+# Rule doesn&#39;t fire on that.
+# We need to make the list comp inside set() be the only reference, but imagine:
+# Developer assumes they can insert a debugging mutation between list creation and set() call.
+# After refactor, no intermediate list exists to mutate.
+# Show: if we could mutate the list during its construction (impossible).
+# Instead: use side effect in expression that depends on list length so far.
+# But list comp doesn&#39;t expose partial list.
+# We simulate by having expression read a global that tracks how many items processed.
+processed_count = []
+def process(x):
+    processed_count.append(len(processed_count))  # Index of this item
+    return x * 10
+items = [1,2,3]
+s1 = set([process(x) for x in items])  # processed_count: [0,1,2]
+print(&#39;Processed indices (list-based):&#39;, processed_count)
+print(&#39;Result:&#39;, s1)
+processed_count.clear()
+s2 = {process(x) for x in items}       # processed_count: [0,1,2]
+print(&#39;Processed indices (set-literal):&#39;, processed_count)
+print(&#39;Result:&#39;, s2)
+# Same.
+# Final attempt: hazard is that list() constructor is explicit about creating list; set literal hides it.
+# For teaching, removing list() may obscure intent.
+# We output trace showing same behavior but note that intermediate list is gone.
+print(&#39;Note: intermediate list no longer exists for inspection&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — evaluation order and side effects when expressions are merged, duplicated or deleted</summary><pre>cache = {}  # Simple cache: key -&gt; computed value
+access_log = []   # Log each access to compute_expensive
+def expensive_compute(x):
+    access_log.append(x)
+    if x in cache:
+        return cache[x]
+    result = x ** 2
+    cache[x] = result
+    return result
+items = [2, 3, 2, 4]  # Duplicate 2
+try:
+    # List comp: evaluates each item in order; second 2 hits cache
+    s = set([expensive_compute(x) for x in items])
+    print(&#39;Access log (list-based):&#39;, access_log)
+    print(&#39;Cache contents:&#39;, cache)
+    print(&#39;Result set:&#39;, s)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, e)
+access_log.clear()
+cache.clear()
+try:
+    s2 = {expensive_compute(x) for x in items}  # Set comp: same evaluation order
+    print(&#39;Access log (set-literal):&#39;, access_log)
+    print(&#39;Cache contents:&#39;, cache)
+    print(&#39;Result set:&#39;, s2)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, e)
+# Same behavior.
+# Hazard: if code inserted a side effect BETWEEN list creation and set() call.
+# Example:
+#   lst = [expensive_compute(x) for x in items]
+#   print(&#39;List built:&#39;, lst)  # Debug side effect
+#   s = set(lst)
+# Rule doesn&#39;t fire on that.
+# We make the list comp be the argument to set(), so no intermediate.
+# Instead: hazard is that set() constructor vs set literal differ in how they handle exceptions during iteration.
+# But both iterate the comp fully before building set.
+# We give up and output same trace.
+# To force difference: make expression that returns list, and set() flattens? No.
+# Final: use expression that mutates iterator, affecting subsequent items if list not yet built.
+# But comprehensions evaluate iterator fully before building list/set in CPython.
+# However, spec does not guarantee; but in practice, list comp evaluates iterable first.
+# Actually: [f(x) for x in y] first gets iter(y), then iterates it.
+# Same for set comp.
+# So no difference.
+# We output trace showing identical behavior to confirm no semantic change (as expected for this hazard).
+print(&#39;Identical behavior confirms no semantic hazard for reordering/duplication&#39;)
+</pre></details></body></html>

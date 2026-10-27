@@ -1,0 +1,34 @@
+{
+  "summary": "Flags PEP 613 explicit type aliases that reference symbols unavailable at runtime due to being imported only within TYPE_CHECKING blocks.",
+  "firingShapes": [
+    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from mod import X\nA: TypeAlias = X",
+    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    class C: ...\nB: TypeAlias = C | int",
+    "import typing\nif typing.TYPE_CHECKING:\n    from pkg import Y\nZ: TypeAlias = list[Y]",
+    "from __future__ import annotations\nfrom typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from a import B\nC: TypeAlias = B",
+    "from typing import TYPE_CHECKING, TypeAlias\nif TYPE_CHECKING:\n    import foo\nD: TypeAlias = foo.Bar",
+    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from x import Y as Z\nE: TypeAlias = Z",
+    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    def f() -> int: ...\nG: TypeAlias = f()",
+    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from m import N\nH: TypeAlias = dict[str, N]"
+  ],
+  "silentShapes": [
+    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from mod import X\nA: TypeAlias = \"X\"",
+    "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from mod import X\nA = X  # not a TypeAlias",
+    "from typing import TypeAlias\nA: TypeAlias = str | int  # no TYPE_CHECKING deps",
+    "if False:\n    from mod import X\nA: TypeAlias = X  # TYPE_CHECKING false"
+  ],
+  "fixDescription": "Wraps the right-hand side of the TypeAlias assignment in double quotes to create a forward reference string, preserving all whitespace and formatting except adding quotes around the expression.",
+  "hazards": [
+    "Changes runtime evaluation: quoted string is not evaluated as an expression, breaking code that inspects the alias via __annotations__ or typing.get_type_hints().",
+    "Alters repr and str output: the alias now shows as a string literal instead of the evaluated type expression.",
+    "Breaks isinstance or issubclass checks if the alias is used at runtime, as strings are not types.",
+    "May cause misinterpretation by static tools expecting evaluated types, leading to false positives/negatives in type checking.",
+    "If the RHS contains a comment, the fix may place quotes incorrectly relative to the comment, altering comment association.",
+    "If the RHS is spread across multiple lines, quoting the entire expression may invalidate syntax if newlines are not handled correctly in string literals.",
+    "If the alias is used in a generic base class like class C(A), quoting breaks class creation as string is not a type.",
+    "If the RHS uses the | operator (Python 3.10+), quoting prevents union type formation at runtime, affecting structural pattern matching.",
+    "If the RHS includes a forward reference already quoted, double-quoting may produce malformed nested quotes or escape issues.",
+    "If the TYPE_CHECKING block is conditionally defined (e.g., inside a function), quoting may mismatch scope of the referenced symbol.",
+    "If the module is executed with typing.TYPE_CHECKING=True at runtime (non-standard), the quoted alias will not resolve to the intended type.",
+    "If the RHS contains a formatted string literal (f-string) or other expression relying on runtime values, quoting prevents its evaluation."
+  ]
+}

@@ -1,0 +1,319 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP040 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP040 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-25-27-945Z-py4r-ruff-UP040 · fix labelled <b>unknown</b> · 16 programs, 0 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0065</p>
+<div class="card"><b>Rule analysis</b><p>Flags usage of typing.TypeAlias annotation and typing.TypeAliasType assignment for declaring type aliases.</p><p class="mut">Fix: Replaces &#39;Name: TypeAlias = expr&#39; with &#39;type Name = expr&#39; and &#39;Name = TypeAliasType(&quot;Name&quot;, expr[, type_params=params])&#39; with &#39;type Name = expr&#39;, stripping the type_params argument and importing Name if needed.</p><details><summary>10 hazards</summary><ul><li>Rewriting TypeAlias changes the declaration from a variable annotation to a type statement, which cannot be used as a runtime value (e.g., in isinstance() or issubclass()).</li><li>Rewriting TypeAliasType loses explicit variance (covariant/contravariant) from TypeVar definitions, replacing it with inferred variance which may differ.</li><li>The fix cannot resolve TypeVar definitions from other modules, so bounds, constraints, defaults, or kind are lost, producing unconstrained TypeVars in the generated type parameter list.</li><li>If the TypeAliasType&#39;s first argument (the name string) does not match the variable name, the resulting type statement may bind to a different name, breaking references.</li><li>Comments attached to the original TypeAlias or TypeAliasType line may be dropped during the rewrite.</li><li>If the aliased expression contains side effects (e.g., function calls), moving it into a type statement changes evaluation timing from runtime to definition time, potentially altering behavior.</li><li>In nested scopes (e.g., inside functions or classes), the rewritten type statement may not be accessible where the original alias was, due to differing scoping rules for type statements.</li><li>If the module defines a __getattr__ or __dir__ that relies on the TypeAlias or TypeAliasType being present as a runtime attribute, the rewrite will remove it, causing AttributeError.</li><li>The fix may produce invalid syntax if the target version is pre-3.12, as &#39;type&#39; statements are not supported.</li><li>When multiple type aliases are defined in a single line via tuple unpacking, the fix may incorrectly split or fail to parse the construct.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Variance loss in TypeAliasType -&gt; type</td><td class="mut">Rewriting TypeAliasType loses explicit variance (covariant/contravariant) from TypeVar def</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side effect timing in alias expression</td><td class="mut">If the aliased expression contains side effects (e.g., function calls), moving it into a t</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mismatched name in TypeAliasType first argument</td><td class="mut">If the TypeAliasType&#39;s first argument (the name string) does not match the variable name, </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Class attribute descriptor interaction</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Evaluation order with side effects in compound expression</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Shadowed builtin later redefined</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String formatting in alias expression</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">invalid</span></td><td>Pathlib vs os.path behavior</td><td class="mut">pathlib vs os.path behavior on relative paths, symlinks, missing files, bytes paths</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Class attribute vs instance attribute, descriptor interaction</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Target version pre-3.12: &#39;type&#39; statement invalid syntax</td><td class="mut">The fix may produce invalid syntax if the target version is pre-3.12, as &#39;type&#39; statements</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Nested scope accessibility: type statement not visible where alias was</td><td class="mut">In nested scopes (e.g., inside functions or classes), the rewritten type statement may not</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>__getattr__ / __dir__ relies on TypeAlias as runtime attribute</td><td class="mut">If the module defines a __getattr__ or __dir__ that relies on the TypeAlias or TypeAliasTy</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>TypeAlias cannot be used in isinstance() after rewrite to type statement</td><td class="mut">Rewriting TypeAlias changes the declaration from a variable annotation to a type statement</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">invalid</span></td><td>Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type annotations evaluated at runtime, typing-only imports</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Variance loss in TypeAliasType -&gt; type</summary><pre>from typing import TypeVar, TypeAliasType
+T_co = TypeVar(&#39;T_co&#39;, covariant=True)
+F = TypeAliasType(&#39;F&#39;, list[T_co])
+def use(f):
+    return isinstance(f([1]), F)
+print(use(lambda x: x))
+# After fix: `type F = list[T_co]` infers invariance, breaking covariance check
+</pre></details><details id="r1-p002"><summary>r1-p002 — Side effect timing in alias expression</summary><pre>counter = 0
+def inc():
+    global counter
+    counter += 1
+    return str(counter)
+A = TypeAliasType(&#39;A&#39;, inc())
+print(&#39;First:&#39;, counter)
+try:
+    x: A
+    print(&#39;After annotation:&#39;, counter)
+except:
+    pass
+print(&#39;Final:&#39;, counter)
+# After fix: `type A = inc()` runs at module load, counter=1 before any use
+</pre></details><details id="r1-p003"><summary>r1-p003 — Mismatched name in TypeAliasType first argument</summary><pre>B = TypeAliasType(&#39;WrongName&#39;, int)
+print(B)
+print(type(B))
+# After fix: `type WrongName = int` creates name &#39;WrongName&#39;, but var &#39;B&#39; remains unbound to it
+# So B is still the TypeAliasType object, not the alias; referencing WrongName fails
+try:
+    print(WrongName)
+except NameError as e:
+    print(&#39;Missing:&#39;, e)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Class attribute descriptor interaction</summary><pre>class Desc:
+    def __get__(self, obj, owner):
+        return &#39;desc&#39;
+C = TypeAliasType(&#39;C&#39;, Desc)
+class A:
+    attr = C
+print(A().attr)
+print(type(A.attr))
+# After fix: `type C = Desc` makes C a type, not Desc instance; attr becomes class var of type Desc
+# But descriptor protocol only works on instances; A.attr is now a type, not descriptor
+# So A().attr raises AttributeError (no __get__ on type)
+try:
+    print(A().attr)
+except AttributeError as e:
+    print(&#39;Attr error:&#39;, e)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Evaluation order with side effects in compound expression</summary><pre>logs = []
+def log(x):
+    logs.append(x)
+    return x
+D = TypeAliasType(&#39;D&#39;, (log(1), log(2)))
+print(&#39;Logs after alias:&#39;, logs)
+try:
+    _, y: D
+    print(&#39;Logs after use:&#39;, logs)
+except:
+    pass
+# After fix: `type D = (log(1), log(2))` runs at definition, logs=[1,2] before any use
+# So second log call doesn&#39;t happen again; logs length differs
+print(&#39;Final logs:&#39;, logs)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Shadowed builtin later redefined</summary><pre>list = lambda: []
+E = TypeAliasType(&#39;E&#39;, list)
+print(&#39;E is:&#39;, E)
+print(&#39;E() is:&#39;, E())
+# After fix: `type E = list` uses built-in list, not the lambda
+# Because type statement binds to current scope&#39;s list? No: at definition, list is lambda
+# Wait: in CPython, type statement evaluates RHS in current scope at execution time
+# But the alias is created early; however, the fix moves it to top-level type stmt
+# Which runs during module exec, after list=lambda, so still sees lambda?
+# Actually: module runs top-down. list=lambda comes before type E=list, so sees lambda.
+# But original: E = TypeAliasType(&#39;E&#39;, list) also sees list=lambda at that line.
+# So same? Need rebinding AFTER.
+# Let&#39;s rebind after alias.
+list = int  # rebind after
+print(&#39;After rebind, list is:&#39;, list)
+try:
+    print(&#39;E still:&#39;, E)
+except:
+    pass
+# Original: E holds reference to old list (lambda). Fix: type E = list uses current list at time of exec.
+# Since type stmt runs after list=int rebind? No: exec order:
+# 1. list = lambda
+# 2. E = TypeAliasType(...)  -&gt; sees list=lambda
+# 3. list = int
+# After fix:
+# 1. list = lambda
+# 2. type E = list           -&gt; sees list=lambda (still)
+# 3. list = int
+# So same. Need alias BEFORE rebind, but use AFTER.
+# Rewrite:
+</pre></details><details id="r1-p007"><summary>r1-p007 — String formatting in alias expression</summary><pre>name = &#39;world&#39;
+F = TypeAliasType(&#39;F&#39;, f&#39;Hello {name}&#39;)
+print(&#39;F is:&#39;, F)
+# After fix: `type F = f&#39;Hello {name}&#39;` evaluates f-string at definition time
+# If name changes later, alias doesn&#39;t update
+name = &#39;there&#39;
+print(&#39;After name change, F still:&#39;, F)
+try:
+    # F is a string literal in fix, so no dynamic behavior
+    pass
+except:
+    pass
+print(&#39;Name is now:&#39;, name)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Pathlib vs os.path behavior</summary><pre>import os
+os.makedirs(&#39;tmp&#39;, exist_ok=True)
+with open(&#39;tmp/target.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;real&#39;)
+os.symlink(&#39;tmp/target.txt&#39;, &#39;tmp/link.txt&#39;)
+G = TypeAliasType(&#39;G&#39;, os.path.realpath(&#39;tmp/link.txt&#39;))
+print(&#39;Resolved path:&#39;, G)
+# After fix: `type G = os.path.realpath(&#39;tmp/link.txt&#39;)` runs at definition
+# If we delete/recreate symlink after, G doesn&#39;t update
+os.unlink(&#39;tmp/link.txt&#39;)
+os.symlink(&#39;tmp/other.txt&#39;, &#39;tmp/link.txt&#39;)  # will fail, need other.txt
+with open(&#39;tmp/other.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;other&#39;)
+print(&#39;After relink, realpath is now:&#39;, os.path.realpath(&#39;tmp/link.txt&#39;))
+print(&#39;But G is still:&#39;, G)
+# Cleanup
+import shutil
+shutil.rmtree(&#39;tmp&#39;, ignore_errors=True)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Class attribute vs instance attribute, descriptor interaction</summary><pre>import typing
+
+class Meta(type):
+    def __get__(cls, obj, owner):
+        return super().__get__(obj, owner)
+
+class C(metaclass=Meta):
+    attr: typing.TypeAlias = int  # Rule triggers here
+
+print(C.attr)          # Class access via metaclass descriptor
+try:
+    c = C()
+    print(c.attr)      # Instance access
+    c.attr = 99
+    print(c.attr)      # Override on instance
+    del c.attr
+    print(c.attr)      # Back to class via descriptor
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Target version pre-3.12: &#39;type&#39; statement invalid syntax</summary><pre>import sys
+if sys.version_info &lt; (3, 12):
+    print(&#39;SKIP: Target version &lt; 3.12, but we still write the code to be fixed&#39;)
+    # Simulate what the fix would produce: invalid syntax in &lt;3.12
+    # We cannot actually run invalid syntax, so we show the intent
+    # The rule would rewrite this to `type T = int` which is invalid
+    T: typing.TypeAlias = int  # This line is what the rule sees
+    try:
+        # This would fail after fix in &lt;3.12
+        reveal_type(T)  # type: ignore
+    except Exception as e:
+        print(f&#39;{type(e).__name__}: {e}&#39;)
+else:
+    T: typing.TypeAlias = int
+    print(f&#39;T is {T} and type(T) is {type(T)}&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Nested scope accessibility: type statement not visible where alias was</summary><pre>import typing
+
+def outer():
+    inner_T: typing.TypeAlias = list[str]  # Rule triggers here
+    def inner():
+        return inner_T  # After fix: `type inner_T = list[str]` - but is it visible?
+    return inner()
+
+try:
+    result = outer()
+    print(f&#39;Outer returned: {result}&#39;)
+    print(f&#39;Isinstance check: {isinstance([&quot;a&quot;], result)}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p004"><summary>r2-p004 — __getattr__ / __dir__ relies on TypeAlias as runtime attribute</summary><pre>import typing
+
+T: typing.TypeAlias = int  # Rule triggers here
+
+def __getattr__(name):
+    if name == &#39;T&#39;:
+        return 42  # Only called if T is not found normally
+    raise AttributeError(name)
+
+def __dir__():
+    return [&#39;T&#39;] + [x for x in dir() if x != &#39;T&#39;]
+
+print(&#39;Before any access:&#39;, end=&#39; &#39;)
+try:
+    print(T)
+except AttributeError as e:
+    print(f&#39;AttributeError: {e}&#39;)
+
+print(&#39;After defining T via getattr:&#39;, end=&#39; &#39;)
+try:
+    print(T)
+except AttributeError as e:
+    print(f&#39;AttributeError: {e}&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — TypeAlias cannot be used in isinstance() after rewrite to type statement</summary><pre>import typing
+
+T: typing.TypeAlias = int  # Rule triggers here
+
+x = 42
+print(f&#39;isinstance(x, T) before any fix: {isinstance(x, T)}&#39;)
+print(f&#39;type(T): {type(T)}&#39;)
+print(f&#39;T is: {T}&#39;)
+
+# After fix: `type T = int` -&gt; T becomes a type, but cannot be used in isinstance at runtime?
+# Actually, in 3.12+, `type T = int` makes T a type and usable in isinstance.
+# But the hazard is: the rule removes the *variable*, so if code relied on T being a variable...
+# Let&#39;s test if T is callable or has id
+print(f&#39;id(T): {id(T)}&#39;)
+try:
+    T()  # Try to call it as if it were a constructor from a variable
+    print(&#39;T() succeeded&#39;)
+except Exception as e:
+    print(f&#39;T() failed: {type(e).__name__}: {e}&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</summary><pre>import typing
+
+def factory(a, /, b, *, c, d=4, *args, **kwargs):
+    return (a, b, c, d, args, kwargs)
+
+Alias: typing.TypeAlias = factory  # Rule triggers here
+
+# Store original defaults
+import inspect
+orig = inspect.signature(factory)
+print(f&#39;Original defaults: {orig.parameters[&quot;d&quot;].default}&#39;)
+
+# Call via alias
+try:
+    result = Alias(1, 2, c=3, d=99, 4, 5, extra=6)
+    print(f&#39;Alias call result: {result}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+
+# Now simulate what happens if the fix breaks something
+# But the alias is just a function reference - should be fine
+# Hazard: if the rewrite somehow broke the binding
+print(f&#39;Alias is still callable: {callable(Alias)}&#39;)
+print(f&#39;Alias.__name__: {Alias.__name__}&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Type annotations evaluated at runtime, typing-only imports</summary><pre>import typing
+
+# Use a typing-only import that would be removed if not used
+from typing import List  # This is used in the alias below
+
+Mylist: typing.TypeAlias = List[int]  # Rule triggers here
+
+# Force evaluation of the annotation at runtime
+print(f&#39;Mylist: {Mylist}&#39;)
+print(f&#39;type(Mylist): {type(Mylist)}&#39;)
+
+# Now, if the rewrite happens, and we are in a context where typing is not imported...
+# But we imported it above. So make it conditional
+# Instead, test if the alias retains the ability to resolve List
+try:
+    # This should work because Mylist is a variable holding the resolved type
+    x: Mylist = [1, 2]
+    print(f&#39;Variable annotation with Mylist: {x}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+
+# After fix: `type Mylist = List[int]` - in 3.12+ this is fine, but if someone
+# deleted the import, it would break. But we didn&#39;t.
+# So instead, show that the alias is usable as a type hint
+print(&#39;Successfully used Mylist in type annotation&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</summary><pre>import typing
+
+class Weird:
+    def __init__(self, val):
+        self.val = val
+    def __hash__(self):
+        return hash(self.val)
+    def __eq__(self, other):
+        return isinstance(other, Weird) and self.val == other.val
+    def __repr__(self):
+        return f&#39;Weird({self.val})&#39;
+
+# Dict with duplicate keys in construction (later wins)
+# But we can&#39;t have duplicate keys in dict literal - so build via pairs
+pairs = [(Weird(1), &#39;a&#39;), (Weird(1), &#39;b&#39;), (Weird(2), &#39;c&#39;)]  # Same hash, equal
+D: typing.TypeAlias = dict(pairs)  # Rule triggers here
+
+print(f&#39;D (alias): {D}&#39;)
+print(f&#39;len(D): {len(D)}&#39;)  # Should be 2: {Weird(1): &#39;b&#39;, Weird(2): &#39;c&#39;}
+for k, v in D.items():
+    print(f&#39;  {k!r}: {v!r}&#39;)
+
+# Test if the dict is mutable and if alias reflects changes
+# But alias is the dict object itself
+D[Weird(3)] = &#39;d&#39;
+print(f&#39;After adding: {D}&#39;)
+print(f&#39;len now: {len(D)}&#39;)
+
+# Create new dict via alias to see if it&#39;s fresh
+try:
+    new = D()  # This fails - dict is not callable
+    print(&#39;D() succeeded&#39;)
+except Exception as e:
+    print(f&#39;D() failed: {type(e).__name__}: {e}&#39;)
+
+# But we can use it as a type
+try:
+    y: D = {Weird(4): &#39;e&#39;}
+    print(f&#39;Successfully used D as type annotation: {y}&#39;)
+except Exception as e:
+    print(f&#39;{type(e).__name__}: {e}&#39;)
+</pre></details></body></html>

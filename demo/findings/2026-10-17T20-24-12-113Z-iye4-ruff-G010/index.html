@@ -1,0 +1,487 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff G010 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff G010 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-24-12-113Z-iye4-ruff-G010 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 12 fixed, 8 oracle-backed finding(s) · model cost $0.1321</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags any use of the deprecated method `.warn()` on objects identified as loggers (including direct usage of `logging`, Flask’s `current_app.logger`, locally defined logger-like variables, and imported logger objects), suggesting replacement with the equivalent `.warning()` method.</p><p class="mut">Fix: Replace every occurrence of the method call `.warn(` with `.warning(` while preserving all arguments, formatting, and surrounding context exactly.</p><details><summary>10 hazards</summary><ul><li>Rewriting `obj.warn` to `obj.warning` changes behavior if `obj` defines a custom `.warn` method distinct from `.warning` (e.g., in a test mock or wrapper class).</li><li>If `warn` is accessed via `getattr(obj, &#39;warn&#39;)` dynamically, the textual replacement does not affect the attribute lookup and may leave stale code.</li><li>When `warn` appears inside a string literal or comment, the tool should not modify it, but overzealous matching could corrupt documentation or logging configuration strings.</li><li>If `warn` is part of a larger identifier like `warning_prefix`, the replacement would produce `warning_prefixing`, causing a NameError or unintended variable reference.</li><li>In code using `logging.Logger.warn` via a bound method stored earlier (e.g., `log_method = logger.warn; log_method()`), rewriting the source does not update the stored reference, leading to continued use of the deprecated method.</li><li>If the logger object is conditionally assigned (e.g., `logger = debug_logger if DEBUG else null_logger`) and only one branch defines `.warn`, the rewrite may incorrectly apply to a fallback object lacking `.warning`.</li><li>When `lint.logger-objects` includes a logger imported via `from x import y as z`, the tool may fail to recognize the alias and either miss the violation or incorrectly rewrite non-logger uses of `z`.</li><li>If the code defines a local variable named `warn` in the same scope (e.g., `warn = 42; logger.warn()`), the rewrite could ambiguously interfere with that variable though unlikely due to attribute access syntax.</li><li>In Flask apps, if `current_app` is accessed outside an application context, the rewrite does not fix the underlying runtime error but may create false confidence in correctness.</li><li>When multiple logger-like objects exist (e.g., `access_logger` and `error_logger`), the tool might incorrectly apply the fix based on naming heuristics even if only one is a true logger per `lint.logger-objects`.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p001"><b>r1-p001</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule G010 explicitly exists to replace deprecated `logging.warn` with `logging.warning`; the fix does exactly that. The only behavioral difference is that the DeprecationWarning emitted by the old method disappears, which is the documented purpose of the rule. This is not a bug in the fix, though it means the fix changes observable behavior (removing a warning) and therefore should not be considered a fully &#39;safe&#39; rewrite in contexts where the warning itself is relied upon.">judge: intended-change · low</span> Multiple logger-like objects - heuristic misapplication<p class="mut">The rule G010 explicitly exists to replace deprecated `logging.warn` with `logging.warning`; the fix does exactly that. The only behavioral difference is that the DeprecationWarning emitted by the old method disappears, which is the documented purpose of the rule. This is not a bug in the fix, though it means the fix changes observable behavior (removing a warning) and therefore should not be considered a fully &#39;safe&#39; rewrite in contexts where the warning itself is relied upon.</p>
+<h2>Minimized program (11→6 lines)</h2><pre>import logging
+error_logger = logging.getLogger(&#39;error&#39;)
+try:
+    error_logger.warn(&#39;error msg&#39;)   # Should become .warning
+except Exception as e:
+    print(f&#39;Error: {type(e).__name__}: {e}&#39;)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:27.826896136 -0400
++++ fixed.py	2026-10-17 16:24:28.077895473 -0400
+@@ -4,8 +4,8 @@
+ access_logger = logging.getLogger(&#39;access&#39;)  # Not in lint.logger-objects
+ # Rule should fire on error_logger.warn but NOT on access_logger.warn
+ try:
+<span class="del">-    error_logger.warn(&#39;error msg&#39;)   # Should become .warning</span>
+<span class="del">-    access_logger.warn(&#39;access msg&#39;) # Should NOT be changed (heuristic overreach)</span>
+<span class="add">+    error_logger.warning(&#39;error msg&#39;)   # Should become .warning</span>
+<span class="add">+    access_logger.warning(&#39;access msg&#39;) # Should NOT be changed (heuristic overreach)</span>
+ except Exception as e:
+     print(f&#39;Error: {type(e).__name__}: {e}&#39;)
+ print(&#39;Done&#39;)
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: DeprecationWarning: The &#39;warn&#39; method is deprecated, use &#39;warning&#39; instead
+stderr after: error msg</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/12295">astral-sh/ruff/issues/12295</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/7248">astral-sh/ruff/issues/7248</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2186">astral-sh/ruff/issues/2186</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13673">astral-sh/ruff/issues/13673</a> <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/17219">astral-sh/ruff/issues/17219</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/21889">astral-sh/ruff/issues/21889</a> · <a href="reports/r1-p001.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p002"><b>r1-p002</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule G010 explicitly rewrites deprecated `logger.warn` to `logger.warning` because `warn` is deprecated in favor of `warning`. The observed stderr change shows the DeprecationWarning disappearing after the fix, which is exactly the documented purpose of the rule. This is not a bug in the fix; the program demonstrates the intended behavior change.">judge: intended-change · low</span> Exceptions inside rewritten code with finally/else/chaining<p class="mut">The rule G010 explicitly rewrites deprecated `logger.warn` to `logger.warning` because `warn` is deprecated in favor of `warning`. The observed stderr change shows the DeprecationWarning disappearing after the fix, which is exactly the documented purpose of the rule. This is not a bug in the fix; the program demonstrates the intended behavior change.</p>
+<h2>Minimized program (16→10 lines)</h2><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+try:
+    raise ValueError(&#39;bad&#39;)
+except ValueError as e:
+    try:
+        logger.warn(&#39;in except&#39;)  # Rewritten
+    except RuntimeError as final_err:
+        pass
+print(&#39;Finished&#39;)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:28.224895086 -0400
++++ fixed.py	2026-10-17 16:24:28.482894406 -0400
+@@ -1,16 +1,16 @@
+ import logging
+ logger = logging.getLogger(&#39;test&#39;)
+ try:
+<span class="del">-    logger.warn(&#39;about to fail&#39;)  # Rewritten to .warning</span>
+<span class="add">+    logger.warning(&#39;about to fail&#39;)  # Rewritten to .warning</span>
+     raise ValueError(&#39;bad&#39;)
+ except ValueError as e:
+     try:
+<span class="del">-        logger.warn(&#39;in except&#39;)  # Rewritten</span>
+<span class="add">+        logger.warning(&#39;in except&#39;)  # Rewritten</span>
+         raise RuntimeError(&#39;chained&#39;) from e
+     except RuntimeError as final_err:
+         pass
+ else:
+<span class="del">-    logger.warn(&#39;no ex&#39;)  # Rewritten</span>
+<span class="add">+    logger.warning(&#39;no ex&#39;)  # Rewritten</span>
+ finally:
+<span class="del">-    logger.warn(&#39;cleanup&#39;)  # Rewritten</span>
+<span class="add">+    logger.warning(&#39;cleanup&#39;)  # Rewritten</span>
+ print(&#39;Finished&#39;)
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: DeprecationWarning: The &#39;warn&#39; method is deprecated, use &#39;warning&#39; instead
+stderr after: about to fail</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/12295">astral-sh/ruff/issues/12295</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/7248">astral-sh/ruff/issues/7248</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2186">astral-sh/ruff/issues/2186</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13673">astral-sh/ruff/issues/13673</a> <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/17219">astral-sh/ruff/issues/17219</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/970">astral-sh/ruff/issues/970</a> · <a href="reports/r1-p002.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule G010 explicitly exists to replace deprecated `logging.warn` with `logging.warning`, which are functionally equivalent per the documentation. The observed behavior change is exactly the removal of the DeprecationWarning, which is the intended effect of the fix. The program demonstrates the rule working as designed.">judge: intended-change · low</span> `warn` as substring in larger identifier<p class="mut">The rule G010 explicitly exists to replace deprecated `logging.warn` with `logging.warning`, which are functionally equivalent per the documentation. The observed behavior change is exactly the removal of the DeprecationWarning, which is the intended effect of the fix. The program demonstrates the rule working as designed.</p>
+<h2>Minimized program (8→4 lines)</h2><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+warning_prefix = &#39;pre-&#39;  # Variable containing substring &#39;warn&#39;
+logger.warn(warning_prefix + &#39;fix&#39;)  # Correctly becomes .warning
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:30.005890406 -0400
++++ fixed.py	2026-10-17 16:24:30.271889712 -0400
+@@ -4,5 +4,5 @@
+ # Rule should ONLY replace .warn(...) -&gt; .warning(...), NOT touch identifiers
+ # So: logger.warn(warning_prefix + &#39;fix&#39;) -&gt; logger.warning(warning_prefix + &#39;fix&#39;)
+ # SAFE: no substring replacement in identifiers
+<span class="del">-logger.warn(warning_prefix + &#39;fix&#39;)  # Correctly becomes .warning</span>
+<span class="add">+logger.warning(warning_prefix + &#39;fix&#39;)  # Correctly becomes .warning</span>
+ print(f&#39;Prefix: {warning_prefix}&#39;)
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: DeprecationWarning: The &#39;warn&#39; method is deprecated, use &#39;warning&#39; instead
+stderr after: pre-fix</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p003"><b>r2-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule G010 explicitly replaces deprecated `logger.warn` with `logger.warning` because they are functionally equivalent; the only observed difference is that the deprecation warning disappears after the fix, which is the intended effect of the rule.">judge: intended-change · low</span> String formatting edge cases with % and f-strings<p class="mut">The rule G010 explicitly replaces deprecated `logger.warn` with `logger.warning` because they are functionally equivalent; the only observed difference is that the deprecation warning disappears after the fix, which is the intended effect of the rule.</p>
+<h2>Minimized program (7→4 lines)</h2><pre>import logging
+logger = logging.getLogger()
+name = &#39;Alice&#39;
+logger.warn(&#39;Hello {}&#39;.format(name))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:36.413873903 -0400
++++ fixed.py	2026-10-17 16:24:36.668873256 -0400
+@@ -2,6 +2,6 @@
+ logger = logging.getLogger()
+ logger.setLevel(logging.INFO)
+ name = &#39;Alice&#39;
+<span class="del">-logger.warn(&#39;Hello %s&#39; % name)</span>
+<span class="del">-logger.warn(f&#39;Hello {name}&#39;)</span>
+<span class="del">-logger.warn(&#39;Hello {}&#39;.format(name))</span>
+<span class="add">+logger.warning(&#39;Hello %s&#39; % name)</span>
+<span class="add">+logger.warning(f&#39;Hello {name}&#39;)</span>
+<span class="add">+logger.warning(&#39;Hello {}&#39;.format(name))</span>
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: DeprecationWarning: The &#39;warn&#39; method is deprecated, use &#39;warning&#39; instead
+stderr after: Hello Alice</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/12295">astral-sh/ruff/issues/12295</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/7248">astral-sh/ruff/issues/7248</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2186">astral-sh/ruff/issues/2186</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13673">astral-sh/ruff/issues/13673</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/17219">astral-sh/ruff/issues/17219</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15555">astral-sh/ruff/issues/15555</a> · <a href="reports/r2-p003.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p004"><b>r2-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule G010 explicitly replaces deprecated `logger.warn` with `logger.warning` because `warn` is deprecated in favor of `warning`. The observed stderr change shows the DeprecationWarning disappearing after the fix, which is exactly the documented purpose of the rule. The construct is a normal logger usage inside a generator expression, and the fix correctly performs the intended rename.">judge: intended-change · low</span> Generator consumed once, logger.warn inside generator expression<p class="mut">The rule G010 explicitly replaces deprecated `logger.warn` with `logger.warning` because `warn` is deprecated in favor of `warning`. The observed stderr change shows the DeprecationWarning disappearing after the fix, which is exactly the documented purpose of the rule. The construct is a normal logger usage inside a generator expression, and the fix correctly performs the intended rename.</p>
+<h2>Minimized program (6→4 lines)</h2><pre>import logging
+logger = logging.getLogger()
+gen = (logger.warn(f&#39;Processing {x}&#39;) for x in range(2))
+print(&#39;Second consumption:&#39;, list(gen))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:36.818872876 -0400
++++ fixed.py	2026-10-17 16:24:37.063872256 -0400
+@@ -1,6 +1,6 @@
+ import logging
+ logger = logging.getLogger()
+ logger.setLevel(logging.INFO)
+<span class="del">-gen = (logger.warn(f&#39;Processing {x}&#39;) for x in range(2))</span>
+<span class="add">+gen = (logger.warning(f&#39;Processing {x}&#39;) for x in range(2))</span>
+ print(&#39;First consumption:&#39;, list(gen))
+ print(&#39;Second consumption:&#39;, list(gen))
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: DeprecationWarning: The &#39;warn&#39; method is deprecated, use &#39;warning&#39; instead
+stderr after: Processing 0</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/12295">astral-sh/ruff/issues/12295</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/7248">astral-sh/ruff/issues/7248</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2186">astral-sh/ruff/issues/2186</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13673">astral-sh/ruff/issues/13673</a> <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/17219">astral-sh/ruff/issues/17219</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/21889">astral-sh/ruff/issues/21889</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/6972">astral-sh/ruff/issues/6972</a> · <a href="reports/r2-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p005"><b>r2-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrites `logger.warn` to `logger.warning` based on a naming heuristic, but `logger` is a conditional object that may be a `NullLogger` lacking both methods. The original code catches the `AttributeError` from `warn`; after the fix, the same exception is raised for `warning`, changing the error message and potentially breaking error-handling logic that expects the original attribute name.">judge: real · high</span> Conditionally assigned logger missing .warning in fallback<p class="mut">The fix rewrites `logger.warn` to `logger.warning` based on a naming heuristic, but `logger` is a conditional object that may be a `NullLogger` lacking both methods. The original code catches the `AttributeError` from `warn`; after the fix, the same exception is raised for `warning`, changing the error message and potentially breaking error-handling logic that expects the original attribute name.</p>
+<h2>Minimized program (11→11 lines)</h2><pre>DEBUG = False
+class DebugLogger:
+    def warn(self, msg):
+        print(f&#39;DEBUG WARN: {msg}&#39;)
+class NullLogger:
+    pass  # No warn or warning
+logger = DebugLogger() if DEBUG else NullLogger()
+try:
+    logger.warn(&#39;test&#39;)
+except AttributeError as e:
+    print(type(e).__name__, str(e))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:37.206871895 -0400
++++ fixed.py	2026-10-17 16:24:37.375871469 -0400
+@@ -6,6 +6,6 @@
+     pass  # No warn or warning
+ logger = DebugLogger() if DEBUG else NullLogger()
+ try:
+<span class="del">-    logger.warn(&#39;test&#39;)</span>
+<span class="add">+    logger.warning(&#39;test&#39;)</span>
+ except AttributeError as e:
+     print(type(e).__name__, str(e))
+</pre>
+<h2>Observed</h2><pre>stdout before:
+AttributeError &#39;NullLogger&#39; object has no attribute &#39;warn&#39;
+stdout after:
+AttributeError &#39;NullLogger&#39; object has no attribute &#39;warning&#39;</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/14147">astral-sh/ruff/issues/14147</a> <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/14147">astral-sh/ruff/issues/14147</a> · <a href="reports/r2-p005.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p007"><b>r2-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule G010 explicitly documents that `logging.warn` and `logging.Logger.warn` are deprecated aliases for `warning` and should be rewritten; the observed stderr shows the deprecation warning disappearing after the fix, which is exactly the intended behavior change.">judge: intended-change · low</span> Aliased logger import not recognized by lint.logger-objects<p class="mut">The rule G010 explicitly documents that `logging.warn` and `logging.Logger.warn` are deprecated aliases for `warning` and should be rewritten; the observed stderr shows the deprecation warning disappearing after the fix, which is exactly the intended behavior change.</p>
+<h2>Minimized program (5→3 lines)</h2><pre>import logging
+my_logger = logging.getLogger()
+my_logger.warn(&#39;test&#39;)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:37.698870654 -0400
++++ fixed.py	2026-10-17 16:24:37.943870036 -0400
+@@ -1,5 +1,5 @@
+ import logging
+ my_logger = logging.getLogger()
+ my_logger.setLevel(logging.INFO)
+<span class="del">-my_logger.warn(&#39;test&#39;)</span>
+<span class="add">+my_logger.warning(&#39;test&#39;)</span>
+ print(&#39;Done&#39;)
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: DeprecationWarning: The &#39;warn&#39; method is deprecated, use &#39;warning&#39; instead
+stderr after: test</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/12295">astral-sh/ruff/issues/12295</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/7248">astral-sh/ruff/issues/7248</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2186">astral-sh/ruff/issues/2186</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13673">astral-sh/ruff/issues/13673</a> <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/17219">astral-sh/ruff/issues/17219</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/28407">astral-sh/ruff/issues/28407</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15555">astral-sh/ruff/issues/15555</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/4136">astral-sh/ruff/issues/4136</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/4692">astral-sh/ruff/issues/4692</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/21889">astral-sh/ruff/issues/21889</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/11031">astral-sh/ruff/issues/11031</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/11854">astral-sh/ruff/issues/11854</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14221">astral-sh/ruff/issues/14221</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/1507">astral-sh/ruff/issues/1507</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/18349">astral-sh/ruff/issues/18349</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9770">astral-sh/ruff/issues/9770</a> · <a href="reports/r2-p007.md">evidence sheet</a></p>
+</div><div class="card" id="r2-p008"><b>r2-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The rule G010 explicitly replaces deprecated `warn` with `warning` because they are functionally equivalent; the only observed difference is that the deprecation warning disappears after the fix, which is the intended behavior change documented by the rule.">judge: intended-change · low</span> Bytes vs str in warn argument encoding handling<p class="mut">The rule G010 explicitly replaces deprecated `warn` with `warning` because they are functionally equivalent; the only observed difference is that the deprecation warning disappears after the fix, which is the intended behavior change documented by the rule.</p>
+<h2>Minimized program (9→3 lines)</h2><pre>import logging
+logger = logging.getLogger()
+logger.warn(&#39;str string&#39;)
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:24:38.071869714 -0400
++++ fixed.py	2026-10-17 16:24:38.323869081 -0400
+@@ -4,6 +4,6 @@
+ logger.setLevel(logging.INFO)
+ handler = io.StringIO()
+ logger.addHandler(logging.StreamHandler(handler))
+<span class="del">-logger.warn(b&#39;byte string&#39;)</span>
+<span class="del">-logger.warn(&#39;str string&#39;)</span>
+<span class="add">+logger.warning(b&#39;byte string&#39;)</span>
+<span class="add">+logger.warning(&#39;str string&#39;)</span>
+ print(handler.getvalue())
+</pre>
+<h2>Observed</h2><pre>stderr before: &lt;wd&gt;/prog: DeprecationWarning: The &#39;warn&#39; method is deprecated, use &#39;warning&#39; instead
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/12295">astral-sh/ruff/issues/12295</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/7248">astral-sh/ruff/issues/7248</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2186">astral-sh/ruff/issues/2186</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13673">astral-sh/ruff/issues/13673</a> <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/17219">astral-sh/ruff/issues/17219</a> · <a href="reports/r2-p008.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Multiple logger-like objects - heuristic misapplication</td><td class="mut">When multiple logger-like objects exist (e.g., `access_logger` and `error_logger`), the to</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Exceptions inside rewritten code with finally/else/chaining</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span></td><td>Dynamic getattr lookup - rewrite misses attribute access</td><td class="mut">If `warn` is accessed via `getattr(obj, &#39;warn&#39;)` dynamically, the textual replacement does</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Bound method stored earlier - stored reference not updated</td><td class="mut">If `logging.Logger.warn` via a bound method stored earlier (e.g., `log_method = logger.war</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Local variable named `warn` in same scope</td><td class="mut">If the code defines a local variable named `warn` in the same scope (e.g., `warn = 42; log</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Dict ordering, duplicate keys, __hash__/__eq__, sets</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>`warn` as substring in larger identifier</td><td class="mut">If `warn` is part of a larger identifier like `warning_prefix`, the replacement would prod</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>File modes, truncation, partial writes, non-str data</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Custom warn method differs from warning</td><td class="mut">Rewriting obj.warn to obj.warning changes behavior if obj defines a custom .warn method di</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span></td><td>warn inside string literal not rewritten</td><td class="mut">When warn appears inside a string literal or comment, the tool should not modify it, but o</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>String formatting edge cases with % and f-strings</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Generator consumed once, logger.warn inside generator expression</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Conditionally assigned logger missing .warning in fallback</td><td class="mut">If the logger object is conditionally assigned (e.g., logger = debug_logger if DEBUG else </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span></td><td>Dynamic getattr access to warn not affected by textual replace</td><td class="mut">If warn is accessed via getattr(obj, &#39;warn&#39;) dynamically, the textual replacement does not</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Aliased logger import not recognized by lint.logger-objects</td><td class="mut">When lint.logger-objects includes a logger imported via from x import y as z, the tool may</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Bytes vs str in warn argument encoding handling</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Multiple logger-like objects - heuristic misapplication</summary><pre>import logging
+# Simulate lint.logger-objects containing only [&#39;error_logger&#39;]
+error_logger = logging.getLogger(&#39;error&#39;)
+access_logger = logging.getLogger(&#39;access&#39;)  # Not in lint.logger-objects
+# Rule should fire on error_logger.warn but NOT on access_logger.warn
+try:
+    error_logger.warn(&#39;error msg&#39;)   # Should become .warning
+    access_logger.warn(&#39;access msg&#39;) # Should NOT be changed (heuristic overreach)
+except Exception as e:
+    print(f&#39;Error: {type(e).__name__}: {e}&#39;)
+print(&#39;Done&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:27.826896136 -0400
++++ fixed.py	2026-10-17 16:24:28.077895473 -0400
+@@ -4,8 +4,8 @@
+ access_logger = logging.getLogger(&#39;access&#39;)  # Not in lint.logger-objects
+ # Rule should fire on error_logger.warn but NOT on access_logger.warn
+ try:
+<span class="del">-    error_logger.warn(&#39;error msg&#39;)   # Should become .warning</span>
+<span class="del">-    access_logger.warn(&#39;access msg&#39;) # Should NOT be changed (heuristic overreach)</span>
+<span class="add">+    error_logger.warning(&#39;error msg&#39;)   # Should become .warning</span>
+<span class="add">+    access_logger.warning(&#39;access msg&#39;) # Should NOT be changed (heuristic overreach)</span>
+ except Exception as e:
+     print(f&#39;Error: {type(e).__name__}: {e}&#39;)
+ print(&#39;Done&#39;)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Exceptions inside rewritten code with finally/else/chaining</summary><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+try:
+    logger.warn(&#39;about to fail&#39;)  # Rewritten to .warning
+    raise ValueError(&#39;bad&#39;)
+except ValueError as e:
+    try:
+        logger.warn(&#39;in except&#39;)  # Rewritten
+        raise RuntimeError(&#39;chained&#39;) from e
+    except RuntimeError as final_err:
+        pass
+else:
+    logger.warn(&#39;no ex&#39;)  # Rewritten
+finally:
+    logger.warn(&#39;cleanup&#39;)  # Rewritten
+print(&#39;Finished&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:28.224895086 -0400
++++ fixed.py	2026-10-17 16:24:28.482894406 -0400
+@@ -1,16 +1,16 @@
+ import logging
+ logger = logging.getLogger(&#39;test&#39;)
+ try:
+<span class="del">-    logger.warn(&#39;about to fail&#39;)  # Rewritten to .warning</span>
+<span class="add">+    logger.warning(&#39;about to fail&#39;)  # Rewritten to .warning</span>
+     raise ValueError(&#39;bad&#39;)
+ except ValueError as e:
+     try:
+<span class="del">-        logger.warn(&#39;in except&#39;)  # Rewritten</span>
+<span class="add">+        logger.warning(&#39;in except&#39;)  # Rewritten</span>
+         raise RuntimeError(&#39;chained&#39;) from e
+     except RuntimeError as final_err:
+         pass
+ else:
+<span class="del">-    logger.warn(&#39;no ex&#39;)  # Rewritten</span>
+<span class="add">+    logger.warning(&#39;no ex&#39;)  # Rewritten</span>
+ finally:
+<span class="del">-    logger.warn(&#39;cleanup&#39;)  # Rewritten</span>
+<span class="add">+    logger.warning(&#39;cleanup&#39;)  # Rewritten</span>
+ print(&#39;Finished&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Dynamic getattr lookup - rewrite misses attribute access</summary><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+method_name = &#39;warn&#39;
+func = getattr(logger, method_name)  # Gets .warn, not affected by source rewrite
+func(&#39;dynamic call&#39;)  # Still uses deprecated .warn
+# Rule does NOT trigger on getattr(...) so no rewrite happens
+print(&#39;Called via getattr&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Bound method stored earlier - stored reference not updated</summary><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+log_method = logger.warn  # Bound to deprecated .warn
+# Rule rewrites: logger.warn(...) -&gt; logger.warning(...) but NOT log_method
+log_method(&#39;stored call&#39;)  # Still uses .warn
+# New calls use .warning
+logger.warn(&#39;direct call&#39;)  # Now .warning
+print(&#39;Stored vs direct&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:28.838893468 -0400
++++ fixed.py	2026-10-17 16:24:29.085892819 -0400
+@@ -4,5 +4,5 @@
+ # Rule rewrites: logger.warn(...) -&gt; logger.warning(...) but NOT log_method
+ log_method(&#39;stored call&#39;)  # Still uses .warn
+ # New calls use .warning
+<span class="del">-logger.warn(&#39;direct call&#39;)  # Now .warning</span>
+<span class="add">+logger.warning(&#39;direct call&#39;)  # Now .warning</span>
+ print(&#39;Stored vs direct&#39;)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Local variable named `warn` in same scope</summary><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+warn = 99  # Local variable, not interfering with attribute access
+# Rule rewrites: logger.warn(...) -&gt; logger.warning(...)
+logger.warn(&#39;value:&#39;, warn)  # arg &#39;warn&#39; is the var 99
+print(f&#39;Local warn={warn}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:29.227892446 -0400
++++ fixed.py	2026-10-17 16:24:29.478891788 -0400
+@@ -2,5 +2,5 @@
+ logger = logging.getLogger(&#39;test&#39;)
+ warn = 99  # Local variable, not interfering with attribute access
+ # Rule rewrites: logger.warn(...) -&gt; logger.warning(...)
+<span class="del">-logger.warn(&#39;value:&#39;, warn)  # arg &#39;warn&#39; is the var 99</span>
+<span class="add">+logger.warning(&#39;value:&#39;, warn)  # arg &#39;warn&#39; is the var 99</span>
+ print(f&#39;Local warn={warn}&#39;)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Dict ordering, duplicate keys, __hash__/__eq__, sets</summary><pre>import logging
+class WeirdDict(dict):
+    def __hash__(self): return id(self)
+    def __eq__(self, other): return self is other
+logger = logging.getLogger(&#39;test&#39;)
+d = {}
+d[WeirdDict()] = &#39;first&#39;
+d[WeirdDict()] = &#39;second&#39;  # Different key due to __eq__
+# Rule rewrites both:
+logger.warn(&#39;dict len:&#39;, len(d))  # Becomes .warning
+logger.warn(&#39;weird:&#39;, d)        # Becomes .warning
+print(f&#39;dict size: {len(d)}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:29.621891413 -0400
++++ fixed.py	2026-10-17 16:24:29.858890792 -0400
+@@ -7,6 +7,6 @@
+ d[WeirdDict()] = &#39;first&#39;
+ d[WeirdDict()] = &#39;second&#39;  # Different key due to __eq__
+ # Rule rewrites both:
+<span class="del">-logger.warn(&#39;dict len:&#39;, len(d))  # Becomes .warning</span>
+<span class="del">-logger.warn(&#39;weird:&#39;, d)        # Becomes .warning</span>
+<span class="add">+logger.warning(&#39;dict len:&#39;, len(d))  # Becomes .warning</span>
+<span class="add">+logger.warning(&#39;weird:&#39;, d)        # Becomes .warning</span>
+ print(f&#39;dict size: {len(d)}&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — `warn` as substring in larger identifier</summary><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+warning_prefix = &#39;pre-&#39;  # Variable containing substring &#39;warn&#39;
+# Rule should ONLY replace .warn(...) -&gt; .warning(...), NOT touch identifiers
+# So: logger.warn(warning_prefix + &#39;fix&#39;) -&gt; logger.warning(warning_prefix + &#39;fix&#39;)
+# SAFE: no substring replacement in identifiers
+logger.warn(warning_prefix + &#39;fix&#39;)  # Correctly becomes .warning
+print(f&#39;Prefix: {warning_prefix}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:30.005890406 -0400
++++ fixed.py	2026-10-17 16:24:30.271889712 -0400
+@@ -4,5 +4,5 @@
+ # Rule should ONLY replace .warn(...) -&gt; .warning(...), NOT touch identifiers
+ # So: logger.warn(warning_prefix + &#39;fix&#39;) -&gt; logger.warning(warning_prefix + &#39;fix&#39;)
+ # SAFE: no substring replacement in identifiers
+<span class="del">-logger.warn(warning_prefix + &#39;fix&#39;)  # Correctly becomes .warning</span>
+<span class="add">+logger.warning(warning_prefix + &#39;fix&#39;)  # Correctly becomes .warning</span>
+ print(f&#39;Prefix: {warning_prefix}&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — File modes, truncation, partial writes, non-str data</summary><pre>import logging
+logger = logging.getLogger(&#39;test&#39;)
+with open(&#39;test_out.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;start\n&#39;)
+    # Rule rewrites: logger.warn(...) -&gt; logger.warning(...)
+    logger.warn(&#39;log to file&#39;, f)  # Passing file obj as arg
+    f.write(&#39;middle\n&#39;)
+    logger.warn(&#39;more log&#39;)
+    f.write(&#39;end\n&#39;)
+with open(&#39;test_out.txt&#39;, &#39;r&#39;) as f:
+    print(f.read(), end=&#39;&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:30.450889245 -0400
++++ fixed.py	2026-10-17 16:24:30.718888546 -0400
+@@ -3,9 +3,9 @@
+ with open(&#39;test_out.txt&#39;, &#39;w&#39;) as f:
+     f.write(&#39;start\n&#39;)
+     # Rule rewrites: logger.warn(...) -&gt; logger.warning(...)
+<span class="del">-    logger.warn(&#39;log to file&#39;, f)  # Passing file obj as arg</span>
+<span class="add">+    logger.warning(&#39;log to file&#39;, f)  # Passing file obj as arg</span>
+     f.write(&#39;middle\n&#39;)
+<span class="del">-    logger.warn(&#39;more log&#39;)</span>
+<span class="add">+    logger.warning(&#39;more log&#39;)</span>
+     f.write(&#39;end\n&#39;)
+ with open(&#39;test_out.txt&#39;, &#39;r&#39;) as f:
+     print(f.read(), end=&#39;&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Custom warn method differs from warning</summary><pre>class LoggerLike:
+    def warn(self, msg):
+        return f&#39;WARN: {msg}&#39;
+    def warning(self, msg):
+        return f&#39;WARNING: {msg}&#39;
+
+l = LoggerLike()
+print(l.warn(&#39;test&#39;))
+print(l.warning(&#39;test&#39;))
+</pre></details><details id="r2-p002"><summary>r2-p002 — warn inside string literal not rewritten</summary><pre>s = &#39;This is a warn message in a string&#39;
+print(s)
+# This is a warn message in a comment
+print(&#39;No change expected&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — String formatting edge cases with % and f-strings</summary><pre>import logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+name = &#39;Alice&#39;
+logger.warn(&#39;Hello %s&#39; % name)
+logger.warn(f&#39;Hello {name}&#39;)
+logger.warn(&#39;Hello {}&#39;.format(name))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:36.413873903 -0400
++++ fixed.py	2026-10-17 16:24:36.668873256 -0400
+@@ -2,6 +2,6 @@
+ logger = logging.getLogger()
+ logger.setLevel(logging.INFO)
+ name = &#39;Alice&#39;
+<span class="del">-logger.warn(&#39;Hello %s&#39; % name)</span>
+<span class="del">-logger.warn(f&#39;Hello {name}&#39;)</span>
+<span class="del">-logger.warn(&#39;Hello {}&#39;.format(name))</span>
+<span class="add">+logger.warning(&#39;Hello %s&#39; % name)</span>
+<span class="add">+logger.warning(f&#39;Hello {name}&#39;)</span>
+<span class="add">+logger.warning(&#39;Hello {}&#39;.format(name))</span>
+</pre></details><details id="r2-p004"><summary>r2-p004 — Generator consumed once, logger.warn inside generator expression</summary><pre>import logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+gen = (logger.warn(f&#39;Processing {x}&#39;) for x in range(2))
+print(&#39;First consumption:&#39;, list(gen))
+print(&#39;Second consumption:&#39;, list(gen))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:36.818872876 -0400
++++ fixed.py	2026-10-17 16:24:37.063872256 -0400
+@@ -1,6 +1,6 @@
+ import logging
+ logger = logging.getLogger()
+ logger.setLevel(logging.INFO)
+<span class="del">-gen = (logger.warn(f&#39;Processing {x}&#39;) for x in range(2))</span>
+<span class="add">+gen = (logger.warning(f&#39;Processing {x}&#39;) for x in range(2))</span>
+ print(&#39;First consumption:&#39;, list(gen))
+ print(&#39;Second consumption:&#39;, list(gen))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Conditionally assigned logger missing .warning in fallback</summary><pre>DEBUG = False
+class DebugLogger:
+    def warn(self, msg):
+        print(f&#39;DEBUG WARN: {msg}&#39;)
+class NullLogger:
+    pass  # No warn or warning
+logger = DebugLogger() if DEBUG else NullLogger()
+try:
+    logger.warn(&#39;test&#39;)
+except AttributeError as e:
+    print(type(e).__name__, str(e))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:37.206871895 -0400
++++ fixed.py	2026-10-17 16:24:37.375871469 -0400
+@@ -6,6 +6,6 @@
+     pass  # No warn or warning
+ logger = DebugLogger() if DEBUG else NullLogger()
+ try:
+<span class="del">-    logger.warn(&#39;test&#39;)</span>
+<span class="add">+    logger.warning(&#39;test&#39;)</span>
+ except AttributeError as e:
+     print(type(e).__name__, str(e))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Dynamic getattr access to warn not affected by textual replace</summary><pre>import logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+method = getattr(logger, &#39;warn&#39;)
+method(&#39;test via getattr&#39;)
+# After fix, source still has getattr(logger, &#39;warn&#39;) so behavior unchanged
+</pre></details><details id="r2-p007"><summary>r2-p007 — Aliased logger import not recognized by lint.logger-objects</summary><pre>import logging
+my_logger = logging.getLogger()
+my_logger.setLevel(logging.INFO)
+my_logger.warn(&#39;test&#39;)
+print(&#39;Done&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:37.698870654 -0400
++++ fixed.py	2026-10-17 16:24:37.943870036 -0400
+@@ -1,5 +1,5 @@
+ import logging
+ my_logger = logging.getLogger()
+ my_logger.setLevel(logging.INFO)
+<span class="del">-my_logger.warn(&#39;test&#39;)</span>
+<span class="add">+my_logger.warning(&#39;test&#39;)</span>
+ print(&#39;Done&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Bytes vs str in warn argument encoding handling</summary><pre>import logging
+import io
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+handler = io.StringIO()
+logger.addHandler(logging.StreamHandler(handler))
+logger.warn(b&#39;byte string&#39;)
+logger.warn(&#39;str string&#39;)
+print(handler.getvalue())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:24:38.071869714 -0400
++++ fixed.py	2026-10-17 16:24:38.323869081 -0400
+@@ -4,6 +4,6 @@
+ logger.setLevel(logging.INFO)
+ handler = io.StringIO()
+ logger.addHandler(logging.StreamHandler(handler))
+<span class="del">-logger.warn(b&#39;byte string&#39;)</span>
+<span class="del">-logger.warn(&#39;str string&#39;)</span>
+<span class="add">+logger.warning(b&#39;byte string&#39;)</span>
+<span class="add">+logger.warning(&#39;str string&#39;)</span>
+ print(handler.getvalue())
+</pre></details></body></html>

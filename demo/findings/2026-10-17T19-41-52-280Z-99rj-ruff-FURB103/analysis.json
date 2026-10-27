@@ -1,0 +1,33 @@
+{
+  "summary": "Flags patterns where a file is opened, written to once, and closed within a with statement using open() and .write(), suggesting replacement with pathlib.Path.write_text() or .write_bytes().",
+  "firingShapes": [
+    "with open('file.txt', 'w') as f: f.write(data)",
+    "with open(path, 'wb') as f: f.write(b'data')",
+    "with open(filename, 'w', encoding='utf-8') as f: f.write(text)",
+    "with open(file, 'w') as f: f.write('constant')",
+    "with open(var, 'w') as f: f.write(expr)",
+    "with open(name, 'w', buffering=1) as f: f.write(s)",
+    "with open(path, 'w') as f: f.write(result())",
+    "with open('out.log', 'a') as f: f.write(msg)"
+  ],
+  "silentShapes": [
+    "with open('file.txt', 'r') as f: data = f.read()",
+    "with open('file.txt', 'w') as f: f.write(a); f.write(b)",
+    "with open('file.txt', 'w') as f: f.write(); f.close()",
+    "with open('file.txt') as f: for line in f: pass",
+    "f = open('file.txt', 'w'); f.write(data); f.close()"
+  ],
+  "fixDescription": "Replaces the with open(...) as f: f.write(content) block with either Path(file_path).write_text(content, encoding) if mode is 'w' or 'wt' with optional encoding, or Path(file_path).write_bytes(content) if mode is 'wb', preserving the file path expression and write argument.",
+  "hazards": [
+    "The rewrite drops any comments attached to the with statement or the open() call, as the fix is marked unsafe when comments are present.",
+    "If the file path expression has side effects (e.g., a function call), the rewrite may evaluate it once instead of potentially multiple times in error handling paths, though in practice it's evaluated once in both forms.",
+    "When the write argument is a complex expression, moving it into Path.write_text()/write_bytes() does not change evaluation timing since both evaluate the argument before the call, but refactoring may affect debugging breakpoints.",
+    "If the alias 'f' is used elsewhere in the with block after the write (e.g., for logging), removing the with block breaks that usage.",
+    "The rewrite assumes the mode is strictly text or binary write; if the mode includes flags like '+' (e.g., 'w+'), the equivalent pathlib method does not exist, making the fix inapplicable or incorrect.",
+    "If a custom opener is passed via the opener parameter to open(), the pathlib replacement cannot replicate this behavior, leading to different file opening semantics.",
+    "The rewrite does not preserve the file descriptor's inheritance properties or buffering behavior explicitly set via buffering parameter, though default buffering is similar.",
+    "If the write call is conditional on a variable that also affects control flow (unlikely due to single-write constraint), the refactor doesn't alter logic but removes the conditional wrapper.",
+    "In rare cases where __del__ or context manager __exit__ relies on the file object being alive beyond the write (impossible here due to block scope), early termination could occur, but CPython's garbage collection timing makes this speculative.",
+    "If the code relies on the with statement suppressing exceptions from open() (e.g., FileNotFoundError), the pathlib version propagates the same exceptions, so behavior is preserved."
+  ]
+}

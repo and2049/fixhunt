@@ -1,0 +1,542 @@
+{
+  "runId": "2026-10-17T21-29-58-650Z-tktt-ruff-FURB122",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB122",
+    "fixKind": "unknown",
+    "docs": "# for-loop-writes (FURB122)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for the use of `IOBase.write` in a for loop.\n\n## Why is this bad?\nWhen writing a batch of elements, it's more idiomatic to use a single method call to\n`IOBase.writelines`, rather than write elements one by one.\n\n## Example\n```python\nfrom pathlib import Path\n\nwith Path(\"file\").open(\"w\") as f:\n    for line in lines:\n        f.write(line)\n\nwith Path(\"file\").open(\"wb\") as f_b:\n    for line_b in lines_b:\n        f_b.write(line_b.encode())\n```\n\nUse instead:\n```python\nfrom pathlib import Path\n\nwith Path(\"file\").open(\"w\") as f:\n    f.writelines(lines)\n\nwith Path(\"file\").open(\"wb\") as f_b:\n    f_b.writelines(line_b.encode() for line_b in lines_b)\n```\n\n## Fix safety\nThis fix is marked as unsafe if it would cause comments to be deleted.\n\n## References\n- [Python documentation: `io.IOBase.writelines`](https://docs.python.org/3/library/io.html#io.IOBase.writelines)\n"
+  },
+  "analysis": {
+    "summary": "Flags loops calling IOBase.write inside a for-loop body where each iteration writes a value derived solely from the loop variable.",
+    "firingShapes": [
+      "for x in seq: f.write(x)",
+      "for i in range(len(a)): f.write(a[i])",
+      "while idx < n: f.write(data[idx]); idx += 1",
+      "for item in items: out.write(str(item))",
+      "for k, v in mapping.items(): log.write(f'{k}: {v}')",
+      "for chunk in iter(read, b''): sock.write(chunk)"
+    ],
+    "silentShapes": [
+      "for line in lines: print(line, file=f)",
+      "for elem in data: f.write(elem); f.flush()",
+      "try:\n for x in vals: f.write(x)\nexcept: pass",
+      "for x in y: z = x; f.write(z)"
+    ],
+    "fixDescription": "Replace the for-loop with a single call to writelines using a generator expression that yields the same values as the original write calls, preserving the loop variable usage.",
+    "hazards": [
+      "The rewrite may drop comments placed inside the for-loop body, as they are not preserved in the generator expression.",
+      "If the loop variable is mutated after the write call (e.g., f.write(x); x = None), the rewritten version loses access to the mutated value since it only captures the original iteration value.",
+      "When the write call is guarded by a condition inside the loop (e.g., if ok: f.write(x)), the fix incorrectly writes all items unconditionally, altering output.",
+      "If the loop contains multiple write statements (e.g., f.write(a); f.write(b)), the fix only replaces the first, leaving the second and changing behavior.",
+      "For binary files opened in 'wb' mode, using writelines with a generator of strings (instead of bytes) raises TypeError due to type mismatch.",
+      "If the iterable being looped over is modified during iteration (e.g., f.write(x); lines.pop(0)), the rewrite evaluates the iterable upfront via the generator, potentially causing different iteration or errors.",
+      "When the write call is part of a larger expression (e.g., n = f.write(x)), the fix discards the return value, breaking assignments or checks that relied on it.",
+      "If the file object is reassigned within the loop (e.g., f.write(x); f = open(...)), the rewrite uses the original file object for all writes, ignoring later reassignments.",
+      "In nested loops, applying the fix to the inner loop may incorrectly hoist the generator expression to the outer scope, causing name collisions or premature evaluation.",
+      "If the loop variable has the same name as a function used in the write argument (e.g., f.write(len) where len is the loop var), the rewrite captures the wrong binding due to late-binding closure in the generator."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0037263,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 4,
+    "fixed": 4,
+    "disputed": 12
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "FURB122 Hazard 1: Write Return Value Discarded",
+      "hazard": "When the write call is part of a larger expression (e.g., n = f.write(x)), the fix discards the return value, breaking assignments or checks that relied on it.",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: write() argument must be str, not bytes",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "FURB122 Hazard 2: File Modes and Truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB122",
+            "severity": "warning",
+            "message": "Use of `f.write` in a for loop",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "written bytes: b'helloworld'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "written bytes: b'helloworld'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:30:10.161304589 -0400\n+++ fixed.py\t2026-10-17 17:30:10.326301796 -0400\n@@ -2,8 +2,7 @@\n if os.path.exists('tmp.bin'): os.remove('tmp.bin')\n f = open('tmp.bin', 'wb')\n try:\n-    for x in [b'hello', b'world']:\n-        f.write(x)\n+    f.writelines([b'hello', b'world'])\n except Exception as e:\n     print('error during write:', type(e).__name__, str(e))\n f.close()\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "FURB122 Hazard 3: Walrus and Closure Scoping",
+      "hazard": "walrus, comprehensions scoping, late binding in closures and lambdas",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "file 0: 0\nfile 1: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "FURB122 Hazard 4: Dict Ordering and Hashing",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB122",
+            "severity": "warning",
+            "message": "Use of `f.write` in a for loop",
+            "span": [
+              7,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "dict output: ['1:a', '2:b']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "dict output: ['1:a', '2:b']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:30:10.555297920 -0400\n+++ fixed.py\t2026-10-17 17:30:10.728294991 -0400\n@@ -4,8 +4,7 @@\n     def __eq__(self, other): return self.val == other.val\n f = open('tmp.txt', 'w')\n d = {BadKey(1): 'a', BadKey(2): 'b'}\n-for k, v in d.items():\n-    f.write(f'{k.val}:{v}\\n')\n+f.writelines(f'{k.val}:{v}\\n' for k, v in d.items())\n f.close()\n with open('tmp.txt') as f:\n     lines = f.readlines()\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "FURB122 Hazard 5: Conditional Write Inside Loop",
+      "hazard": "When the write call is guarded by a condition inside the loop (e.g., if ok: f.write(x)), the fix incorrectly writes all items unconditionally, altering output.",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "conditioned writes: [1, 3]\nfile content: '13'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "FURB122 Hazard 6: Mutable Defaults and Aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "first call: [1, 2, 3, 4]\nsecond call: [1, 2, 3, 4]\nfile content: '34'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "FURB122 Hazard 7: Binary File and String Generator Mismatch",
+      "hazard": "For binary files opened in 'wb' mode, using writelines with a generator of strings (instead of bytes) raises TypeError due to type mismatch.",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB122",
+            "severity": "warning",
+            "message": "Use of `f.write` in a for loop",
+            "span": [
+              3,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "expected error: TypeError a bytes-like object is required, not 'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "expected error: TypeError a bytes-like object is required, not 'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:30:11.089288883 -0400\n+++ fixed.py\t2026-10-17 17:30:11.265285908 -0400\n@@ -1,11 +1,9 @@\n f = open('tmp.bin', 'wb')\n try:\n-    for x in ['a', 'b']:\n-        f.write(x.encode())  # correct: bytes\n+    f.writelines(x.encode() for x in ['a', 'b'])  # correct: bytes\n     f.close()\n     f = open('tmp.bin', 'wb')\n-    for x in ['a', 'b']:\n-        f.write(x)  # error: str in binary mode\n+    f.writelines(['a', 'b'])  # error: str in binary mode\n except Exception as e:\n     print('expected error:', type(e).__name__, str(e))\n finally:\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "FURB122 Hazard 8: Loop Variable Mutated After Write",
+      "hazard": "If the loop variable is mutated after the write call (e.g., f.write(x); x = None), the rewritten version loses access to the mutated value since it only captures the original iteration value.",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "file wrote: ab\nx after write: ['a', 'b']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Multiple writes - only first replaced",
+      "hazard": "FURB122 Hazard 1: Multiple write statements in loop",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "0_1_2_\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "File object reassigned in loop",
+      "hazard": "FURB122 Hazard 2: File object reassignment during iteration",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "tmp: 0\ntmp2: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Truthy/falsy and identity checks",
+      "hazard": "FURB122 Hazard 3: Custom __bool__ and identity vs equality",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "1T\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Late binding: loop var shadows built-in",
+      "hazard": "FURB122 Hazard 4: Loop variable name conflict with function in write arg",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError 'int' object is not callable\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Keyword-only and defaults evaluated once",
+      "hazard": "FURB122 Hazard 5: Default args, keyword-only, *args/**kwargs",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "'1|2|3|\\n'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Binary file: writelines gets strings instead of bytes",
+      "hazard": "FURB122 Hazard 7: Binary mode with string generator -> TypeError",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB122",
+            "severity": "warning",
+            "message": "Use of `f.write` in a for loop",
+            "span": [
+              2,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError a bytes-like object is required, not 'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError a bytes-like object is required, not 'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:30:17.054188433 -0400\n+++ fixed.py\t2026-10-17 17:30:17.224185585 -0400\n@@ -1,6 +1,5 @@\n f = open('tmp.bin', 'wb')\n-for b in [b'a', b'b', b'c']:\n-    f.write(b)\n+f.writelines([b'a', b'b', b'c'])\n f.close()\n # Now simulate the broken fix: writelines with str gen on binary file\n try:\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Non-str data and partial writes",
+      "hazard": "FURB122 Hazard 8: File modes, truncation, non-str data",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'\\x00\\x01\\x00\\x02\\x00\\x03'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Non-file write() object (e.g. logging.StreamHandler)",
+      "hazard": "FURB122 Hazard 9: Context manager with write() but no close()",
+      "rule": "FURB122",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a\nb\nc\n\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

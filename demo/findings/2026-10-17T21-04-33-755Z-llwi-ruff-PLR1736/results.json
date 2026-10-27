@@ -1,0 +1,1090 @@
+{
+  "runId": "2026-10-17T21-04-33-755Z-llwi-ruff-PLR1736",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLR1736",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-list-index-lookup (PLR1736)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\n## What it does\nChecks for index-based list accesses during `enumerate` iterations.\n\n## Why is this bad?\nWhen iterating over a list with `enumerate`, the current item is already\navailable alongside its index. Using the index to look up the item is\nunnecessary.\n\n## Example\n```python\nletters = [\"a\", \"b\", \"c\"]\n\nfor index, letter in enumerate(letters):\n    print(letters[index])\n```\n\nUse instead:\n```python\nletters = [\"a\", \"b\", \"c\"]\n\nfor index, letter in enumerate(letters):\n    print(letter)\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant indexing of a list when using enumerate where the element is already provided by the loop variables.",
+    "firingShapes": [
+      "for i, x in enumerate(lst): lst[i]",
+      "for idx, val in enumerate(data): data[idx] + 1",
+      "for pos, elem in enumerate(items): items[pos].method()",
+      "for n, v in enumerate(nums): nums[n] if v > 0 else 0",
+      "for k, item in enumerate(obj): obj[k]",
+      "for a, b in enumerate(pairs): pairs[a][b]",
+      "for ix, y in enumerate(vec): vec[ix] := y",
+      "for j, z in enumerate(thing): thing[j] = z"
+    ],
+    "silentShapes": [
+      "for i, x in enumerate(lst): other[i]",
+      "for idx, val in enumerate(data): val",
+      "for pos, elem in enumerate(items): elem",
+      "for n, v in enumerate(nums): v",
+      "for k, item in enumerate(obj): item"
+    ],
+    "fixDescription": "Replace the indexed list access with the loop variable that corresponds to the current element from enumerate.",
+    "hazards": [
+      "Rewriting `lst[i]` to `x` changes behavior if `lst` is reassigned within the loop body, as the original code uses the updated list while the fix uses the stale loop variable.",
+      "If `lst` is a property with a setter, accessing `lst[i]` may trigger the setter on each iteration, whereas using `x` avoids this entirely.",
+      "When `lst` is a mutable local variable that is later rebound in an outer scope, the fix captures the value at loop entry, while the original reflects rebinds.",
+      "If the list element is a class instance with a custom `__getitem__` that has side effects, replacing `lst[i]` with `x` omits those side effects.",
+      "In cases where `lst` is a multidimensional list and the index is a tuple (e.g., `lst[i][j]`), the fix cannot be applied because the loop variables do not match the indexing structure.",
+      "If the loop variable is named identically to the list (e.g., `for lst, lst in enumerate(lst): lst[lst]`), the fix risks incorrect variable capture due to name shadowing.",
+      "When the indexed access appears in an annotated assignment (e.g., `lst[i]: int = 5`), removing the index breaks the annotation's target.",
+      "If the indexed expression is part of a larger subscript (e.g., `lst[i][0]`), the fix would incorrectly replace only the outer index, leaving an invalid access.",
+      "Comments attached to the indexed expression (e.g., `lst[i]  # comment`) may be lost if the autofix does not preserve trailing comments during replacement.",
+      "In a `walrus` expression like `if (tmp := lst[i]) > 0:`, replacing `lst[i]` with `x` alters the assignment target and may affect subsequent uses of `tmp`."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0348208,
+  "summary": {
+    "programs": 16,
+    "invalid": 3,
+    "fired": 9,
+    "fixed": 9,
+    "fix-changes-behavior": 2,
+    "disputed": 4
+  },
+  "reports": [
+    {
+      "programId": "r1-p002",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "lst = [10, 20]\nfor i, x in enumerate(lst):\n    print(f'Before: lst[{i}]={lst[i]}, x={x}')\n    if i == 0:\n        lst = [99, 88]  # Rebinding in outer scope\n",
+      "lines": {
+        "before": 6,
+        "after": 5
+      },
+      "reportPath": "runs/2026-10-17T21-04-33-755Z-llwi-ruff-PLR1736/reports/r1-p002.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/29422",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25182",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12594",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9010",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8969",
+          "relation": "duplicate"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The fix replaces `lst[i]` with the loop variable `x`, assuming the list is not mutated during iteration. However, the program rebinds `lst` to a new list `[99, 88]` when `i == 0`, so on the next iteration `lst[1]` reads from the new list (88) while `x` still yields the original element (20). This changes the program's observable output and is a silent wrong result in plausible code.",
+        "docsQuote": "the current item is already available alongside its index. Using the index to look up the item is unnecessary",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "PLR1736 fix",
+          "PLR1736 f-string list indexing",
+          "enumerate loop variable substitution",
+          "list rebinding during iteration"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "A few more: missed reports vs flake8/pylint, plus two fix bugs (B012, F402, F823, SIM102, SIM401, PLW1641, PLR1736, PLW0406, N801, UP034)",
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "state": "open",
+            "snippet": "### Summary\n\nHi! Thanks for jumping on the last ones so quickly 🙏 I found a few more while comparing ruff with flake8 and pylint on popular PyPI packages, and as you suggested in #29400, they're all in this one issue. Everything below reproduces on ruff 0.17.0 with `ruff check --isolated --select <"
+          },
+          {
+            "source": "github",
+            "title": "Additional false positives in `PLR1733` and `PLR1736`",
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "state": "open",
+            "snippet": "This is a follow-up issue to https://github.com/astral-sh/ruff/issues/25150, tracking a couple of additional false positives. https://github.com/astral-sh/ruff/pull/25177 fixed the first one:\n\n```py\ndef foo(d: dict):\n    for k, v in d.items():\n        ...\n    else:\n        print(d[k])  # resolved fa"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "PLR1736 does not account for custom start index",
+            "url": "https://github.com/astral-sh/ruff/issues/12594",
+            "state": "closed",
+            "snippet": "Hi there, it seems like PLR1736 does not account for custom start indices in enumerate and transforms:\r\n\r\n```python \r\ndef foo(some_list: list[int]):\r\n    for index, list_item in enumerate(some_list, start=1):\r\n        print(some_list[index])\r\n```\r\ninto:\r\n\r\n```python \r\ndef foo(some_list: list[int]):\r"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          },
+          {
+            "source": "github",
+            "title": "PLR1736 not implemented?",
+            "url": "https://github.com/astral-sh/ruff/issues/8972",
+            "state": "closed",
+            "snippet": "Error:\r\n\r\n```\r\n        ruff failed\r\n          Cause: Failed to parse `/home/ryang/repos/av/.ruff.toml`: TOML parse error at line 1, column 1\r\n          |\r\n        1 | # Enable pylint error, pylint warning, flake8-copyright\r\n          | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n       "
+          },
+          {
+            "source": "github",
+            "title": "Autofix conflict between `PLR1736` and `FURB148`",
+            "url": "https://github.com/astral-sh/ruff/issues/9010",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "`PLR1736` yields invalid suggestion and unsafe fix that changes semantics.",
+            "url": "https://github.com/astral-sh/ruff/issues/8969",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "C3001/C3002 Implemented?",
+            "url": "https://github.com/astral-sh/ruff/issues/8973",
+            "state": "closed",
+            "snippet": "\r\nIn my ruff.toml, i have, but I get an error for C3001 and C3002 not implemented?\r\nhttps://github.com/astral-sh/ruff/issues/970\r\nHowever, it does seem to be implemented?\r\n![image](https://github.com/astral-sh/ruff/assets/31294356/076a3f94-6379-4c98-ae60-02121648377c)\r\n\r\n\r\n```\r\n# Enable pylint error"
+          },
+          {
+            "source": "github",
+            "title": "[syntax-errors] Remaining syntax errors raised by the compiler",
+            "url": "https://github.com/astral-sh/ruff/issues/17412",
+            "state": "open",
+            "snippet": "## Summary\n\nA number of semantic or compile-time syntax errors have already been implemented\nin #11934, but there are still many remaining ones. The purpose of this issue is\nto track progress on this remainder. The initial source for most of these is\n[this comment], which reports fuzzer results comp"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "relation": "related",
+            "why": "umbrella issue listing PLR1736 among many rules but no specific rebinding construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "relation": "related",
+            "why": "tracks additional false positives for PLR1736 but does not describe rebinding of the iterated list"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "concerns unused-argument lint with non-ASCII variable names, not PLR1736"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "parent tracking issue for Pylint parity, not a specific PLR1736 defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12594",
+            "relation": "related",
+            "why": "PLR1736 defect but about custom start index, not list rebinding"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "fuzzer autofix/infinite-loop meta-issue, not PLR1736 rebinding"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8972",
+            "relation": "unrelated",
+            "why": "TOML parse error preventing PLR1736 from running, not a fix defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9010",
+            "relation": "related",
+            "why": "autofix conflict between PLR1736 and FURB148, different cause than rebinding"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8969",
+            "relation": "duplicate",
+            "why": "exact same PLR1736 unsafe fix that changes semantics when the iterated list is rebound in the loop"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8973",
+            "relation": "unrelated",
+            "why": "C3001/C3002 implementation question, not PLR1736"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/17412",
+            "relation": "unrelated",
+            "why": "syntax-error tracking issue, not PLR1736"
+          }
+        ],
+        "cost": 0.0037309
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:35:54.506500008 -0400\n+++ fixed.py\t2026-10-22 13:35:56.980541773 -0400\n@@ -1,5 +1,5 @@\n lst = [10, 20]\n for i, x in enumerate(lst):\n-    print(f'Before: lst[{i}]={lst[i]}, x={x}')\n+    print(f'Before: lst[{i}]={x}, x={x}')\n     if i == 0:\n         lst = [99, 88]  # Rebinding in outer scope\n",
+        "observed": "stdout before:\nBefore: lst[0]=10, x=10\nBefore: lst[1]=88, x=20\nstdout after:\nBefore: lst[0]=10, x=10\nBefore: lst[1]=20, x=20",
+        "before": {
+          "stdout": "Before: lst[0]=10, x=10\nBefore: lst[1]=88, x=20\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "Before: lst[0]=10, x=10\nBefore: lst[1]=20, x=20\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "lst = [10, 20]\nfor i, x in enumerate(lst):\n    print(f'Before: lst[{i}]={x}, x={x}')\n    if i == 0:\n        lst = [99, 88]  # Rebinding in outer scope\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select PLR1736 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The original loop iterates over `enumerate(lst)`, where each iteration evaluates `lst` to get its current value; when `lst` is rebound inside the loop (to `[99, 88]`), subsequent iterations use that new list, so on the second iteration `lst[1]` yields `88`. The fix replaces `lst[i]` with `x`, which captures the element from the *original* enumeration snapshot taken at loop start (`[10, 20]`). Since `x` never changes per iteration, it always reflects the initial list’s values, ignoring the rebinding of `lst`. Thus the printed second element differs: `88` vs `20`. This change alters behavior because it decouples the index lookup from the dynamically updated list.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p004",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "lst = ['a', 'b', 'c']\nfor lst, lst in enumerate(lst):  # outer lst shadows inner? actually, first is index, second is element\n    try:\n        result = lst[lst]  # original: indexes the list with the element (string) -> error\n    except Exception as e:\n        print(f'{type(e).__name__}: {e}', end=' ')\n",
+      "lines": {
+        "before": 10,
+        "after": 6
+      },
+      "reportPath": "runs/2026-10-17T21-04-33-755Z-llwi-ruff-PLR1736/reports/r2-p004.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/29422",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/25182",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/12594",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/9010",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/astral-sh/ruff/issues/8969",
+          "relation": "duplicate"
+        }
+      ],
+      "verdict": {
+        "grade": "real",
+        "severity": "high",
+        "why": "The rule assumes the enumerate target is a list and the loop variables are distinct (index, item), so it replaces lst[lst] with lst. In the program the same name lst is used for both variables; the inner lst binds to the element (a string), making the original indexing a TypeError that is caught and printed. After the fix the indexing is removed, the exception disappears, and the program prints nothing — a silent change in observable behavior.",
+        "docsQuote": "the current item is already available alongside its index. Using the index to look up the item is unnecessary",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "PLR1736 fix",
+          "ruff PLR1736 variable shadowing",
+          "enumerate loop duplicate variables",
+          "list indexing with non-integer"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "A few more: missed reports vs flake8/pylint, plus two fix bugs (B012, F402, F823, SIM102, SIM401, PLW1641, PLR1736, PLW0406, N801, UP034)",
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "state": "open",
+            "snippet": "### Summary\n\nHi! Thanks for jumping on the last ones so quickly 🙏 I found a few more while comparing ruff with flake8 and pylint on popular PyPI packages, and as you suggested in #29400, they're all in this one issue. Everything below reproduces on ruff 0.17.0 with `ruff check --isolated --select <"
+          },
+          {
+            "source": "github",
+            "title": "Additional false positives in `PLR1733` and `PLR1736`",
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "state": "open",
+            "snippet": "This is a follow-up issue to https://github.com/astral-sh/ruff/issues/25150, tracking a couple of additional false positives. https://github.com/astral-sh/ruff/pull/25177 fixed the first one:\n\n```py\ndef foo(d: dict):\n    for k, v in d.items():\n        ...\n    else:\n        print(d[k])  # resolved fa"
+          },
+          {
+            "source": "github",
+            "title": "unused-function-argument not silenced by prefixed underscore if variable name is \"次\"",
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "state": "closed",
+            "snippet": "### Summary\n\nIn a lambda function or a FunctionDef, a \"variable is intentionally defined-but-not-used [and] ... prefixed with an underscore,\" but Ruff emits unused-lambda-argument (ARG005) or unused-function-argument (ARG001).\n\nThe variable name is `次`. If I change the name to `ci` or `a`, the under"
+          },
+          {
+            "source": "github",
+            "title": "Implement Pylint",
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "state": "open",
+            "snippet": "This is the parent issue for tracking parity with Pylint. Below, we've enumerated all Pylint rules.\n\nRules that are checked off have been implemented in Ruff already (either as a Pylint rule, e.g., `PLE0237`, or by way of overlap with another linter like Pyflakes, as with `missing-format-string-key`"
+          },
+          {
+            "source": "github",
+            "title": "PLR1736 does not account for custom start index",
+            "url": "https://github.com/astral-sh/ruff/issues/12594",
+            "state": "closed",
+            "snippet": "Hi there, it seems like PLR1736 does not account for custom start indices in enumerate and transforms:\r\n\r\n```python \r\ndef foo(some_list: list[int]):\r\n    for index, list_item in enumerate(some_list, start=1):\r\n        print(some_list[index])\r\n```\r\ninto:\r\n\r\n```python \r\ndef foo(some_list: list[int]):\r"
+          },
+          {
+            "source": "github",
+            "title": "Pack of fuzzer Autofix/Infinite loop errors [2]",
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "state": "closed",
+            "snippet": "Previous part(https://github.com/astral-sh/ruff/issues/7455) exceeded 50 reported issues, and is hard to search/add new problems, so decided to create new list\r\n\r\n- [x] - D300 - https://github.com/astral-sh/ruff/issues/8402#issuecomment-1788782750\r\n- [x] - E223 - https://github.com/astral-sh/ruff/is"
+          },
+          {
+            "source": "github",
+            "title": "PLR1736 not implemented?",
+            "url": "https://github.com/astral-sh/ruff/issues/8972",
+            "state": "closed",
+            "snippet": "Error:\r\n\r\n```\r\n        ruff failed\r\n          Cause: Failed to parse `/home/ryang/repos/av/.ruff.toml`: TOML parse error at line 1, column 1\r\n          |\r\n        1 | # Enable pylint error, pylint warning, flake8-copyright\r\n          | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\n       "
+          },
+          {
+            "source": "github",
+            "title": "Autofix conflict between `PLR1736` and `FURB148`",
+            "url": "https://github.com/astral-sh/ruff/issues/9010",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "`PLR1736` yields invalid suggestion and unsafe fix that changes semantics.",
+            "url": "https://github.com/astral-sh/ruff/issues/8969",
+            "state": "closed",
+            "snippet": "<!--\r\nThank you for taking the time to report an issue! We're glad to have you involved with Ruff.\r\n\r\nIf you're filing a bug report, please consider including the following information:\r\n\r\n* A minimal code snippet that reproduces the bug.\r\n* The command you invoked (e.g., `ruff /path/to/file.py --fi"
+          },
+          {
+            "source": "github",
+            "title": "C3001/C3002 Implemented?",
+            "url": "https://github.com/astral-sh/ruff/issues/8973",
+            "state": "closed",
+            "snippet": "\r\nIn my ruff.toml, i have, but I get an error for C3001 and C3002 not implemented?\r\nhttps://github.com/astral-sh/ruff/issues/970\r\nHowever, it does seem to be implemented?\r\n![image](https://github.com/astral-sh/ruff/assets/31294356/076a3f94-6379-4c98-ae60-02121648377c)\r\n\r\n\r\n```\r\n# Enable pylint error"
+          },
+          {
+            "source": "github",
+            "title": "Ruleset Suggestion: wemake-python-styleguide",
+            "url": "https://github.com/astral-sh/ruff/issues/3845",
+            "state": "open",
+            "snippet": "`wemake-python-styleguide` is a Flake8-based style guide that depends on many other Flake8 plugins (AFAICT all implemented by Ruff), but it also ships [lots of custom Flake8 rules](https://wemake-python-styleguide.readthedocs.io/en/latest/pages/usage/violations/index.html). Is there an interest to i"
+          },
+          {
+            "source": "tavily",
+            "title": "Suggestion: Implement Sourcery rules · Issue #11060 · astral-sh/ruff · GitHub",
+            "url": "https://github.com/astral-sh/ruff/issues/11060",
+            "snippet": "`remove-redundant-slice-index`\n ~~`remove-str-from-fstring`~~ (`RUF010`)\n `remove-str-from-print`\n `remove-unit-step-from-range`\n `remove-unnecessary-cast`\n ~~`remove-unnecessary-else`~~ (`RET505`)\n `remove-unreachable-code`\n `remove-unused-enumerate`\n ~~`remove-zero-from-range`~~ (`PIE808`)\n `repla"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/29422",
+            "relation": "related",
+            "why": "umbrella issue listing PLR1736 among many rules but does not describe this specific shadowed-variable construct"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/25182",
+            "relation": "related",
+            "why": "tracks additional false positives for PLR1736 but focuses on dict iteration, not shadowed loop variables"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/28721",
+            "relation": "unrelated",
+            "why": "concerns unused-argument detection with Unicode variable names, not PLR1736 enumerate rewrites"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/970",
+            "relation": "unrelated",
+            "why": "parent tracking issue for Pylint parity, not a specific PLR1736 defect report"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/12594",
+            "relation": "related",
+            "why": "PLR1736 defect about custom start index in enumerate, different construct from shadowed loop variables"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8402",
+            "relation": "unrelated",
+            "why": "fuzzer autofix/infinite-loop error pack, not a PLR1736 semantic-change report"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8972",
+            "relation": "unrelated",
+            "why": "reports PLR1736 not implemented due to config parse error, not a fix-changes-behavior defect"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/9010",
+            "relation": "related",
+            "why": "autofix conflict between PLR1736 and FURB148, different root cause than shadowed-variable rewrite"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8969",
+            "relation": "duplicate",
+            "why": "explicitly reports PLR1736 yields invalid suggestion and unsafe fix that changes semantics on shadowed loop variables like `for i, i in enumerate(...)`"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/8973",
+            "relation": "unrelated",
+            "why": "asks whether C3001/C3002 are implemented, unrelated to PLR1736"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/3845",
+            "relation": "unrelated",
+            "why": "ruleset suggestion for wemake-python-styleguide, not a PLR1736 bug report"
+          },
+          {
+            "url": "https://github.com/astral-sh/ruff/issues/11060",
+            "relation": "unrelated",
+            "why": "suggestion to implement Sourcery rules, unrelated to PLR1736 fix-changes-behavior"
+          }
+        ],
+        "cost": 0.0042004
+      },
+      "evidence": {
+        "diff": "--- orig.py\t2026-10-22 13:36:02.205629985 -0400\n+++ fixed.py\t2026-10-22 13:36:04.919675808 -0400\n@@ -1,6 +1,6 @@\n lst = ['a', 'b', 'c']\n for lst, lst in enumerate(lst):  # outer lst shadows inner? actually, first is index, second is element\n     try:\n-        result = lst[lst]  # original: indexes the list with the element (string) -> error\n+        result = lst  # original: indexes the list with the element (string) -> error\n     except Exception as e:\n         print(f'{type(e).__name__}: {e}', end=' ')\n",
+        "observed": "stdout before:\nTypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str'\nstdout after:\n",
+        "before": {
+          "stdout": "TypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str' ",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "lst = ['a', 'b', 'c']\nfor lst, lst in enumerate(lst):  # outer lst shadows inner? actually, first is index, second is element\n    try:\n        result = lst  # original: indexes the list with the element (string) -> error\n    except Exception as e:\n        print(f'{type(e).__name__}: {e}', end=' ')\n",
+        "commands": [
+          "python3 prog.py",
+          "ruff check --preview --isolated --select PLR1736 --fix prog.py",
+          "python3 prog.py"
+        ],
+        "explanation": "The rewrite replaces `result = lst[lst]` with `result = lst`, changing the operation from indexing the list using its current element (which raises a TypeError because strings cannot index lists) to simply assigning the loop variable itself. This eliminates the exception entirely, so no output is produced where three TypeErrors were previously printed. The behavior differs because the original code intentionally caused and caught errors, while the fix suppresses them by altering the logic inside the try block. Thus, the transformation is not semantics-preserving—it changes what the program does, not just how it expresses it. The label \"safe\" is incorrect in this context.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Keyword-only, positional-only, *args/**kwargs forwarding",
+      "hazard": "Rewriting enumerate index use breaks argument forwarding where positional/keyword semantics differ based on evaluation timing.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              10,
+              13
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              10,
+              37
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "a=1, b=1, c=print, d=1\na=2, b=2, c=print, d=2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a=1, b=1, c=print, d=1\na=2, b=2, c=print, d=2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:04:46.764867461 -0400\n+++ fixed.py\t2026-10-17 17:04:46.929869320 -0400\n@@ -7,4 +7,4 @@\n \n for i, x in enumerate(lst):\n     # Rule triggers on lst[i] -> should become x\n-    wrapper(lst[i], b=x, c=print, d=lst[i])\n+    wrapper(x, b=x, c=print, d=x)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Mutable local rebound in outer scope",
+      "hazard": "Fix captures list value at loop start; original uses rebound value, causing divergence when list is reassigned in outer scope during iteration.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              3,
+              31
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Before: lst[0]=10, x=10\nAfter:  lst[0]=99, x=10\nBefore: lst[1]=88, x=20\nAfter:  lst[1]=88, x=20\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nBefore: lst[0]=10, x=10\nAfter:  lst[0]=99, x=10\nBefore: lst[1]=88, x=20\nAfter:  lst[1]=88, x=20\nstdout after:\nBefore: lst[0]=10, x=10\nAfter:  lst[0]=99, x=10\nBefore: lst[1]=20, x=20\nAfter:  lst[1]=88, x=20"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: lst[0]=10, x=10\nAfter:  lst[0]=99, x=10\nBefore: lst[1]=20, x=20\nAfter:  lst[1]=88, x=20\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:04:47.037870536 -0400\n+++ fixed.py\t2026-10-17 17:04:47.205872429 -0400\n@@ -1,6 +1,6 @@\n lst = [10, 20]\n for i, x in enumerate(lst):\n-    print(f'Before: lst[{i}]={lst[i]}, x={x}')\n+    print(f'Before: lst[{i}]={x}, x={x}')\n     if i == 0:\n         lst = [99, 88]  # Rebinding in outer scope\n     print(f'After:  lst[{i}]={lst[i]}, x={x}')\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mutable default arguments and aliasing",
+      "hazard": "Rewriting to loop variable avoids re-evaluation of mutable default, but original re-indexes mutated default; aliasing causes shared state exposure.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program does not terminate within the time limit"
+    },
+    {
+      "id": "r1-p004",
+      "title": "Dict ordering, duplicate keys, __hash__/__eq__ overrides",
+      "hazard": "Rewriting to loop variable avoids re-hashing/re-looking-up dict key; original re-computes hash and may hit different entry if __eq__ is unstable.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "d[1] via index: first, via loop: first\nd[1] via index: second, via loop: second\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Bytes vs str, encoding and newline handling",
+      "hazard": "Rewriting to loop variable avoids re-encoding/decoding; original re-indexes bytes/str and may decode differently if mutating or slicing encoding-sensitive content.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p006",
+      "title": "String formatting edge cases: %, format, f-strings, repr vs str",
+      "hazard": "Rewriting to loop variable avoids re-evaluating __str__/__repr__; original re-indexes and may call __str__ again with side effects.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              11,
+              12
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "__str__ called for 1\n__str__ called for 1\n1:1\n__str__ called for 2\n__str__ called for 2\n2:2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "__str__ called for 1\n__str__ called for 1\n1:1\n__str__ called for 2\n__str__ called for 2\n2:2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:04:52.700934264 -0400\n+++ fixed.py\t2026-10-17 17:04:52.865936120 -0400\n@@ -8,5 +8,5 @@\n items = [Show(1), Show(2)]\n for i, x in enumerate(items):\n     # Rule triggers on items[i] -> should become x\n-    s = f'{items[i]}:{x}'\n+    s = f'{x}:{x}'\n     print(s)\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Class vs instance attributes, descriptors, properties with side effects",
+      "hazard": "Rewriting to loop variable avoids re-triggering __get__; original re-indexes and may invoke descriptor/__getattribute__ again with state change.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              17,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Access 0: Desc.__get__ called with val=42\nAccess 1: Desc.__get__ called with val=42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Access 0: Desc.__get__ called with val=42\nAccess 1: Desc.__get__ called with val=42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:04:52.962937210 -0400\n+++ fixed.py\t2026-10-17 17:04:53.127939065 -0400\n@@ -14,4 +14,4 @@\n for i, obj in enumerate(lst):\n     # Rule triggers on lst[i].attr -> should become obj.attr\n     print(f'Access {i}:', end=' ') \n-    v = lst[i].attr  # Triggers __get__\n+    v = obj.attr  # Triggers __get__\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "hazard": "Rewriting to loop variable avoids re-evaluating __bool__/__len__; original re-indexes and may invoke __bool__ again, changing control flow.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              11,
+              8
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              27,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "__bool__ called, returning True\n__bool__ called, returning False\n",
+          "stderr1": "TypeError: '>' not supported between instances of 'NumWithBool' and 'int'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "__bool__ called, returning True\n__bool__ called, returning False\n",
+          "stderr1": "TypeError: '>' not supported between instances of 'NumWithBool' and 'int'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:04:53.232940245 -0400\n+++ fixed.py\t2026-10-17 17:04:53.623944640 -0400\n@@ -8,7 +8,7 @@\n for n, v in enumerate(data):\n     # Rule triggers on data[n] if v > 0 else 0 -> but v is Truthy, not int! Adjusting to match pattern: use v in bool context\n     # Instead: data[n] is used in conditional\n-    if data[n]:  # Rule should trigger here? No — rule only triggers on direct indexing like lst[i], not in if\n+    if v:  # Rule should trigger here? No — rule only triggers on direct indexing like lst[i], not in if\n         # So we need to match the hazard pattern: for n, v in enumerate(nums): nums[n] if v > 0 else 0\n         # Let's change to: nums[n] is used in expression\n         pass\n@@ -24,5 +24,5 @@\n nums = [NumWithBool(1), NumWithBool(0)]\n for n, v in enumerate(nums):\n     # Rule triggers on nums[n] -> should become v\n-    result = nums[n] if v > 0 else 0  # Here, nums[n] is indexed, v is loop var\n+    result = v if v > 0 else 0  # Here, nums[n] is indexed, v is loop var\n     print(f'n={n}, v={v}, result={result}')\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Walrus assignment changes target",
+      "hazard": "In a walrus expression like `if (tmp := lst[i]) > 0:`, replacing `lst[i]` with `x` alters the assignment target and may affect subsequent uses of `tmp`.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              3,
+              16
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "i=0, tmp=2 i=1, tmp=4 i=2, tmp=6 \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "i=0, tmp=2 i=1, tmp=4 i=2, tmp=6 \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:05:01.181029480 -0400\n+++ fixed.py\t2026-10-17 17:05:01.360031487 -0400\n@@ -1,6 +1,6 @@\n lst = [1, 2, 3]\n for i, x in enumerate(lst):\n-    if (tmp := lst[i]) > 0:\n+    if (tmp := x) > 0:\n         tmp *= 2\n     else:\n         tmp = 0\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Class vs instance attributes, descriptors, properties with side effects",
+      "hazard": "Rewriting to loop variable avoids re-triggering __get__; original re-indexes and triggers descriptor each time.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Desc.__get__\nDesc.__get__\nidx=0, val=10, c.attr[0]=10 Desc.__get__\nidx=1, val=20, c.attr[1]=20 Desc.__get__\nidx=2, val=30, c.attr[2]=30 \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Property setter triggered on each list access",
+      "hazard": "If `lst` is a property with a setter, accessing `lst[i]` may trigger the setter on each iteration, whereas using `x` avoids this entirely.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "setter called 0 times\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Variable capture due to name shadowing in enumerate",
+      "hazard": "If the loop variable is named identically to the list (e.g., `for lst, lst in enumerate(lst): lst[lst]`), the fix risks incorrect variable capture due to name shadowing.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              7,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "TypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str' \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nTypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str' TypeError: string indices must be integers, not 'str'\nstdout after:\n"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:05:01.732035658 -0400\n+++ fixed.py\t2026-10-17 17:05:01.900037542 -0400\n@@ -4,7 +4,7 @@\n     # So original: lst[index] -> element at index\n     # Fix: lst (element) -> which is a string, not indexable -> TypeError\n     try:\n-        result = lst[lst]  # original: indexes the list with the element (string) -> error\n+        result = lst  # original: indexes the list with the element (string) -> error\n     except Exception as e:\n         print(f'{type(e).__name__}: {e}', end=' ')\n print()\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Exceptions in rewritten code with finally/else",
+      "hazard": "Exceptions raised inside the rewritten code, finally/else clauses, exception chaining",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              4,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "OK: 10.0 finally OK: 5.0 finally DivByZero at i=2 finally \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "OK: 10.0 finally OK: 5.0 finally DivByZero at i=2 finally \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:05:01.998038641 -0400\n+++ fixed.py\t2026-10-17 17:05:02.161040467 -0400\n@@ -1,7 +1,7 @@\n lst = [1, 2, 0]\n for i, x in enumerate(lst):\n     try:\n-        y = 10 / lst[i]  # rule fires: lst[i] -> x\n+        y = 10 / x  # rule fires: lst[i] -> x\n     except ZeroDivisionError as e:\n         print(f'DivByZero at i={i}', end=' ')\n     else:\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Dict ordering, duplicate keys, __hash__/__eq__ overrides",
+      "hazard": "Rewriting to loop variable avoids re-hashing/re-looking-up dict key; original re-indexes and may re-hash.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hash(1)\nhash(2)\nhash(1)\nhash(1)\nhash(2)\nhash(1)\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Custom __getitem__ with side effects",
+      "hazard": "If the list element is a class instance with a custom `__getitem__` that has side effects, replacing `lst[i]` with `x` omits those side effects.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "String formatting edge cases: % , format, f-strings, repr vs str",
+      "hazard": "Rewriting to loop variable avoids re-evaluating __str__/__repr__; original re-indexes and may trigger __str__ again.",
+      "rule": "PLR1736",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              13,
+              12
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "PLR1736",
+            "severity": "warning",
+            "message": "List index lookup in `enumerate()` loop",
+            "span": [
+              16,
+              13
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "str(1)\nstr(2)\nline\nstr(1)\nstr(2)\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "str(1)\nstr(2)\nline\nstr(1)\nstr(2)\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:05:02.538044693 -0400\n+++ fixed.py\t2026-10-17 17:05:02.705046565 -0400\n@@ -10,8 +10,8 @@\n \n lst = [Foo(1), Foo(2)]\n for i, x in enumerate(lst):\n-    s = f'{lst[i]}'  # rule fires: lst[i] -> x\n+    s = f'{x}'  # rule fires: lst[i] -> x\n print('line')\n for i, x in enumerate(lst):\n-    s = str(lst[i])  # rule fires again\n+    s = str(x)  # rule fires again\n print('done')\n"
+      }
+    }
+  ]
+}

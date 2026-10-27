@@ -1,0 +1,673 @@
+{
+  "runId": "2026-10-17T21-38-53-735Z-6uly-ruff-RUF017",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF017",
+    "fixKind": "unknown",
+    "docs": "# quadratic-list-summation (RUF017)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks for the use of `sum()` to flatten lists of lists, which has\nquadratic complexity.\n\n## Why is this bad?\nThe use of `sum()` to flatten lists of lists is quadratic in the number of\nlists, as `sum()` creates a new list for each element in the summation.\n\nInstead, consider using another method of flattening lists to avoid\nquadratic complexity. The following methods are all linear in the number of\nlists:\n\n- `[*sublist for sublist in lists]` (Python 3.15+)\n- `functools.reduce(operator.iadd, lists, [])`\n- `list(itertools.chain.from_iterable(lists))`\n- `[item for sublist in lists for item in sublist]`\n\nWhen fixing relevant violations, Ruff uses the starred-list-comprehension\nform on Python 3.15 and later. On older Python versions, Ruff falls back to\nthe `functools.reduce` form, which outperforms the other pre-3.15\nalternatives in [microbenchmarks].\n\n## Example\n```python\nlists = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\njoined = sum(lists, [])\n```\n\nOn Python 3.14 and earlier, use instead:\n```python\nimport functools\nimport operator\n\nlists = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\njoined = functools.reduce(operator.iadd, lists, [])\n```\n\nOn Python 3.15 and later, use instead:\n```python\nlists = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\njoined = [*sublist for sublist in lists]\n```\n\n## Fix safety\n\nThis fix is always marked as unsafe because the replacement may accept any\niterable where `sum` previously required lists. On Python 3.15 and later,\nRuff uses iterable unpacking within a list comprehension; on older Python\nversions, Ruff uses `operator.iadd`. In both cases, code that previously\nraised an error may silently succeed. Moreover, the fix could remove\ncomments from the original code.\n\n## References\n- [_How Not to Flatten a List of Lists in Python_](https://mathieularose.com/how-not-to-flatten-a-list-of-lists-in-python)\n- [_How do I make a flat list out of a list of lists?_](https://stackoverflow.com/questions/952914/how-do-i-make-a-flat-list-out-of-a-list-of-lists/953097#953097)\n\n[microbenchmarks]: https://github.com/astral-sh/ruff/issues/5073#issuecomment-1591836349\n"
+  },
+  "analysis": {
+    "summary": "Flags calls to sum() used to flatten lists of lists by providing [] as the start argument.",
+    "firingShapes": [
+      "sum([[1, 2], [3]], [])",
+      "sum(a + b for a, b in zip(x, y), [])",
+      "sum(map(list, nested), [])",
+      "sum([x[i:i+2] for i in range(0, len(x), 2)], [])",
+      "sum(([k, v] for k, v in d.items()), [])",
+      "sum([[]] * n, [])",
+      "sum(get_lists(), [])",
+      "sum(data.values(), [])"
+    ],
+    "silentShapes": [
+      "sum([1, 2, 3])",
+      "sum(range(10))",
+      "sum(d.values())",
+      "sum(i for i in range(10) if i % 2 == 0)",
+      "total = 0; total = sum(nums, total)"
+    ],
+    "fixDescription": "Rewrites sum(lists, []) as [*sublist for sublist in lists] on Python 3.15+, otherwise as functools.reduce(operator.iadd, lists, []) after importing functools and operator if needed.",
+    "hazards": [
+      "The rewrite accepts any iterable of iterables, whereas sum required actual lists, potentially changing behavior if non-list iterables are passed.",
+      "If the original sum call appeared in a context where its TypeError on non-list inputs was being caught and handled, the rewrite may silently succeed and alter control flow.",
+      "The fix may reorder evaluation: sum evaluates left-to-right with immediate accumulation, while the reduce form also evaluates left-to-right but via operator.iadd calls, which could differ if list concatenation had side effects (though unlikely for built-in lists).",
+      "On Python 3.15+, the starred form [*sublist for sublist in lists] creates the list via a comprehension, which may have different performance characteristics but identical results for list inputs.",
+      "If the variable name 'lists' is reused or shadowed in the surrounding scope, the fix’s comprehension or reduce expression could capture a different binding than the original sum call intended.",
+      "The fix may drop inline or trailing comments attached to the sum call line, as the rewrite replaces the entire expression and may not preserve comment tokens.",
+      "If the sum call was part of a larger expression (e.g., inside a function argument or conditional), the fix’s insertion of import statements (for reduce form) could affect module-level state or trigger side effects at import time.",
+      "Using functools.reduce(operator.iadd, ...) assumes the elements support in-place addition via __iadd__; for lists this works, but if the iterables were custom sequences with unusual __iadd__ behavior, the result might diverge from sum’s repeated __add__ usage.",
+      "In rare cases where the start value [] was not a literal but a variable, the fix incorrectly hardcodes [], altering behavior if that variable was mutated elsewhere or intended to be dynamic.",
+      "If the code relied on the quadratic behavior of sum for timing or testing purposes, the rewrite changes performance characteristics, potentially breaking time-sensitive logic."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.006161399999999999,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 11,
+    "fixed": 0,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Evaluation Order Side Effect",
+      "hazard": "The fix may reorder evaluation: sum evaluates left-to-right with immediate accumulation, while the reduce form also evaluates left-to-right but via operator.iadd calls, which could differ if list conc",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              16,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "sum:\nreduce-like:\nResults equal: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "sum:\nreduce-like:\nResults equal: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Star Imports and Module State",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              22,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before sum: []\nAfter sum: []\nResult: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before sum: []\nAfter sum: []\nResult: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Non-List Iterables",
+      "hazard": "The rewrite accepts any iterable of iterables, whereas sum required actual lists, potentially changing behavior if non-list iterables are passed.",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              11,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Input:\n  [1, 2] (list)\n  (3, 4) (tuple)\n  {5, 6} (set)\nsum error: TypeError can only concatenate list (not \"tuple\") to list\n\nReduce form:\nreduce result: [1, 2, 3, 4, 5, 6] <class 'list'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Input:\n  [1, 2] (list)\n  (3, 4) (tuple)\n  {5, 6} (set)\nsum error: TypeError can only concatenate list (not \"tuple\") to list\n\nReduce form:\nreduce result: [1, 2, 3, 4, 5, 6] <class 'list'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Custom __iadd__ vs __add__",
+      "hazard": "Using functools.reduce(operator.iadd, ...) assumes the elements support in-place addition via __iadd__; for lists this works, but if the iterables were custom sequences with unusual __iadd__ behavior,",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Initial: WeirdSeq([1, 2], a) WeirdSeq([3, 4], b) WeirdSeq([5, 6], c)\n\nUsing sum:\nError: TypeError can only concatenate list (not \"WeirdSeq\") to list\n\nUsing reduce:\nResult: WeirdSeq([5, 6], start)\na,b,c after: WeirdSeq([1, 2], a) WeirdSeq([3, 4], b) WeirdSeq([5, 6], c)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Import-Time Side Effects in Expression",
+      "hazard": "If the sum call was part of a larger expression (e.g., inside a function argument or conditional), the fix’s insertion of import statements (for reduce form) could affect module-level state or trigger",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              27,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before call: ['initialized']\nAfter sum: ['initialized']\nResult: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before call: ['initialized']\nAfter sum: ['initialized']\nResult: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "String Formatting Edge Cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              2,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Flattened: ['a', 'b', 'c', 'd']\n%% formatting: abcd\n.format(): abcd\nf-string: abcd\nrepr: 'abcd'\nNested quote f-string: He said \"abcd\"\nFormat spec: 'abcd'    \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Flattened: ['a', 'b', 'c', 'd']\n%% formatting: abcd\n.format(): abcd\nf-string: abcd\nrepr: 'abcd'\nNested quote f-string: He said \"abcd\"\nFormat spec: 'abcd'    \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Keyword-Only and Args Forwarding",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p008",
+      "title": "Generator Consumption",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              10,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              15,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "First sum:\n  Generator started\n  Yielding [0, 1]\n  Yielding [1, 2]\n  Yielding [2, 3]\n  Generator ended\nResult: [0, 1, 1, 2, 2, 3]\n\nSecond sum (same generator):\n  Generator started\n  Yielding [0, 1]\n  Yielding [1, 2]\n  Yielding [2, 3]\n  Generator ended\nResult: [0, 1, 1, 2, 2, 3]\n\nManual reduce for comparison:\n  Generator started\n  Yielding [0, 1]\n  Yielding [1, 2]\n  Yielding [2, 3]\n  Generator ended\nReduce result: [0, 1, 1, 2, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First sum:\n  Generator started\n  Yielding [0, 1]\n  Yielding [1, 2]\n  Yielding [2, 3]\n  Generator ended\nResult: [0, 1, 1, 2, 2, 3]\n\nSecond sum (same generator):\n  Generator started\n  Yielding [0, 1]\n  Yielding [1, 2]\n  Yielding [2, 3]\n  Generator ended\nResult: [0, 1, 1, 2, 2, 3]\n\nManual reduce for comparison:\n  Generator started\n  Yielding [0, 1]\n  Yielding [1, 2]\n  Yielding [2, 3]\n  Generator ended\nReduce result: [0, 1, 1, 2, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Type annotation evaluation with forward reference",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              4,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: can only concatenate list (not \"tuple\") to list",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: can only concatenate list (not \"tuple\") to list",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "F-string with escaped braces and quote nesting",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              2,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Binary file write with partial truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sum() can't sum bytes [use b''.join(seq) instead]",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r2-p004",
+      "title": "Variable shadowing of 'lists' in nested scope",
+      "hazard": "If the variable name 'lists' is reused or shadowed in the surrounding scope, the fix’s comprehension or reduce expression could capture a different binding than the original sum call intended.",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              2,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              4,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: can only concatenate list (not \"int\") to list",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: can only concatenate list (not \"int\") to list",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Trailing comment on sum call line lost in fix",
+      "hazard": "The fix may drop inline or trailing comments attached to the sum call line, as the rewrite replaces the entire expression and may not preserve comment tokens.",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "[1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Custom sequence with __iadd__ vs __add__ divergence",
+      "hazard": "Using functools.reduce(operator.iadd, ...) assumes the elements support in-place addition via __iadd__; for lists this works, but if the iterables were custom sequences with unusual __iadd__ behavior,",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "sum result: Vec(3)\nstart after sum: Vec(0)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Sum call inside function argument triggering module-level import",
+      "hazard": "If the sum call was part of a larger expression (e.g., inside a function argument or conditional), the fix’s insertion of import statements (for reduce form) could affect module-level state or trigger",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF017",
+            "severity": "warning",
+            "message": "Avoid quadratic list summation",
+            "span": [
+              5,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "consumed: [1, 2]\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "consumed: [1, 2]\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Bytes vs str in sum with binary mode interaction",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "RUF017",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: sum() can't sum bytes [use b''.join(seq) instead]",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

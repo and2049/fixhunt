@@ -1,0 +1,133 @@
+{
+  "runId": "2026-10-23T03-46-37-103Z-x323-ruff-FURB103",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB103",
+    "fixKind": "unknown",
+    "docs": "# write-whole-file (FURB103)\n\nDerived from the **refurb** linter.\n\nFix is sometimes available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nChecks for uses of `open` and `write` that can be replaced by `pathlib`\nmethods, like `Path.write_text` and `Path.write_bytes`.\n\n## Why is this bad?\nWhen writing a single string to a file, it's simpler and more concise\nto use `pathlib` methods like `Path.write_text` and `Path.write_bytes`\ninstead of `open` and `write` calls via `with` statements.\n\n## Example\n```python\nwith open(\"file.txt\", \"w\") as f:\n    f.write(\"some text\")\n```\n\nUse instead:\n```python\nfrom pathlib import Path\n\nPath(\"file.txt\").write_text(\"some text\")\n```\n\n## Fix Safety\nThis rule's fix is marked as unsafe if the replacement would remove comments attached to the original expression.\n\n## References\n- [Python documentation: `Path.write_bytes`](https://docs.python.org/3/library/pathlib.html#pathlib.Path.write_bytes)\n- [Python documentation: `Path.write_text`](https://docs.python.org/3/library/pathlib.html#pathlib.Path.write_text)\n"
+  },
+  "analysis": {
+    "summary": "Flags manual file writes using open() and .write() when they can be replaced with pathlib.Path.write_text() or write_bytes().",
+    "firingShapes": [
+      "with open('file.txt', 'w') as f:\\n    f.write('text')",
+      "with open(path, 'wb') as f:\\n    f.write(data)",
+      "with open(filename, 'w', encoding='utf-8') as f:\\n    f.write(content)",
+      "with open(filepath, 'a') as f:\\n    f.write(line)\\n",
+      "with open(name, 'wt') as f:\\n    f.write(s)",
+      "with open(p, 'w', buffering=1) as f:\\n    f.write(msg)",
+      "with open(src, 'w', errors='ignore') as f:\\n    f.write(txt)",
+      "with open(out, 'wb', opener=None) as f:\\n    f.write(b)"
+    ],
+    "silentShapes": [
+      "with open('r+') as f:\\n    f.read()\\n    f.write('x')",
+      "with open('file.txt') as f:\\n    data = f.read()",
+      "f = open('file.txt', 'w'); f.write('text')",
+      "with open('file.txt', 'w') as f:\\n    if True:\\n        f.write('text')",
+      "with open('file.txt', 'w') as f:\\n    other(); f.write('text')"
+    ],
+    "fixDescription": "Replaces the with-open-write block with a direct call to pathlib.Path(file_path).write_text(content) or write_bytes(data), preserving the file path and written content while removing the variable assignment and block structure.",
+    "hazards": [
+      "The rewrite removes the file handle variable (f), breaking any subsequent use of f after the write but before the block ends.",
+      "If the write call is not the last statement in the block, the fix incorrectly truncates the block and drops later statements.",
+      "The fix assumes the file is opened solely for writing; modes like 'r+' or 'a+' are not equivalent to write_text/write_bytes and may alter behavior.",
+      "Comments attached to the 'with' line, 'as f:', or indentation are discarded during the rewrite, violating comment preservation expectations.",
+      "The rewrite does not preserve custom openers, buffering, or errors parameters, which may affect I/O behavior in edge cases.",
+      "If the file path expression has side effects (e.g., function call), duplicating it in Path() changes evaluation timing and frequency.",
+      "When the written data is a complex expression, the fix may alter evaluation order relative to other expressions in the surrounding scope.",
+      "The generated code lacks the implicit file closing guaranteed by the context manager, though write_text/write_bytes handle closure internally—this is safe only if no exceptions occur mid-write.",
+      "If 'open' or 'Path' is shadowed by a local variable, the fix may bind to the wrong identifier, altering semantics.",
+      "The fix introduces a new import dependency on pathlib; if the module does not already import Path, the rewrite may cause a NameError unless the tool adds the import."
+    ]
+  },
+  "opts": {
+    "n": 2,
+    "rounds": 1,
+    "unsafe": false
+  },
+  "cost": 0.0013503,
+  "summary": {
+    "programs": 2,
+    "invalid": 0,
+    "fired": 1,
+    "fixed": 1,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "star_import_side_effect_all",
+      "hazard": "FURB103 triggered inside a loop over __all__; after star import shadows Path causing mis-resolution",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB103",
+            "severity": "{\"cell\":null,\"code\":\"FURB103\",\"end_location\":{\"column\":44,\"row\":11},\"filename\":\"/home/sun/dev/diaghunt/runs/2026-10-23T03-46-37-103Z-x323-ruff-FURB103/r1-p001/orig.py\",\"fix\":{\"applicability\":\"safe\",\"edits\":[{\"content\":\"import pathlib\\n\",\"end_location\":{\"column\":1,\"row\":3},\"location\":{\"column\":1,\"row\":3}},{\"content\":\"pathlib.Path('tmp.bin').write_bytes(txt)\",\"end_location\":{\"column\":29,\"row\":12},\"location\":{\"column\":13,\"row\":11}}],\"message\":\"Replace with `Path('tmp.bin').write_bytes(txt)`\"},\"location\":{\"column\":18,\"row\":11},\"message\":\"`open` and `write` should be replaced by `Path('tmp.bin').write_bytes(txt)`\",\"name\":\"write-whole-file\",\"noqa_row\":11,\"severity\":\"error\",\"url\":\"https://docs.astral.sh/ruff/rules/write-whole-file\"}",
+            "message": "`open` and `write` should be replaced by `Path('tmp.bin').write_bytes(txt)`",
+            "span": [
+              11,
+              18
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "FileNotFoundError [Errno 2] No such file or directory: 'tmp.bin'\n",
+          "stdoutHash": "45c9bc70c2f479af01ffc0f3",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "FileNotFoundError [Errno 2] No such file or directory: 'tmp.bin'\n",
+          "stdoutHash": "45c9bc70c2f479af01ffc0f3",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-22 23:46:49.092196632 -0400\n+++ fixed.py\t2026-10-22 23:46:51.210216049 -0400\n@@ -1,5 +1,6 @@\n import os\n from pathlib import *\n+import pathlib\n def main():\n     __all__ = ['p']\n     p = lambda x: None\n@@ -8,8 +9,7 @@\n         if name == 'p':\n             continue\n         try:\n-            with open('tmp.bin', 'wb') as f:\n-                f.write(txt)\n+            pathlib.Path('tmp.bin').write_bytes(txt)\n             break\n         except TypeError as e:\n             print(e)\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "shadowed_builtins_redeclared",
+      "hazard": "Shadowing open then restoring it lets second use show if first was rewritten incorrectly",
+      "rule": "FURB103",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stdoutHash": "e3b0c44298fc1c149afbf4c8",
+          "stderr1": "ValueError: bad",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

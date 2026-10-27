@@ -1,0 +1,1 @@
+counter = 0\ndef inc():\n    global counter\n    counter += 1\n    return str(counter)\nwith open('tmp.txt', 'w') as f:\n    f.write(inc())\n    f.write(inc())\nprint('counter:', counter)\nwith open('tmp.txt') as f:\n    print('file:', repr(f.read()))\nimport os\nos.remove('tmp.txt')

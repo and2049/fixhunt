@@ -1,0 +1,715 @@
+{
+  "runId": "2026-10-17T20-37-33-991Z-218k-ruff-SIM223",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM223",
+    "fixKind": "unknown",
+    "docs": "# expr-and-false (SIM223)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for `and` expressions that contain falsey values.\n\n## Why is this bad?\nIf the expression is used as a condition, it can be replaced in-full with\n`False`.\n\nIn other cases, the expression can be short-circuited to the first falsey\nvalue.\n\nBy using `False` (or the first falsey value), the code is more concise\nand easier to understand, since it no longer contains redundant conditions.\n\n## Example\n```python\nif x and [] and y:\n    pass\n\na = x and [] and y\n```\n\nUse instead:\n```python\nif False:\n    pass\n\na = x and []\n```\n"
+  },
+  "analysis": {
+    "summary": "Flags 'and' expressions containing at least one constant falsey literal (like [], {}, '', set(), etc.) where replacing the whole expression with either False (in boolean contexts) or truncating after the last truthy operand before the first falsey improves clarity.",
+    "firingShapes": [
+      "x and []",
+      "[] and y",
+      "'' and z",
+      "{ } and w",
+      "set() and v",
+      "True and False and x",
+      "a and b and [] and c",
+      "x and {} and y"
+    ],
+    "silentShapes": [
+      "x and y",
+      "0 and y",
+      "None and y",
+      "x and [] or y",
+      "if []: pass"
+    ],
+    "fixDescription": "Replaces the entire 'and' expression with False when used in a boolean context (e.g., directly as an if/test condition), otherwise truncates the expression to include only operands up to (but not including) the first falsey literal, preserving the original evaluation order and short-circuit behavior for the remaining truthy prefix.",
+    "hazards": [
+      "Rewriting 'x and []' to 'x and []' (no change) when the falsey literal is not at a truncation point does not alter behavior but may miss optimization opportunities; however, the rule only triggers when a falsey literal is present and replacement is valid.",
+      "In 'if x and [] and y:', replacing with 'if False:' changes behavior if 'x' has side effects (e.g., function call) because the original evaluates 'x' before short-circuiting, while the fix does not evaluate 'x' at all.",
+      "In 'a = x and [] and y', replacing with 'a = x and []' preserves short-circuiting: if 'x' is falsey, 'x' is evaluated and assigned; if 'x' is truthy, '[]' is evaluated and assigned (due to truncation after 'x'), matching the original which would assign '[]' after evaluating 'x' and then short-circuit on '[]'.",
+      "If the expression appears in a context where its type matters (e.g., passed to a function expecting a list), replacing 'x and []' with 'x and []' (no change) is safe, but replacing with 'False' in a non-boolean context would cause a type error; however, the fix only uses 'False' in boolean contexts, so this hazard is mitigated by context detection.",
+      "The fix does not remove or move comments attached to the operands; if a comment is placed after a truncated operand (e.g., 'x and []  # comment'), the comment may be lost if the rewrite deletes the falsey literal and surrounding whitespace without preserving trailing comments.",
+      "In nested expressions like 'f(x and [] and y)', replacing the inner 'and' with 'x and []' alters the argument passed to f: originally, if x is truthy, f([]) is called; after fix, if x is truthy, f([]) is still called — equivalent. If x is falsey, f(x) is called in both cases. So no hazard here — but this illustrates that pure functional contexts are safe.",
+      "If the falsey literal is a mutable default or shared object (e.g., 'x and [] and y' where [] is a literal), replacing with 'x and []' still creates a new empty list each time — no identity issue since list literals are distinct objects.",
+      "In 'x and [] and y', if 'x' is an expression with side effects (e.g., 'print(1)'), the original evaluates 'x', then '[]', then short-circuits; the fix 'x and []' evaluates 'x', then '[]', then assigns — same side effects. No change in evaluation order or side effects for the kept prefix.",
+      "When the 'and' chain starts with a falsey literal (e.g., '[] and x'), the fix truncates to nothing? Actually, the rule replaces with the first falsey value in non-boolean contexts — but documentation shows 'a = x and [] and y' -> 'a = x and []', implying it keeps up to the falsey. For '[] and x', the first falsey is at start, so it should become just '[]'? But the fix description says 'truncates to include only operands up to (but not including) the first falsey' — which would be empty. However, in practice, the rule likely keeps the first falsey as the result when it's the first element. Clarification needed: the silent shape '0 and y' suggests that non-literal falsey values are not flagged, so only literal falseys trigger. For '[] and x', the fix would replace with '[]' (the first falsey literal). This is equivalent: original short-circuits on first operand [], result is []; fix is []. Same."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0079617,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 3
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Custom bool and len interaction",
+      "hazard": "Testing interaction between __bool__ and __len__ where replacing 'x and []' with 'x' changes behavior when x is falsey due to __len__ returning 0 but __bool__ returning True.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: []\nbool(x): True\nlen(x): 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Literal falsey at start of and-chain",
+      "hazard": "Verifying that when the and-chain starts with a literal falsey like [], the fix replaces the whole expression with [] (preserving short-circuit), and that this is equivalent to original.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "result: []\nlst unchanged: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: []\nlst unchanged: [1, 2, 3]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Truncation preserves assignment semantics",
+      "hazard": "In 'a = x and [] and y', ensuring that truncation to 'x and []' preserves short-circuit behavior: if x is falsey, a gets x; if x is truthy, a gets [] (from the falsey literal), matching original.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              4,
+              11
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              10,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "a: 0\na when x falsey: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "a: 0\na when x falsey: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Keyword-only and positional-only parameters",
+      "hazard": "Ensuring that when the rewritten 'and' expression appears in a function call with keyword-only and positional-only parameters, the argument evaluation order and value are preserved.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "pos=[], kw=42\npos=[], kw=42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Mutable default argument aliasing",
+      "hazard": "Testing that when a mutable default argument is involved in an 'and' expression that gets rewritten, aliasing behavior is preserved.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "z: []\nz after x.clear(): []\nz is x: True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Nested function call equivalence",
+      "hazard": "Confirming that in a pure functional context like f(x and [] and y), the rewrite to f(x and []) does not change the argument passed, even when x is truthy or falsey.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              4,
+              15
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              9,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "res: []\nres: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "res: []\nres: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Pathlib path handling",
+      "hazard": "Ensuring that when pathlib.Path objects are used in 'and' expressions involving literal falseys, the rewrite does not alter path resolution or existence checks.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              14,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "result: []\nresult2: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: []\nresult2: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Exception handling in and-expression",
+      "hazard": "Testing that if the left operand of an 'and' expression raises an exception, the rewrite does not change exception propagation, especially when the expression is inside a try-finally block.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p001",
+      "title": "Side effect in left operand of boolean-context and-expression",
+      "hazard": "In 'if x and [] and y:', replacing with 'if False:' skips evaluation of 'x', losing side effects.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `False` instead of `... and False and ...`",
+            "span": [
+              6,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "side\nskipped True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "side\nskipped True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Literal falsey at start of and-expression in assignment",
+      "hazard": "For '[] and x', the fix replaces with '[]'; behavior matches original short-circuit, but we verify equivalence under mutation.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              2,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "result: []\nlst after: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: []\nlst after: [1, 2]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Side effects in kept prefix of and-expression",
+      "hazard": "In 'x and [] and y', fix becomes 'x and []'; side effects in 'x' occur in both versions.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "executed\nval: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "executed\nval: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "And-expression in function argument: preserved behavior",
+      "hazard": "Inner 'and' rewritten inside f(); if x truthy, both versions pass []; if falsey, both pass x.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              4,
+              9
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              6,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "got: []\ngot: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "got: []\ngot: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Type-sensitive context: and-expression in list construction",
+      "hazard": "Fix avoids False in non-boolean context; 'x and []' remains as-is, preserving type expectations.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              2,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "list contents: [[]]\ntype of element: <class 'list'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "list contents: [[]]\ntype of element: <class 'list'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Comment preservation around modified and-expression",
+      "hazard": "Comments near the and-expression should not interfere; we verify logic unchanged despite comment proximity.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              3,
+              11
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "y: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "y: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "File write: and-expression in mode or data",
+      "hazard": "Using and-expression in file open mode or write data; fix must not alter behavior.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `... and [] and ...`",
+            "span": [
+              2,
+              8
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: open() argument 'mode' must be str, not list",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: open() argument 'mode' must be str, not list",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Evaluation order: and-expression with function calls and mutation",
+      "hazard": "Left-to-right evaluation and short-circuiting must be preserved after truncation.",
+      "rule": "SIM223",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM223",
+            "severity": "warning",
+            "message": "Use `[]` instead of `[] and ...`",
+            "span": [
+              6,
+              13
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "state: ['log']\nres: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "state: ['log']\nres: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

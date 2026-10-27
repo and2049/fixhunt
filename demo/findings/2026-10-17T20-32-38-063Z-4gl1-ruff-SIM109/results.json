@@ -1,0 +1,528 @@
+{
+  "runId": "2026-10-17T20-32-38-063Z-4gl1-ruff-SIM109",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "SIM109",
+    "fixKind": "unknown",
+    "docs": "# compare-with-tuple (SIM109)\n\nDerived from the **flake8-simplify** linter.\n\nFix is always available.\n\n## What it does\nChecks for boolean expressions that contain multiple equality comparisons\nto the same value.\n\n## Why is this bad?\nTo check if an object is equal to any one of multiple values, it's more\nconcise to use the `in` operator with a tuple of values.\n\n## Example\n```python\nif foo == x or foo == y:\n    ...\n```\n\nUse instead:\n```python\nif foo in (x, y):\n    ...\n```\n\n## Fix safety\n\nThis fix is always unsafe. It may change the value of the expression if any of the\ncomparators have side effects, and, for expressions that mix equality comparisons with\nother operands, it can change the order in which operands are evaluated. Ruff preserves\nthe original order when an operand falls before or after the group of merged comparisons,\nbut if an unmatched operand falls *between* two merged comparisons (e.g. `foo == x or bar\nor foo == y`), it's moved after the merged `in` comparison.\n\n## References\n- [Python documentation: Membership test operations](https://docs.python.org/3/reference/expressions.html#membership-test-operations)\n"
+  },
+  "analysis": {
+    "summary": "Flags repeated equality checks against different literals/variables using '==' chained by 'or'/'and'.",
+    "firingShapes": [
+      "a == b or a == c",
+      "a == b and a == c",
+      "a == b or a == c or a == d",
+      "a == b and a == c and a == d",
+      "a != b or a != c",
+      "a != b and a != c",
+      "(a == b or a == c) and d",
+      "d and (a == b or a == c)"
+    ],
+    "silentShapes": [
+      "a == b or c == d",
+      "a == b and c == d",
+      "a == b or a",
+      "a is b or a is c",
+      "len(a) == len(b) or len(a) == len(c)"
+    ],
+    "fixDescription": "Rewrites a chain of equality (or inequality) comparisons of the same left-hand operand with 'or' (or 'and') into a single membership test using 'in' (or 'not in') with a tuple of the right-hand operands, preserving the original grouping and surrounding expression structure.",
+    "hazards": [
+      "If any right-hand operand in the original chain has side effects (e.g., a function call), the rewrite may reduce the number of evaluations, altering program state.",
+      "When the chain is mixed with other operators (e.g., 'a == x or b or a == y'), the fix may reorder operands, moving a stray operand like 'b' to after the 'in' expression, changing evaluation order.",
+      "If the left-hand operand is used elsewhere in the expression outside the equality chain (e.g., '(a == x or a == y) and a'), the fix may duplicate its evaluation via the 'in' operation, potentially causing side effects or inconsistent values if 'a' is mutable or impure.",
+      "In nested expressions like 'f(a == x or a == y)', the rewrite changes when 'a' is evaluated relative to the function call 'f', possibly affecting argument evaluation order.",
+      "If the left-hand operand is a property or attribute access (e.g., 'obj.prop == x or obj.prop == y'), the fix may increase the number of attribute lookups, which could differ if '__getattr__' or '__getattribute__' has side effects.",
+      "When the equality chain appears in a lambda or comprehension (e.g., '[z for z in data if a == x or a == y]'), the fix alters how many times 'a' is accessed per iteration, impacting performance and side effects.",
+      "If the right-hand operands include mutable objects and the tuple is used in a context where identity matters (e.g., 'is' checks later), the rewrite creates a new tuple object, potentially breaking identity-based logic.",
+      "Comments attached to individual comparison tokens (e.g., 'a == x  # comment\n  or a == y') may be lost or misplaced during the rewrite, as the autofix operates on the AST and does not preserve comment spacing or attachment.",
+      "In rare cases involving custom '__eq__' methods that depend on global state or call counts, reducing the number of equality checks from N to 1 via tuple membership can alter behavior if the method has side effects or relies on invocation frequency.",
+      "If the expression is part of a larger boolean context where short-circuiting matters (e.g., 'a == x or expensive() and a == y'), the fix may break short-circuit evaluation by evaluating all right-hand operands via tuple construction before the 'in' check, removing early exits."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.008820600000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 4,
+    "fixed": 0,
+    "disputed": 9
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "hazard": "When the LHS has a custom __bool__ or __len__, accessing it multiple times (as in the original) vs once (in the fixed version) changes behavior if __bool__ has side effects or returns non-boolean valu",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a.count=0, result=False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "If the right-hand operands include mutable objects and the tuple is used in a context where identity matters (e.g., 'is'",
+      "hazard": "The autofix creates a new tuple for the 'in' check. If the original RHS objects are later compared by identity ('is') against the tuple or its elements, the new tuple breaks identity expectations.",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "z before: [[], [], 'matched']\ninner\nx=[1], y=[]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "When the equality chain appears in a lambda or comprehension (e.g., '[z for z in data if a == x or a == y]'), the fix al",
+      "hazard": "In a comprehension, the LHS 'a' is accessed once per iteration in the fixed version ('a in (x, y)') but twice in the original ('a == x or a == y'). If accessing 'a' has side effects (e.g., property, d",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a.access_count=3, result=[1]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "hazard": "If the RHS values are not hashable (e.g., lists, dicts), the 'in' check with a tuple will raise TypeError, whereas the original chained '==' comparisons may succeed if equality is defined (e.g., with ",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM109",
+            "severity": "warning",
+            "message": "Use `a in (b, c)` instead of multiple equality comparisons",
+            "span": [
+              5,
+              15
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Original: a==b or a==c -> True\na==b: True, a==c: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Original: a==b or a==c -> True\na==b: True, a==c: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Comments attached to individual comparison tokens (e.g., 'a == x  # comment\\n  or a == y') may be lost or misplaced duri",
+      "hazard": "The autofix removes comments attached to the individual comparison expressions because it rewrites the AST and does not preserve comment tokens.",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "test=False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "shadowed builtins and names redefined later in the module",
+      "hazard": "If the LHS or RHS names are shadowed or redefined after the comparison but before the tuple is used in a later context (e.g., in a closure), the fixed version captures the values at rewrite time, whil",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "check() = False\ncheck() = False\ns.count=1, result=True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "type annotations evaluated at runtime, typing-only imports",
+      "hazard": "If the LHS or RHS involves a name that is only available due to a typing import (e.g., from typing import List) and is used at runtime in the comparison, removing the typing import (if the fix somehow",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "No SIM109 trigger\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "mutable default arguments and aliasing after a rewrite",
+      "hazard": "If the LHS or RHS contains a mutable default argument, and the function is called multiple times, the original version may mutate the object between the two equality checks, while the fixed version ev",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "f() = True\nf() = False\ng() = False\nh() = False\nrhs1_accessed=True, rhs2_accessed=True, result=False\nrhs1_accessed=True, rhs2_accessed=False, result=True\nrhs1_accessed=True, rhs2_accessed=True, result=True\nSee hazard 3 for LHS access count change.\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Custom __eq__ with side effects",
+      "hazard": "In rare cases involving custom '__eq__' methods that depend on global state or call counts, reducing the number of equality checks from N to 1 via tuple membership can alter behavior if the method has",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM109",
+            "severity": "warning",
+            "message": "Use `a in (b, c)` instead of multiple equality comparisons",
+            "span": [
+              9,
+              4
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Calls: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Calls: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Truthiness of custom __bool__ and 'is' confusion",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "no match\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Generator consumption in comprehension",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM109",
+            "severity": "warning",
+            "message": "Use `x in (z, z)` instead of multiple equality comparisons",
+            "span": [
+              6,
+              27
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Async generator and await ordering",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "SIM109",
+            "severity": "warning",
+            "message": "Use `x in (v, v)` instead of multiple equality comparisons",
+            "span": [
+              9,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'asyncio' is not defined. Did you forget to import 'asyncio'?",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Property access with side effects in __getattr__",
+      "hazard": "If the left-hand operand is a property or attribute access (e.g., 'obj.prop == x or obj.prop == y'), the fix may increase the number of attribute lookups, which could differ if '__getattr__' or '__get",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Attribute accesses: 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Function argument evaluation order changed",
+      "hazard": "In nested expressions like 'f(a == x or a == y)', the rewrite changes when 'a' is evaluated relative to the function call 'f', possibly affecting argument evaluation order.",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Eval order: ['get_a', 'f']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Mutable RHS objects and identity dependence",
+      "hazard": "If the right-hand operands include mutable objects and the tuple is used in a context where identity matters (e.g., 'is' checks later), the rewrite creates a new tuple object, potentially breaking ide",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Star-import and module-level side effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "SIM109",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "No trigger expected\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    }
+  ]
+}

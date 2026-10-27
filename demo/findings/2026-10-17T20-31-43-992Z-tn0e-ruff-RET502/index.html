@@ -1,0 +1,330 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RET502 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RET502 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-31-43-992Z-tn0e-ruff-RET502 · fix labelled <b>unknown</b> · 16 programs, 13 fired, 13 fixed, 0 oracle-backed finding(s) · model cost $0.0045</p>
+<div class="card"><b>Rule analysis</b><p>Flags bare &#39;return&#39; statements in functions where at least one other return returns a non-None value.</p><p class="mut">Fix: Replace each bare &#39;return&#39; statement with &#39;return None&#39;.</p><details><summary>10 hazards</summary><ul><li>Rewriting &#39;return&#39; inside a generator function changes it from yielding nothing to yielding None, altering iterator output.</li><li>In async functions, &#39;return&#39; becomes &#39;return None&#39;, which may affect awaited values if callers expect no return value.</li><li>If the bare &#39;return&#39; is inside a nested function that is used as a context manager, returning None instead of implicitly returning None has no behavioral difference but could confuse static analysis tools expecting generator-like behavior.</li><li>If the function&#39;s return annotation is &#39;-&gt; None&#39;, adding explicit &#39;return None&#39; is redundant but harmless; however, if annotation is missing or incorrect, it may mask type checker warnings about inconsistent return types.</li><li>If the bare &#39;return&#39; occurs after a side-effecting expression (e.g., &#39;print(x); return&#39;), moving &#39;None&#39; into the return statement does not change side effects, but if the rewrite were mistakenly placed before the side effect due to incorrect line wrapping, it would alter execution order.</li><li>If the code contains a trailing comment on the same line as &#39;return&#39; (e.g., &#39;return  # early exit&#39;), the rewrite may drop the comment if the tool does not preserve comments during token replacement.</li><li>If the bare &#39;return&#39; is inside a lambda (though lambdas cannot contain bare returns), this shape cannot occur, but if mistakenly applied via macro-generated code, it would raise a SyntaxError.</li><li>In functions decorated with @property, @staticmethod, or @classmethod, the rewrite behaves identically since these decorators do not alter return value semantics.</li><li>If the function is overridden in a subclass and the bare &#39;return&#39; is part of a contract expecting implicit None, making it explicit may improve clarity but does not change behavior.</li><li>If the code relies on the disassembly showing &#39;LOAD_CONST(None)&#39; vs. implicit return, debugging or profiling tools that distinguish explicit vs. implicit returns may report different bytecode, though behavior is identical.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>Lambda syntax error</td><td class="mut">Bare return inside lambda raises SyntaxError; fixing it makes invalid code valid.</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Context manager confusion</td><td class="mut">Rewriting bare return to return None in __exit__ doesn&#39;t suppress exceptions but changes a</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Finally clause interaction</td><td class="mut">Exception handling chain altered by explicit return vs implicit flow through finally.</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable default interference</td><td class="mut">Rewrite affects when mutation occurs relative to early exit; list persistence changed.</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>Shadowed built-in clash</td><td class="mut">Local return override interacts with later global reassignment affecting closure capture.</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus and comprehension scope</td><td class="mut">Early return in nested scope alters walrus variable persistence in enclosing comprehension</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Parameter forwarding complexity</td><td class="mut">Explicit return None interferes with *args/**kwargs debugging introspection vs implicit.</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Subclass override clarity</td><td class="mut">Explicit return None in base class method makes override intent clearer without behavior c</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Property decorator - return rewrite under @property</td><td class="mut">In functions decorated with @property, @staticmethod, or @classmethod, the rewrite behaves</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Runtime type annotations with typing imports</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Async function - return None affects awaited value</td><td class="mut">In async functions, &#39;return&#39; becomes &#39;return None&#39;, which may affect awaited values if cal</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Star-imports and module-level side effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Custom __bool__ and None vs falsy comparison</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Nested function used as context manager</td><td class="mut">If the bare &#39;return&#39; is inside a nested function that is used as a context manager, return</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Comments and docstrings on rewritten return</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>File write with non-str data and truncation</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Lambda syntax error</summary><pre>def outer():
+    # This line is syntactically invalid; included to illustrate impossible scenario
+    lam = lambda: (yield) or return
+    return lam
+</pre></details><details id="r1-p002"><summary>r1-p002 — Context manager confusion</summary><pre>class CM:
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is ValueError:
+            return
+        return False
+with CM() as cm:
+    raise ValueError(&#39;oops&#39;)
+print(cm.__dict__.get(&#39;suppressed&#39;, &#39;no&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:31:58.308675715 -0400
++++ fixed.py	2026-10-17 16:31:58.685676138 -0400
+@@ -2,7 +2,7 @@
+     def __enter__(self): return self
+     def __exit__(self, exc_type, exc, tb):
+         if exc_type is ValueError:
+<span class="del">-            return</span>
+<span class="add">+            return None</span>
+         return False
+ with CM() as cm:
+     raise ValueError(&#39;oops&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Finally clause interaction</summary><pre>def f(x):
+    try:
+        if x == 0:
+            return 1/x
+        return
+    except ZeroDivisionError as e:
+        print(&#39;caught:&#39;, e)
+        return -1
+    finally:
+        print(&#39;finally&#39;)
+print(f(0))
+print(f(1))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:31:58.907676387 -0400
++++ fixed.py	2026-10-17 16:31:59.070676569 -0400
+@@ -2,7 +2,7 @@
+     try:
+         if x == 0:
+             return 1/x
+<span class="del">-        return</span>
+<span class="add">+        return None</span>
+     except ZeroDivisionError as e:
+         print(&#39;caught:&#39;, e)
+         return -1
+</pre></details><details id="r1-p004"><summary>r1-p004 — Mutable default interference</summary><pre>log = []
+def append_if_nonzero(n, log=log):
+    if n &lt;= 0:
+        return
+    log.append(n)
+    return log
+append_if_nonzero(0)
+append_if_nonzero(1)
+print(log)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:31:59.172676684 -0400
++++ fixed.py	2026-10-17 16:31:59.333676865 -0400
+@@ -1,7 +1,7 @@
+ log = []
+ def append_if_nonzero(n, log=log):
+     if n &lt;= 0:
+<span class="del">-        return</span>
+<span class="add">+        return None</span>
+     log.append(n)
+     return log
+ append_if_nonzero(0)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Shadowed built-in clash</summary><pre>def make_func():
+    return = 42  # shadows built-in
+    def inner():
+        if True:
+            return return
+        return None
+    return inner
+f = make_func()
+del return  # remove shadow
+print(f())
+</pre></details><details id="r1-p006"><summary>r1-p006 — Walrus and comprehension scope</summary><pre>def gen_vals():
+    vals = []
+    for i in range(3):
+        if (x := i) == 1:
+            return
+        vals.append(x*2)
+    return vals
+print(gen_vals())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:31:59.587677151 -0400
++++ fixed.py	2026-10-17 16:31:59.747677331 -0400
+@@ -2,7 +2,7 @@
+     vals = []
+     for i in range(3):
+         if (x := i) == 1:
+<span class="del">-            return</span>
+<span class="add">+            return None</span>
+         vals.append(x*2)
+     return vals
+ print(gen_vals())
+</pre></details><details id="r1-p007"><summary>r1-p007 — Parameter forwarding complexity</summary><pre>def wrapper(*args, **kwargs):
+    if not args:
+        return
+    return inner(*args, **kwargs)
+def inner(a, b=10):
+    print(a, b)
+    return a + b
+wrapper()
+wrapper(5)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:31:59.847677444 -0400
++++ fixed.py	2026-10-17 16:32:00.017677635 -0400
+@@ -1,6 +1,6 @@
+ def wrapper(*args, **kwargs):
+     if not args:
+<span class="del">-        return</span>
+<span class="add">+        return None</span>
+     return inner(*args, **kwargs)
+ def inner(a, b=10):
+     print(a, b)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Subclass override clarity</summary><pre>class Base:
+    def process(self):
+        if not self.enabled:
+            return
+        return &#39;work&#39;
+class Derived(Base):
+    def __init__(self):
+        self.enabled = False
+    def process(self):
+        super().process()
+        return &#39;overridden&#39;
+d = Derived()
+print(d.process() or &#39;None&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:00.116677747 -0400
++++ fixed.py	2026-10-17 16:32:00.285677938 -0400
+@@ -1,7 +1,7 @@
+ class Base:
+     def process(self):
+         if not self.enabled:
+<span class="del">-            return</span>
+<span class="add">+            return None</span>
+         return &#39;work&#39;
+ class Derived(Base):
+     def __init__(self):
+</pre></details><details id="r2-p001"><summary>r2-p001 — Property decorator - return rewrite under @property</summary><pre>class C:
+    @property
+    def val(self):
+        if self._x &gt; 0:
+            return
+        return self._x
+
+    def __init__(self, x):
+        self._x = x
+
+c = C(5)
+print(c.val)
+c._x = -1
+print(c.val)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:05.449683840 -0400
++++ fixed.py	2026-10-17 16:32:05.620684037 -0400
+@@ -2,7 +2,7 @@
+     @property
+     def val(self):
+         if self._x &gt; 0:
+<span class="del">-            return</span>
+<span class="add">+            return None</span>
+         return self._x
+ 
+     def __init__(self, x):
+</pre></details><details id="r2-p002"><summary>r2-p002 — Runtime type annotations with typing imports</summary><pre>from typing import List, Optional
+
+def f(x: Optional[int]) -&gt; List[int]:
+    if x is None:
+        return
+    return [x] * 2
+
+print(f(None))
+print(f(3))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:05.722684155 -0400
++++ fixed.py	2026-10-17 16:32:05.902684363 -0400
+@@ -2,7 +2,7 @@
+ 
+ def f(x: Optional[int]) -&gt; List[int]:
+     if x is None:
+<span class="del">-        return</span>
+<span class="add">+        return None</span>
+     return [x] * 2
+ 
+ print(f(None))
+</pre></details><details id="r2-p003"><summary>r2-p003 — Async function - return None affects awaited value</summary><pre>async def fetch(flag):
+    if not flag:
+        return
+    return 42
+
+async def main():
+    result = await fetch(False)
+    print(&#39;result:&#39;, result)
+    result2 = await fetch(True)
+    print(&#39;result2:&#39;, result2)
+
+import asyncio
+asyncio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:06.012684491 -0400
++++ fixed.py	2026-10-17 16:32:06.299684824 -0400
+@@ -1,6 +1,6 @@
+ async def fetch(flag):
+     if not flag:
+<span class="del">-        return</span>
+<span class="add">+        return None</span>
+     return 42
+ 
+ async def main():
+</pre></details><details id="r2-p004"><summary>r2-p004 — Star-imports and module-level side effects</summary><pre>__all__ = [&#39;helper&#39;]
+
+def helper():
+    if config.get(&#39;skip&#39;):
+        return
+    return &#39;loaded&#39;
+
+config = {&#39;skip&#39;: True}
+print(helper())
+config[&#39;skip&#39;] = False
+print(helper())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:06.462685013 -0400
++++ fixed.py	2026-10-17 16:32:06.633685212 -0400
+@@ -2,7 +2,7 @@
+ 
+ def helper():
+     if config.get(&#39;skip&#39;):
+<span class="del">-        return</span>
+<span class="add">+        return None</span>
+     return &#39;loaded&#39;
+ 
+ config = {&#39;skip&#39;: True}
+</pre></details><details id="r2-p005"><summary>r2-p005 — Custom __bool__ and None vs falsy comparison</summary><pre>class FalsyObj:
+    def __bool__(self):
+        return False
+    def __eq__(self, other):
+        return True if other is None else False
+
+def check(val):
+    if val:
+        return
+    return val is None
+
+obj = FalsyObj()
+print(check(obj))
+print(check(None))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:06.735685331 -0400
++++ fixed.py	2026-10-17 16:32:06.894685515 -0400
+@@ -6,7 +6,7 @@
+ 
+ def check(val):
+     if val:
+<span class="del">-        return</span>
+<span class="add">+        return None</span>
+     return val is None
+ 
+ obj = FalsyObj()
+</pre></details><details id="r2-p006"><summary>r2-p006 — Nested function used as context manager</summary><pre>def make_ctx():
+    entered = []
+    def ctx():
+        entered.append(True)
+        if not entered[0]:
+            return
+        return &#39;ok&#39;
+    return ctx
+
+ctx_func = make_ctx()
+with ctx_func():
+    pass
+print(&#39;entered:&#39;, len([*make_ctx()()]))  # This line is wrong, fixing:
+inner = make_ctx()
+with inner():
+    pass
+print(&#39;entered count:&#39;, len([True for _ in [inner()]]))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:06.999685637 -0400
++++ fixed.py	2026-10-17 16:32:07.366686065 -0400
+@@ -3,7 +3,7 @@
+     def ctx():
+         entered.append(True)
+         if not entered[0]:
+<span class="del">-            return</span>
+<span class="add">+            return None</span>
+         return &#39;ok&#39;
+     return ctx
+ 
+</pre></details><details id="r2-p007"><summary>r2-p007 — Comments and docstrings on rewritten return</summary><pre>def process(data):
+    &quot;&quot;&quot;Process data, early exit if invalid.&quot;&quot;&quot;
+    if not data:  # skip empty
+        return  # nothing to do
+    return data.upper()
+
+print(process(&#39;&#39;))
+print(process(&#39;hello&#39;))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:32:07.582686317 -0400
++++ fixed.py	2026-10-17 16:32:07.739686500 -0400
+@@ -1,7 +1,7 @@
+ def process(data):
+     &quot;&quot;&quot;Process data, early exit if invalid.&quot;&quot;&quot;
+     if not data:  # skip empty
+<span class="del">-        return  # nothing to do</span>
+<span class="add">+        return None  # nothing to do</span>
+     return data.upper()
+ 
+ print(process(&#39;&#39;))
+</pre></details><details id="r2-p008"><summary>r2-p008 — File write with non-str data and truncation</summary><pre>def write_log(msg, critical):
+    if not critical:
+        return
+    with open(&#39;log.txt&#39;, &#39;w&#39;) as f:
+        f.write(msg)  # expects str
+
+write_log(&#39;error&#39;, False)
+write_log(&#39;critical&#39;, True)
+with open(&#39;log.txt&#39;) as f:
+    print(f.read())
+</pre></details></body></html>

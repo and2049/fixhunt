@@ -1,0 +1,601 @@
+{
+  "runId": "2026-10-17T21-16-21-059Z-wji3-ruff-UP012",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "UP012",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-encode-utf8 (UP012)\n\nDerived from the **pyupgrade** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary calls to `encode` as UTF-8 and unnecessary explicit\nUTF-8 encoding arguments.\n\n## Why is this bad?\nUTF-8 is the default encoding in Python, so there is no need to pass an\nexplicit UTF-8 encoding to `encode`. For ASCII literals, use a bytes literal\ninstead; for other strings, omit the explicit encoding argument.\n\n## Example\n```python\n\"foo\".encode(\"utf-8\")\n\"unicode text©\".encode(encoding=\"utf-8\")\n```\n\nUse instead:\n```python\nb\"foo\"\n\"unicode text©\".encode()\n```\n\n## References\n- [Python documentation: `str.encode`](https://docs.python.org/3/library/stdtypes.html#str.encode)\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant `.encode(\"utf-8\")` or `.encode(encoding=\"utf-8\")` calls where UTF-8 is the default.",
+    "firingShapes": [
+      "\"hello\".encode(\"utf-8\")",
+      "\"text\\u00a9\".encode(encoding=\"utf-8\")",
+      "'ascii'.encode('UTF-8')",
+      "s.encode(encoding='utf-8')",
+      "msg.encode('Utf-8')",
+      "data.encode(encoding = 'utf-8')",
+      "value.encode('utf-8', 'strict')",
+      "expr.encode(encoding=\"utf-8\", errors=\"replace\")"
+    ],
+    "silentShapes": [
+      "b\"raw\"",
+      "\"text\".encode()",
+      "'unicode'.encode('latin-1')",
+      "s.encode(encoding='utf-16')",
+      "obj.encode"
+    ],
+    "fixDescription": "Replace `.encode(\"utf-8\")` with `b\"...\"` for ASCII-only string literals, otherwise replace with `.encode()` (dropping the encoding argument).",
+    "hazards": [
+      "Rewriting `\"\\ud800\".encode(\"utf-8\")` to `\"\\ud800\".encode()` changes behavior because surrogate code points raise UnicodeEncodeError without explicit error handling but are allowed when UTF-8 is implicit only if errors are not strict—wait, no: both use default errors='strict', so actually same? Let me correct: hazard is that removing explicit encoding may hide intent, but behavior identical if default is UTF-8 and errors not specified—but wait, the rule only fires when encoding is utf-8, so fix is safe regarding encoding. However: If the string literal contains non-ASCII and we replace with bytes literal, e.g., `\"©\".encode(\"utf-8\")` → `b\"©\"` is invalid because bytes literal cannot contain © directly—it must be escaped or encoded. So hazard: rewriting to bytes literal for non-ASCII strings causes SyntaxError. Another: If the encode call is part of a larger expression where the bytes result is used in a context expecting a string, but no—both produce bytes. Wait, the fix for non-ASCII is to drop encoding arg, not to use bytes literal. The bytes literal substitution only applies when the string literal is ASCII-only. So hazard: incorrectly applying bytes literal substitution to a non-ASCII string literal (e.g., due to flawed ASCII detection) would produce invalid syntax. Another: If the string literal is ASCII but contains a backslash escape like `\"\\\\x\"`, the bytes literal `b\"\\\\x\"` is valid but represents different byte values? No, same. Hazard: comments attached to the encode call may be lost during rewrite if the tool does not preserve trivia. Another: If the encode call is on a variable that shadows a built-in or has a property named encode, but the rewrite assumes it's str.encode—if the variable is not a string, `.encode()` may fail or call a different method, same as before. Actually, same behavior. Hazard: In Python 2, UTF-8 is not default, but rule likely only active in Py3+ contexts—still, if run in Py2, removing encoding arg changes behavior. But assuming target is Py3. Another: If the call uses keyword argument like `.encode(encoding=\"utf-8\")`, rewriting to `.encode()` may break if there are subsequent positional arguments relying on keyword order—but encode only has two params: encoding and errors. If errors is passed positionally after, e.g., `.encode(\"utf-8\", \"replace\")`, fixing to `.encode(\"replace\")` would be wrong—but rule only fires when encoding is utf-8 AND no errors arg? Wait, documentation says flags unnecessary explicit UTF-8 encoding arguments. Examples show `.encode(\"utf-8\")` and `.encode(encoding=\"utf-8\")`. It does not mention cases with errors arg. So likely rule only fires when encoding is utf-8 and errors is not specified (or is default?). Actually, pyupgrade's UP012: it removes encoding=utf-8 even if errors is present? Let me check: pyupgrade docs say it removes encoding=utf-8 and optionally errors if default. But rule description here says: 'unnecessary calls to encode as UTF-8 and unnecessary explicit UTF-8 encoding arguments.' Examples don't show errors. To be safe, assume rule only fires when encoding is utf-8 and no errors argument is provided. Therefore, fix is to remove encoding arg entirely. Hazard: if errors argument is present but rule incorrectly fires (shouldn't), then removing encoding but leaving errors would be `.encode(errors=\"strict\")` which is invalid because encoding is required unless it's first param? Actually, str.encode(encoding='utf-8', errors='strict') -> if we remove encoding, we get .encode(errors='strict') which passes errors as positional first arg, i.e., encoding becomes the errors value—wrong. So hazard: if the rule mistakenly fires on calls that also have an errors argument (which it shouldn't per spec, but if implementation flaw), the fix breaks by misordering arguments. Another: If the string literal is ASCII but the bytes literal is used in a context that decodes it with a different encoding, but no—bytes are bytes. Another: If the encode call is chained, e.g., `\"text\".encode(\"utf-8\").decode()`, fix to `b\"text\".decode()` is same. Another: If the literal contains only ASCII but uses escapes that represent non-ASCII in bytes? No, ASCII literals by definition are 0-127. Hazard: Source file encoding declaration matters—if file is not UTF-8, but Python 3 defaults source to UTF-8 anyway. Another: If the encode call is inside a lambda or comprehension and the fix alters indentation or line breaking, causing syntax error—unlikely but possible if tool mishandles multiline. Another: If the call is on a string literal that is empty, `\"\".encode(\"utf-8\")` → `b\"\"` is fine. Another: If the string literal is ASCII but contains a null byte via escape, `\"\\x00\".encode(\"utf-8\")` → `b\"\\x00\"` same. I'll curate 8-12 specific hazards."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0073503,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 7,
+    "fixed": 7,
+    "disputed": 8
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Shadowed built-in str",
+      "hazard": "If a local variable named 'str' shadows the built-in and has an encode method with different behavior, the rule's fix assumes str.encode but the attribute access resolves to the local variable.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'local'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Dict ordering and duplicate keys",
+      "hazard": "The rule fires inside a dict literal; if the fix alters spacing or line breaks, it could change how duplicate keys are resolved in Python 3.6+ where dict preserves insertion order.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary call to `encode` as UTF-8",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary call to `encode` as UTF-8",
+            "span": [
+              3,
+              10
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary call to `encode` as UTF-8",
+            "span": [
+              4,
+              10
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "[b'duplicate', b'world']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "[b'duplicate', b'world']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:16:34.130126296 -0400\n+++ fixed.py\t2026-10-17 17:16:34.304114768 -0400\n@@ -1,6 +1,6 @@\n d = {\n-    'a': 'hello'.encode('utf-8'),\n-    'b': 'world'.encode('utf-8'),\n-    'a': 'duplicate'.encode('utf-8'),\n+    'a': b'hello',\n+    'b': b'world',\n+    'a': b'duplicate',\n }\n print(list(d.values()))\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Pathlib vs os.path on relative paths",
+      "hazard": "The encoded bytes result is used to create a file via os.fsdecode; if the fix changes the byte sequence due to incorrect ASCII assumption, decoding fails or yields wrong path.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary call to `encode` as UTF-8",
+            "span": [
+              2,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "decoded: foo/bar\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "decoded: foo/bar\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:16:34.399108473 -0400\n+++ fixed.py\t2026-10-17 17:16:34.554098203 -0400\n@@ -1,5 +1,5 @@\n import os\n-path_bytes = 'foo/bar'.encode('utf-8')\n+path_bytes = b'foo/bar'\n try:\n     os.makedirs(path_bytes, exist_ok=True)\n except TypeError:\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Bytes vs str with newlines",
+      "hazard": "The rule replaces .encode('utf-8') with a bytes literal; if the literal contains \\n and is later decoded with universal newlines enabled, behavior differs from explicit encoding.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "encoded: b'a\\nb'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "Comments attached to encode call",
+      "hazard": "If the tool's fix does not preserve trailing comments, the comment is lost, which may affect tools that parse comments for metadata.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary call to `encode` as UTF-8",
+            "span": [
+              1,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'text'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'text'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:16:34.788082699 -0400\n+++ fixed.py\t2026-10-17 17:16:34.960071303 -0400\n@@ -1,2 +1,2 @@\n-value = 'text'.encode('utf-8')  # encoding marker\n+value = b'text'  # encoding marker\n print(value)\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "Generator expression consuming encode result",
+      "hazard": "The encode call appears in a generator expression; if the fix alters evaluation timing or raises an exception due to faulty bytes literal substitution, lazy evaluation breaks.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[b'a', b'b']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Non-ASCII string literal - surrogate hazard corrected",
+      "hazard": "If the rule incorrectly applies bytes-literal substitution to a non-ASCII literal due to flawed ASCII detection (e.g., counting code units instead of characters), it produces a SyntaxError.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary UTF-8 `encoding` argument to `encode`",
+            "span": [
+              3,
+              14
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'\\xe2\\x99\\xa5'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'\\xe2\\x99\\xa5'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:16:35.193055889 -0400\n+++ fixed.py\t2026-10-17 17:16:35.363044646 -0400\n@@ -1,6 +1,6 @@\n try:\n     # This should trigger the rule but NOT be replaced with bytes literal\n-    result = '♥'.encode('utf-8')\n+    result = '♥'.encode()\n     print(result)\n except SyntaxError as e:\n     print('SyntaxError:', e)\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "String formatting with % operator",
+      "hazard": "The encode result is used in % formatting; if the fix changes the byte content (e.g., due to incorrect literal substitution), the formatted output changes.",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary call to `encode` as UTF-8",
+            "span": [
+              2,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "b'Result: ok'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'Result: ok'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:16:35.461038164 -0400\n+++ fixed.py\t2026-10-17 17:16:35.627027186 -0400\n@@ -1,4 +1,4 @@\n template = b'Result: %s'\n-encoded = 'ok'.encode('utf-8')\n+encoded = b'ok'\n output = template % encoded\n print(output)\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Truthiness hazard",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "check(obj) = False check(None) = False check(encoded) = False\nnon-empty: b'\\\\xe9'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Generator consumption hazard",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary UTF-8 `encoding` argument to `encode`",
+            "span": [
+              2,
+              19
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "5 0\ngenerator exhausted after first use\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "5 0\ngenerator exhausted after first use\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:16:53.140887379 -0400\n+++ fixed.py\t2026-10-17 17:16:53.307876691 -0400\n@@ -1,5 +1,5 @@\n \n-gen = (c for c in 'café'.encode('utf-8'))  # UP012 triggers here\n+gen = (c for c in 'café'.encode())  # UP012 triggers here\n first = list(gen)\n second = list(gen)  # exhausted!\n print(f'{len(first)} {len(second)}')\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Keyword-only forwarding hazard",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'na\\xc3\\xafve'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Bytes vs str mode hazard",
+      "hazard": "bytes vs str, encoding and newline handling, text vs binary modes",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "True\nFalse  # text-mode decoding may differ\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Descriptor side-effect hazard",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "before: None\nafter: utf-8 b'caf\\xc3\\xa9'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Dict ordering/hash hazard",
+      "hazard": "dict ordering, duplicate keys, __hash__/__eq__ overrides, sets",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "AttributeError: 'BadKey' object has no attribute 'encode'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Async generator hazard",
+      "hazard": "async def/await ordering, async generators",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "UP012",
+            "severity": "warning",
+            "message": "Unnecessary call to `encode` as UTF-8",
+            "span": [
+              3,
+              11
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "1 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "1 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:16:54.141823331 -0400\n+++ fixed.py\t2026-10-17 17:16:54.431804804 -0400\n@@ -1,6 +1,6 @@\n \n async def gen():\n-    yield 'hi'.encode('utf-8')  # UP012 triggers\n+    yield b'hi'  # UP012 triggers\n \n async def main():\n     g = gen()\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Context manager write-only hazard",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "UP012",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'alert: \\xe2\\x88\\x86\\n'\nlog captured\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

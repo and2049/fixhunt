@@ -1,0 +1,33 @@
+{
+  "summary": "Flags uses of the RegExp constructor where both arguments are static strings, recommending replacement with a regex literal.",
+  "firingShapes": [
+    "new RegExp(\"abc\", \"u\");",
+    "var re = new RegExp('\\\\d+', 'g');",
+    "function test() { return new RegExp(\"hello\", \"i\"); }",
+    "if (new RegExp(\"foo\", \"m\").test(str)) {}",
+    "const arr = [new RegExp(\"bar\", \"y\")];",
+    "new RegExp(\"\\\\s+\", \"\");",
+    "new RegExp(\"\", \"g\");",
+    "new RegExp(escapeMe(\"a\"), \"u\");"
+  ],
+  "silentShapes": [
+    "new RegExp(userInput, flags);",
+    "new RegExp(\"abc\", variableFlags);",
+    "const pattern = \"abc\"; new RegExp(pattern, \"u\");",
+    "/abc/u;",
+    "new Function(\"return new RegExp('a', 'b')\")();"
+  ],
+  "fixDescription": "Replaces `new RegExp(pattern, flags)` with `/pattern/flags` when both `pattern` and `flags` are string literals, preserving the exact literal values including escape sequences.",
+  "hazards": [
+    "If the pattern contains a forward slash (`/`), the regex literal may terminate early, causing a syntax error or incorrect pattern (e.g., `new RegExp(\"/abc/\", \"\")` becomes `///abc///`, which is invalid).",
+    "If the pattern contains unescaped regex metacharacters that were intended to be literal (e.g., `new RegExp(\"[abc]\", \"\")`), the literal behaves the same, but future maintainers might misinterpret intent—though behavior is preserved, this is noted as a readability hazard in some contexts.",
+    "If the flags string contains characters not valid in regex literals (e.g., `new RegExp(\"a\", \"xy\")`), the literal `/a/xy` is invalid and throws a SyntaxError, whereas the constructor would have thrown a runtime TypeError—changing error timing and type.",
+    "If the pattern is an empty string (`new RegExp(\"\", \"g\")`), the literal `//g` is invalid due to ambiguous comment start, causing a parse failure where the constructor succeeded.",
+    "If the flags string is empty (`new RegExp(\"abc\", \"\")`), the literal `/abc/` is valid and equivalent, so no hazard here—but included for completeness in edge-case analysis.",
+    "If the RegExp call is inside a larger expression (e.g., `x = new RegExp(\"a\", \"b\") + 1`), the rewrite changes the expression structure and may affect operator precedence or parsing if not properly parenthesized (though Biome’s fix assumes standalone or safe contexts).",
+    "If the code relies on the RegExp constructor creating a distinct object each time (e.g., for testing `instanceof`), the literal also creates a new object per evaluation, so behavior is preserved—no hazard in this case.",
+    "If the pattern or flags string literals contain line terminators (e.g., via template literals misidentified as literals—though rule only fires on string literals), the rewrite would fail, but the rule only triggers on actual string literals, so this is excluded by precondition.",
+    "If a comment is between `new` and `RegExp` (e.g., `new /* hint */ RegExp(\"a\", \"b\")`), Biome’s fixer may not trigger or may mishandle spacing, but the rule as documented flags the call shape regardless of whitespace—so assuming the fixer handles whitespace, no semantic hazard, but potential formatting loss.",
+    "If the code is in a context where `RegExp` has been shadowed (e.g., `let RegExp = String;`), the rule should not fire because it’s not the built-in, but if it does due to flawed detection, rewriting to a literal would break behavior by bypassing the shadow."
+  ]
+}

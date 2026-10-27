@@ -1,0 +1,1 @@
+async function* g(){if(1){return;}else{yield 2;}}const it=g();it.next().then(r=>out+=r.value?''+r.value:'');it.next().then(r=>out+=','+(r.done?'done':r.value));var out='';Promise.resolve().then(()=>print(out));

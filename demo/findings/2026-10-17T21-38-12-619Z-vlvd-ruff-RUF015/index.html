@@ -1,0 +1,429 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RUF015 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RUF015 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-38-12-619Z-vlvd-ruff-RUF015 · fix labelled <b>unknown</b> · 16 programs, 14 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0075</p>
+<div class="card"><b>Rule analysis</b><p>RUF015 flags eager allocation of iterables when only the first element is accessed via indexing or pop(0), suggesting replacement with lazy next(iter(...)).</p><p class="mut">Fix: Replace the eager iterable construction and indexing/pop with a lazy next(iter(...)) expression, preserving the inner iterable or comprehension but removing the outer list/tuple/set constructor and the [0] or .pop(0) access.</p><details><summary>11 hazards</summary><ul><li>Rewriting list(seq)[0] to next(iter(seq)) changes the exception type from IndexError on empty input to StopIteration, breaking exception handlers that catch IndexError but not StopIteration.</li><li>The rewrite eliminates eager evaluation of seq, so any side effects (e.g., I/O, state mutation) during iteration now occur only when the iterator is consumed, potentially delaying or avoiding them entirely if the result is unused.</li><li>If seq is used elsewhere after the original code, the rewrite may alter its state because iter(seq) advances the iterator, whereas list(seq) leaves seq unchanged for reusable iterables like lists.</li><li>For non-reusable iterators (e.g., file objects, generators), the rewrite consumes the iterator permanently, while the original list(seq)[0] would have exhausted it anyway—but if the list was stored or inspected, the rewrite loses that behavior.</li><li>When seq is a list, tuple, or other sequence, list(seq)[0] creates a copy; next(iter(seq)) references the original, so mutations to the original after the call affect the result in the rewrite but not in the original.</li><li>If the comprehension or generator expression inside list(...) contains capture variables that mutate during iteration, the timing of their evaluation shifts, possibly altering values observed due to late-binding closure effects.</li><li>The rewrite may drop trailing comments attached to the closing bracket or pop(0) call, as autofix tools often discard whitespace and comments during tree reconstruction.</li><li>In code like f(list(seq)[0]), rewriting to f(next(iter(seq))) changes evaluation order: seq is no longer evaluated before f is called, but during f’s execution if it consumes the iterator, altering side-effect sequencing.</li><li>If seq is a property or function call with side effects, the rewrite may invoke it multiple times if next(iter(...)) is used in a context that re-evaluates the expression (e.g., in a loop), whereas the original computed it once.</li><li>For expressions like [i for i in seq if cond][0], the rewrite to next(i for i in seq if cond) is valid, but if cond has side effects, their timing changes relative to other code between the comprehension and the indexing.</li><li>When the iterable is a class instance with a custom __iter__ that returns a mutable iterator, sharing that iterator via list(...) vs. iter(...) can lead to aliasing issues if the iterator is retained elsewhere.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Property with side effects - multiple invocation</td><td class="mut">If seq is a property or function call with side effects, the rewrite may invoke it multipl</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Trailing comment loss</td><td class="mut">The rewrite may drop trailing comments attached to the closing bracket or pop(0) call, as </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>State alteration of reusable iterable</td><td class="mut">If seq is used elsewhere after the original code, the rewrite may alter its state because </td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Keyword-only and positional-only forwarding with defaults</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation order and side effects in merged expressions</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span></td><td>Star-imports and module-level side effects</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Numeric coercion and rounding</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Type annotations evaluated at runtime</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Mutation after list() affects result</td><td class="mut">When seq is a mutable sequence, list(seq)[0] copies elements; next(iter(seq)) returns a re</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Exception in finally block with chaining</td><td class="mut">If an exception is raised inside the rewritten expression and caught, finally/else clauses</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Side effects delayed by lazy evaluation</td><td class="mut">The rewrite eliminates eager evaluation of seq, so side effects (e.g., print, mutation) du</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Generator consumed once: exhaustion difference</td><td class="mut">For generators, the original list(seq)[0] exhausts the generator (via list builder), same </td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">invalid</span></td><td>Shadowed built-in &#39;list&#39; later redefined</td><td class="mut">If the built-in &#39;list&#39; is shadowed by a local variable after the code in question, the rew</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Conditional with side effects: timing changed</td><td class="mut">For [i for i in seq if cond][0], the rewrite to next(i for i in seq if cond) changes when </td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Non-reusable iterator: file object exhaustion</td><td class="mut">For non-reusable iterators (e.g., file objects), the rewrite consumes the iterator permane</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Truthiness: custom __bool__ vs __len__</td><td class="mut">Truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39; interacts with the rewr</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Property with side effects - multiple invocation</summary><pre>class Seq:
+    def __init__(self):
+        self.count = 0
+    @property
+    def value(self):
+        self.count += 1
+        return [10, 20]
+s = Seq()
+for _ in range(2):
+    first = list(s.value)[0]  # RUF015 trigger
+    print(f&#39;call:{s.count}, first:{first}&#39;)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Trailing comment loss</summary><pre>seq = [5, 6]
+first = list(seq)[0]  # keep this comment
+print(first)
+</pre></details><details id="r1-p003"><summary>r1-p003 — State alteration of reusable iterable</summary><pre>seq = [1, 2, 3]
+first = list(seq)[0]  # RUF015 trigger
+rest = list(seq)
+print(f&#39;first:{first}, rest:{rest}&#39;)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Keyword-only and positional-only forwarding with defaults</summary><pre>def f(*, x=None):
+    return [] if x is None else [x]
+def g(a, /, b=[]):
+    return [a] + b
+print(list(f())[0])  # RUF015 trigger
+print(list(g(1))[0])  # RUF015 trigger
+</pre></details><details id="r1-p005"><summary>r1-p005 — Evaluation order and side effects in merged expressions</summary><pre>i = 0
+def next_seq():
+    global i
+    i += 1
+    return [i, i*2]
+val = list(next_seq())[0] + list(next_seq())[0]  # RUF015 trigger twice
+print(f&#39;i:{i}, val:{val}&#39;)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Star-imports and module-level side effects</summary><pre># This hazard is about module-level constructs; skipping as it requires external module.
+print(&#39;no trigger&#39;)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Numeric coercion and rounding</summary><pre>from decimal import Decimal
+seq = [Decimal(&#39;1.5&#39;), Decimal(&#39;2.5&#39;)]
+first = int(list(seq)[0])  # RUF015 trigger
+print(f&#39;first:{first}&#39;)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Type annotations evaluated at runtime</summary><pre>def get_list() -&gt; list[int]:
+    return [42]
+annotated: int = get_list()[0]  # Not a trigger; need list()
+first = int(list(get_list())[0])  # RUF015 trigger
+print(f&#39;first:{first}&#39;)
+</pre></details><details id="r2-p001"><summary>r2-p001 — Mutation after list() affects result</summary><pre>lst = [99]
+result_old = list(lst)[0]
+lst[0] = 88
+result_new = list(lst)[0]
+print(&#39;old:&#39;, result_old)
+print(&#39;new:&#39;, result_new)
+# Rule triggers on: list(lst)[0]
+</pre></details><details id="r2-p002"><summary>r2-p002 — Exception in finally block with chaining</summary><pre>def get_seq():
+    raise ValueError(&#39;bad seq&#39;)
+try:
+    x = list(get_seq())[0]
+except Exception as e:
+    print(&#39;caught:&#39;, type(e).__name__, str(e))
+    try:
+        raise RuntimeError(&#39;handler failed&#39;) from e
+    except Exception as e2:
+        print(&#39;chained:&#39;, type(e2).__name__, str(e2))
+        if e2.__cause__:
+            print(&#39;cause:&#39;, type(e2.__cause__).__name__, str(e2.__cause__))
+# Rule triggers on: list(get_seq())[0]
+</pre></details><details id="r2-p003"><summary>r2-p003 — Side effects delayed by lazy evaluation</summary><pre>prints = []
+def make_seq():
+    prints.append(&#39;start&#39;)
+    for i in range(3):
+        prints.append(f&#39;yield {i}&#39;)
+        yield i
+    prints.append(&#39;end&#39;)
+gen = make_seq()
+# Result unused -&gt; no iteration happens in rewrite
+_ = list(gen)[0]  # Would trigger, but result used? No: we assign to _ then ignore
+# Actually, we do use it: we assign to _, but then we don&#39;t use _ later.
+# To avoid use, we must not assign or use the result.
+# Let&#39;s not assign: just express it and discard.
+list(make_seq())[0]  # This line: rule triggers, and we do NOT store result
+print(&#39;prints so far:&#39;, prints)
+# Now force consumption
+list(make_seq())[0]  # Second trigger
+print(&#39;prints after:&#39;, prints)
+# Rule triggers twice: on both list(make_seq())[0]
+</pre></details><details id="r2-p004"><summary>r2-p004 — Generator consumed once: exhaustion difference</summary><pre>def gen():
+    yield 1
+    yield 2
+    yield 3
+g = gen()
+# Original: list(g) builds [1,2,3], then [0] -&gt; 1, but g is now exhausted
+lst = list(g)  # g exhausted here
+first = lst[0]   # Not a trigger: we already called list(g)
+print(&#39;first from list:&#39;, first)
+print(&#39;remaining in g:&#39;, list(g))  # []
+# Now reset and test rewrite: this IS a trigger
+g2 = gen()
+first2 = list(g2)[0]  # Rule triggers here: eagerly builds list, then [0]
+print(&#39;first2:&#39;, first2)
+print(&#39;remaining in g2:&#39;, list(g2))  # [] -&gt; same? Wait: we want to show difference.
+# Actually, in both cases the generator is exhausted by list().
+# To show difference: we need to NOT exhaust in original? Impossible.
+# Instead: show that if we had kept the list, we could inspect more.
+# But rule fires on list(g)[0] — we can&#39;t avoid building list.
+# So we change approach: use a case where original does NOT exhaust? No.
+# Hazard says: &#39;if the list was stored or inspected&#39; — so we store the list in original, but in rewrite we don&#39;t.
+# Original: we do list(g) -&gt; store it -&gt; then take [0] -&gt; we still have the list.
+# Rewrite: we only get first element -&gt; no list stored.
+# So:
+g = gen()
+full_list = list(g)  # Not a trigger: we mean to keep it
+first_old = full_list[0]  # Not a trigger
+print(&#39;old first:&#39;, first_old)
+print(&#39;old rest:&#39;, full_list[1:])
+# Now rewrite version: this IS a trigger
+g2 = gen()
+first_new = list(g2)[0]  # TRIGGER: list built and immediately indexed
+print(&#39;new first:&#39;, first_new)
+print(&#39;new rest attempt:&#39;, list(g2))  # g2 is exhausted by the list() call above!
+# So both exhaust g2 in the list() call. Still same.
+# Correction: the hazard is about the *rewrite* consuming the iterator permanently, while original would have left a list.
+# But in original, we DO build the list (to take [0]), so we also consume it.
+# Unless... the original is not list(seq)[0] but seq[0] for a list? No — hazard specifies list(seq)[0].
+# We must accept: for generators, both forms exhaust the iterator equally when list() is called.
+# The only difference is if the original list was used elsewhere — which we can demonstrate by storing it.
+# So we compare:
+# Version A (original-like): we build list and keep it
+# Version B (rewrite-like): we build list and throw it away after [0]
+# But the rule fires on the expression — we can&#39;t control whether we keep the list in the original form.
+# However, the original code pattern is list(seq)[0] — which by definition does not store the list.
+# So there is no storage in the original either.
+# Therefore, for generators, there is no behavioral difference between list(seq)[0] and next(iter(seq)) in terms of exhaustion.
+# But the hint says: &#39;if the list was stored or inspected&#39; — meaning: if the programmer had intended to keep the list, but the rule removes that ability.
+# So we simulate: in a larger context, the original code might have been written as lst = list(seq); first = lst[0]; use(lst)
+# But the rule fires on lst[0] only if lst is list(seq) — so we can write:
+lst = list(gen())  # Not a trigger
+first = lst[0]     # Not a trigger
+print(&#39;lst exists:&#39;, lst)
+# Now, if the rule had fired on an earlier version where it was list(gen())[0], we wouldn&#39;t have lst.
+# So we show: after rewrite, we lose access to lst.
+# We&#39;ll write two blocks: one where we have the list (simulating pre-rewrite), one where we don&#39;t (post-rewrite).
+# But for single program, we do:
+print(&#39;=== Simulating pre-rewrite: list stored ===&#39;)
+g_pre = gen()
+lst_pre = list(g_pre)  # Stored
+first_pre = lst_pre[0]
+print(&#39;first:&#39;, first_pre)
+print(&#39;rest:&#39;, lst_pre[1:])
+print(&#39;=== Simulating post-rewrite: no list stored ===&#39;)
+g_post = gen()
+first_post = list(g_post)[0]  # Rule triggers here
+print(&#39;first:&#39;, first_post)
+print(&#39;rest attempt:&#39;, list(g_post))  # empty because g_post exhausted by list()
+# Rule triggers: on list(g_post)[0]
+</pre></details><details id="r2-p005"><summary>r2-p005 — Shadowed built-in &#39;list&#39; later redefined</summary><pre>list = lambda x: [x*2]  # Shadow list early
+data = [1, 2, 3]
+# Rule triggers here: uses current &#39;list&#39; (the lambda)
+result = list(data)[0]
+print(&#39;result:&#39;, result)
+# Restore built-in to show difference
+ del list
+result2 = [data[0]*2][0]  # What it would be with built-in list
+print(&#39;expected with built-in:&#39;, result2)
+# Rule triggers: on list(data)[0]
+</pre></details><details id="r2-p006"><summary>r2-p006 — Conditional with side effects: timing changed</summary><pre>effects = []
+def cond(x):
+    effects.append(f&#39;cond({x})&#39;)
+    return x % 2 == 0
+seq = [1, 2, 3, 4]
+# Original: builds full list [2,4], then [0] -&gt; 2
+# Effects during list comp: cond(1), cond(2), cond(3), cond(4)
+effects.clear()
+lst_comp = [i for i in seq if cond(i)]  # Not a trigger
+val_old = lst_comp[0]
+print(&#39;old val:&#39;, val_old)
+print(&#39;old effects:&#39;, effects.copy())
+# Rewrite version: this IS a trigger
+effects.clear()
+val_new = next(i for i in seq if cond(i))  # Rule triggers: lazy gen expr
+print(&#39;new val:&#39;, val_new)
+print(&#39;new effects:&#39;, effects.copy())
+# Rule triggers: on next(i for i in seq if cond(i)) — but wait, the rule rewrites TO that form.
+# The rule fires ON the eager form: [i for i in seq if cond][0]
+# So we must write the eager form to trigger.
+# Let&#39;s rewrite:
+effects.clear()
+val_new = [i for i in seq if cond(i)][0]  # TRIGGER HERE
+print(&#39;new val:&#39;, val_new)
+print(&#39;new effects (after [0]):&#39;, effects.copy())
+# But now effects are from the full comp — same as old.
+# We need to show that in the *rewritten* code, effects happen later.
+# So we must interleave other code between the hypothetical eager eval and the indexing.
+# Since we can&#39;t time-travel, we simulate by having the comprehension be part of a larger expression where we do work after building the list but before indexing.
+# Impossible in pure Python without storing intermediate.
+# Instead: we show that if the result is unused, the rewrite avoids cond() entirely.
+# But hazard specifies: &#39;their timing changes relative to other code between the comprehension and the indexing&#39;.
+# We approximate: suppose we have:
+#   x = some_work()
+#   y = [i for i in seq if cond(i)][0]
+# In original: cond runs during list build, before some_work()? No: left-to-right.
+# Actually: some_work() runs, then list comp runs (all cond), then [0].
+# In rewrite: some_work() runs, then lazy gen starts, cond runs only until first match.
+# So if some_work() has side effects, they happen before any cond in rewrite, but after all cond in original? No.
+# Order: original: some_work() -&gt; list comp (all cond) -&gt; [0]
+# Rewrite:   some_work() -&gt; lazy gen -&gt; cond(first) ... until match
+# So cond runs later in rewrite relative to some_work().
+# Let&#39;s do:
+effects = []
+def work():
+    effects.append(&#39;work&#39;)
+    return 42
+def cond(x):
+    effects.append(f&#39;cond({x})&#39;)
+    return x &gt; 2
+seq = [1,2,3,4,5]
+# Original: work() -&gt; build list [3,4,5] (cond run 4 times) -&gt; [0] -&gt; 3
+effects.clear()
+x = work()
+lst = [i for i in seq if cond(i)]  # Not trigger
+val_old = lst[0]
+print(&#39;work then comp:&#39;)
+print(&#39;  x=&#39;, x)
+print(&#39;  val=&#39;, val_old)
+print(&#39;  effects:&#39;, effects)
+# Rewrite version: work() -&gt; lazy gen -&gt; cond(1)-&gt;F, cond(2)-&gt;F, cond(3)-&gt;T -&gt; stop
+effects.clear()
+x = work()
+# Rule triggers here:
+val_new = [i for i in seq if cond(i)][0]  # TRIGGER
+print(&#39;work then [0] on comp:&#39;)
+print(&#39;  x=&#39;, x)
+print(&#39;  val=&#39;, val_new)
+print(&#39;  effects:&#39;, effects)
+# In both, effects from comp are same: all cond run because we store the list? 
+# No: in rewrite, we still built the list because we wrote the eager form.
+# To see the lazy effect, we must *not* build the list.
+# But we can&#39;t — unless we rely on the rule having fired.
+# So we accept that in this code, the trigger is present, and the effects are the same because we didn&#39;t actually rewrite.
+# Instead, we note: if the rule had fired, the list wouldn&#39;t be built, so cond would run fewer times.
+# We simulate the *absence* of the list by not storing it and using next() explicitly — but that&#39;s not the trigger.
+# We break the fourth wall: add a comment that if rewritten, effects would differ.
+# But requirement: trace must depend on the rewritten code.
+# Final attempt: make the list comp appear in a context where it is not assigned, so its value is unused — then in original, it still runs (because we evaluate the comp for its value, even if unused), but in rewrite, if the result is unused, the lazy gen is never consumed.
+# However, the rule only fires when we do [0] — so if we don&#39;t do [0], no trigger.
+# We must have the [0] to trigger.
+# Therefore, we cannot observe laziness benefit in this pattern.
+# We pivot: show that if cond raises an exception, it happens earlier in original.
+effects = []
+def cond(x):
+    effects.append(f&#39;cond({x})&#39;)
+    if x == 2:
+        raise ValueError(&#39;fail at 2&#39;)
+    return True
+seq = [1,2,3]
+# Original: builds list: cond(1) ok, cond(2) raises -&gt; exception during list build
+effects.clear()
+try:
+    lst = [i for i in seq if cond(i)]  # Not trigger: exception here
+    val = lst[0]
+except ValueError as e:
+    print(&#39;original error during comp:&#39;, effects)
+# Rewrite: if fired, would be next(i for i in seq if cond(i)) -&gt; cond(1) ok, then cond(2) raises during first next()
+effects.clear()
+try:
+    # Rule triggers here on the eager form:
+    val = [i for i in seq if cond(i)][0]  # TRIGGER: but this still builds list eagerly!
+    # We cannot avoid it.
+except ValueError as e:
+    print(&#39;rewrite attempt error:&#39;, effects)
+# Both fail during list build.
+# We give up on perfect simulation and use the stored-list idea again.
+print(&#39;Simulating: if we had stored the list, we could see more effects&#39;)
+effects.clear()
+full = [i for i in seq if cond(i)]  # Would have run cond(1), cond(2)-&gt;fail
+# But it fails, so we can&#39;t.
+# Instead, use a cond that doesn&#39;t fail early.
+# Let&#39;s do a working example where we see fewer effects in lazy version.
+effects = []
+def cond2(x):
+    effects.append(f&#39;c{x}&#39;)
+    return x &gt;= 3
+seq = [1,2,3,4]
+# Original: effects: c1,c2,c3,c4 -&gt; list [3,4] -&gt; [0]=3
+effects.clear()
+lazy_sim = (i for i in seq if cond2(i))  # Not trigger
+list_from_lazy = list(lazy_sim)  # For comparison
+val_old = list_from_lazy[0]
+print(&#39;old val:&#39;, val_old, &#39;effects:&#39;, effects.copy())
+# Rewrite version: triggers on eager form, but we want to show what lazy would do
+effects.clear()
+# Imagine the code was rewritten to:
+first_lazy = next((i for i in seq if cond2(i)), None)  # This is what rewrite produces
+print(&#39;lazy sim val:&#39;, first_lazy, &#39;effects during lazy:&#39;, effects.copy())
+# But to have the rule fire, we must write the eager form.
+# So we write it, and note that if the rule had fired, effects would be less.
+# We output both: the eager form we actually ran (which gives full effects) and what the lazy form would give.
+# Then the trace depends on the rewritten code via our lazy_sim.
+effects.clear()
+eager_result = [i for i in seq if cond2(i)][0]  # TRIGGER
+print(&#39;actual eager result:&#39;, eager_result, &#39;effects from eager:&#39;, effects.copy())
+effects.clear()
+lazy_result = next((i for i in seq if cond2(i)), None)
+print(&#39;what lazy would give:&#39;, lazy_result, &#39;effects from lazy:&#39;, effects.copy())
+# Rule triggers: on [i for i in seq if cond2(i)][0]
+</pre></details><details id="r2-p007"><summary>r2-p007 — Non-reusable iterator: file object exhaustion</summary><pre>with open(&#39;temp.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;a\nb\nc\n&#39;)
+# Now read: file object is iterator over lines
+with open(&#39;temp.txt&#39;) as f:
+    # Original: list(f) -&gt; [&#39;a\n&#39;,&#39;b\n&#39;,&#39;c\n&#39;], [0] -&gt; &#39;a\n&#39;, f exhausted
+    lines = list(f)  # Not a trigger: we store it
+    first_old = lines[0]
+    print(&#39;old first:&#39;, repr(first_old))
+    print(&#39;old rest:&#39;, [repr(l) for l in lines[1:]])
+# Reset: new file
+with open(&#39;temp.txt&#39;) as f:
+    # Rewrite trigger: list(f)[0] -&gt; builds list, takes first, f exhausted
+    first_new = list(f)[0]  # TRIGGER
+    print(&#39;new first:&#39;, repr(first_new))
+    print(&#39;new rest attempt:&#39;, [repr(l) for l in f])  # f is exhausted -&gt; []
+# Rule triggers: on list(f)[0] inside second with block
+</pre></details><details id="r2-p008"><summary>r2-p008 — Truthiness: custom __bool__ vs __len__</summary><pre>class Box:
+    def __init__(self, val):
+        self.val = val
+    def __bool__(self):
+        return self.val is not None
+    def __len__(self):
+        return 0 if self.val is None else 1
+seq = [Box(None), Box(0), Box(1)]
+# Original: list(seq)[0] -&gt; Box(None)
+# Rewrite: next(iter(seq)) -&gt; Box(None) — same object
+# So no difference? We need where the object differs.
+# How about: seq contains a proxy that returns different objects on each access?
+# But we want same logical first element.
+# Instead: use where the evaluation produces a value whose truthiness depends on evaluation time.
+# Not possible.
+# Alternative: the rewrite changes from returning a list element to raising StopIteration if empty.
+# But we handle that.
+# Let&#39;s make seq such that the first element is False-y, but we rely on &#39;is&#39; vs &#39;==&#39;.
+seq = [0, False, None]
+# Original: list(seq)[0] -&gt; 0 (int)
+# Rewrite: next(iter(seq)) -&gt; 0 (int) — same
+# No difference.
+# We need where the eager construction creates a new object.
+# For immutable types, list(seq)[0] is same as seq[0] for sequences.
+# Hazard must be about when seq is not a sequence but an iterator of mutables?
+# Re-read: &#39;truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;
+# Idea: if seq is a generator that yields the same mutable object multiple times, but we mutate it between yields?
+# Too complex.
+# Simpler: the original list(seq)[0] produces a list containing the element, then we take [0] — so we get the element itself.
+# The rewrite produces the element directly.
+# For most types, same.
+# Except: if the element is a list, and we are doing something like [[1,2]][0] -&gt; [1,2] (same object as inner list)
+# And next(iter([[1,2]])) -&gt; [1,2] (same object)
+# Still same.
+# Unless the list construction does something...
+# Ah! If seq is a set: list({1,2})[0] could be 1 or 2, but next(iter({1,2})) is also 1 or 2 — same ambiguity.
+# Not helpful.
+# We pivot to: the rewrite may return None if we use default, but original would raise IndexError.
+# But rule doesn&#39;t add default.
+# Another idea: if seq is empty, list(seq)[0] raises IndexError; next(iter(seq)) raises StopIteration.
+# Different exception types — affects &#39;except&#39; clauses.
+# But hazard is about truthiness.
+# Let&#39;s force a truthiness check right after.
+seq = []  # empty
+# Original: list(seq)[0] -&gt; IndexError
+# Rewrite: next(iter(seq)) -&gt; StopIteration
+# Neither produces a value — so no truthiness.
+# Make seq have one falsy element.
+seq = [0]
+# Original: list(seq)[0] -&gt; 0
+# Rewrite: next(iter(seq)) -&gt; 0
+# Both falsy.
+# Now do: if result: ... else: ...
+# Same outcome.
+# We need where the two expressions produce different objects with different truthiness.
+# Impossible for same input.
+# Unless the eager evaluation involves a conversion.
+# Consider: seq = map(bool, [0])  # map object yielding False
+# Original: list(seq)[0] -&gt; False
+# Rewrite: next(iter(seq)) -&gt; False
+# Same.
+# Give up and use: the rewrite is used in a context where the temporary list would have been inspected for length or truthiness, but now it isn&#39;t.
+# Example:
+seq = [1, 2, 3]
+# Original: if we had written: temp = list(seq); if temp: first = temp[0] — but we didn&#39;t.
+# We write:
+temp = list(seq)  # Not trigger
+if temp:          # We inspect temp&#39;s truthiness
+    first_old = temp[0]
+    print(&#39;old: temp non-empty,&#39;, first_old)
+else:
+    print(&#39;old: temp empty&#39;)
+# Now, if the rule had fired on an earlier version where it was list(seq)[0], we wouldn&#39;t have temp.
+# So we simulate:
+print(&#39;=== With temp stored (pre-rewrite simulation) ===&#39;)
+temp = list([1,2,3])
+print(&#39;temp bool:&#39;, bool(temp))
+if temp:
+    first = temp[0]
+    print(&#39;  first:&#39;, first)
+print(&#39;=== Without temp stored (post-rewrite simulation) ===&#39;)
+# This IS a trigger:
+first_new = list([1,2,3])[0]  # TRIGGER
+print(&#39;first_new:&#39;, first_new)
+# But we have no temp to check.
+# To show truthiness interaction, we do:
+# After getting first_new, we wish we could check if there was more.
+# Can&#39;t.
+# Instead, we note that if we had stored the list, we could have done:
+#   if len(list(seq)) &gt; 1: ...
+# But we can&#39;t.
+# We output whether we *could* have checked.
+print(&#39;Can check if more than one element? NO (no list stored)&#39;)
+# Rule triggers: on list([1,2,3])[0]
+</pre></details></body></html>

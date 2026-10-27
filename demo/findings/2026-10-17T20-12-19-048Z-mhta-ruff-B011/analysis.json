@@ -1,0 +1,33 @@
+{
+  "summary": "The rule flags any use of 'assert False' because assertions are removed in optimized mode, making them unreliable for raising errors.",
+  "firingShapes": [
+    "assert False",
+    "assert False, \"message\"",
+    "if cond: assert False",
+    "def f(): assert False",
+    "class C: assert False",
+    "try: assert False\\nexcept: pass",
+    "lambda: assert False",
+    "[x for x in y if assert False]"
+  ],
+  "silentShapes": [
+    "assert True",
+    "assert x",
+    "assert x == y",
+    "raise AssertionError",
+    "if __debug__: assert False"
+  ],
+  "fixDescription": "Replace 'assert False' with 'raise AssertionError', preserving any message argument as the error's argument if present.",
+  "hazards": [
+    "In optimized mode (-O), the original 'assert False' would be ignored and do nothing, while the fix raises an exception, changing program behavior from silent continuation to explicit error.",
+    "If 'assert False' appears inside a lambda or list comprehension, replacing it with 'raise AssertionError' may break the expression context, as raise is a statement and cannot be used where an expression is expected (e.g., in a list comprehension filter or lambda body), causing a SyntaxError.",
+    "When 'assert False' is used in a try block, the fix changes which exceptions are caught: the original would be skipped in -O mode, but the fix always raises, potentially altering exception handling flow even in normal mode if other exceptions are expected.",
+    "If 'assert False' is followed by a comment on the same line, the autofix may drop or misplace the comment during rewriting, especially if the tool does not preserve trailing comments.",
+    "In a class or module scope, 'assert False' is executed during definition; replacing it with 'raise AssertionError' changes the timing and visibility of the error—now raised at import time unconditionally, whereas in -O mode the original would be removed and no error raised.",
+    "If 'assert False' is part of a larger expression via short-circuiting (e.g., 'assert False or x'), removing the assert changes evaluation: the original would short-circuit to False in normal mode (but be removed in -O), while the fix always raises, breaking any reliance on the assert returning None or enabling short-circuit.",
+    "When 'assert False' has a message (e.g., 'assert False, msg'), the fix correctly passes msg to AssertionError, but if msg has side effects (e.g., a function call), those are now evaluated unconditionally, whereas in -O mode the original assert would be removed and the side effects would not occur.",
+    "If the code relies on the fact that 'assert False' raises AssertionError only in non-optimized mode to conditionally disable checks, replacing it with a permanent raise breaks that intentional optimization-aware behavior.",
+    "In nested functions, if 'assert False' is used and the fix is applied, the raised exception may interfere with introspection or debugging tools that expect AssertionError to originate from assert statements specifically.",
+    "If 'assert False' appears in a string or comment (as text), the linter should not flag it, but if the autofix incorrectly modifies such occurrences (due to faulty pattern matching), it would corrupt documentation or example code."
+  ]
+}

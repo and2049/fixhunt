@@ -1,0 +1,681 @@
+{
+  "runId": "2026-10-17T20-19-11-157Z-cejr-ruff-C404",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "C404",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-list-comprehension-dict (C404)\n\nDerived from the **flake8-comprehensions** linter.\n\nFix is always available.\n\n## What it does\nChecks for unnecessary list comprehensions.\n\n## Why is this bad?\nIt's unnecessary to use a list comprehension inside a call to `dict()`,\nsince there is an equivalent comprehension for this type.\n\n## Example\n```python\ndict([(x, f(x)) for x in foo])\n```\n\nUse instead:\n```python\n{x: f(x) for x in foo}\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe, as it may occasionally drop comments\nwhen rewriting the call. In most cases, though, comments will be preserved.\n"
+  },
+  "analysis": {
+    "summary": "Flags when dict() wraps a list comprehension producing key-value pairs.",
+    "firingShapes": [
+      "dict([(k, v) for k, v in items])",
+      "dict([(key, func(key)) for key in seq if cond])",
+      "dict([(i, i*2) for i in range(n)])",
+      "dict([(a, b) for a, b in zip(x, y)])",
+      "dict([(expr1, expr2) for var in iterable])",
+      "dict(list((x, y) for x, y in stuff))",
+      "dict([tuple(pair) for pair in pairs])",
+      "dict([(k,) + v for k, *v in data])"
+    ],
+    "silentShapes": [
+      "dict({(k, v) for k, v in items})",
+      "dict(zip(keys, values))",
+      "{k: v for k, v in items}",
+      "[(k, v) for k, v in items]",
+      "dict()"
+    ],
+    "fixDescription": "Rewrites dict([(expr1, expr2) for target in iterable if cond]) to {expr1: expr2 for target in iterable if cond}, preserving comprehension structure and filters.",
+    "hazards": [
+      "If the list comprehension uses a variable name that shadows an outer variable in the dict key or value expression, the dict comprehension may capture that variable differently due to its own local scope.",
+      "If the iterable expression has side effects (e.g., a function call), moving it into the dict comprehension changes when those effects occur relative to other expressions in the same statement.",
+      "If the list comprehension is nested inside another expression where the list's identity or mutability matters (e.g., passed to a function that modifies it), replacing it with a dict comprehension alters the object type and breaks expectations.",
+      "If the comprehension contains a bare yield or yield-from, rewriting it as a dict comprehension changes it from a generator expression to a dict comprehension, altering execution timing and preventing lazy evaluation.",
+      "If the original code relies on the list being built eagerly (e.g., for truthiness or length before iteration), the dict comprehension's lazy-like evaluation (though still eager in CPython) may not preserve intermediate state assumptions in rare edge cases involving __bool__ or __len__ overrides.",
+      "If the list comprehension is part of a larger expression where operator precedence groups it unexpectedly (e.g., dict([(k, v) for k, v in items]) + {}), removing the list constructor could change parsing if parentheses are omitted incorrectly during rewrite.",
+      "If the comprehension includes a tuple with more than two elements (e.g., [(k, v, w) for ...]), the rule should not fire, but if misapplied, the fix would raise a ValueError due to too many values to unpack in the dict comprehension.",
+      "If the list comprehension is inside a lambda or nested function and uses a nonlocal variable, the dict comprehension's implicit scope may not preserve the same closure behavior, especially in Python 2 or under atypical execution contexts.",
+      "Comments attached to the list brackets or for/clause tokens may be dropped during AST rewrite, even if the tool attempts preservation, due to formatting loss in the conversion process.",
+      "If the iterable is the same variable being assigned to in the comprehension (e.g., dict([(x, x+1) for x in xs]) where xs is later reused), the rewrite is safe, but if the variable is deleted or reassigned mid-comprehension via del or side effect, the timing of observation differs."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0053463,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 12,
+    "fixed": 0,
+    "disputed": 2
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Side effects in iterable expression",
+      "hazard": "If the iterable expression has side effects (e.g., a function call), moving it into the dict comprehension changes when those effects occur relative to other expressions in the same statement.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "iterable\n{1: 1, 2: 4}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "iterable\n{1: 1, 2: 4}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Context manager interaction",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              11,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "enter\nexit: ['0', '1', 'done']\nafter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "enter\nexit: ['0', '1', 'done']\nafter\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Bare yield in comprehension",
+      "hazard": "If the comprehension contains a bare yield or yield-from, rewriting it as a dict comprehension changes it from a generator expression to a dict comprehension, altering execution timing and preventing ",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p004",
+      "title": "Class vs instance attributes, descriptors",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              8,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "prop accessed\n{'val': 10, 'prop': 10}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "prop accessed\n{'val': 10, 'prop': 10}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "Evaluation order and side effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              6,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "counter: 4 dict: {1: 2, 3: 4}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "counter: 4 dict: {1: 2, 3: 4}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "String formatting edge cases",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "'str'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Truthiness and coercion",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              5,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "dict: {} len: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "dict: {} len: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Numeric coercion and rounding",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              4,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "dict: {1: 1.75}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "dict: {1: 1.75}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Comment Loss Hazard",
+      "hazard": "Comments attached to list brackets or for-clauses may be dropped during AST-to-source rewrite.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Rebinding During Comprehension",
+      "hazard": "Rebinding the iterable variable mid-comprehension changes observation timing between list and dict forms.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "{1: 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "{1: 2}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Eagerness and Truthiness",
+      "hazard": "Reliance on list truthiness/length during construction differs if __bool__ has side effects.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "list bool during: True\ndict from list: {1: 1, 2: 2}\ndict comp bool called: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Truthiness and Identity Edge Cases",
+      "hazard": "__bool__/__len__ overrides, None vs falsy, 'is' vs '==' affect reliance on list vs dict intermediate state.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    },
+    {
+      "id": "r2-p005",
+      "title": "Mutability and Identity in Context",
+      "hazard": "Passing the list to a function that mutates it; dict comp yields different type, breaking expectations.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              22,
+              5
+            ],
+            "fix": "unsafe"
+          },
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              47,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "mutate list result: 3\nfinal list: [(1, 2), (3, 4), (99, 99)]\nlist mutability test: 3\nh is: <class 'dict'>\nb before mutate: [((1, 2), (1, 2))] <class 'list'>\nb after mutate: [((1, 2), (1, 2)), (99, 99)]\ndict has no append\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "mutate list result: 3\nfinal list: [(1, 2), (3, 4), (99, 99)]\nlist mutability test: 3\nh is: <class 'dict'>\nb before mutate: [((1, 2), (1, 2))] <class 'list'>\nb after mutate: [((1, 2), (1, 2)), (99, 99)]\ndict has no append\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Star Imports and Module Side Effects",
+      "hazard": "Module-level side effects from * imports or __all__ may be affected if the rewrite occurs at module scope.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              3,
+              7
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "MAP defined as: dict\nMAP contents: {'a': 'a', 'b': 'b'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "MAP defined as: dict\nMAP contents: {'a': 'a', 'b': 'b'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Keyword-Only and Defaults Evaluation",
+      "hazard": "Defaults in keyword-only args evaluated once; comprehension scope may interact if closure captures mutable default.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "C404",
+            "severity": "warning",
+            "message": "Unnecessary list comprehension (rewrite as a dict comprehension)",
+            "span": [
+              4,
+              20
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "first call: {}\nsecond call: {1: 2, 2: 4, 3: 6}\nafter mutate, p2(): {1: 2, 2: 4, 3: 6, 4: 8}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first call: {}\nsecond call: {1: 2, 2: 4, 3: 6}\nafter mutate, p2(): {1: 2, 2: 4, 3: 6, 4: 8}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Pathlib vs os.path Behavior",
+      "hazard": "Behavioral differences between pathlib and os.path for paths, symlinks, or bytes paths affected by rewrite timing.",
+      "rule": "C404",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "KeyError: '<wd>/prog",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

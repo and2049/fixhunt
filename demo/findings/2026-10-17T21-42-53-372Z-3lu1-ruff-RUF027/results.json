@@ -1,0 +1,536 @@
+{
+  "runId": "2026-10-17T21-42-53-372Z-3lu1-ruff-RUF027",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF027",
+    "fixKind": "unknown",
+    "docs": "# missing-f-string-syntax (RUF027)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\nThis rule is in preview and is not stable. The `--preview` flag is required for use.\n\n## What it does\nSearches for strings that look like they were meant to be f-strings, but are missing an `f` prefix.\n\n## Why is this bad?\nExpressions inside curly braces are only evaluated if the string has an `f` prefix.\n\n## Details\n\nThere are many possible string literals which are not meant to be f-strings\ndespite containing f-string-like syntax. As such, this lint ignores all strings\nwhere one of the following conditions applies:\n\n1. The string is a standalone expression. For example, the rule ignores all docstrings.\n2. The string is part of a function call with argument names that match at least one variable\n   (for example: `format(\"Message: {value}\", value=\"Hello World\")`)\n3. The string (or a parent expression of the string) has a direct method call on it\n   (for example: `\"{value}\".format(...)`)\n4. The string has no `{...}` expression sections, or uses invalid f-string syntax.\n5. The string references variables that are not in scope, or it doesn't capture variables at all.\n6. Any format specifiers in the potential f-string are invalid.\n7. The string is part of a function call that is known to expect a template string rather than an\n   evaluated f-string: for example, a [`logging`][logging] call, a [`gettext`][gettext] call,\n   or a [FastAPI path].\n\n## Example\n\n```python\nname = \"Sarah\"\nday_of_week = \"Tuesday\"\nprint(\"Hello {name}! It is {day_of_week} today!\")\n```\n\nUse instead:\n```python\nname = \"Sarah\"\nday_of_week = \"Tuesday\"\nprint(f\"Hello {name}! It is {day_of_week} today!\")\n```\n\n## Fix safety\n\nThis fix will always change the behavior of the program and, despite the precautions detailed\nabove, this may be undesired. As such the fix is always marked as unsafe.\n\n## Options\n\n- `lint.logger-objects`\n\n[logging]: https://docs.python.org/3/howto/logging-cookbook.html#using-particular-formatting-styles-throughout-your-application\n[gettext]: https://docs.python.org/3/library/gettext.html\n[FastAPI path]: https://fastapi.tiangolo.com/tutorial/path-params/\n"
+  },
+  "analysis": {
+    "summary": "Flags string literals containing curly-brace expressions without an 'f' prefix when they appear to be intended as f-strings.",
+    "firingShapes": [
+      "print(\"Value: {x}\")",
+      "log.info(\"User {id} logged in\")",
+      "msg = \"Result: {a}+{b}=\"",
+      "raise ValueError(\"Bad {field}\")",
+      "return f\"Prefix {y}\" + \"Suffix {z}\"",
+      "\"Header\\n{key}: {val}\\nFooter\".splitlines()",
+      "[s for s in [\"Item {i}\"] if i]",
+      "{\"k\": \"Value {v}\"}['k']"
+    ],
+    "silentShapes": [
+      "\"{literal}\"",
+      "f\"{x}\"",
+      "\"{}\".format(x)",
+      "logger.debug(\"{%s}\", x)",
+      "\"{{escaped}}\""
+    ],
+    "fixDescription": "Adds an 'f' prefix to the string literal, converting it into an f-string so that expressions within curly braces are evaluated.",
+    "hazards": [
+      "The string may be used in a context expecting a literal string with braces (e.g., regex, SQL, or templating), where adding 'f' would cause runtime errors due to undefined variable names or syntax issues.",
+      "If the string contains backslashes, the f-string prefix changes how escape sequences are interpreted (e.g., '\\n' vs. actual newline), potentially altering the string value.",
+      "Comments placed inside the string literal (e.g., via concatenation or multi-line strings) may be misinterpreted as code or removed during parsing after the fix.",
+      "In triple-quoted strings, adding 'f' may interfere with indentation processing if the string relies on dedent behavior that differs between raw and f-string handling.",
+      "If the string is part of a larger expression (e.g., concatenation with other strings or variables), the fix may break operator precedence or introduce unintended grouping.",
+      "When the string appears in a dictionary key or set literal, the rewritten f-string may raise a TypeError at runtime if the expression evaluates to an unhashable type.",
+      "If the string is used in a byte string context (e.g., b\"{x}\"), the fix is invalid and would produce a SyntaxError, though Ruff should avoid suggesting it in such cases.",
+      "The fix may inadvertently capture variables from an outer scope that were not intended to be used, especially in nested functions or comprehensions, changing closure behavior.",
+      "In f-strings, expressions are evaluated left-to-right; if the original string relied on brace literals for formatting (e.g., in a loop generating templates), evaluation order side effects could emerge.",
+      "If the string contains a '#' inside braces (e.g., \"{x#comment}\"), the f-string parser may interpret it as a comment, truncating the expression and causing a SyntaxError or incorrect evaluation.",
+      "When the string is passed to a function like gettext or logging that expects a format string with named placeholders, the f-string will evaluate the expressions immediately, bypassing the intended deferred formatting mechanism.",
+      "If the string is defined but never used (dead code), the fix still applies and may introduce unnecessary runtime overhead or NameErrors if variables are undefined."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.005971200000000001,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 4,
+    "fixed": 0,
+    "disputed": 10
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "String comment inside triple-quoted literal misparsed as code after f-string conversion",
+      "hazard": "Comments placed inside the string literal (e.g., via concatenation or multi-line strings) may be misinterpreted as code or removed during parsing after the fix.",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "NameError: name 'x' is not defined",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Left-to-right evaluation in f-string exposes side effects in original template",
+      "hazard": "In f-strings, expressions are evaluated left-to-right; if the original string relied on brace literals for formatting (e.g., in a loop generating templates), evaluation order side effects could emerge",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "KeyError: 'inc()'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "Mutable default argument captures f-string expression state across calls",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "x\nx\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Non-file context manager with write() but no close() misused in f-string logging",
+      "hazard": "context managers that are not files, objects with write() but no close()",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "LOG: Error: 500\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p005",
+      "title": "Generator expression in list comprehension consumed once after f-string rewrite",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "First use : ['Item {v}', 'Item {v}']\nSecond use: ['Item {v}', 'Item {v}']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Keyword-only argument default evaluated once, f-string captures stale value",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: f-string: expecting '}'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Float division rounding differs when f-string evaluates expression eagerly",
+      "hazard": "int/float/bool coercion, Decimal, division and rounding",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF027",
+            "severity": "warning",
+            "message": "Possible f-string without an `f` prefix",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Before fix: Result: 1/3\nAfter fix : esult: 1/\nBefore fix: Result: 2/3\nAfter fix : esult: 2/\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before fix: Result: 1/3\nAfter fix : esult: 1/\nBefore fix: Result: 2/3\nAfter fix : esult: 2/\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Class attribute shadowed by instance attribute, f-string binds to wrong scope",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "SyntaxError: f-string: expecting '}'",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Dictionary key with unhashable expression",
+      "hazard": "When the string appears in a dictionary key or set literal, the rewritten f-string may raise a TypeError at runtime if the expression evaluates to an unhashable type.",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF027",
+            "severity": "warning",
+            "message": "Possible f-string without an `f` prefix",
+            "span": [
+              2,
+              6
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "{'Key {x}': 'value'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "{'Key {x}': 'value'}\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Generator consumed once in list comprehension",
+      "hazard": "generators vs lists, iterators consumed once, lazy vs eager evaluation",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: ['Item 0', 'Item 0']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "gettext bypasses deferred formatting",
+      "hazard": "When the string is passed to a function like gettext or logging that expects a format string with named placeholders, the f-string will evaluate the expressions immediately, bypassing the intended def",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF027",
+            "severity": "warning",
+            "message": "Possible f-string without an `f` prefix",
+            "span": [
+              5,
+              24
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Translated: 'Hello {name}'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Translated: 'Hello {name}'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Closure captures outer variable incorrectly",
+      "hazard": "The fix may inadvertently capture variables from an outer scope that were not intended to be used, especially in nested functions or comprehensions, changing closure behavior.",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Value: 99\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Backslash escape sequence changed",
+      "hazard": "If the string contains backslashes, the f-string prefix changes how escape sequences are interpreted (e.g., '\\n' vs. actual newline), potentially altering the string value.",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "'Path: \\\\u{code}'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Dead code introduces NameError",
+      "hazard": "If the string is defined but never used (dead code), the fix still applies and may introduce unnecessary runtime overhead or NameErrors if variables are undefined.",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Dead code string repr: 'Value {x}'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Triple-quoted string dedent interference",
+      "hazard": "In triple-quoted strings, adding 'f' may interfere with indentation processing if the string relies on dedent behavior that differs between raw and f-string handling.",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p008",
+      "title": "Regex pattern with braces treated as f-string",
+      "hazard": "The string may be used in a context expecting a literal string with braces (e.g., regex, SQL, or templating), where adding 'f' would cause runtime errors due to undefined variable names or syntax issu",
+      "rule": "RUF027",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF027",
+            "severity": "warning",
+            "message": "Possible f-string without an `f` prefix",
+            "span": [
+              9,
+              12
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "Regex matches: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Regex matches: False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "runId": "2026-10-17T21-08-16-178Z-c9dh-ruff-PLW1507",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "PLW1507",
+    "fixKind": "unknown",
+    "docs": "# shallow-copy-environ (PLW1507)\n\nDerived from the **Pylint** linter.\n\nFix is always available.\n\n## What it does\nCheck for shallow `os.environ` copies.\n\n## Why is this bad?\n`os.environ` is not a `dict` object, but rather, a proxy object. As such, mutating a shallow\ncopy of `os.environ` will also mutate the original object.\n\nSee [BPO 15373] for more information.\n\n## Example\n```python\nimport copy\nimport os\n\nenv = copy.copy(os.environ)\n```\n\nUse instead:\n```python\nimport os\n\nenv = os.environ.copy()\n```\n\n## Fix safety\n\nThis rule's fix is marked as unsafe because replacing a shallow copy with a deep copy can lead\nto unintended side effects. If the program modifies the shallow copy at some point, changing it\nto a deep copy may prevent those modifications from affecting the original data, potentially\naltering the program's behavior.\n\n## References\n- [Python documentation: `copy` — Shallow and deep copy operations](https://docs.python.org/3/library/copy.html)\n- [Python documentation: `os.environ`](https://docs.python.org/3/library/os.html#os.environ)\n\n[BPO 15373]: https://bugs.python.org/issue15373\n"
+  },
+  "analysis": {
+    "summary": "Flags shallow copying of os.environ using copy.copy() due to mutation risks.",
+    "firingShapes": [
+      "import copy; import os; env = copy.copy(os.environ)",
+      "from copy import copy; import os; env = copy(os.environ)",
+      "import os; from copy import copy; x = copy(copy.deepcopy(y), os.environ)",
+      "import os; import copy; a = copy.copy(b); c = copy.copy(os.environ)",
+      "import os; import copy; def f(): return copy.copy(os.environ)",
+      "import os; import copy; class C: m = copy.copy(os.environ)",
+      "import os; import copy; if True: env = copy.copy(os.environ)",
+      "import os; import copy; while False: pass; env = copy.copy(os.environ)"
+    ],
+    "silentShapes": [
+      "import os; env = dict(os.environ)",
+      "import os; env = {k: v for k, v in os.environ.items()}",
+      "import os; env = os.environ.copy()",
+      "import copy; import os; x = copy.copy([1, 2, 3])",
+      "import os; env = os.environ"
+    ],
+    "fixDescription": "Replaces 'copy.copy(os.environ)' with 'os.environ.copy()' while preserving imports and surrounding context.",
+    "hazards": [
+      "Rewriting inside a function call argument like f(copy.copy(os.environ)) changes evaluation timing if os.environ.copy() has side effects (though it doesn't, the form differs).",
+      "If 'copy' is locally rebound (e.g., 'copy = lambda x: x'), the fix incorrectly removes the call to the local 'copy'.",
+      "In a comprehension like [copy.copy(os.environ) for _ in range(1)], the fix alters iteration behavior if os.environ.copy() is expensive or has side effects (it doesn't, but structurally differs).",
+      "When the copy occurs in a lambda default argument like lambda x=copy.copy(os.environ): x, the fix changes when the copy is evaluated (at definition vs call time).",
+      "If the code relies on the type of the copy being exactly copy._wrap type (not dict), switching to dict breaks isinstance checks against copy.copy's result type.",
+      "In a try/except block where copy.copy might raise TypeError (if os.environ were not copyable, though it is), the fix removes the exception handling path.",
+      "If os.environ is shadowed by a local variable before the copy, the fix still uses the global os.environ, breaking intended behavior.",
+      "The fix may disrupt formatting-dependent tooling (e.g., linters that rely on line length) by replacing a longer expression with a shorter one.",
+      "If the original code had a comment between 'copy.' and 'copy(os.environ)', the fix removes it during AST rewrite.",
+      "In an augmented assignment like x += copy.copy(os.environ), the fix changes the right-hand side evaluation, potentially altering side effects if os.environ.copy() had them (it doesn't, but the form is different).",
+      "When used in a context manager like with lock: copy.copy(os.environ), the fix does not affect the lock but changes the expression value, possibly breaking downstream logic expecting a copy proxy.",
+      "If the module defines a class named 'environ' in os, the fix incorrectly attributes the copy to that instead of the real os.environ (though unlikely, depends on imports)."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0035804999999999995,
+  "summary": {
+    "programs": 1,
+    "invalid": 0,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 1
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r2-p005",
+      "title": "Evaluation Order and Side Effects in Merged Expressions",
+      "hazard": "Evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "PLW1507",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "state: ['eval', 'copied a']\nresult name: a\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

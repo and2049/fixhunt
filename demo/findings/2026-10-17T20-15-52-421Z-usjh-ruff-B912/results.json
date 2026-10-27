@@ -1,0 +1,474 @@
+{
+  "runId": "2026-10-17T20-15-52-421Z-usjh-ruff-B912",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "B912",
+    "fixKind": "unknown",
+    "docs": "# map-without-explicit-strict (B912)\n\nDerived from the **flake8-bugbear** linter.\n\nFix is always available.\n\n## What it does\nChecks for `map` calls without an explicit `strict` parameter when called with two or more\niterables, or any starred argument.\n\nThis rule applies to Python 3.14 and later, where `map` accepts a `strict` keyword\nargument. For details, see: [What’s New in Python 3.14].\n\n## Why is this bad?\nBy default, if the iterables passed to `map` are of different lengths, the\nresulting iterator will be silently truncated to the length of the shortest\niterable. This can lead to subtle bugs.\n\nPass `strict=True` to raise a `ValueError` if the iterables are of\nnon-uniform length. Alternatively, if the iterables are deliberately of\ndifferent lengths, pass `strict=False` to make the intention explicit.\n\n## Example\n```python\nmap(f, a, b)\n```\n\nUse instead:\n```python\nmap(f, a, b, strict=True)\n```\n\n## Fix safety\nThis rule's fix is marked as unsafe. While adding `strict=False` preserves\nthe runtime behavior, it can obscure situations where the iterables are of\nunequal length. Ruff prefers to alert users so they can choose the intended\nbehavior themselves.\n\n## References\n- [Python documentation: `map`](https://docs.python.org/3/library/functions.html#map)\n- [What’s New in Python 3.14]\n\n[What's New in Python 3.14]: https://docs.python.org/dev/whatsnew/3.14.html\n"
+  },
+  "analysis": {
+    "summary": "Flags map() calls lacking an explicit 'strict' keyword argument when invoked with multiple iterables or starred arguments.",
+    "firingShapes": [
+      "map(func, a)",
+      "map(func, *args)",
+      "map(func, a, b)",
+      "map(lambda x: x+1, range(5), [0]*5)",
+      "map(str.upper, s1, s2, s3)",
+      "map(pow, bases, exponents)",
+      "map(add, *[list1, list2])",
+      "map(None, iter1, iter2)"
+    ],
+    "silentShapes": [
+      "map(func)",
+      "map(func, a, strict=True)",
+      "map(func, a, strict=False)",
+      "map(func, a, b, c, strict=None)",
+      "map(len)"
+    ],
+    "fixDescription": "Adds ', strict=True' as the final keyword argument to the map call, preserving all existing arguments and their order.",
+    "hazards": [
+      "If the original call already contains a '**kwargs' unpacking that might include 'strict', adding another 'strict' argument creates a duplicate keyword error.",
+      "If the map call is part of a larger expression where trailing commas affect parsing (e.g., inside a tuple literal), inserting ', strict=True' could alter grouping or create invalid syntax.",
+      "When the map call appears in a context where the argument list ends with a bare '*args' (no following comma), inserting ', strict=True' after it may be misinterpreted as part of the starred expression rather than a keyword argument.",
+      "If the function being mapped relies on side effects that occur during iteration, changing from implicit truncation to strict length checking could cause early termination via ValueError where previously the loop would have completed silently.",
+      "In code targeting Python versions <3.14, the added 'strict' argument will raise a TypeError at runtime since older map implementations do not accept this parameter.",
+      "If the map call is embedded within a lambda or comprehension where the argument list is constructed dynamically, the static insertion of 'strict=True' may not reflect the intended runtime behavior.",
+      "Comments placed between the last positional argument and the closing parenthesis (e.g., 'map(f, a, b  # comment)') risk being displaced or rendered invalid when the fix inserts ', strict=True' before the closing parenthesis.",
+      "When the map call uses positional-only parameters or appears in a stub file (.pyi), inserting 'strict=True' may violate type checker expectations or overload definitions.",
+      "If the iterables passed to map are actually the same object (e.g., map(f, x, x)), the strict check passes trivially, but the fix still adds noise without benefit.",
+      "In code that intentionally relies on zip-like truncation behavior (e.g., processing paired data where excess elements are ignorable), enforcing strict=True introduces unnecessary failures.",
+      "If the map call is written across multiple lines with inconsistent indentation, the autofix may insert ', strict=True' at an incorrect indentation level, breaking formatting rules.",
+      "When the map call is immediately followed by a method chain (e.g., map(f, a, b).filter(...)), inserting ', strict=True' before the closing parenthesis does not affect the chain, but if the chain starts on the same line, whitespace handling could become ambiguous."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0036300000000000004,
+  "summary": {
+    "programs": 16,
+    "invalid": 1,
+    "fired": 0,
+    "fixed": 0,
+    "disputed": 15
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "bytes vs str encoding",
+      "hazard": "Adding strict=True changes behavior when mapping over mismatched-length byte/str sequences due to encoding assumptions.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "error: AttributeError 'str' object has no attribute 'decode'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "star-imports and __all__",
+      "hazard": "map with *args triggers rule; if imported module has side effects in __all__, evaluation order matters.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "sum: 4\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "same object twice",
+      "hazard": "map(f, x, x) passes strict trivially, but fix adds noisy strict=True; no behavior change, but violates minimality.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "all equal? False\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "descriptor side effects",
+      "hazard": "Function mapped uses descriptor whose __get__ has side effects; strict=True may cause early exit before all accesses.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "access\naccess\nresults: [42, 42]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "side effects in function",
+      "hazard": "mapped function has side effects; strict=True causes ValueError on length mismatch, skipping remaining side effects.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: side() takes 1 positional argument but 2 were given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "keyword-only and defaults",
+      "hazard": "map with function using keyword-only args; rule triggers on *args, but fix may interfere if defaults are mutable.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "lists: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "exceptions and finally",
+      "hazard": "strict=True raises ValueError in map; alters control flow, skipping finally or else blocks in caller.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p008",
+      "title": "dict ordering and duplicate keys",
+      "hazard": "map over dict items with duplicate keys via __eq__ override; strict=True may fail before all duplicates seen.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "error: AttributeError 'tuple' object has no attribute 'v'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "File Modes and Truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError write() argument must be str, not bytes\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "**kwargs Unpacking Conflict",
+      "hazard": "If the original call already contains a '**kwargs' unpacking that might include 'strict', adding another 'strict' argument creates a duplicate keyword error.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError func() takes 2 positional arguments but 3 were given\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p003",
+      "title": "Keyword-Only and Defaults",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError kwonly_func() takes 1 positional argument but 2 were given\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p004",
+      "title": "Truthiness and Identity",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "[True, False]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Side Effects in Mapped Function",
+      "hazard": "If the function being mapped relies on side effects that occur during iteration, changing from implicit truncation to strict length checking could cause early termination via ValueError where previous",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: side_effect_func() takes 1 positional argument but 2 were given",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Descriptor Side Effects",
+      "hazard": "class attributes vs instance attributes, descriptors, properties with side effects",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "results: [100, 101]\nDesc.counter: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Lambda/Comprehension Embedding",
+      "hazard": "If the map call is embedded within a lambda or comprehension where the argument list is constructed dynamically, the static insertion of 'strict=True' may not reflect the intended runtime behavior.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: []\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Intentional Truncation Reliance",
+      "hazard": "In code that intentionally relies on zip-like truncation behavior (e.g., processing paired data where excess elements are ignorable), enforcing strict=True introduces unnecessary failures.",
+      "rule": "B912",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "results: [('a', 11), ('b', 22), ('c', 33)]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

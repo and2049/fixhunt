@@ -1,0 +1,32 @@
+{
+  "summary": "The rule flags arrow functions with a block body containing only a single return statement.",
+  "firingShapes": [
+    "const f = () => { return x; };",
+    "let g = (a) => { return a + 1; };",
+    "var h = (x, y) => { return x * y; };",
+    "const i = () => { return { a: 1 }; };",
+    "const j = () => { return [1, 2]; };",
+    "const k = () => { return /pattern/g; };",
+    "const l = m => { return m.prop; };",
+    "function outer() { return () => { return 42; }; }"
+  ],
+  "silentShapes": [
+    "const f = () => { \"use strict\"; return x; };",
+    "const g = () => { /* comment */ return x; };",
+    "const h = () => { return; };",
+    "const i = () => { if (true) return x; };",
+    "const j = () => { try { return x; } finally {} };"
+  ],
+  "fixDescription": "Replace the block body with a concise arrow body by removing braces and the return keyword, wrapping the returned expression in parentheses if needed to avoid parsing ambiguities (e.g., object literals become ({ ... }) and comma-separated expressions remain grouped).",
+  "hazards": [
+    "Rewriting `() => { return expr, expr; }` as `() => (expr, expr)` changes evaluation order if the comma expression relies on left-to-right side effects being visible before the fix (though value is same, timing of side effects may differ in debuggers or proxies).",
+    "If the returned expression is an object literal like `{ a: 1 }`, omitting parentheses during rewrite would cause a parse error (`{` interpreted as block start), but the fix adds them—however, if the original code relied on automatic semicolon insertion after the block, adding parentheses could alter ASI boundaries in edge cases involving newlines.",
+    "When the arrow function is used as a constructor via `new`, the concise form may incorrectly return the wrapped expression instead of the newly created instance (though arrow functions aren’t constructible, this is more theoretical; if mistakenly called via `Reflect.construct`, behavior diverges).",
+    "If the return expression contains a `yield` (in generator context), rewriting breaks because arrow functions cannot be generators, but the rule doesn’t fire on generators anyway—still, if misapplied due to incorrect parsing, it would invalidate syntax.",
+    "In non-strict mode, if the function body contained a `with` statement (invalid in strict), but the rule doesn’t fire on multi-statement bodies, so not applicable—however, if a single `return with (x) {}` existed, the fix would preserve it, but `with` is deprecated and rarely used.",
+    "If the returned expression is a class declaration like `class C {}`, rewriting as `() => class C {}` is fine, but if the original relied on the block creating a lexical scope for `let`/`const` inside (which it doesn’t—returns don’t create scopes), no issue arises.",
+    "If the arrow function’s body had a trailing comment after `return` (e.g., `return x; // note`), the rule stays silent per documentation, so no fix is applied—thus no hazard from comment loss in fired cases.",
+    "If the function is part of a larger expression like `x = () => { return y }()`, the fix changes precedence grouping; however, since the arrow function call is immediate, the value is unchanged, but if the return expression were itself a function call with side effects, the timing of evaluation relative to outer expressions remains identical due to call semantics.",
+    "In TypeScript or JSX contexts, if the arrow function returns a JSX element like `<div />`, rewriting as `() => (<div />)` is valid, but if the original block had a comment or directive (excluded), no issue—however, tools that rely on block-body structure for formatting may reformat incorrectly post-fix."
+  ]
+}

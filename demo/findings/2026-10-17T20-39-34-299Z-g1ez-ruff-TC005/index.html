@@ -1,0 +1,409 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff TC005 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff TC005 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-39-34-299Z-g1ez-ruff-TC005 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 12 fixed, 6 oracle-backed finding(s) · model cost $0.0693</p>
+<div class="card"><b>Rule analysis</b><p>Flags empty if TYPE_CHECKING blocks containing only pass statements.</p><p class="mut">Fix: Removes the entire if TYPE_CHECKING: block when its body consists solely of a pass statement, preserving surrounding indentation and code structure.</p><details><summary>8 hazards</summary><ul><li>Removing the block may change line numbers, affecting debuggers or stack traces that rely on exact source locations.</li><li>If the block contains a trailing comment after pass, the comment will be deleted along with the block.</li><li>In nested contexts like class or function definitions, removing the block alters the indentation depth of subsequent lines, potentially breaking syntax if mixed tabs/spaces exist.</li><li>When the block follows a try/except/finally clause, its removal can change the visual grouping and lead to misinterpretation of exception handling scope.</li><li>If the block is the only statement in a suite (e.g., a lambda or one-liner if), deleting it may result in an empty suite, causing a syntax error.</li><li>In async functions, removing the block could affect the perceived coroutine structure if tools inspect raw source for await placement context.</li><li>When the block is adjacent to a multi-line statement (e.g., with implicit line continuation), its removal may alter the boundary detection for the continued line.</li><li>If the block is used as a placeholder for future type annotations (common in stubs), removing it deletes intentional design intent documented via comments nearby.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p002"><b>r1-p002</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the `if TYPE_CHECKING:` block without ensuring `TYPE_CHECKING` is imported from `typing`, turning a runtime `NameError` into silent success. In real code that omits the import (common when the block is left empty by mistake), this changes observable behavior from a crash to no error, which is a silent wrong result.">judge: real · high</span> Nested class/function definition with mixed tabs/spaces indentation<p class="mut">The fix removes the `if TYPE_CHECKING:` block without ensuring `TYPE_CHECKING` is imported from `typing`, turning a runtime `NameError` into silent success. In real code that omits the import (common when the block is left empty by mistake), this changes observable behavior from a crash to no error, which is a silent wrong result.</p>
+<h2>Minimized program (9→6 lines)</h2><pre>def outer():
+	if True:
+		pass
+	if TYPE_CHECKING:
+		pass
+outer()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:39:42.056783730 -0400
++++ fixed.py	2026-10-17 16:39:42.439800691 -0400
+@@ -3,7 +3,5 @@
+ 		x = 1
+ 	else:
+ 		pass
+<span class="del">-	if TYPE_CHECKING:</span>
+<span class="del">-		pass</span>
+ 	print(x)  # uses space indent; mixing with tab above causes IndentationError if block removed incorrectly
+ outer()
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+1
+exit 1 → 0
+stderr before: NameError: name &#39;TYPE_CHECKING&#39; is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/28868">astral-sh/ruff/issues/28868</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15681">astral-sh/ruff/issues/15681</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/pull/16669">astral-sh/ruff/pull/16669</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15526">astral-sh/ruff/issues/15526</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/6236">astral-sh/ruff/issues/6236</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/11245">astral-sh/ruff/issues/11245</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/24713">astral-sh/ruff/issues/24713</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9197">astral-sh/ruff/issues/9197</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9298">astral-sh/ruff/issues/9298</a> · <a href="reports/r1-p002.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p003"><b>r1-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the `if TYPE_CHECKING:` block without ensuring `TYPE_CHECKING` is imported from `typing`, causing a `NameError` at runtime in the original code that disappears after the fix. This changes observable behavior from a crash to silent execution, which is a silent wrong result in plausible code where the import is missing.">judge: real · high</span> Mutable default argument aliased after rewrite<p class="mut">The fix removes the `if TYPE_CHECKING:` block without ensuring `TYPE_CHECKING` is imported from `typing`, causing a `NameError` at runtime in the original code that disappears after the fix. This changes observable behavior from a crash to silent execution, which is a silent wrong result in plausible code where the import is missing.</p>
+<h2>Minimized program (9→6 lines)</h2><pre>def f(a=None):
+    if a is None:
+        a = []
+    if TYPE_CHECKING:
+        pass
+print(f())
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:39:42.534804899 -0400
++++ fixed.py	2026-10-17 16:39:42.912821638 -0400
+@@ -1,8 +1,6 @@
+ def f(a=None):
+     if a is None:
+         a = []
+<span class="del">-    if TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     a.append(1)
+     return a
+ print(f())
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+[1]
+[1]
+exit 1 → 0
+stderr before: NameError: name &#39;TYPE_CHECKING&#39; is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/28868">astral-sh/ruff/issues/28868</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15681">astral-sh/ruff/issues/15681</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/pull/16669">astral-sh/ruff/pull/16669</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/11368">astral-sh/ruff/issues/11368</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15526">astral-sh/ruff/issues/15526</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/16176">astral-sh/ruff/issues/16176</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9197">astral-sh/ruff/issues/9197</a> · <a href="reports/r1-p003.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p004"><b>r1-p004</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the entire `if TYPE_CHECKING:` block including the `pass` statement, but `TYPE_CHECKING` is not imported from `typing`. Without the import, the original code raises a `NameError` at runtime, while the fixed code runs silently. A user applying this fix to code missing the import would change a crashing program into one that runs with no error, which is a silent behavior change in plausible code.">judge: real · high</span> Type annotation evaluated at runtime with typing-only import<p class="mut">The fix removes the entire `if TYPE_CHECKING:` block including the `pass` statement, but `TYPE_CHECKING` is not imported from `typing`. Without the import, the original code raises a `NameError` at runtime, while the fixed code runs silently. A user applying this fix to code missing the import would change a crashing program into one that runs with no error, which is a silent behavior change in plausible code.</p>
+<h2>Minimized program (5→2 lines)</h2><pre>if TYPE_CHECKING:
+    pass
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:39:43.012826066 -0400
++++ fixed.py	2026-10-17 16:39:43.396843045 -0400
+@@ -1,5 +1,3 @@
+ from typing import List
+<span class="del">-if TYPE_CHECKING:</span>
+<span class="del">-    pass</span>
+ x: List[int] = []
+ print(type(x).__name__)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+list
+exit 1 → 0
+stderr before: NameError: name &#39;TYPE_CHECKING&#39; is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/28868">astral-sh/ruff/issues/28868</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15681">astral-sh/ruff/issues/15681</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2214">astral-sh/ruff/issues/2214</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/17555">astral-sh/ruff/issues/17555</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9472">astral-sh/ruff/issues/9472</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13929">astral-sh/ruff/issues/13929</a> · <a href="reports/r1-p004.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p005"><b>r1-p005</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the `if TYPE_CHECKING:` guard without importing `TYPE_CHECKING` from `typing`, turning a NameError at runtime into a silently executing no-op. In real code, TYPE_CHECKING blocks are only used when the constant is imported, so removing the guard without adding the import changes behavior from crash to success.">judge: real · high</span> Generator vs list: iterator consumed once<p class="mut">The fix removes the `if TYPE_CHECKING:` guard without importing `TYPE_CHECKING` from `typing`, turning a NameError at runtime into a silently executing no-op. In real code, TYPE_CHECKING blocks are only used when the constant is imported, so removing the guard without adding the import changes behavior from crash to success.</p>
+<h2>Minimized program (8→4 lines)</h2><pre>def gen():
+    if TYPE_CHECKING:
+        pass
+it = gen()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:39:43.505847865 -0400
++++ fixed.py	2026-10-17 16:39:43.895865110 -0400
+@@ -1,6 +1,4 @@
+ def gen():
+<span class="del">-    if TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     yield 1
+     yield 2
+ it = gen()
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+1
+[2]
+exit 1 → 0
+stderr before: NameError: name &#39;TYPE_CHECKING&#39; is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/28868">astral-sh/ruff/issues/28868</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15681">astral-sh/ruff/issues/15681</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/13929">astral-sh/ruff/issues/13929</a> · <a href="reports/r1-p005.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p007"><b>r1-p007</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix removes the entire `if TYPE_CHECKING:` block including the import guard, but `TYPE_CHECKING` is not defined at runtime unless imported from `typing`. The original code crashes with a `NameError`, while the fixed code runs silently, changing a loud failure into silent success. This is a real behavior change in plausible code that uses the pattern without the required import.">judge: real · high</span> Evaluation order and side effects in expression merging<p class="mut">The fix removes the entire `if TYPE_CHECKING:` block including the import guard, but `TYPE_CHECKING` is not defined at runtime unless imported from `typing`. The original code crashes with a `NameError`, while the fixed code runs silently, changing a loud failure into silent success. This is a real behavior change in plausible code that uses the pattern without the required import.</p>
+<h2>Minimized program (5→2 lines)</h2><pre>if TYPE_CHECKING:
+    pass
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:39:44.154876551 -0400
++++ fixed.py	2026-10-17 16:39:44.537893460 -0400
+@@ -1,5 +1,3 @@
+ side = 0
+<span class="del">-if TYPE_CHECKING:</span>
+<span class="del">-    pass</span>
+ side += 1
+ print(side)
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+1
+exit 1 → 0
+stderr before: NameError: name &#39;TYPE_CHECKING&#39; is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/28868">astral-sh/ruff/issues/28868</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15681">astral-sh/ruff/issues/15681</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/1785">astral-sh/ruff/issues/1785</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/2214">astral-sh/ruff/issues/2214</a> · <a href="reports/r1-p007.md">evidence sheet</a></p>
+</div><div class="card" id="r1-p008"><b>r1-p008</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag " title="The original program fails with a NameError because TYPE_CHECKING is used without being imported from typing, making the before-run already broken. The fix removes the undefined name and leaves a no-op pass statement, which changes the exit code from 1 to 0 but only because the original code was invalid.">judge: program-bug · low</span> Keyword-only, positional-only, *args/**kwargs forwarding with defaults<p class="mut">The original program fails with a NameError because TYPE_CHECKING is used without being imported from typing, making the before-run already broken. The fix removes the undefined name and leaves a no-op pass statement, which changes the exit code from 1 to 0 but only because the original code was invalid.</p>
+<h2>Minimized program (5→4 lines)</h2><pre>def f(pos, /, kw=None, *args, **kwargs):
+    if TYPE_CHECKING:
+        pass
+print(f(1, kw=2, extra=3))
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 16:39:44.636897831 -0400
++++ fixed.py	2026-10-17 16:39:45.025915003 -0400
+@@ -1,5 +1,3 @@
+ def f(pos, /, kw=None, *args, **kwargs):
+<span class="del">-    if TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     return pos, kw, args, kwargs
+ print(f(1, kw=2, extra=3))
+</pre>
+<h2>Observed</h2><pre>stdout before:
+
+stdout after:
+(1, 2, (), {&#39;extra&#39;: 3})
+exit 1 → 0
+stderr before: NameError: name &#39;TYPE_CHECKING&#39; is not defined
+stderr after: (none)</pre>
+<p>Upstream: <span class="tag">duplicate</span><a href="https://github.com/astral-sh/ruff/issues/28868">astral-sh/ruff/issues/28868</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/15681">astral-sh/ruff/issues/15681</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/pull/16669">astral-sh/ruff/pull/16669</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/21921">astral-sh/ruff/issues/21921</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/14538">astral-sh/ruff/issues/14538</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/11103">astral-sh/ruff/issues/11103</a> <span class="tag">related</span><a href="https://github.com/astral-sh/ruff/issues/9573">astral-sh/ruff/issues/9573</a> · <a href="reports/r1-p008.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Context manager without close() - object with write() but no __exit__</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Nested class/function definition with mixed tabs/spaces indentation</td><td class="mut">In nested contexts like class or function definitions, removing the block alters the inden</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Mutable default argument aliased after rewrite</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Type annotation evaluated at runtime with typing-only import</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Generator vs list: iterator consumed once</td><td class="mut">generators vs lists, iterators consumed once, lazy vs eager evaluation</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">invalid</span></td><td>Multi-line statement with implicit line continuation affected by block removal</td><td class="mut">When the block is adjacent to a multi-line statement (e.g., with implicit line continuatio</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Evaluation order and side effects in expression merging</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>Keyword-only, positional-only, *args/**kwargs forwarding with defaults</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Lambda with TYPE_CHECKING block</td><td class="mut">If the block is the only statement in a suite (e.g., a lambda or one-liner if), deleting i</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>StringIO context manager with write but no close</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Bytes vs str in binary file write after TYPE_CHECKING block</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Exception in finally clause after TYPE_CHECKING block deletion</td><td class="mut">exceptions raised inside the rewritten code, finally/else clauses, exception chaining</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Partial write in binary mode with truncated data</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Evaluation order: side effect in TYPE_CHECKING condition affects later assignment</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Placeholder for future type annotation with comment</td><td class="mut">If the block is used as a placeholder for future type annotations (common in stubs), remov</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">invalid</span></td><td>Dict ordering and duplicate keys after TYPE_CHECKING block removal</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Context manager without close() - object with write() but no __exit__</summary><pre>import io
+class Writer:
+    def __init__(self):
+        self.buf = &#39;&#39;
+    def write(self, s):
+        self.buf += s
+w = Writer()
+with w:
+    if TYPE_CHECKING:
+        pass
+print(w.buf)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:41.450756856 -0400
++++ fixed.py	2026-10-17 16:39:41.845774376 -0400
+@@ -6,6 +6,5 @@
+         self.buf += s
+ w = Writer()
+ with w:
+<span class="del">-    if TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+<span class="add">+    pass</span>
+ print(w.buf)
+</pre></details><details id="r1-p002"><summary>r1-p002 — Nested class/function definition with mixed tabs/spaces indentation</summary><pre>def outer():
+	if True:
+		x = 1
+	else:
+		pass
+	if TYPE_CHECKING:
+		pass
+	print(x)  # uses space indent; mixing with tab above causes IndentationError if block removed incorrectly
+outer()
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:42.056783730 -0400
++++ fixed.py	2026-10-17 16:39:42.439800691 -0400
+@@ -3,7 +3,5 @@
+ 		x = 1
+ 	else:
+ 		pass
+<span class="del">-	if TYPE_CHECKING:</span>
+<span class="del">-		pass</span>
+ 	print(x)  # uses space indent; mixing with tab above causes IndentationError if block removed incorrectly
+ outer()
+</pre></details><details id="r1-p003"><summary>r1-p003 — Mutable default argument aliased after rewrite</summary><pre>def f(a=None):
+    if a is None:
+        a = []
+    if TYPE_CHECKING:
+        pass
+    a.append(1)
+    return a
+print(f())
+print(f())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:42.534804899 -0400
++++ fixed.py	2026-10-17 16:39:42.912821638 -0400
+@@ -1,8 +1,6 @@
+ def f(a=None):
+     if a is None:
+         a = []
+<span class="del">-    if TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     a.append(1)
+     return a
+ print(f())
+</pre></details><details id="r1-p004"><summary>r1-p004 — Type annotation evaluated at runtime with typing-only import</summary><pre>from typing import List
+if TYPE_CHECKING:
+    pass
+x: List[int] = []
+print(type(x).__name__)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:43.012826066 -0400
++++ fixed.py	2026-10-17 16:39:43.396843045 -0400
+@@ -1,5 +1,3 @@
+ from typing import List
+<span class="del">-if TYPE_CHECKING:</span>
+<span class="del">-    pass</span>
+ x: List[int] = []
+ print(type(x).__name__)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Generator vs list: iterator consumed once</summary><pre>def gen():
+    if TYPE_CHECKING:
+        pass
+    yield 1
+    yield 2
+it = gen()
+print(next(it))
+print(list(it))  # second consumption: should be [2] if gen() is lazy; if broken, may be [] or error
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:43.505847865 -0400
++++ fixed.py	2026-10-17 16:39:43.895865110 -0400
+@@ -1,6 +1,4 @@
+ def gen():
+<span class="del">-    if TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     yield 1
+     yield 2
+ it = gen()
+</pre></details><details id="r1-p006"><summary>r1-p006 — Multi-line statement with implicit line continuation affected by block removal</summary><pre>total = (
+    1 +
+    2
+    if TYPE_CHECKING:
+        pass
+    + 3
+)
+print(total)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Evaluation order and side effects in expression merging</summary><pre>side = 0
+if TYPE_CHECKING:
+    pass
+side += 1
+print(side)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:44.154876551 -0400
++++ fixed.py	2026-10-17 16:39:44.537893460 -0400
+@@ -1,5 +1,3 @@
+ side = 0
+<span class="del">-if TYPE_CHECKING:</span>
+<span class="del">-    pass</span>
+ side += 1
+ print(side)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Keyword-only, positional-only, *args/**kwargs forwarding with defaults</summary><pre>def f(pos, /, kw=None, *args, **kwargs):
+    if TYPE_CHECKING:
+        pass
+    return pos, kw, args, kwargs
+print(f(1, kw=2, extra=3))
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:44.636897831 -0400
++++ fixed.py	2026-10-17 16:39:45.025915003 -0400
+@@ -1,5 +1,3 @@
+ def f(pos, /, kw=None, *args, **kwargs):
+<span class="del">-    if TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     return pos, kw, args, kwargs
+ print(f(1, kw=2, extra=3))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Lambda with TYPE_CHECKING block</summary><pre>import typing
+f = lambda: [] if typing.TYPE_CHECKING else [print(1)]
+try:
+    f()
+except SyntaxError as e:
+    print(f&#39;SyntaxError: {e}&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — StringIO context manager with write but no close</summary><pre>import io, typing
+buf = io.StringIO()
+with buf:
+    if typing.TYPE_CHECKING:
+        pass
+    buf.write(&#39;hello&#39;)
+print(buf.getvalue())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:49.486111068 -0400
++++ fixed.py	2026-10-17 16:39:49.873128023 -0400
+@@ -1,7 +1,5 @@
+ import io, typing
+ buf = io.StringIO()
+ with buf:
+<span class="del">-    if typing.TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     buf.write(&#39;hello&#39;)
+ print(buf.getvalue())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Bytes vs str in binary file write after TYPE_CHECKING block</summary><pre>import typing
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    if typing.TYPE_CHECKING:
+        pass
+    f.write(b&#39;hello&#39; if not typing.TYPE_CHECKING else &#39;world&#39;)
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;test.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:50.096137786 -0400
++++ fixed.py	2026-10-17 16:39:50.276145660 -0400
+@@ -1,7 +1,5 @@
+ import typing
+ with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+<span class="del">-    if typing.TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     f.write(b&#39;hello&#39; if not typing.TYPE_CHECKING else &#39;world&#39;)
+ with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+     print(f.read())
+</pre></details><details id="r2-p004"><summary>r2-p004 — Exception in finally clause after TYPE_CHECKING block deletion</summary><pre>import typing
+try:
+    if typing.TYPE_CHECKING:
+        pass
+    raise ValueError(&#39;bad&#39;)
+except ValueError as e:
+    print(f&#39;Caught: {e}&#39;)
+finally:
+    print(&#39;finally runs&#39;)
+    if False:
+        raise RuntimeError(&#39;should not happen&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:50.384150384 -0400
++++ fixed.py	2026-10-17 16:39:50.563158215 -0400
+@@ -1,7 +1,5 @@
+ import typing
+ try:
+<span class="del">-    if typing.TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     raise ValueError(&#39;bad&#39;)
+ except ValueError as e:
+     print(f&#39;Caught: {e}&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Partial write in binary mode with truncated data</summary><pre>import typing
+with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    if typing.TYPE_CHECKING:
+        pass
+    f.write(b&#39;12345&#39;)
+    f.seek(2)
+    f.write(b&#39;99&#39;)
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;test.bin&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:50.671162939 -0400
++++ fixed.py	2026-10-17 16:39:50.850170769 -0400
+@@ -1,7 +1,5 @@
+ import typing
+ with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+<span class="del">-    if typing.TYPE_CHECKING:</span>
+<span class="del">-        pass</span>
+     f.write(b&#39;12345&#39;)
+     f.seek(2)
+     f.write(b&#39;99&#39;)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Evaluation order: side effect in TYPE_CHECKING condition affects later assignment</summary><pre>import typing
+counter = 0
+def inc():
+    global counter
+    counter += 1
+    return counter
+if typing.TYPE_CHECKING and inc():
+    x = 1
+else:
+    x = 2
+print(f&#39;x={x}, counter={counter}&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Placeholder for future type annotation with comment</summary><pre>import typing
+# TODO: Add proper type for config when module stabilizes
+if typing.TYPE_CHECKING:
+    pass
+config = {}  # runtime dict, will be typed later
+print(f&#39;config={config}&#39;)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:39:51.109182092 -0400
++++ fixed.py	2026-10-17 16:39:51.288189910 -0400
+@@ -1,6 +1,4 @@
+ import typing
+ # TODO: Add proper type for config when module stabilizes
+<span class="del">-if typing.TYPE_CHECKING:</span>
+<span class="del">-    pass</span>
+ config = {}  # runtime dict, will be typed later
+ print(f&#39;config={config}&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Dict ordering and duplicate keys after TYPE_CHECKING block removal</summary><pre>import typing
+d = {}
+if typing.TYPE_CHECKING:
+    pass
+d[&#39;a&#39;] = 1
+d[&#39;b&#39;] = 2
+d[&#39;a&#39;] = 3  # duplicate key
+for k, v in d.items():
+    print(f&#39;{k}:{v}&#39;, end=&#39; &#39;)}
+print()
+</pre></details></body></html>

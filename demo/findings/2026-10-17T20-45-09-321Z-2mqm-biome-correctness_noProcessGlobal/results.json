@@ -1,0 +1,476 @@
+{
+  "runId": "2026-10-17T20-45-09-321Z-2mqm-biome-correctness_noProcessGlobal",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "correctness/noProcessGlobal",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noProcessGlobal\n- Fix: safe\n- Default severity: info\n- Available from version: 2.0.0\n- Diagnostic category: lint/correctness/noProcessGlobal\n\n\nDescription\n\n Disallow the use of `process` global.\n\n Node.js and Deno expose `process` global but they are hard to statically analyze by tools,\n so code should not assume they are available. Instead, `import process from \"node:process\"`.\n\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n const foo = process.env.FOO;\n ```\n\nValid\n\n ```js\n import process from \"node:process\";\n\n const foo = process.env.FOO;\n ```\n\n The rule is not able to detect cases where the global object is aliased:\n\n ```js\n const foo = globalThis;\n const bar = foo.process;\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags any direct reference to the `process` global variable.",
+    "firingShapes": [
+      "const x = process;",
+      "console.log(process.version);",
+      "if (process.browser) {}",
+      "return process.exit(0);",
+      "delete process.env.TEST;",
+      "process.on('exit', fn);",
+      "[...process.argv];",
+      "({a} = process);"
+    ],
+    "silentShapes": [
+      "import process from 'node:process'; console.log(process);",
+      "const p = globalThis.process;",
+      "var process = {};",
+      "function f(process) { return process; }",
+      "with ({process}) { console.log(process); }"
+    ],
+    "fixDescription": "Replaces every occurrence of the identifier `process` with an imported binding by adding `import process from 'node:process';` at the top of the file (if not already present) and rewriting the reference to use that imported binding.",
+    "hazards": [
+      "Replacing `process` in a catch clause like `catch (process)` would rename the exception parameter, altering what is caught.",
+      "If a local variable named `process` is declared later in the same scope, the import would hoist above it and cause the local variable to shadow the import instead of the global, changing runtime behavior.",
+      "When `process` is used as a label (e.g., `process: break process;`), the rewrite would break syntax because labels cannot be replaced with imported identifiers.",
+      "In indirect eval calls such as `eval('process.env')`, the string is not rewritten, so the eval would still resolve to the global `process` if it exists, diverging from the direct-reference behavior.",
+      "If the file already contains an import named `process` from a different source (e.g., `import process from './local-process'`), adding another import would cause a duplicate identifier error.",
+      "When `process` is accessed via destructuring with a default value like `{process = fallback} = obj`, the rewrite would fail to produce valid syntax.",
+      "Comments attached to the `process` token (e.g., `process/* TODO */.env`) would be lost because the autofix replaces the entire token without preserving trailing or inline comments.",
+      "In non-ESM environments where `import` statements are not supported (e.g., CommonJS without `type: module`), inserting the import would cause a parse error or runtime failure."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0024876000000000004,
+  "summary": {
+    "programs": 13,
+    "invalid": 1,
+    "fired": 6,
+    "fixed": 6,
+    "disputed": 6
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Label usage breaks syntax when replaced",
+      "hazard": "When `process` is used as a label (e.g., `process: break process;`), the rewrite would break syntax because labels cannot be replaced with imported identifiers.",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "inside label block\nafter label\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Temporal dead zone after hoisting/reordering",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'process' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Var hoisting and redeclaration inside loops",
+      "hazard": "var hoisting and re-declaration inside loops or after use",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "undef\nloop0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Catch clause parameter renamed alters exception handling",
+      "hazard": "Replacing `process` in a catch clause like `catch (process)` would rename the exception parameter, altering what is caught.",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "caught: test\nafter catch\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p006",
+      "title": "Local variable later shadows imported binding",
+      "hazard": "If a local variable named `process` is declared later in the same scope, the import would hoist above it and cause the local variable to shadow the import instead of the global, changing runtime behav",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "ReferenceError: Cannot access 'process' before initialization",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p007",
+      "title": "Inline comments attached to token are lost",
+      "hazard": "Comments attached to the `process` token (e.g., `process/* TODO */.env`) would be lost because the autofix replaces the entire token without preserving trailing or inline comments.",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noProcessGlobal",
+            "severity": "info",
+            "message": "Usage of the `process` global is discouraged.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "v26.8.1\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "v26.8.1\ndone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:45:18.826564821 -0400\n+++ fixed.js\t2026-10-17 16:45:19.131573203 -0400\n@@ -1,2 +1,3 @@\n+import process from \"node:process\";\n console.log(process/* version */.version);\n console.log('done');\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "Function declarations inside blocks/switch/labeled statements",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noProcessGlobal",
+            "severity": "info",
+            "message": "Usage of the `process` global is discouraged.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "func\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "func\nobject\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:45:19.316578284 -0400\n+++ fixed.js\t2026-10-17 16:45:19.596585973 -0400\n@@ -1,3 +1,4 @@\n+import process from \"node:process\";\n switch (1) {\n   case 1:\n     function process() { return 'func'; }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Class field referencing process",
+      "hazard": "class fields, static blocks, private names, super calls",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noProcessGlobal",
+            "severity": "info",
+            "message": "Usage of the `process` global is discouraged.",
+            "span": null
+          },
+          {
+            "rule": "correctness/noProcessGlobal",
+            "severity": "info",
+            "message": "Usage of the `process` global is discouraged.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "same\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "same\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:45:23.981706046 -0400\n+++ fixed.js\t2026-10-17 16:45:24.254713496 -0400\n@@ -1,3 +1,4 @@\n+import process from \"node:process\";\n class C {\n   static #p = process;\n   static {\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Inline comment on process token",
+      "hazard": "Comments attached to the `process` token (e.g., `process/* TODO */.env`) would be lost because the autofix replaces the entire token without preserving trailing or inline comments.",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noProcessGlobal",
+            "severity": "info",
+            "message": "Usage of the `process` global is discouraged.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "unset\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "unset\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:45:24.428718244 -0400\n+++ fixed.js\t2026-10-17 16:45:24.695725530 -0400\n@@ -1 +1,2 @@\n+import process from \"node:process\";\n console.log(process/* TODO */.env.NODE_ENV ?? 'unset');\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Function declaration in switch case",
+      "hazard": "function declarations inside blocks, switch cases, labeled statements",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noProcessGlobal",
+            "severity": "info",
+            "message": "Usage of the `process` global is discouraged.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:45:24.882730632 -0400\n+++ fixed.js\t2026-10-17 16:45:25.153738022 -0400\n@@ -1,3 +1,4 @@\n+import process from \"node:process\";\n switch (1) {\n   case 1:\n     function f() { return process.pid; }\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Local variable process declared after use",
+      "hazard": "If a local variable named `process` is declared later in the same scope, the import would hoist above it and cause the local variable to shadow the import instead of the global, changing runtime behav",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "undefined\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "CommonJS environment without ES modules",
+      "hazard": "In non-ESM environments where `import` statements are not supported (e.g., CommonJS without `type: module`), inserting the import would cause a parse error or runtime failure.",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "correctness/noProcessGlobal",
+            "severity": "info",
+            "message": "Usage of the `process` global is discouraged.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 16:45:25.570749386 -0400\n+++ fixed.js\t2026-10-17 16:45:25.837756662 -0400\n@@ -1 +1,2 @@\n+import process from \"node:process\";\n console.log(process.pid);\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "Strict mode function using process",
+      "hazard": "strict vs sloppy mode semantics",
+      "rule": "correctness/noProcessGlobal",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "error": "generated program is not deterministic"
+    }
+  ]
+}

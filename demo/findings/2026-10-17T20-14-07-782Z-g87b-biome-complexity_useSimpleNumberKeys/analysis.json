@@ -1,0 +1,35 @@
+{
+  "summary": "Flags numeric literals used as object property keys when they contain non-decimal digits, underscores, octal/hex/binary prefixes, BigInt suffixes, or floating-point numbers with leading decimal points.",
+  "firingShapes": [
+    "({ 0xFF: 'value' })",
+    "({ 0b1010: true })",
+    "({ 0o755: null })",
+    "({ 1_000: 'test' })",
+    "({ 1.5_2: 'invalid' })",
+    "({ 123n: 'bigint' })",
+    "({ .5: 'decimal' })",
+    "({ 1e3_0: 'scientific' })"
+  ],
+  "silentShapes": [
+    "({ 0: 'zero' })",
+    "({ 42: 'answer' })",
+    "({ 3.14: 'pi' })",
+    "({ 2.5e8: 'large' })",
+    "({ -5: 'negative' })"
+  ],
+  "fixDescription": "Rewrites the numeric literal key to its base-10 integer or floating-point equivalent by removing underscores, converting non-decimal prefixes (0x, 0b, 0o) to decimal values, stripping BigInt suffix (n), and preserving the numeric value while ensuring valid syntax.",
+  "hazards": [
+    "Rewriting 0xFF as 255 changes behavior if the key was relied upon for hexadecimal representation in serialization or debugging contexts.",
+    "Converting 0b1010 to 10 alters semantics if the binary form was used as a flag or bitmask identifier in state machines.",
+    "Replacing 0o755 with 493 breaks code that depends on octal notation for file permission-like semantics in configuration objects.",
+    "Removing underscores from 1_000 to produce 1000 may break parsing if the underscore was part of a larger token or macro (though rare in JS, possible via eval or code generation).",
+    "Stripping the 'n' from 123n to yield 123 changes the type from BigInt to Number, risking precision loss for large integers and breaking BigInt-specific operations.",
+    "Rewriting .5 as 0.5 alters the source text but is semantically equivalent; however, if the original .5 was used in a context where leading dot matters (e.g., regex or tokenizer), it could cause issues—though in object keys, this is unlikely, still a theoretical hazard.",
+    "Converting 1e3_0 to 1000 changes the representation but preserves value; however, if the code relies on the exact string form of the key (e.g., via Object.keys() and string comparison), behavioral equivalence holds, but developers might expect the original form for readability or debugging.",
+    "If the numeric key is part of a computed property name in a class or dynamic context (though this rule only applies to literals), the fix does not apply—but if misapplied due to incorrect parsing, it could rewrite non-literal keys, causing syntax errors.",
+    "In strict mode, octal literals like 0o755 are allowed, but rewriting them to decimal avoids potential confusion; however, if the code was relying on the octal literal to trigger an error in older environments, the fix silently changes behavior.",
+    "When the object is used in a JSON-like context (e.g., stringified and parsed elsewhere), changing 0xFF to 255 alters the key name in the serialized form, potentially breaking key-based lookups in receiving systems.",
+    "If the numeric literal is adjacent to comments or whitespace that is significant for tooling (e.g., JSDoc or lint directives), the rewrite may inadvertently shift or lose those comments during AST replacement.",
+    "Rewriting a floating-point literal like 1.5_2 (invalid per rule) assumes the underscore is only a separator, but if the code was intentionally using underscore as part of a larger identifier via concatenation (e.g., via window['1_'+'5_2']), the fix does not apply—but if the rule incorrectly fired on a valid identifier, it would corrupt the code."
+  ]
+}

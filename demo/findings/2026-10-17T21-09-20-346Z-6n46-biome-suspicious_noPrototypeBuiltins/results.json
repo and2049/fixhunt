@@ -1,0 +1,2381 @@
+{
+  "runId": "2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins",
+  "tool": "biome",
+  "ext": "js",
+  "version": "2.5.15",
+  "rule": {
+    "tool": "biome",
+    "rule": "suspicious/noPrototypeBuiltins",
+    "fixKind": "safe",
+    "docs": "Summary\n\n- Name: noPrototypeBuiltins\n- Fix: safe\n- Default severity: warn\n- Available from version: 1.1.0\n- Diagnostic category: lint/suspicious/noPrototypeBuiltins\n- This rule is recommended\n\nDescription\n\n Disallow direct use of `Object.prototype` builtins.\n\n ECMAScript 5.1 added `Object.create` which allows the creation of an object with a custom prototype.\n This pattern is often used for objects used as Maps. However, this pattern can lead to errors\n if something else relies on prototype properties/methods.\n Moreover, the methods could be shadowed, this can lead to random bugs and denial of service\n vulnerabilities. For example, calling `hasOwnProperty` directly on parsed JSON like `{\"hasOwnProperty\": 1}` could lead to vulnerabilities.\n To avoid subtle bugs like this, you should call these methods from `Object.prototype`.\n For example, `foo.isPrototypeOf(bar)` should be replaced with `Object.prototype.isPrototypeOf.call(foo, \"bar\")`\n As for the `hasOwn` method, `foo.hasOwn(\"bar\")` should be replaced with `Object.hasOwn(foo, \"bar\")`.\n\nExamples\n\nInvalid\n\n ```js,expect_diagnostic\n var invalid = foo.hasOwnProperty(\"bar\");\n ```\n\n ```js,expect_diagnostic\n var invalid = foo.isPrototypeOf(bar);\n ```\n\n ```js,expect_diagnostic\n var invalid = foo.propertyIsEnumerable(\"bar\");\n ```\n\n ```js,expect_diagnostic\n Object.hasOwnProperty.call(foo, \"bar\");\n ```\n\nValid\n\n ```js\n var valid = Object.hasOwn(foo, \"bar\");\n var valid = Object.prototype.isPrototypeOf.call(foo, bar);\n var valid = {}.propertyIsEnumerable.call(foo, \"bar\");\n ```\n\n\n"
+  },
+  "analysis": {
+    "summary": "Flags direct calls to Object.prototype methods (hasOwnProperty, isPrototypeOf, propertyIsEnumerable) invoked on arbitrary objects.",
+    "firingShapes": [
+      "foo.hasOwnProperty(\"bar\");",
+      "obj.isPrototypeOf(target);",
+      "map.propertyIsEnumerable(\"key\");",
+      "arr.hasOwnProperty(\"length\");",
+      "nullObj.hasOwnProperty(\"test\");",
+      "window.isPrototypeOf(document);",
+      "someObj.propertyIsEnumerable(\"toString\");",
+      "data.hasOwnProperty(undefined);"
+    ],
+    "silentShapes": [
+      "Object.prototype.hasOwnProperty.call(foo, \"bar\");",
+      "{}.isPrototypeOf.call(obj, target);",
+      "Object.hasOwn(foo, \"bar\");",
+      "var x = foo.hasOwnProperty; x.call(foo, \"bar\");",
+      "if (foo.hasOwnProperty) {}"
+    ],
+    "fixDescription": "Replaces obj.methodName(args) with Object.prototype.methodName.call(obj, args) for hasOwnProperty, isPrototypeOf, and propertyIsEnumerable; replaces obj.hasOwnProperty with Object.hasOwn when applicable per rule documentation.",
+    "hazards": [
+      "Rewriting foo.hasOwnProperty(\"bar\") to Object.prototype.hasOwnProperty.call(foo, \"bar\") changes behavior if foo is null or undefined, as the former throws a TypeError while the latter also throws but may be caught differently due to call stack differences.",
+      "If foo.hasOwnProperty is a non-function value (e.g., a number or string), the original code throws TypeError when invoked, but the fix attempts to call Object.prototype.hasOwnProperty.call which expects a function, preserving the error but altering the error path.",
+      "When foo is declared with let or const and used before initialization in the same block, the fix does not alter the TDZ error timing, but if the original relied on foo being accessible via a scope hole, the fix does not change that—however, no behavioral shift occurs here as both forms reference foo identically.",
+      "If foo is a proxy with a get trap that returns a non-function for hasOwnProperty, the original invokes the trap and then attempts to call the result, throwing TypeError; the fix bypasses the trap entirely by referencing Object.prototype directly, so the get trap is not triggered, altering observable behavior.",
+      "In strict mode, if foo.hasOwnProperty is accessed via a with statement (deprecated but possible), the original resolves foo in the with scope, while the fix references Object.prototype globally, potentially changing the base object if the with scope had an Object property.",
+      "The fix removes any opportunity for side effects in the retrieval of foo.hasOwnProperty—such as logging in a get trap or modifying state—because it no longer accesses the property on foo at all, whereas the original evaluates foo.hasOwnProperty as an expression before calling it.",
+      "If the code depends on the call stack showing foo.hasOwnProperty in traces (e.g., for debugging or error reporting), replacing it with Object.prototype.hasOwnProperty.call alters the stack trace, which could affect error handling logic that inspects stack frames.",
+      "When the argument \"bar\" is an expression with side effects (e.g., a function call), the evaluation order of arguments is preserved in the fix, but if the original relied on the this-value being evaluated after arguments (which it never is in JS), no change occurs—however, this is not a real hazard since this-binding always happens before argument evaluation in calls.",
+      "If foo is document.all in legacy browsers (which acts like undefined for == null but has special behavior), the original may behave inconsistently due to its [[Call]] semantics, while the fix uses standard Function.prototype.call, potentially altering behavior in edge cases involving IE-specific quirks.",
+      "If the code is parsed in a context where Object.prototype has been overridden (e.g., via iframe pollution or deliberate mutation), the fix uses the current Object.prototype, which may differ from the original object's actual prototype chain if inheritance was altered, though this affects both original and fix similarly since both rely on Object.prototype.",
+      "Comments attached to the original call site (e.g., foo.hasOwnProperty/*note*/(\"bar\")) may be lost or misplaced during the rewrite if the autofix does not preserve trailing or inline comments, degrading code readability."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.10828600000000002,
+  "summary": {
+    "programs": 16,
+    "invalid": 0,
+    "fired": 16,
+    "fixed": 16,
+    "disputed": 1,
+    "fix-changes-behavior": 7
+  },
+  "reports": [
+    {
+      "programId": "r1-p002",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "if (typeof foo === 'undefined') {\n  try {\n    console.log(foo.hasOwnProperty('x'));\n  } catch (e) {\n    console.log(e.name, e.message);\n  }\n}\nvar foo = { x: 1 };\n",
+      "lines": {
+        "before": 8,
+        "after": 8
+      },
+      "reportPath": "runs/2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins/reports/r1-p002.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/10769",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/7900",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/281",
+          "relation": "related"
+        },
+        {
+          "url": "https://github.com/biomejs/biome/issues/4121",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule rewrites foo.hasOwnProperty('x') to Object.hasOwn(foo, 'x') specifically to bypass any shadowed or missing hasOwnProperty on the receiver. The original code throws a TypeError when accessing the property on undefined; the rewritten code throws a different TypeError when Object.hasOwn receives undefined. Both fail as expected for an undefined receiver, and the change in error message reflects the intended semantic shift from a prototype method call to a static method call.",
+        "docsQuote": "the methods could be shadowed, this can lead to random bugs and denial of service vulnerabilities",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noPrototypeBuiltins fix",
+          "suspicious noPrototypeBuiltins hasOwnProperty call",
+          "Object.hasOwn replacement for prototype method",
+          "fix behavior change in typeof guard block"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Biome is crashing when opening a .ejs file · Issue #7900 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/7900",
+            "snippet": "\"error\" \" \" \"noMisleadingCharacterClass\" \"error\" \" \" \"noPrototypeBuiltins\" \"error\" \" \" \"noRedeclare\" \"error\" \" \" \"noShadowRestrictedNames\" \"error\" \" \" \"noUnsafeNegation\" \"error\" \" \" \"useGetterReturn\" \"error\" \" \" \"assist\" \"enabled\" true \"actions\" \"recommended\" true \"source\" \"organizeImports\" \"on\" \" \""
+          },
+          {
+            "source": "tavily",
+            "title": "🐛 noUnusedVariables false positive · Issue #281 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/281",
+            "snippet": "{ \"all\": true, \"noArrayIndexKey\": \"off\", \"noExplicitAny\": \"off\", \"noPrototypeBuiltins\": \"off\", \"noRedeclare\": \"off\", \"noShadowRestrictedNames\": \"off\" }, \"style\": { \"all\": true, \"noImplicitBoolean\": \"off\", \"noNamespace\": \"off\", \"noNegationElse\": \"off\", \"useBlockStatements\": \"off\", \"noInferrableTypes\""
+          },
+          {
+            "source": "tavily",
+            "title": "📝 Line width is not respected for functions that return template literals · Issue #4121 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/issues/4121",
+            "snippet": "\"error\" \" \" \"noExtraNonNullAssertion\" \"error\" \" \" \"noFallthroughSwitchClause\" \"error\" \" \" \"noFunctionAssign\" \"error\" \" \" \"noGlobalAssign\" \"error\" \" \" \"noImportAssign\" \"error\" \" \" \"noMisleadingCharacterClass\" \"error\" \" \" \"noMisleadingInstantiator\" \"error\" \" \" \"noPrototypeBuiltins\" \"error\" \" \" \"noRede"
+          },
+          {
+            "source": "tavily",
+            "title": "fix(lint/useExhaustiveDependencies): correct fix for method calls by siketyan · Pull Request #7709 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/7709",
+            "snippet": "@siketyan \n\n### @siketyan siketyan commented Oct 7, 2025 • edited Loading Uh oh! There was an error while loading. Please reload this page.\n\nCopy link \n   Copy Markdown\n\nMember\n\n## Summary\n\nThe useExhaustiveDependencies rule now correctly adds the object as a dependency when its method is called wit"
+          },
+          {
+            "source": "tavily",
+            "title": "fix(css_parser): fix is at unicode range check by xin2017338 · Pull Request #3745 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/3745",
+            "snippet": "in this line in order to create a valid suggestion.Outdated suggestions cannot be applied.This suggestion has been applied or marked resolved.Suggestions cannot be applied from pending reviews.Suggestions cannot be applied on multi-line comments.Suggestions cannot be applied while the pull request i"
+          },
+          {
+            "source": "tavily",
+            "title": "fix(linter): fix aliased paths in `useImportExtensions` by arendjr · Pull Request #7597 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/7597",
+            "snippet": "Comment thread  crates/biome\\_package/src/node\\_js\\_package/tsconfig\\_json.rs\n\nComment on lines  +86  to  +96\n\n|  | [...] ``` [...] ```"
+          },
+          {
+            "source": "tavily",
+            "title": "fix(useConsistentTestIt): fix panic when applying code fix by dyc3 · Pull Request #9942 · biomejs/biome · GitHub",
+            "url": "https://github.com/biomejs/biome/pull/9942",
+            "snippet": "|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noThisInStatic` safe fix is not safe",
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions rule with Vue inject, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "noSkippedTests rule, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "private method detection, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "React StrictMode component export detection, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions callback overload, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "a11y anchor content rule, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "related",
+            "why": "same noPrototypeBuiltins rule but different construct (computed member expression with __proto__) and different unsafe fix"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7900",
+            "relation": "related",
+            "why": "same noPrototypeBuiltins rule mentioned in crash report but different defect (crash vs behavior change)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/281",
+            "relation": "related",
+            "why": "same noPrototypeBuiltins rule mentioned in config but different defect (false positive on unused variables)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4121",
+            "relation": "related",
+            "why": "same noPrototypeBuiltins rule mentioned in config but different defect (line width for template literals)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/7709",
+            "relation": "unrelated",
+            "why": "useExhaustiveDependencies rule fix for method calls, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/3745",
+            "relation": "unrelated",
+            "why": "CSS parser unicode range fix, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/7597",
+            "relation": "unrelated",
+            "why": "useImportExtensions aliased paths fix, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/pull/9942",
+            "relation": "unrelated",
+            "why": "useConsistentTestIt panic fix, not prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "relation": "unrelated",
+            "why": "noThisInStatic safe fix issue, not prototype builtins"
+          }
+        ],
+        "cost": 0.0049936
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:36:23.487989364 -0400\n+++ fixed.js\t2026-10-22 13:36:26.081033160 -0400\n@@ -1,6 +1,6 @@\n if (typeof foo === 'undefined') {\n   try {\n-    console.log(foo.hasOwnProperty('x'));\n+    console.log(Object.hasOwn(foo, 'x'));\n   } catch (e) {\n     console.log(e.name, e.message);\n   }\n",
+        "observed": "stdout before:\nTypeError Cannot read properties of undefined (reading 'hasOwnProperty')\nstdout after:\nTypeError Cannot convert undefined or null to object",
+        "before": {
+          "stdout": "TypeError Cannot read properties of undefined (reading 'hasOwnProperty')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "TypeError Cannot convert undefined or null to object\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "if (typeof foo === 'undefined') {\n  try {\n    console.log(Object.hasOwn(foo, 'x'));\n  } catch (e) {\n    console.log(e.name, e.message);\n  }\n}\nvar foo = { x: 1 };\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=suspicious/noPrototypeBuiltins --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original code checks `typeof foo === 'undefined'`; since `foo` is later defined as `{x:1}`, this condition is false, so the block is skipped—no error occurs. However, due to hoisting, `var foo` is initialized to `undefined` at runtime *before* assignment, making `typeof foo === 'undefined'` true when evaluated early in execution order. Inside the block, `foo.hasOwnProperty('x')` attempts to call a method on `undefined`, throwing a TypeError with message \"Cannot read properties of undefined\". The replacement uses `Object.hasOwn(foo, 'x')`, which requires its first argument to be an object; passing `undefined` causes it to throw immediately with \"Cannot convert undefined or null to object\"—a different error message, proving the behavior changed despite identical control flow logic. The fix assumes `foo` is always an object, ignoring the hoisted `undefined` state that triggers the exception path. This alters observable output, violating semantic equivalence.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p006",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "const fakeAll = { \n};\nfakeAll.__proto__ = null;\ntry {\n  console.log(fakeAll == null, fakeAll.hasOwnProperty('length'));\n} catch (e) {\n}\n",
+      "lines": {
+        "before": 17,
+        "after": 7
+      },
+      "reportPath": "runs/2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins/reports/r1-p006.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/10769",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule rewrites `fakeAll.hasOwnProperty('length')` to `Object.hasOwn(fakeAll, 'length')` to bypass any shadowed `hasOwnProperty` method. The program deliberately sets `__proto__ = null` so the object lacks the built-in method; the original call throws and is caught, producing no output, while the fixed call succeeds and prints `false false`. This behavioral change is exactly what the rule documents as its purpose.",
+        "docsQuote": "the methods could be shadowed, this can lead to random bugs and denial of service vulnerabilities",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noPrototypeBuiltins fix",
+          "suspicious noPrototypeBuiltins hasOwnProperty call",
+          "Object.hasOwn replacement pattern",
+          "prototype null object property check"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noThisInStatic` safe fix is not safe",
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "CSS property sorting issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "CSS variable reordering issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "CSS nested rule reordering issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions false positive on overloaded calls, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "noSkippedTests conditional skip fix, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "private method detection issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "React StrictMode export detection, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions callback overload false positive, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "a11y anchor content PascalCase allowance, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "related",
+            "why": "useLiteralKeys flags __proto__ in computed member expression with unsafe fix conflicting with noProto, same rule domain but different construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "relation": "unrelated",
+            "why": "noThisInStatic safe fix safety issue, not prototype builtin replacement"
+          }
+        ],
+        "cost": 0.0030972
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:36:31.528125165 -0400\n+++ fixed.js\t2026-10-22 13:36:33.948166044 -0400\n@@ -2,6 +2,6 @@\n };\n fakeAll.__proto__ = null;\n try {\n-  console.log(fakeAll == null, fakeAll.hasOwnProperty('length'));\n+  console.log(fakeAll == null, Object.hasOwn(fakeAll, 'length'));\n } catch (e) {\n }\n",
+        "observed": "stdout before:\n\nstdout after:\nfalse false",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "false false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "const fakeAll = { \n};\nfakeAll.__proto__ = null;\ntry {\n  console.log(fakeAll == null, Object.hasOwn(fakeAll, 'length'));\n} catch (e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=suspicious/noPrototypeBuiltins --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original call `fakeAll.hasOwnProperty('length')` uses the inherited method from `Object.prototype`, but since `__proto__` is set to `null`, `fakeAll` has no prototype chain, so accessing `.hasOwnProperty` throws a TypeError because the property is undefined. This error is caught, so nothing is printed. The fix replaces it with `Object.hasOwn(fakeAll, 'length')`, which is a standalone function that does not rely on the object’s prototype and safely returns `false`. Thus, the try block now executes fully, printing `false false` instead of catching an error and printing nothing. The behavior changes because the fix avoids a thrown exception that was previously silenced.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r1-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "const obj = {};\nObject.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\ntry {\n  console.log(obj.hasOwnProperty('x'));\n} catch (e) {\n}\ntry {\n} catch (e) {\n}\n",
+      "lines": {
+        "before": 12,
+        "after": 9
+      },
+      "reportPath": "runs/2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins/reports/r1-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/10769",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "high",
+        "why": "The program deliberately shadows hasOwnProperty on obj with a non-function value (42). The rule exists precisely to bypass such shadowing by rewriting obj.hasOwnProperty('x') to Object.hasOwn(obj, 'x'). Before the fix the call throws a TypeError (caught silently, no output); after the fix Object.hasOwn correctly returns false, which is printed. This behavioral change is the documented purpose of the rule, not a bug in the fix.",
+        "docsQuote": "the methods could be shadowed, this can lead to random bugs and denial of service vulnerabilities. For example, calling hasOwnProperty directly on parsed JSON like {\"hasOwnProperty\": 1} could lead to vulnerabilities. To avoid subtle bugs like this, you should call these methods from Object.prototype.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noPrototypeBuiltins fix",
+          "suspicious noPrototypeBuiltins hasOwnProperty call",
+          "suspicious noPrototypeBuiltins object method override",
+          "suspicious noPrototypeBuiltins prototype property shadowing"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noThisInStatic` safe fix is not safe",
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "CSS property sorting issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "CSS property sorting issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "CSS property sorting issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions false positive on overloaded call, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "noSkippedTests conditional skip fix, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "private method considered unused, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "React StrictMode component export detection, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions callback overload false positive, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "a11y/useAnchorContent PascalCase allowance, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "related",
+            "why": "useLiteralKeys flags __proto__ in computed member expression with unsafe fix conflicting with noProto, same rule family (prototype builtins) but different construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "relation": "unrelated",
+            "why": "noThisInStatic safe fix not safe, not prototype builtin replacement"
+          }
+        ],
+        "cost": 0.0031365000000000004
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:36:37.986234258 -0400\n+++ fixed.js\t2026-10-22 13:36:39.993268164 -0400\n@@ -1,7 +1,7 @@\n const obj = {};\n Object.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\n try {\n-  console.log(obj.hasOwnProperty('x'));\n+  console.log(Object.hasOwn(obj, 'x'));\n } catch (e) {\n }\n try {\n",
+        "observed": "stdout before:\n\nstdout after:\nfalse",
+        "before": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "const obj = {};\nObject.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\ntry {\n  console.log(Object.hasOwn(obj, 'x'));\n} catch (e) {\n}\ntry {\n} catch (e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=suspicious/noPrototypeBuiltins --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original call uses `obj.hasOwnProperty`, which accesses the overridden property defined on `obj` that returns the number 42, so `console.log(42)` outputs `42`. The fix replaces it with `Object.hasOwn(obj, 'x')`, which calls the built-in method unaffected by the override, correctly returning `false` since `obj` has no own property `'x'`. Thus, the behavior changes from logging `42` to logging `false`.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p001",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "let obj = null;\ntry {\n} catch (e) {\n}\ntry {\n  console.log(obj.hasOwnProperty('prop'));\n} catch (e) {\n  console.log('Direct call threw:', e.name, e.message);\n}\n",
+      "lines": {
+        "before": 13,
+        "after": 9
+      },
+      "reportPath": "runs/2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins/reports/r2-p001.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/10769",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule intentionally replaces direct prototype method calls with static Object.hasOwn to avoid shadowing vulnerabilities. The original code threw a TypeError when accessing hasOwnProperty on null, while the fixed code throws a different TypeError from Object.hasOwn when passed null. This behavioral difference is the documented purpose of the rule—bypassing the object's own property lookup—so the change is intended, not a bug.",
+        "docsQuote": "the methods could be shadowed, this can lead to random bugs and denial of service vulnerabilities",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noPrototypeBuiltins fix",
+          "suspicious noPrototypeBuiltins hasOwnProperty method",
+          "Object.hasOwn replacement direct property access",
+          "null object prototype builtin usage"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noThisInStatic` safe fix is not safe",
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions rule with Vue inject, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "noSkippedTests rule about test skipping, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "private method detection, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "React StrictMode component export detection, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions callback overload, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "a11y anchor content rule with PascalCase components, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "related",
+            "why": "useLiteralKeys rule flags __proto__ in computed member expression, same prototype builtins concern but different rule and construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "relation": "unrelated",
+            "why": "noThisInStatic rule safe fix safety, not prototype builtin replacement"
+          }
+        ],
+        "cost": 0.0031153
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:36:46.462377459 -0400\n+++ fixed.js\t2026-10-22 13:36:48.434410778 -0400\n@@ -3,7 +3,7 @@\n } catch (e) {\n }\n try {\n-  console.log(obj.hasOwnProperty('prop'));\n+  console.log(Object.hasOwn(obj, 'prop'));\n } catch (e) {\n   console.log('Direct call threw:', e.name, e.message);\n }\n",
+        "observed": "stdout before:\nDirect call threw: TypeError Cannot read properties of null (reading 'hasOwnProperty')\nstdout after:\nDirect call threw: TypeError Cannot convert undefined or null to object",
+        "before": {
+          "stdout": "Direct call threw: TypeError Cannot read properties of null (reading 'hasOwnProperty')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "Direct call threw: TypeError Cannot convert undefined or null to object\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "let obj = null;\ntry {\n} catch (e) {\n}\ntry {\n  console.log(Object.hasOwn(obj, 'prop'));\n} catch (e) {\n  console.log('Direct call threw:', e.name, e.message);\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=suspicious/noPrototypeBuiltins --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original code calls hasOwnProperty directly on `obj`, which is null; accessing any property on null throws \"Cannot read properties of null\". The replacement uses Object.hasOwn(null, 'prop'), which first attempts to convert its first argument to an object via ToObject, and converting null or undefined throws \"Cannot convert undefined or null to object\". Though both throw TypeErrors, the error messages differ, so the observable output changes, proving the rewrite is not semantics‑preserving.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p002",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "const obj = {};\nObject.defineProperty(obj, 'hasOwnProperty', {\n  get() {\n    console.log('Getter called');\n    return Object.prototype.hasOwnProperty;\n  }\n});\nobj.hasOwnProperty('x');\n",
+      "lines": {
+        "before": 10,
+        "after": 8
+      },
+      "reportPath": "runs/2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins/reports/r2-p002.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/10769",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule explicitly warns that prototype methods like hasOwnProperty can be shadowed and replaces direct calls with Object.hasOwn to bypass the object's own property. The program demonstrates this exact scenario by defining a custom hasOwnProperty getter; the fix intentionally changes behavior to call the safe built-in instead of the shadowed getter.",
+        "docsQuote": "the methods could be shadowed, this can lead to random bugs and denial of service vulnerabilities",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noPrototypeBuiltins fix",
+          "suspicious noPrototypeBuiltins hasOwnProperty call",
+          "biome lint rule suspicious noPrototypeBuiltins override",
+          "Object.defineProperty redefines hasOwnProperty getter"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noThisInStatic` safe fix is not safe",
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 When using useNamingConvention, prefix and suffix functionality cannot be used in destructuring assignment renaming.",
+            "url": "https://github.com/biomejs/biome/issues/8953",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.3.13\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:       "
+          },
+          {
+            "source": "github",
+            "title": "🐛 Svelte: reordering imports assumes `{ \"indentScriptAndStyle\": false }` and ignores current indentation",
+            "url": "https://github.com/biomejs/biome/issues/9194",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useFilenamingConvention` override not applying to TanStack Start splat route files ($.ts, rpc.$.ts)",
+            "url": "https://github.com/biomejs/biome/issues/9082",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.0\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:  "
+          },
+          {
+            "source": "github",
+            "title": "💅 useConsistentTypeDefinitions should ignore interfaces in global declarations",
+            "url": "https://github.com/biomejs/biome/issues/8449",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nBiome 2.38\nmacOS Tahoe 26.1\n```\n\n### Rule name\n\n`useConsistentTypeDefinitions`\n\n### Playground link\n\nhttps://biomejs.dev/playground/?code=ZABlAGMAbABhAHIAZQAgAGcAbABvAGIAYQBsACAAewAKACAAIABpAG4AdABlAHIAZgBhAGMAZQAgAFcAaQBuAGQAbwB3ACAAewAKACAAIAAgACAAXwBfAFMAQQBCA"
+          },
+          {
+            "source": "github",
+            "title": "📝 CSS comment gets reformated without proper indentation",
+            "url": "https://github.com/biomejs/biome/issues/11228",
+            "state": "closed",
+            "snippet": "### Environment information\n\nThere are some values in a variable that have some comments in between them.\n\n```css\n:root {\n\t--main-font-stack:\n\t\t/* Why does this comment get placed without indentation? */\n\t\tsystem-ui,\n\t\t/* Comment 1 */\n\t\t-apple-system,\n\t\tBlinkMacSystemFont,\n\t\t/* Comment 2 */\n\t\t\"Segoe"
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys override not working",
+            "url": "https://github.com/biomejs/biome/issues/6736",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nim following https://biomejs.dev/guides/getting-started/\n\n1. i do `npx @biomejs/biome init`\n2. i install vscode biomejs plugin\n3. i restart window\n4. i add the code block\n\n\n\n\t\"linter\": {\n\t\t\"enabled\": true,\n\t\t\"rules\": {\n\t\t\t\"recommended\": true,\n\t\t\t\"complexity\": {\n\t"
+          },
+          {
+            "source": "github",
+            "title": "💅 Linter: `lint --write` is not idempotent on Astro frontmatter, while `lint` reports no issues",
+            "url": "https://github.com/biomejs/biome/issues/7912",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.3.2\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BIO"
+          },
+          {
+            "source": "github",
+            "title": "unknownAtRules error for tailwind v4",
+            "url": "https://github.com/biomejs/biome/issues/7223",
+            "state": "closed",
+            "snippet": "# Update\n\nFor those of you finding this via search: The fix has already been merged to our `next` branch, and it'll be in your hands when the next minor (2.3) is released.\n\n-- @dyc3\n\n---\n\n### Environment information\n\n```bash\nCLI:\n  Version:                      2.2.0\n  Color support:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 Nest.js app breaks with useImportType rule",
+            "url": "https://github.com/biomejs/biome/issues/4514",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\r\n  Version:                      1.9.4\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             x86_64\r\n  OS:                           macos\r\n\r\nEnvironment:\r\n  BIOME_LOG_PATH:               unset\r\n  BIOME_LOG_PREFIX_NAME:        u"
+          },
+          {
+            "source": "github",
+            "title": "💅 Overriding linter rules in nested conf file (monorepo)",
+            "url": "https://github.com/biomejs/biome/issues/6434",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\n  Version:                      2.0.0\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAME:        unset\n  BI"
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions rule false positive, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "noSkippedTests rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "private method detection, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "React StrictMode component detection, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions callback overload, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "a11y anchor content rule, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "related",
+            "why": "useLiteralKeys rule flags __proto__ in computed member expression, same rule family (prototype builtins) but different construct"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "relation": "unrelated",
+            "why": "noThisInStatic rule safe fix, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8953",
+            "relation": "unrelated",
+            "why": "useNamingConvention destructuring assignment, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9194",
+            "relation": "unrelated",
+            "why": "Svelte import reordering, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9082",
+            "relation": "unrelated",
+            "why": "useFilenamingConvention override, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8449",
+            "relation": "unrelated",
+            "why": "useConsistentTypeDefinitions interfaces, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11228",
+            "relation": "unrelated",
+            "why": "CSS comment reformatting, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6736",
+            "relation": "unrelated",
+            "why": "useLiteralKeys override not working, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7912",
+            "relation": "unrelated",
+            "why": "Astro frontmatter idempotency, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/7223",
+            "relation": "unrelated",
+            "why": "unknownAtRules Tailwind, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/4514",
+            "relation": "unrelated",
+            "why": "useImportType Nest.js, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/6434",
+            "relation": "unrelated",
+            "why": "nested config override, not prototype builtin replacement"
+          }
+        ],
+        "cost": 0.0054087
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:36:54.392511452 -0400\n+++ fixed.js\t2026-10-22 13:36:56.473546617 -0400\n@@ -5,4 +5,4 @@\n     return Object.prototype.hasOwnProperty;\n   }\n });\n-obj.hasOwnProperty('x');\n+Object.hasOwn(obj, 'x');\n",
+        "observed": "stdout before:\nGetter called\nstdout after:\n",
+        "before": {
+          "stdout": "Getter called\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "const obj = {};\nObject.defineProperty(obj, 'hasOwnProperty', {\n  get() {\n    console.log('Getter called');\n    return Object.prototype.hasOwnProperty;\n  }\n});\nObject.hasOwn(obj, 'x');\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=suspicious/noPrototypeBuiltins --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original call `obj.hasOwnProperty('x')` invokes the custom getter defined on `obj`, which logs \"Getter called\" before returning the function from `Object.prototype.hasOwnProperty`. The replacement `Object.hasOwn(obj, 'x')` bypasses any property named `hasOwnProperty` on `obj` entirely, directly using the built-in static method that does not trigger the getter. Thus, the side effect of logging is omitted, changing observable behavior. This violates semantic equivalence because the fix assumes `hasOwnProperty` refers to the inherited method, but the program intentionally overrides it via a getter. The transformation is unsafe when the property is shadowed with non-standard behavior.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p005",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "let accessCount = 0;\nconst handler = {\n  get(target, prop) {\n    if (prop === 'hasOwnProperty') {\n      console.log('Trap hit for hasOwnProperty, access #', accessCount);\n    }\n    return target[prop];\n  }\n};\nconst obj = new Proxy({ foo: 1 }, handler);\nobj.hasOwnProperty('foo');\n",
+      "lines": {
+        "before": 20,
+        "after": 11
+      },
+      "reportPath": "runs/2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins/reports/r2-p005.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/10769",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "low",
+        "why": "The rule explicitly rewrites direct calls like obj.hasOwnProperty('foo') to Object.hasOwn(obj, 'foo') to bypass any shadowed or custom hasOwnProperty on the object. The program demonstrates this by using a Proxy that traps access to hasOwnProperty; the fix intentionally avoids that trap, changing the observable behavior exactly as the documentation describes.",
+        "docsQuote": "the methods could be shadowed, this can lead to random bugs and denial of service vulnerabilities. For example, calling hasOwnProperty directly on parsed JSON like {\"hasOwnProperty\": 1} could lead to vulnerabilities. To avoid subtle bugs like this, you should call these methods from Object.prototype.",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noPrototypeBuiltins fix",
+          "suspicious noPrototypeBuiltins proxy trap",
+          "Proxy object hasOwnProperty call",
+          "handler get method interception"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, unrelated to prototype builtin access"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, unrelated to prototype builtin access"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "CSS property sorting rule, unrelated to prototype builtin access"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions false positive on overloaded calls, unrelated to prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "noSkippedTests conditional skip fix, unrelated to prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "private method detection, unrelated to prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "React StrictMode export detection, unrelated to prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions callback overload false positive, unrelated to prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "a11y anchor content PascalCase allowance, unrelated to prototype builtins"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "related",
+            "why": "useLiteralKeys flags __proto__ in computed member expression, same rule family (noPrototypeBuiltins) but different construct (computed member vs direct property access)"
+          }
+        ],
+        "cost": 0.0029137
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:37:00.299611272 -0400\n+++ fixed.js\t2026-10-22 13:37:02.848654350 -0400\n@@ -8,4 +8,4 @@\n   }\n };\n const obj = new Proxy({ foo: 1 }, handler);\n-obj.hasOwnProperty('foo');\n+Object.hasOwn(obj, 'foo');\n",
+        "observed": "stdout before:\nTrap hit for hasOwnProperty, access # 0\nstdout after:\n",
+        "before": {
+          "stdout": "Trap hit for hasOwnProperty, access # 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "let accessCount = 0;\nconst handler = {\n  get(target, prop) {\n    if (prop === 'hasOwnProperty') {\n      console.log('Trap hit for hasOwnProperty, access #', accessCount);\n    }\n    return target[prop];\n  }\n};\nconst obj = new Proxy({ foo: 1 }, handler);\nObject.hasOwn(obj, 'foo');\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=suspicious/noPrototypeBuiltins --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original call `obj.hasOwnProperty('foo')` invokes the proxy’s `get` trap because property lookup on `obj` triggers it; when `prop` equals `'hasOwnProperty'`, the trap logs before returning the inherited method. The replacement `Object.hasOwn(obj, 'foo')` is a direct function call that does not access any property on `obj`, so the proxy’s `get` trap is never invoked and no logging occurs. Thus the rewrite changes observable behavior.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    },
+    {
+      "programId": "r2-p007",
+      "kind": "fix-changes-behavior",
+      "safeLabel": true,
+      "minimized": "const obj = {};\nObject.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\ntry {\n  obj.hasOwnProperty('x');\n} catch (e) {\n  console.log('Original threw:', e.name, ':', e.message);\n}\ntry {\n} catch (e) {\n}\n",
+      "lines": {
+        "before": 13,
+        "after": 10
+      },
+      "reportPath": "runs/2026-10-17T21-09-20-346Z-6n46-biome-suspicious_noPrototypeBuiltins/reports/r2-p007.md",
+      "duplicates": [
+        {
+          "url": "https://github.com/biomejs/biome/issues/10769",
+          "relation": "related"
+        }
+      ],
+      "verdict": {
+        "grade": "intended-change",
+        "severity": "high",
+        "why": "The rule explicitly rewrites direct calls like obj.hasOwnProperty('x') to Object.hasOwn(obj, 'x') to bypass shadowed or missing prototype methods. The program demonstrates this by defining a non-function hasOwnProperty on obj, causing the original to throw a TypeError while the fixed version succeeds. This behavioral change is the documented purpose of the rule.",
+        "docsQuote": "the methods could be shadowed, this can lead to random bugs and denial of service vulnerabilities",
+        "differenceSource": "runtime-semantics"
+      },
+      "dedup": {
+        "queries": [
+          "noPrototypeBuiltins fix",
+          "suspicious noPrototypeBuiltins hasOwnProperty call",
+          "biome lint rule suspicious noPrototypeBuiltins method override",
+          "fix behavior change Object.hasOwn vs obj.hasOwnProperty"
+        ],
+        "hits": [
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can produce invalid CSS when the final semicolon is omitted",
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` moves Sass variable declarations below their uses",
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `useSortedProperties` can change behavior when reordering nested CSS rules",
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      \n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:                "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noUnnecessaryConditions`: false positive on an overloaded call with `undefined` as the default argument (Vue `inject`)",
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.14\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             x86_64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noSkippedTests` conditionally skip fix suggestion",
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.4\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "💅 Actually used private method considered unused",
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "state": "open",
+            "snippet": "### Environment information\n\n```bash\nbiome rage --linter\nCLI:\n  Version:                      2.3.6\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:               unset\n  BIOME_LOG_PREFIX_NAM"
+          },
+          {
+            "source": "github",
+            "title": "💅 cannot detect that the StrictMode component of React is being exported.",
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.4.16\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME:"
+          },
+          {
+            "source": "github",
+            "title": "💅 noUnnecessaryConditions callback overload false positive",
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\n\nCLI:\n  Version:                      2.5.9\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           linux\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:          "
+          },
+          {
+            "source": "github",
+            "title": "💅 lint/a11y/useAnchorContent: the PascalCase component allowance is applied only to self-closing elements",
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "state": "open",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.14\n  Color support:                false\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_FILE:         "
+          },
+          {
+            "source": "github",
+            "title": "💅 useLiteralKeys flags `__proto__` in a computed member expression and offers an unsafe fix that conflicts with noProto",
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "state": "open",
+            "snippet": "## Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.5.1\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_DISTRIBUTION:                npm\n  BIOME_LOG_PATH:            "
+          },
+          {
+            "source": "github",
+            "title": "💅 `noThisInStatic` safe fix is not safe",
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "state": "closed",
+            "snippet": "### Environment information\n\n<details>\n\n```bash\nCLI:\n  Version:                      2.4.11\n  Color support:                true\n\nPlatform:\n  CPU Architecture:             aarch64\n  OS:                           macos\n\nEnvironment:\n  BIOME_LOG_PATH:                    unset\n  BIOME_LOG_PREFIX_NAME: "
+          },
+          {
+            "source": "github",
+            "title": "🐛 Biome LSP is treating typescript files as if they were javascript files",
+            "url": "https://github.com/biomejs/biome/issues/3839",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```block\nCLI:\r\n  Version:                      1.8.3\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             aarch64\r\n  OS:                           macos\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                    "
+          },
+          {
+            "source": "github",
+            "title": "💅 Linter \"safe fix\" of \"let -> const\" breaks Svelte apps",
+            "url": "https://github.com/biomejs/biome/issues/3556",
+            "state": "closed",
+            "snippet": "### Environment information\n\n```bash\nCLI:\r\n  Version:                      1.8.3\r\n  Color support:                true\r\n\r\nPlatform:\r\n  CPU Architecture:             aarch64\r\n  OS:                           macos\r\n\r\nEnvironment:\r\n  BIOME_LOG_DIR:                unset\r\n  NO_COLOR:                     "
+          }
+        ],
+        "verdicts": [
+          {
+            "url": "https://github.com/biomejs/biome/issues/12417",
+            "relation": "unrelated",
+            "why": "CSS property sorting issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12414",
+            "relation": "unrelated",
+            "why": "CSS property sorting issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12413",
+            "relation": "unrelated",
+            "why": "CSS property sorting issue, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/12040",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions false positive on Vue inject, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/9295",
+            "relation": "unrelated",
+            "why": "noSkippedTests conditional skip fix, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/8185",
+            "relation": "unrelated",
+            "why": "private method considered unused, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10609",
+            "relation": "unrelated",
+            "why": "React StrictMode component export detection, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11439",
+            "relation": "unrelated",
+            "why": "noUnnecessaryConditions callback overload false positive, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/11872",
+            "relation": "unrelated",
+            "why": "a11y/useAnchorContent PascalCase allowance, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10769",
+            "relation": "related",
+            "why": "useLiteralKeys flags __proto__ with unsafe fix conflicting with noProto, same rule family (suspicious/noPrototypeBuiltins) but different construct (__proto__ vs hasOwnProperty)"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/10011",
+            "relation": "unrelated",
+            "why": "noThisInStatic safe fix not safe, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3839",
+            "relation": "unrelated",
+            "why": "LSP treating TS as JS, not prototype builtin replacement"
+          },
+          {
+            "url": "https://github.com/biomejs/biome/issues/3556",
+            "relation": "unrelated",
+            "why": "let->const safe fix breaks Svelte, not prototype builtin replacement"
+          }
+        ],
+        "cost": 0.0036463
+      },
+      "evidence": {
+        "diff": "--- orig.js\t2026-10-22 13:37:07.978741051 -0400\n+++ fixed.js\t2026-10-22 13:37:10.524784083 -0400\n@@ -1,7 +1,7 @@\n const obj = {};\n Object.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\n try {\n-  obj.hasOwnProperty('x');\n+  Object.hasOwn(obj, 'x');\n } catch (e) {\n   console.log('Original threw:', e.name, ':', e.message);\n }\n",
+        "observed": "stdout before:\nOriginal threw: TypeError : obj.hasOwnProperty is not a function\nstdout after:\n",
+        "before": {
+          "stdout": "Original threw: TypeError : obj.hasOwnProperty is not a function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "after": {
+          "stdout": "",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "fixed": "const obj = {};\nObject.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\ntry {\n  Object.hasOwn(obj, 'x');\n} catch (e) {\n  console.log('Original threw:', e.name, ':', e.message);\n}\ntry {\n} catch (e) {\n}\n",
+        "commands": [
+          "node prog.js",
+          "bunx @biomejs/biome lint --only=suspicious/noPrototypeBuiltins --write prog.js",
+          "node prog.js"
+        ],
+        "explanation": "The original call `obj.hasOwnProperty('x')` attempts to invoke the property named `'hasOwnProperty'` on `obj`, which was defined as a non‑function value (`42`), causing a `TypeError`. The replacement `Object.hasOwn(obj, 'x')` calls the static method `Object.hasOwn`, bypassing the overridden property entirely and returning `false` without throwing. Since the observable behavior—throwing an exception versus returning normally—differs, the transformation does not preserve program semantics.",
+        "fired": 1,
+        "firedAfter": 0
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Order of Evaluation - Side Effects Duplicated",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "first false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "first false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:33.367972158 -0400\n+++ fixed.js\t2026-10-17 17:09:33.654975164 -0400\n@@ -4,7 +4,7 @@\n }\n const obj = {};\n try {\n-  console.log(obj[getKey()] = 'first', obj.hasOwnProperty(getKey()));\n+  console.log(obj[getKey()] = 'first', Object.hasOwn(obj, getKey()));\n } catch (e) {\n   console.log(e.name, e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p002",
+      "title": "Temporal Dead Zone After Hoisting",
+      "hazard": "temporal dead zone after code is hoisted or reordered",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "TypeError Cannot read properties of undefined (reading 'hasOwnProperty')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": true,
+          "detail": "model expected the rule to stay silent, it fired"
+        },
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nTypeError Cannot read properties of undefined (reading 'hasOwnProperty')\nstdout after:\nTypeError Cannot convert undefined or null to object"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError Cannot convert undefined or null to object\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:33.828976986 -0400\n+++ fixed.js\t2026-10-17 17:09:34.111979950 -0400\n@@ -1,6 +1,6 @@\n if (typeof foo === 'undefined') {\n   try {\n-    console.log(foo.hasOwnProperty('x'));\n+    console.log(Object.hasOwn(foo, 'x'));\n   } catch (e) {\n     console.log(e.name, e.message);\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "TDZ Error Timing Unchanged by Fix",
+      "hazard": "When foo is declared with let or const and used before initialization in the same block, the fix does not alter the TDZ error timing...",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "ReferenceError Cannot access 'value' before initialization\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "ReferenceError Cannot access 'value' before initialization\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:34.282981741 -0400\n+++ fixed.js\t2026-10-17 17:09:34.565984705 -0400\n@@ -1,6 +1,6 @@\n { \n   try {\n-    console.log(value.hasOwnProperty('a'));\n+    console.log(Object.hasOwn(value, 'a'));\n   } catch (e) {\n     console.log(e.name, e.message);\n   }\n"
+      }
+    },
+    {
+      "id": "r1-p004",
+      "title": "Numeric/String Coercion",
+      "hazard": "numeric/string coercion: + vs template literal, objects with toString/valueOf, Symbol, BigInt",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "false false\nfalse false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false false\nfalse false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:34.738986516 -0400\n+++ fixed.js\t2026-10-17 17:09:35.001989271 -0400\n@@ -1,5 +1,5 @@\n const obj = {\n   [Symbol.toPrimitive](hint) { return hint === 'string' ? 'prop' : 42; }\n };\n-console.log(obj.hasOwnProperty('prop'), obj.hasOwnProperty(42));\n-console.log(Object.prototype.hasOwnProperty.call(obj, 'prop'), Object.prototype.hasOwnProperty.call(obj, 42));\n+console.log(Object.hasOwn(obj, 'prop'), Object.hasOwn(obj, 42));\n+console.log(Object.hasOwn(obj, 'prop'), Object.hasOwn(obj, 42));\n"
+      }
+    },
+    {
+      "id": "r1-p005",
+      "title": "__proto__ Keys and Prototype Access",
+      "hazard": "__proto__ keys, prototype access, Object.assign vs spread",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "true\ntrue\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:35.180991145 -0400\n+++ fixed.js\t2026-10-17 17:09:35.451993982 -0400\n@@ -1,3 +1,3 @@\n const obj = { __proto__: { toString: 1 }, toString: 'own' };\n-console.log(obj.hasOwnProperty('toString'));\n-console.log(Object.prototype.hasOwnProperty.call(obj, 'toString'));\n+console.log(Object.hasOwn(obj, 'toString'));\n+console.log(Object.hasOwn(obj, 'toString'));\n"
+      }
+    },
+    {
+      "id": "r1-p006",
+      "title": "document.all Legacy Quirk",
+      "hazard": "If foo is document.all in legacy browsers [...] potentially altering behavior in edge cases involving IE-specific quirks.",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "TypeError fakeAll.hasOwnProperty is not a function\nfalse false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nTypeError fakeAll.hasOwnProperty is not a function\nfalse false\nstdout after:\nfalse false\nfalse false"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false false\nfalse false\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:35.623995783 -0400\n+++ fixed.js\t2026-10-17 17:09:35.909998778 -0400\n@@ -6,12 +6,12 @@\n };\n fakeAll.__proto__ = null;\n try {\n-  console.log(fakeAll == null, fakeAll.hasOwnProperty('length'));\n+  console.log(fakeAll == null, Object.hasOwn(fakeAll, 'length'));\n } catch (e) {\n   console.log(e.name, e.message);\n }\n try {\n-  console.log(fakeAll == null, Object.prototype.hasOwnProperty.call(fakeAll, 'length'));\n+  console.log(fakeAll == null, Object.hasOwn(fakeAll, 'length'));\n } catch (e) {\n   console.log(e.name, e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Non-Function hasOwnProperty Value",
+      "hazard": "If foo.hasOwnProperty is a non-function value (e.g., a number or string), the original code throws TypeError when invoked, but the fix attempts to call Object.prototype.hasOwnProperty.call which expec",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "TypeError obj.hasOwnProperty is not a function\nfalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nTypeError obj.hasOwnProperty is not a function\nfalse\nstdout after:\nfalse\nfalse"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "false\nfalse\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:36.086000620 -0400\n+++ fixed.js\t2026-10-17 17:09:36.357003457 -0400\n@@ -1,12 +1,12 @@\n const obj = {};\n Object.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\n try {\n-  console.log(obj.hasOwnProperty('x'));\n+  console.log(Object.hasOwn(obj, 'x'));\n } catch (e) {\n   console.log(e.name, e.message);\n }\n try {\n-  console.log(Object.prototype.hasOwnProperty.call(obj, 'x'));\n+  console.log(Object.hasOwn(obj, 'x'));\n } catch (e) {\n   console.log(e.name, e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r1-p008",
+      "title": "this Binding: Arrow vs Function",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'prop')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'prop')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:36.522005184 -0400\n+++ fixed.js\t2026-10-17 17:09:36.782007906 -0400\n@@ -5,7 +5,7 @@\n const fn = obj.check;\n console.log(fn());\n try {\n-  console.log(obj.hasOwnProperty('check'));\n+  console.log(Object.hasOwn(obj, 'check'));\n } catch (e) {\n   console.log(e.name, e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p001",
+      "title": "Null/undefined Distinction with Optional Chaining",
+      "hazard": "null/undefined distinction, optional chaining short-circuit, nullish vs falsy",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "obj == null: true\nobj === null: true\nundefined\nDirect call threw: TypeError Cannot read properties of null (reading 'hasOwnProperty')\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nobj == null: true\nobj === null: true\nundefined\nDirect call threw: TypeError Cannot read properties of null (reading 'hasOwnProperty')\nstdout after:\nobj == null: true\nobj === null: true\nundefined\nDirect call threw: TypeError Cannot convert undefined or null to object"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "obj == null: true\nobj === null: true\nundefined\nDirect call threw: TypeError Cannot convert undefined or null to object\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:45.244096410 -0400\n+++ fixed.js\t2026-10-17 17:09:45.521099305 -0400\n@@ -7,7 +7,7 @@\n   console.log('Optional chain threw:', e.name, e.message);\n }\n try {\n-  console.log(obj.hasOwnProperty('prop'));\n+  console.log(Object.hasOwn(obj, 'prop'));\n } catch (e) {\n   console.log('Direct call threw:', e.name, e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Getter Side Effect via DefineProperty",
+      "hazard": "getters, setters and Object.defineProperty side effects",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Before:\nGetter called\nAfter:\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nBefore:\nGetter called\nAfter:\nstdout after:\nBefore:\nAfter:"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before:\nAfter:\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:45.699101165 -0400\n+++ fixed.js\t2026-10-17 17:09:45.977104070 -0400\n@@ -6,5 +6,5 @@\n   }\n });\n console.log('Before:');\n-obj.hasOwnProperty('x');\n+Object.hasOwn(obj, 'x');\n console.log('After:');\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "Async Await Interaction with Property Access",
+      "hazard": "async/await ordering, generators and yield position",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Start\nResult: true\nDone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Start\nResult: true\nDone\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:46.149105867 -0400\n+++ fixed.js\t2026-10-17 17:09:46.407108563 -0400\n@@ -2,7 +2,7 @@\n   const obj = { awaitPromise: Promise.resolve(42) };\n   console.log('Start');\n   try {\n-    const val = await obj.hasOwnProperty('awaitPromise');\n+    const val = await Object.hasOwn(obj, 'awaitPromise');\n     console.log('Result:', val);\n   } catch (e) {\n     console.log('Caught:', e.name);\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Order of Evaluation - Side Effects Doubled",
+      "hazard": "order of evaluation when expressions are merged, duplicated or deleted (side effects run twice or never)",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Before fix simulation:\narg eval 1\n\nAfter fix (Biome rewrites):\narg eval 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before fix simulation:\narg eval 1\n\nAfter fix (Biome rewrites):\narg eval 1\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:46.574110307 -0400\n+++ fixed.js\t2026-10-17 17:09:46.852113212 -0400\n@@ -9,4 +9,4 @@\n prop.call(obj, logArg());\n count = 0;\n console.log('\\nAfter fix (Biome rewrites):');\n-Object.prototype.hasOwnProperty.call(obj, logArg());\n+Object.hasOwn(obj, logArg());\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Property Access Trap Side Effect Lost",
+      "hazard": "The fix removes any opportunity for side effects in the retrieval of foo.hasOwnProperty—such as logging in a get trap or modifying state—because it no longer accesses the property on foo at all, where",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Before (original):\nTrap hit for hasOwnProperty, access # 1\nAccess count after original: 1\n\nAfter (fixed):\nAccess count after fixed: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nBefore (original):\nTrap hit for hasOwnProperty, access # 1\nAccess count after original: 1\n\nAfter (fixed):\nAccess count after fixed: 0\nstdout after:\nBefore (original):\nAccess count after original: 0\n\nAfter (fixed):\nAccess count after fixed: 0"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before (original):\nAccess count after original: 0\n\nAfter (fixed):\nAccess count after fixed: 0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:47.033115103 -0400\n+++ fixed.js\t2026-10-17 17:09:47.306117955 -0400\n@@ -12,9 +12,9 @@\n const obj = new Proxy({ foo: 1 }, handler);\n accessCount = 0;\n console.log('Before (original):');\n-obj.hasOwnProperty('foo');\n+Object.hasOwn(obj, 'foo');\n console.log('Access count after original:', accessCount);\n accessCount = 0;\n console.log('\\nAfter (fixed):');\n-Object.prototype.hasOwnProperty.call(obj, 'foo');\n+Object.hasOwn(obj, 'foo');\n console.log('Access count after fixed:', accessCount);\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Argument Evaluation Order Preserved",
+      "hazard": "When the argument \"bar\" is an expression with side effects (e.g., a function call), the evaluation order of arguments is preserved in the fix, but if the original relied on the this-value being evalua",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Original evaluation order:\nOrder: first\n\nFixed evaluation order:\nOrder: first\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Original evaluation order:\nOrder: first\n\nFixed evaluation order:\nOrder: first\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:47.475119720 -0400\n+++ fixed.js\t2026-10-17 17:09:47.763122729 -0400\n@@ -8,9 +8,9 @@\n const obj = { a: 1 };\n order = [];\n console.log('Original evaluation order:');\n-obj.hasOwnProperty(sideEffect('first')());\n+Object.hasOwn(obj, sideEffect('first')());\n console.log('Order:', order.join(' -> '));\n order = [];\n console.log('\\nFixed evaluation order:');\n-Object.prototype.hasOwnProperty.call(obj, sideEffect('first')());\n+Object.hasOwn(obj, sideEffect('first')());\n console.log('Order:', order.join(' -> '));\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Non-function hasOwnProperty Value",
+      "hazard": "If foo.hasOwnProperty is a non-function value (e.g., a number or string), the original code throws TypeError when invoked, but the fix attempts to call Object.prototype.hasOwnProperty.call which expec",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          },
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "obj.hasOwnProperty: 42\nOriginal threw: TypeError : obj.hasOwnProperty is not a function\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "fix-changes-behavior",
+          "safeLabel": true,
+          "detail": "stdout before:\nobj.hasOwnProperty: 42\nOriginal threw: TypeError : obj.hasOwnProperty is not a function\nstdout after:\nobj.hasOwnProperty: 42"
+        }
+      ],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "obj.hasOwnProperty: 42\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:47.930124473 -0400\n+++ fixed.js\t2026-10-17 17:09:48.201127303 -0400\n@@ -2,12 +2,12 @@\n Object.defineProperty(obj, 'hasOwnProperty', { value: 42, writable: false });\n console.log('obj.hasOwnProperty:', obj.hasOwnProperty);\n try {\n-  obj.hasOwnProperty('x');\n+  Object.hasOwn(obj, 'x');\n } catch (e) {\n   console.log('Original threw:', e.name, ':', e.message);\n }\n try {\n-  Object.prototype.hasOwnProperty.call(obj, 'x');\n+  Object.hasOwn(obj, 'x');\n } catch (e) {\n   console.log('Fixed threw:', e.name, ':', e.message);\n }\n"
+      }
+    },
+    {
+      "id": "r2-p008",
+      "title": "this Binding: Arrow vs Function Method Extraction",
+      "hazard": "this binding: arrow vs function, methods extracted from objects, call/apply/bind",
+      "rule": "suspicious/noPrototypeBuiltins",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "suspicious/noPrototypeBuiltins",
+            "severity": "warning",
+            "message": "Do not access Object.prototype method 'hasOwnProperty' from target object.",
+            "span": null
+          }
+        ],
+        "run": {
+          "stdout": "Function method call: true\n",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Function method call: true\n",
+          "stderr1": "TypeError: Cannot read properties of undefined (reading 'value')",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.js\t2026-10-17 17:09:48.370129069 -0400\n+++ fixed.js\t2026-10-17 17:09:48.651132003 -0400\n@@ -14,7 +14,7 @@\n console.log('Arrow method call:', obj.checkArrow());\n console.log('Extracted arrow call:', arrowFn());\n try {\n-  obj.hasOwnProperty('value');\n+  Object.hasOwn(obj, 'value');\n } catch (e) {\n   console.log('hasOwnProperty call failed:', e.name);\n }\n"
+      }
+    }
+  ]
+}

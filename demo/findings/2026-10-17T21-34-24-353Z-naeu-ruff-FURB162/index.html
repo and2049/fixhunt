@@ -1,0 +1,193 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff FURB162 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff FURB162 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-34-24-353Z-naeu-ruff-FURB162 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0040</p>
+<div class="card"><b>Rule analysis</b><p>Flags `datetime.fromisoformat()` called with a string where `.replace(&#39;Z&#39;, &#39;+00:00&#39;)` has been applied to remove a trailing &#39;Z&#39; suffix.</p><p class="mut">Fix: Replace `datetime.fromisoformat(arg)` with `datetime.fromisoformat(base_string)`, where `arg` is a transformation like `s.replace(&quot;Z&quot;, &quot;+00:00&quot;)`, `t[:-1] + &quot;-00&quot;`, etc., and `base_string` is the original variable before transformation.</p><details><summary>11 hazards</summary><ul><li>If the base string contains internal &#39;Z&#39; characters (e.g., &quot;Z2025-01-01T00:00:00Z&quot;), removing them via replace changes the input meaning and may cause parsing errors.</li><li>If the base string ends with multiple &#39;Z&#39; characters, slicing off only one character (e.g., `[:-1]`) leaves trailing &#39;Z&#39;s, resulting in invalid ISO format.</li><li>If the base string lacks a trailing &#39;Z&#39;, transformations like `rstrip(&quot;Z&quot;, &quot;-00:00&quot;)` may still alter the string (e.g., removing trailing zeros), producing a different datetime.</li><li>If the base string is not a literal but a function call or complex expression, the rewrite may alter evaluation order or side effects if the transformation had any (though pure string methods are side-effect free, the base expression is evaluated once vs potentially multiple times in the original).</li><li>If the variable naming is reused or aliased elsewhere in the scope, the rewrite assumes the base variable is unchanged between its use in the transformation and the fromisoformat call, which may not hold if mutated in between (though unlikely for strings).</li><li>If the code relies on the transformation to normalize case (e.g., expecting lowercase &#39;z&#39;), the fix does not account for that and may fail to parse.</li><li>If the string contains timezone offsets other than UTC (e.g., &quot;+05:30&quot;), the transformation incorrectly forces UTC, changing the represented time.</li><li>If the code is run under Python &lt;3.11, `fromisoformat` cannot parse the &#39;Z&#39; suffix directly, so the fix would cause a ValueError where the original code worked.</li><li>If the transformation includes additional logic beyond the simple patterns (e.g., chained replaces), the tool may not trigger, but if it did incorrectly, the fix would drop meaningful processing.</li><li>Comments attached to the transformation expression (e.g., `# workaround`) would be lost when the entire argument expression is replaced.</li><li>If the base string variable is defined later in the block (due to hoisting-like confusion in conditional blocks), the rewrite could reference it before assignment.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Truthiness comparison</td><td class="mut">__bool__ / __len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Chained replace drops meaning</td><td class="mut">If the transformation includes additional logic beyond the simple patterns, the fix would </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">fired, no fix</span></td><td>Non-UTC offset corrupted</td><td class="mut">If the string contains timezone offsets other than UTC, the transformation incorrectly for</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Comment lost in fix</td><td class="mut">Comments attached to the transformation expression would be lost when the entire argument </td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span></td><td>Coercion edge case</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Multiple trailing Z</td><td class="mut">If the base string ends with multiple &#39;Z&#39; characters, slicing off only one character leave</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Async interaction</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Base string used before assignment</td><td class="mut">If the base string variable is defined later in the block, the rewrite could reference it </td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>shadowed builtins and names redefined later</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>int/float/bool coercion, Decimal, division and rounding</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">fired, no fix</span></td><td>multiple trailing Z characters</td><td class="mut">If the base string ends with multiple &#39;Z&#39; characters, slicing off only one character (e.g.</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>base string defined later in the block</td><td class="mut">If the base string variable is defined later in the block (due to hoisting-like confusion </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>comments attached to the transformation expression</td><td class="mut">Comments attached to the transformation expression (e.g., `# workaround`) would be lost wh</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">fired, no fix</span></td><td>class attributes vs instance attributes, descriptors, properties with side effects</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Truthiness comparison</summary><pre>from datetime import datetime
+
+def f():
+    class X:
+        def __init__(self, v):
+            self.v = v
+        def __bool__(self):
+            return self.v != &#39;&#39;
+        def __len__(self):
+            return len(self.v)
+    s = X(&#39;2023-01-01T12:00:00Z&#39;)
+    t = datetime.fromisoformat(s.replace(&quot;Z&quot;, &quot;+00:00&quot;))
+    u = datetime.fromisoformat(str(s))
+    print(&#39;t:&#39;, t.isoformat())
+    print(&#39;u:&#39;, u.isoformat())
+    print(&#39;equal?&#39;, t == u)
+    print(&#39;same?&#39;, t is u)
+f()
+</pre></details><details id="r1-p002"><summary>r1-p002 — Chained replace drops meaning</summary><pre>from datetime import datetime
+s = &#39;2023-01-01T12:00:00Z&#39;
+t = s.replace(&quot;T&quot;, &quot;_&quot;).replace(&quot;Z&quot;, &quot;+00:00&quot;)
+try:
+    dt = datetime.fromisoformat(t)
+    print(&#39;parsed:&#39;, dt.isoformat())
+except Exception as e:
+    print(type(e).__name__, &#39;:&#39;, e)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Non-UTC offset corrupted</summary><pre>from datetime import datetime
+s = &#39;2023-01-01T12:00:00+05:30&#39;
+dt_wrong = datetime.fromisoformat(s.replace(&quot;Z&quot;, &quot;+00:00&quot;))
+dt_right = datetime.fromisoformat(s)
+print(&#39;wrong:&#39;, dt_wrong.isoformat())
+print(&#39;right:&#39;, dt_right.isoformat())
+print(&#39;diff hours:&#39;, (dt_right - dt_wrong).total_seconds() / 3600)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Comment lost in fix</summary><pre>from datetime import datetime
+# input from user
+s = &#39;2023-01-01T12:00:00Z&#39;  # Zulu time
+try:
+    dt = datetime.fromisoformat(s.replace(&quot;Z&quot;, &quot;+00:00&quot;))  # workaround
+    print(&#39;ok:&#39;, dt.isoformat())
+except Exception as e:
+    print(type(e).__name__, &#39;:&#39;, e)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Coercion edge case</summary><pre>from datetime import datetime
+from decimal import Decimal
+s = &#39;2023-01-01T12:00:00&#39;
+val = Decimal(&#39;10.5&#39;) // 2
+try:
+    dt = datetime.fromisoformat(s + str(int(val)))
+    print(&#39;dt:&#39;, dt.isoformat())
+except Exception as e:
+    print(type(e).__name__, &#39;:&#39;, e)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Multiple trailing Z</summary><pre>from datetime import datetime
+s = &#39;2023-01-01T12:00:00ZZ&#39;
+t = s[:-1] + &#39;-00&#39;
+try:
+    dt = datetime.fromisoformat(t)
+    print(&#39;parsed:&#39;, dt.isoformat())
+except Exception as e:
+    print(type(e).__name__, &#39;:&#39;, e)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Async interaction</summary><pre>from datetime import datetime
+import asyncio
+
+async def gen():
+    yield &#39;2023-01-01T12:00:00Z&#39;
+
+async def main():
+    async for s in gen():
+        dt = datetime.fromisoformat(s.replace(&quot;Z&quot;, &quot;+00:00&quot;))
+        print(&#39;async parsed:&#39;, dt.isoformat())
+asyncio.run(main())
+</pre></details><details id="r1-p008"><summary>r1-p008 — Base string used before assignment</summary><pre>from datetime import datetime
+if True:
+    try:
+        dt = datetime.fromisoformat(s.replace(&quot;Z&quot;, &quot;+00:00&quot;))
+        print(&#39;dt:&#39;, dt.isoformat())
+    except NameError as e:
+        print(&#39;NameError:&#39;, e)
+    s = &#39;2023-01-01T12:00:00Z&#39;
+</pre></details><details id="r2-p001"><summary>r2-p001 — shadowed builtins and names redefined later</summary><pre>import datetime
+str = lambda x: x.upper()
+# str now shadows built-in
+val = &#39;2024-01-01T12:00:00Z&#39;
+tried = datetime.datetime.fromisoformat(str(val).replace(&#39;Z&#39;, &#39;+00:00&#39;))  # rule should fire here
+print(&#39;parsed:&#39;, tried)
+del str
+try:
+    datetime.datetime.fromisoformat(&#39;invalid&#39;.replace(&#39;Z&#39;, &#39;+00:00&#39;))
+except Exception as e:
+    print(&#39;error after del:&#39;, type(e).__name__, &#39;:&#39;, e)
+</pre></details><details id="r2-p002"><summary>r2-p002 — int/float/bool coercion, Decimal, division and rounding</summary><pre>from datetime import datetime
+import decimal
+x = &#39;2024-01-01T00:00:00Z&#39;
+y = bool(x)  # True
+z = decimal.Decimal(&#39;42&#39;) / decimal.Decimal(&#39;2&#39;)  # 21.0
+# Expression with coercion side effects
+ts = datetime.fromisoformat((x.replace(&#39;Z&#39;, &#39;+00:00&#39;), int(z))[0])  # tuple indexing, replace inside
+print(&#39;parsed:&#39;, ts)
+print(&#39;y:&#39;, y, &#39;z:&#39;, z)
+</pre></details><details id="r2-p003"><summary>r2-p003 — multiple trailing Z characters</summary><pre>from datetime import datetime
+s = &#39;2024-01-01T00:00:00ZZ&#39;  # two Z&#39;s
+# Rule triggers on s[:-1] + &#39;-00&#39; but leaves one Z
+try:
+    dt = datetime.fromisoformat(s[:-1] + &#39;-00&#39;)  # becomes ...00:00Z-00 -&gt; invalid
+    print(&#39;unexpected success:&#39;, dt)
+except ValueError as e:
+    print(&#39;ValueError (expected):&#39;, e)
+# Correct would be s.replace(&#39;Z&#39;, &#39;+00:00&#39;) or strip all trailing Z
+s_clean = s.rstrip(&#39;Z&#39;) + &#39;+00:00&#39;
+dt2 = datetime.fromisoformat(s_clean)
+print(&#39;correct parse:&#39;, dt2)
+</pre></details><details id="r2-p004"><summary>r2-p004 — truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</summary><pre>from datetime import datetime
+class MockStr:
+    def __init__(self, s):
+        self.s = s
+    def replace(self, a, b):
+        print(&#39;replace called&#39;)
+        return self.s.replace(a, b)
+    def __bool__(self):
+        return len(self.s) &gt; 10
+    def __len__(self):
+        return len(self.s)
+s = MockStr(&#39;2024-01-01T00:00:00Z&#39;)
+print(&#39;bool(s):&#39;, bool(s))
+if s:  # uses __bool__
+    dt = datetime.fromisoformat(s.replace(&#39;Z&#39;, &#39;+00:00&#39;))  # rule fires here
+    print(&#39;parsed:&#39;, dt)
+else:
+    print(&#39;false branch&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — base string defined later in the block</summary><pre>from datetime import datetime
+if False:
+    s = &#39;2024-01-01T00:00:00Z&#39;  # not executed
+else:
+    s = &#39;2024-01-01T00:00:00Z&#39;  # real definition
+# s is defined, but imagine if rule wrongly hoisted
+try:
+    dt = datetime.fromisoformat(s.replace(&#39;Z&#39;, &#39;+00:00&#39;))  # rule fires
+    print(&#39;parsed:&#39;, dt)
+except NameError as e:
+    print(&#39;NameError (should not happen):&#39;, e)
+print(&#39;s is:&#39;, s)
+</pre></details><details id="r2-p006"><summary>r2-p006 — comments attached to the transformation expression</summary><pre>from datetime import datetime
+s = &#39;2024-01-01T00:00:00Z&#39;
+# Rule should fire on next line, comment must be preserved in spirit via output
+dt = datetime.fromisoformat(s.replace(&#39;Z&#39;, &#39;+00:00&#39;))  # workaround for Zulu time
+print(&#39;parsed:&#39;, dt)
+# Simulate comment loss by checking if we can still associate intent
+print(&#39;workaround applied: Zulu time converted&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</summary><pre>from datetime import datetime
+def parse_time(*, source, fix_z=True):
+    if fix_z:
+        # Rule fires on next line inside function
+        return datetime.fromisoformat(source.replace(&#39;Z&#39;, &#39;+00:00&#39;))
+    return datetime.fromisoformat(source)
+s = &#39;2024-01-01T00:00:00Z&#39;
+print(parse_time(source=s))
+print(parse_time(source=s, fix_z=False))
+</pre></details><details id="r2-p008"><summary>r2-p008 — class attributes vs instance attributes, descriptors, properties with side effects</summary><pre>from datetime import datetime
+class Timestamp:
+    def __init__(self, s):
+        self._s = s
+    @property
+    def iso(self):
+        print(&#39;property accessed&#39;)
+        return self._s
+    @iso.setter
+    def iso(self, v):
+        self._s = v
+    def parse(self):
+        # Rule fires on next line: instance property access in attribute
+        return datetime.fromisoformat(self.iso.replace(&#39;Z&#39;, &#39;+00:00&#39;))
+ts = Timestamp(&#39;2024-01-01T00:00:00Z&#39;)
+print(&#39;parsed:&#39;, ts.parse())
+# Trigger again via reassignment
+ts.iso = &#39;2024-01-02T00:00:00Z&#39;
+print(&#39;re-parsed:&#39;, ts.parse())
+</pre></details></body></html>

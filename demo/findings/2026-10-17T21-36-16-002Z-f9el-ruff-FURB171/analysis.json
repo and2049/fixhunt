@@ -1,0 +1,35 @@
+{
+  "summary": "Flags membership tests (`in`/`not in`) where the right operand is a literal container containing exactly one element.",
+  "firingShapes": [
+    "x in [1]",
+    "x not in {2}",
+    "x in (\"hello\",)",
+    "x in frozenset([None])",
+    "x in b'\\x00'",
+    "x not in [True]",
+    "x in {'a': 1}.keys()",
+    "x in [obj]"
+  ],
+  "silentShapes": [
+    "x in [1, 2]",
+    "x in []",
+    "x in {1: 'a', 2: 'b']",
+    "x in s",
+    "x in func()"
+  ],
+  "fixDescription": "Replaces `x in [y]` with `x == y` and `x not in [y]` with `x != y`, preserving the left operand and the single item from the container literal.",
+  "hazards": [
+    "For string containers like `x in \"a\"`, the rewrite to `x == \"a\"` fails to match the empty string, changing behavior when `x` is `\"\"`.",
+    "For `NaN` values, `nan in [nan]` evaluates to `True` due to identity-based membership, but `nan == nan` is `False`, altering the result.",
+    "If the container is a view like `d.keys()` where `d` is later mutated, the rewrite evaluates the view earlier, potentially capturing a stale state.",
+    "When the single item is an expression with side effects (e.g., `x in [f()]`), the rewrite may evaluate it once instead of preserving the original evaluation context.",
+    "If the left operand `x` is a complex expression with side effects (e.g., `g() in [1]`), the rewrite duplicates its evaluation, causing unintended repeated side effects.",
+    "The fix removes any comments located between the `in`/`not in` operator and the container brackets, altering source code formatting.",
+    "For byte strings like `x in b'\\x00'`, the rewrite to `x == b'\\x00'[0]` incorrectly compares to an integer instead of a byte string element.",
+    "When the container holds a mutable object (e.g., `x in [[]]`), the rewrite uses `==` which may trigger `__eq__` overrides, differing from identity-based `in` semantics.",
+    "If the single item is a placeholder like `...` (Ellipsis), the rewrite to `x == ...` is syntactically valid but semantically opaque and not intended for direct comparison.",
+    "In `not in` contexts, rewriting `x not in [y]` to `x != y` fails when `x` and `y` are of incomparable types that still define `__contains__` (e.g., mixed types in custom containers).",
+    "The rewrite assumes the container is literally a single-element display; it does not apply to variables or function calls, so misapplication could occur if the linter is bypassed.",
+    "For containers formed via unpacking like `x in [*[y]]`, the fix may not trigger or may produce invalid syntax if applied incorrectly."
+  ]
+}

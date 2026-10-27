@@ -1,0 +1,35 @@
+{
+  "summary": "Flags methods defined as plain functions then assigned via `classmethod(func)` outside the function body.",
+  "firingShapes": [
+    "class C:\n    def m(cls): ...\n    m = classmethod(m)",
+    "class C:\n    @staticmethod\n    def m(): ...\n    m = classmethod(m)",
+    "class C:\n    def m(self): ...\n    m = classmethod(m)",
+    "class C:\n    def m(cls, x): return x\n    m = classmethod(m)\n    n = m",
+    "class C:\n    def m(cls): pass\n    m = classmethod(m)\n    del m",
+    "class C:\n    def m(cls): ...\n    m = classmethod(m)\n    __all__ = ['m']",
+    "class C:\n    def m(cls): ...\n    m = classmethod(m)\n    if True:\n        pass",
+    "class D(C):\n    def m(cls): ...\n    m = classmethod(m)"
+  ],
+  "silentShapes": [
+    "class C:\n    @classmethod\n    def m(cls): ...",
+    "class C:\n    m = classmethod(lambda cls: None)",
+    "def m(cls): ...\n    m = classmethod(m)",
+    "class C:\n    def m(self): ...\n    m = staticmethod(m)",
+    "class C:\n    def m(cls): ...\n    cm = classmethod(m)\n    m = cm"
+  ],
+  "fixDescription": "Replaces the method definition and subsequent assignment with a single method definition prefixed by the `@classmethod` decorator, preserving the original function name, parameters, and body.",
+  "hazards": [
+    "If the method name is used in an annotation within the same class body before the assignment, moving the decorator may change the binding time and cause a NameError.",
+    "If the class contains a `__prepare__` metaclass method that relies on the order of attribute definitions, inserting the decorator earlier may alter the namespace preparation state.",
+    "If the method is decorated with other decorators (e.g., `@property`) in the original code, the autofix does not preserve them, potentially changing the descriptor behavior.",
+    "If the method assignment is guarded by a runtime condition (e.g., inside an `if` block), the autofix hoists it to unconditional execution, altering when the method becomes a classmethod.",
+    "If the method name is deleted (`del m`) after the assignment but before the end of the class body, the autofix incorrectly retains the method as a classmethod.",
+    "If the method is assigned to an alias (e.g., `n = m`) after the `classmethod` assignment, the autofix breaks the alias because `n` refers to the undecorated function in the original but would refer to the classmethod-descriptor after the fix.",
+    "If the method definition contains a type comment (e.g., `# type: (cls) -> int`) placed after the function, the autofix may discard it during rewrite, altering static type checking behavior.",
+    "If the method is defined in a class executed under `-OO` (optimized mode) where docstrings are omitted, the autofix preserves the docstring but the rewrite timing may interact unexpectedly with stripped constants.",
+    "If the class is nested inside a function and the method uses a closure variable from the outer scope, the autofix does not affect closure capture, but the redefinition order may interfere with late-bound defaults in rare cases.",
+    "If the method name is `__classcell__` (used in Python 3.7+ for class cell handling), rewriting it as a decorated method may interfere with the class creation protocol.",
+    "If the method assignment is preceded by a `from __future__ import` statement that affects execution semantics, the autofix does not account for potential changes in how the function is compiled.",
+    "If the method is part of a mixin intended to be overridden and the assignment relies on the original function being temporarily accessible via the class dict, the autofix may break intermediate access patterns during class construction."
+  ]
+}

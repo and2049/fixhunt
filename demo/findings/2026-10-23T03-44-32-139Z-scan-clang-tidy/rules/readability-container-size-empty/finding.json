@@ -1,0 +1,99 @@
+{
+  "rule": "readability-container-size-empty",
+  "fixKind": "unknown",
+  "changedFiles": [
+    "native/src/window.cpp"
+  ],
+  "diff": "diff -ruN -x .git -x node_modules -x .venv -x venv -x __pycache__ -x .pytest_cache -x .ruff_cache -x .mypy_cache -x dist -x build -x target -x .tox -x .nox -x runs base/native/src/window.cpp rules/readability-container-size-empty/native/src/window.cpp\n--- base/native/src/window.cpp\t2026-10-22 23:44:32.586315915 -0400\n+++ rules/readability-container-size-empty/native/src/window.cpp\t2026-10-22 23:44:37.183849473 -0400\n@@ -9,4 +9,4 @@\n \n int Window::sum() const { return std::accumulate(samples_.begin(), samples_.end(), 0); }\n \n-bool disabled(const Window& w) { return w.size() == 0; }\n+bool disabled(const Window& w) { return w.empty(); }\n",
+  "before": {
+    "stdout": "ok   !disabled(w)\nok   w.empty()\nok   w.sum() == 9\nok   disabled(off)\nok   normalize(\"MiXed\") == \"mixed\"\nok   first_or_null(\"\") == NULL\nok   std::strcmp(first_or_null(\"a\"), \"a\") == 0\nPASSED\n",
+    "stderr": "",
+    "code": 0,
+    "timedOut": false
+  },
+  "after": {
+    "stdout": "FAIL !disabled(w)\nok   w.empty()\nok   w.sum() == 9\nok   disabled(off)\nok   normalize(\"MiXed\") == \"mixed\"\nok   first_or_null(\"\") == NULL\nok   std::strcmp(first_or_null(\"a\"), \"a\") == 0\nFAILED\n",
+    "stderr": "make: *** [Makefile:6: test] Error 1\n",
+    "code": 2,
+    "timedOut": false
+  },
+  "kind": "fix-changes-behavior",
+  "observed": "stdout lines only before the fix:\n  ok   !disabled(w)\n  PASSED\nstdout lines only after the fix:\n  FAIL !disabled(w)\n  FAILED\nexit 0 → 2\nstderr last line before: (none)\nstderr last line after: make: *** [Makefile:6: test] Error 1",
+  "lint": {
+    "before": 1,
+    "after": 0,
+    "files": 1,
+    "sample": []
+  },
+  "cost": 0.0074199999999999995,
+  "minimal": {
+    "hunks": 1,
+    "of": 1,
+    "files": [
+      "native/src/window.cpp"
+    ],
+    "diff": "--- a/native/src/window.cpp\n+++ b/native/src/window.cpp\n@@ -9,4 +9,4 @@\n \n int Window::sum() const { return std::accumulate(samples_.begin(), samples_.end(), 0); }\n \n-bool disabled(const Window& w) { return w.size() == 0; }\n+bool disabled(const Window& w) { return w.empty(); }\n",
+    "evaluations": 0,
+    "confirmed": true
+  },
+  "verdict": {
+    "grade": "real",
+    "severity": "high",
+    "why": "The rule rewrites `w.size() == 0` to `w.empty()`, which for standard containers is semantically equivalent. However, the test failure indicates that `Window::empty()` either does not exist, has a different signature, or returns a different result than `w.size() == 0`. Since the documentation is missing and the fix is labelled unknown, the rewrite cannot be assumed safe for this user-defined type, and the change in test outcome demonstrates a real behavioral regression.",
+    "docsQuote": "none",
+    "differenceSource": "runtime-semantics"
+  },
+  "upstream": {
+    "queries": [
+      "readability-container-size-empty fix",
+      "readability-container-size-empty size zero comparison",
+      "clang-tidy readability-container-size-empty empty method",
+      "Window disabled function size equals zero"
+    ],
+    "duplicates": [
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/171193",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/154762",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/152387",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/37603",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/118418",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/162287",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/185007",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/88203",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/72619",
+        "relation": "related"
+      },
+      {
+        "url": "https://github.com/llvm/llvm-project/issues/51118",
+        "relation": "related"
+      }
+    ],
+    "cost": 0.0053081
+  },
+  "explanation": "The rewrite replaces `w.size() == 0` with `w.empty()`, which for standard containers like `std::vector` or `deque` is equivalent in behavior—both check if there are zero elements. However, if `Window::size()` returns a signed integer type (e.g., `int`) while `empty()` expects an unsigned comparison internally, or if `Window` overrides `size()` with non-standard semantics (e.g., returning cached or approximated size), then `w.size() == 0` and `w.empty()` may diverge. For instance, if `size()` can be negative due to overflow or bug, `w.size() == 0` would be false for negative values, but `w.empty()` might still return true if the container is actually empty—though this contradicts typical design. More plausibly, if `Window` is not a standard container and `empty()` is not overridden to match `size() == 0`, the two expressions differ. The test failure indicates that for some `w`, `w.size() == 0` is true but `w.empty()` is false (or vice versa), breaking equivalence. Since the fix assumes `empty()` mirrors `size() == 0`, it fails when `Window` does not uphold that contract—making the change unsafe without verifying `Window`'s actual behavior. The observed shift from passing to failing confirms the semantic mismatch.",
+  "report": "reports/readability-container-size-empty.md"
+}

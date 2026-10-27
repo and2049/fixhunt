@@ -1,0 +1,171 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff F504 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff F504 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-53-12-261Z-5dy3-ruff-F504 · fix labelled <b>unknown</b> · 16 programs, 0 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0040</p>
+<div class="card"><b>Rule analysis</b><p>Flags printf-style formatting expressions where extra named keys appear in the mapping argument but have no corresponding placeholder in the format string.</p><p class="mut">Fix: Removes all key-value pairs from the mapping argument where the key does not appear as a named placeholder in the format string.</p><details><summary>12 hazards</summary><ul><li>Removing a key whose value is a function call (e.g., func()) eliminates its side effects, changing program behavior if the function performs I/O or mutates state.</li><li>If the mapping argument is a variable (not a literal), the fix incorrectly assumes it can be rewritten as a smaller literal, which fails when the variable is reused elsewhere or has dynamic contents.</li><li>When the format string contains duplicate placeholders (e.g., &#39;%(a)s %(a)s&#39;), removing a key that appears only once in the mapping but is referenced multiple times may still be safe, but the fix logic must not overremove; however, the rule does not fire in such cases because the key is used.</li><li>If the mapping argument is constructed via a function call (e.g., % build_dict()), the fix cannot safely rewrite it to a literal without knowing the function&#39;s output, potentially causing a mismatch between expected and actual keys.</li><li>If the mapping argument includes nested expressions like %(key)s % {&#39;a&#39;: f().b}, removing the key may break attribute access if f() returns None or an unexpected type, though this is less common.</li><li>Comments attached to the removed key-value pairs (e.g., # TODO) are lost when the fix rewrites the dictionary literal, stripping inline documentation.</li><li>In Python versions prior to 3.6, dictionary literals preserve insertion order only as an implementation detail; removing keys may alter iteration order if the dict is later passed to code relying on order (e.g., for k, v in d.items(): ...)</li><li>If the mapping argument is used in a larger expression (e.g., (%(a)s) % {&#39;a&#39;:1, &#39;b&#39;:2} + c), the fix rewrites only the dict part, but if the surrounding expression depends on the exact structure (e.g., len(...) or == comparison), behavior may change.</li><li>When the format string uses mixed formatting (e.g., &#39;%(name)s %d&#39; % ({&#39;name&#39;: &#39;x&#39;, &#39;extra&#39;: y}, 42)), the fix incorrectly assumes the entire right-hand side is a mapping, leading to invalid syntax or TypeError.</li><li>If the mapping argument is a subclass of dict that overrides __missing__ or __getitem__, removing keys may change behavior if the code relies on the fallback mechanism for missing keys.</li><li>The fix may produce a dictionary with fewer keys than expected by subsequent code that inspects the argument (e.g., via locals() or vars()), breaking introspection or debugging logic.</li><li>In rare cases, removing a key could resolve a naming conflict in a comprehension or lambda scope if the key was accidentally shadowing a built-in, though this is highly speculative and context-dependent.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Variable reuse after removal</td><td class="mut">If the mapping argument is a variable (not a literal), the fix incorrectly assumes it can </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>File write partial failure</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Shadowed built-in redefinition</td><td class="mut">shadowed builtins and names redefined later in the module</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus and late-binding closure</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Property with side effect in dict</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dict in larger expression with len()</td><td class="mut">If the mapping argument is used in a larger expression (e.g., (%(a)s) % {&#39;a&#39;:1, &#39;b&#39;:2} + c</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Lost inline comment in dict literal</td><td class="mut">Comments attached to the removed key-value pairs (e.g., # TODO) are lost when the fix rewr</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Accidental built-in shadow resolved by removal</td><td class="mut">In rare cases, removing a key could resolve a naming conflict in a comprehension or lambda</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">silent</span></td><td>Duplicate placeholders - rule should not fire since key is used</td><td class="mut">When the format string contains duplicate placeholders (e.g., &#39;%(a)s %(a)s&#39;), removing a k</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>int/float/bool coercion, Decimal, division and rounding</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Nested expressions in mapping value breaking on attribute access</td><td class="mut">If the mapping argument includes nested expressions like %(key)s % {&#39;a&#39;: f().b}, removing </td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Mixed formatting with tuple RHS - fix assumes mapping only</td><td class="mut">When the format string uses mixed formatting (e.g., &#39;%(name)s %d&#39; % ({&#39;name&#39;: &#39;x&#39;, &#39;extra&#39;</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>File modes and truncation, partial writes, non-str data passed to write</td><td class="mut">file modes and truncation, partial writes, non-str data passed to write</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Walrus, comprehensions scoping, late binding in closures and lambdas</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>String formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Variable reuse after removal</summary><pre>mapping = {&#39;x&#39;: &#39;keep&#39;, &#39;y&#39;: &#39;remove&#39;}  # y unused
+result = &#39;%(x)s&#39; % mapping
+print(&#39;First:&#39;, result)
+mapping[&#39;y&#39;] = &#39;changed&#39;
+result = &#39;%(x)s&#39; % mapping
+print(&#39;Second:&#39;, result)
+</pre></details><details id="r1-p002"><summary>r1-p002 — File write partial failure</summary><pre>f = open(&#39;test.txt&#39;, &#39;w&#39;)
+data = {&#39;msg&#39;: &#39;hello&#39;, &#39;junk&#39;: 123}  # junk unused
+try:
+    f.write(&#39;%(msg)s\n&#39; % data)
+except Exception as e:
+    print(&#39;Write error:&#39;, type(e).__name__, str(e))
+f.close()
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(&#39;File content:&#39;, repr(f.read()))
+</pre></details><details id="r1-p003"><summary>r1-p003 — Shadowed built-in redefinition</summary><pre>str = &#39;overridden&#39;  # shadow built-in
+mapping = {&#39;a&#39;: &#39;value&#39;, &#39;str&#39;: &#39;also_used&#39;}  # str used in format
+fmt = &#39;%(a)s %(str)s&#39;
+result = fmt % mapping
+print(&#39;Result:&#39;, result)
+# Later, str is reused as built-in via recovery
+try:
+    s = str([1, 2, 3])
+except Exception as e:
+    print(&#39;str recovery failed:&#39;, type(e).__name__, str(e))
+else:
+    print(&#39;str recovery:&#39;, s)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Walrus and late-binding closure</summary><pre>funcs = []
+for i in range(2):
+    mapping = {&#39;a&#39;: i, &#39;b&#39;: i*2}  # b unused
+    if (s := mapping.get(&#39;a&#39;)) is not None:
+        funcs.append(lambda m=mapping: &#39;%(a)s&#39; % m)  # uses mapping
+for f in funcs:
+    print(&#39;Closure result:&#39;, f())
+</pre></details><details id="r1-p005"><summary>r1-p005 — Property with side effect in dict</summary><pre>class Data:
+    def __init__(self):
+        self._val = 0
+    @property
+    def val(self):
+        self._val += 1
+        return self._val
+obj = Data()
+mapping = {&#39;value&#39;: obj.val, &#39;extra&#39;: obj.val}  # extra unused but triggers side effect
+result = &#39;Value: %(value)d&#39; % mapping
+print(&#39;Result:&#39;, result)
+print(&#39;Obj val after:&#39;, obj.val)
+</pre></details><details id="r1-p006"><summary>r1-p006 — Dict in larger expression with len()</summary><pre>mapping = {&#39;a&#39;: &#39;hello&#39;, &#39;b&#39;: &#39;world&#39;}  # b unused
+part = &#39;Hello %(a)s&#39; % mapping
+combined = part + str(len(mapping))  # len depends on full dict
+print(&#39;Combined:&#39;, combined)
+# After fix: mapping becomes {&#39;a&#39;: &#39;hello&#39;}, len=1 -&gt; &#39;Hello hello1&#39;
+# Before: len=2 -&gt; &#39;Hello hello2&#39;
+</pre></details><details id="r1-p007"><summary>r1-p007 — Lost inline comment in dict literal</summary><pre># This comment is outside
+mapping = {
+    &#39;keep&#39;: &#39;value&#39;,  # Important
+    &#39;remove&#39;: 42,   # TODO: remove this
+}
+result = &#39;Keep: %(keep)s&#39; % mapping
+print(&#39;Result:&#39;, result)
+print(&#39;Mapping keys:&#39;, list(mapping.keys()))  # Should show both keys before fix
+</pre></details><details id="r1-p008"><summary>r1-p008 — Accidental built-in shadow resolved by removal</summary><pre>list = [1, 2, 3]  # shadow built-in
+mapping = {&#39;x&#39;: &#39;test&#39;, &#39;list&#39;: [4, 5]}  # list unused in format, but shadows
+# Format uses only &#39;x&#39;, so &#39;list&#39; key is superfluous
+result = &#39;X: %(x)s&#39; % mapping
+print(&#39;Result:&#39;, result)
+# After fix, mapping loses &#39;list&#39; key -&gt; list built-in accessible again?
+# But we don&#39;t rely on that; instead, we show that &#39;list&#39; var still shadows
+try:
+    x = list(range(2))  # This should fail because list is shadowed
+    print(&#39;list() worked:&#39;, x)
+except Exception as e:
+    print(&#39;list() failed:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Duplicate placeholders - rule should not fire since key is used</summary><pre>template = &#39;%(a)s %(a)s&#39;
+data = {&#39;a&#39;: 42, &#39;unused&#39;: &#39;should_not_be_removed_by_rule&#39;}
+result = template % data
+print(&#39;Output:&#39;, result)
+</pre></details><details id="r2-p002"><summary>r2-p002 — int/float/bool coercion, Decimal, division and rounding</summary><pre>from decimal import Decimal
+def make_val():
+    return Decimal(&#39;10.5&#39;)
+template = &#39;Value: %(val).2f&#39;
+data = {&#39;val&#39;: make_val(), &#39;extra&#39;: 3 / 2}
+try:
+    result = template % data
+    print(&#39;Formatted:&#39;, result)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r2-p003"><summary>r2-p003 — Nested expressions in mapping value breaking on attribute access</summary><pre>class Obj:
+    def __init__(self, x):
+        self.b = x
+def get_obj():
+    return Obj(99)
+template = &#39;Result: %(obj)s&#39;
+data = {&#39;obj&#39;: get_obj().b, &#39;unused&#39;: None}
+try:
+    result = template % data
+    print(&#39;Output:&#39;, result)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r2-p004"><summary>r2-p004 — Keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</summary><pre>def process(*, fmt, **kw):
+    return fmt % kw
+def make_data():
+    return {&#39;a&#39;: 1, &#39;extra&#39;: 2}
+template = &#39;%(a)s&#39;
+data = make_data()
+try:
+    result = process(fmt=template, **data)
+    print(&#39;Result:&#39;, result)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r2-p005"><summary>r2-p005 — Mixed formatting with tuple RHS - fix assumes mapping only</summary><pre>template = &#39;%(name)s %d&#39;
+data = ({&#39;name&#39;: &#39;Alice&#39;, &#39;extra&#39;: 99}, 42)
+try:
+    result = template % data
+    print(&#39;Output:&#39;, result)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details><details id="r2-p006"><summary>r2-p006 — File modes and truncation, partial writes, non-str data passed to write</summary><pre>import os
+template = &#39;Log: %(msg)s&#39;
+data = {&#39;msg&#39;: &#39;hello&#39;, &#39;unused&#39;: open(&#39;tmp.txt&#39;, &#39;w&#39;)}
+try:
+    formatted = template % data
+    with open(&#39;out.txt&#39;, &#39;w&#39;) as f:
+        f.write(formatted)
+    with open(&#39;out.txt&#39;) as f:
+        print(&#39;File content:&#39;, repr(f.read()))
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+finally:
+    if os.path.exists(&#39;tmp.txt&#39;):
+        os.remove(&#39;tmp.txt&#39;)
+    if os.path.exists(&#39;out.txt&#39;):
+        os.remove(&#39;out.txt&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Walrus, comprehensions scoping, late binding in closures and lambdas</summary><pre>funcs = []
+for i in range(2):
+    if (data := {&#39;a&#39;: i, &#39;unused&#39;: i*10}) is not None:
+        template = &#39;%(a)s&#39;
+        f = lambda: template % data
+        funcs.append(f)
+print(&#39;Results:&#39;, [f() for f in funcs])
+</pre></details><details id="r2-p008"><summary>r2-p008 — String formatting edge cases: %, format, f-strings, repr vs str, nested quotes</summary><pre>name = &#39;World&#39;
+extra = 42
+template = &#39;Hello %(name)s&#39;
+data = {&#39;name&#39;: name, &#39;extra&#39;: extra}
+try:
+    percent_result = template % data
+    format_result = template.format_map(data)
+    f_result = f&#39;Hello {name}&#39;
+    print(&#39;%:&#39;, percent_result)
+    print(&#39;.format_map:&#39;, format_result)
+    print(&#39;f-string:&#39;, f_result)
+except Exception as e:
+    print(&#39;Error:&#39;, type(e).__name__, str(e))
+</pre></details></body></html>

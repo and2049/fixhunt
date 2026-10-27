@@ -1,0 +1,565 @@
+{
+  "runId": "2026-10-17T21-37-31-641Z-1cbu-ruff-FURB188",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "FURB188",
+    "fixKind": "unknown",
+    "docs": "# slice-to-remove-prefix-or-suffix (FURB188)\n\nDerived from the **refurb** linter.\n\nFix is always available.\n\n## What it does\nChecks for code that could be written more idiomatically using\n[`str.removeprefix()`](https://docs.python.org/3/library/stdtypes.html#str.removeprefix)\nor [`str.removesuffix()`](https://docs.python.org/3/library/stdtypes.html#str.removesuffix).\n\nSpecifically, the rule flags code that conditionally removes a prefix or suffix\nusing a slice operation following an `if` test that uses `str.startswith()` or `str.endswith()`.\n\nThe rule is only applied if your project targets Python 3.9 or later.\n\n## Why is this bad?\nThe methods [`str.removeprefix()`](https://docs.python.org/3/library/stdtypes.html#str.removeprefix)\nand [`str.removesuffix()`](https://docs.python.org/3/library/stdtypes.html#str.removesuffix),\nintroduced in Python 3.9, have the same behavior while being more readable and efficient.\n\n## Example\n```python\ndef example(filename: str, text: str):\n    filename = filename[:-4] if filename.endswith(\".txt\") else filename\n\n    if text.startswith(\"pre\"):\n        text = text[3:]\n```\n\nUse instead:\n```python\ndef example(filename: str, text: str):\n    filename = filename.removesuffix(\".txt\")\n    text = text.removeprefix(\"pre\")\n```\n\n## Fix safety\nThis rule's fix is marked as safe, unless the expression contains comments.\n"
+  },
+  "analysis": {
+    "summary": "Flags conditional slicing to remove prefixes/suffixes after startswith/endswith checks.",
+    "firingShapes": [
+      "s = s[:-len(p)] if s.startswith(p) else s",
+      "s = s[len(p):] if s.startswith(p) else s",
+      "s = s[: -len(suf)] if s.endswith(suf) else s",
+      "s = s[-len(suf):] if s.endswith(suf) else s",
+      "t = t[3:] if t.startswith('abc') else t",
+      "u = u[:-5] if u.endswith('.log') else u",
+      "v = v[2:] if v.startswith('//') else v",
+      "w = w[:-1] if w.endswith('/') else w"
+    ],
+    "silentShapes": [
+      "s = s[1:] if s.startswith('a') else s[2:]",
+      "s = s[:-3] if len(s) > 3 else s",
+      "s = s[2:] if s.startswith('xy') and flag else s",
+      "s = s.removeprefix('pre') if hasattr(s, 'startswith') else s",
+      "if s.startswith('pre'): s = s[3:]; else: s = s[2:]"
+    ],
+    "fixDescription": "Replace conditional slice assignment with direct call to str.removeprefix() or str.removesuffix() using the same prefix/suffix literal.",
+    "hazards": [
+      "Rewriting s = s[:-len(p)] if s.startswith(p) else s when p is a variable with side effects in its evaluation changes timing of those effects.",
+      "If the slice expression uses a variable whose value changes between the startswith check and the slice, the fix may use a stale value.",
+      "When the assigned variable appears elsewhere in the condition (e.g., s = s[:-len(s)] if s.endswith(s) else s), the fix incorrectly binds the method to the original value.",
+      "If the slice is part of a larger expression (e.g., f(s[:-len(p)] if s.startswith(p) else s)), extracting the slice changes evaluation order relative to other function arguments.",
+      "If the branch contains commented-out code (e.g., s = s[:-len(p)]  # TODO: verify\nif s.startswith(p) else s), the fix may discard those comments.",
+      "When the target of assignment is a subscript or attribute (e.g., lst[i] = lst[i][:-len(p)] if lst[i].startswith(p) else lst[i]), the fix may not preserve the same assignment target semantics.",
+      "If the startswith/endswith argument is not a literal but a complex expression, the fix may incorrectly assume it is safe to pass directly to removeprefix/removesuffix.",
+      "In code with multiple assignments to the same variable in one line (e.g., a = b = s[:-len(p)] if s.startswith(p) else s), the fix may not replicate the multiple-assignment behavior.",
+      "If the conditional is nested inside a lambda or comprehension, the fix may alter scoping by lifting expressions.",
+      "When the string method is called on a non-str object that has startswith/endswith but not removeprefix/removesuffix (e.g., bytes), the fix introduces an AttributeError.",
+      "If the string is a subclass that overrides removeprefix/removesuffix with different behavior, the fix changes semantics.",
+      "In Python versions before 3.9, the fix would raise an AttributeError since removeprefix/removesuffix do not exist."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.0032487,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 6,
+    "fixed": 6,
+    "disputed": 7
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "FURB188 Hazard 1: Variable mutated between check and slice",
+      "hazard": "If the slice expression uses a variable whose value changes between the startswith check and the slice, the fix may use a stale value.",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "prefix\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "FURB188 Hazard 2: Non-str object with startswith but no removeprefix",
+      "hazard": "When the string method is called on a non-str object that has startswith/endswith but not removeprefix/removesuffix (e.g., bytes), the fix introduces an AttributeError.",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "b'pre'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p003",
+      "title": "FURB188 Hazard 3: Truthiness and falsy values",
+      "hazard": "truthiness of custom __bool__/__len__, None vs falsy, 'is' vs '=='",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "TypeError: 'C' object is not subscriptable\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "FURB188 Hazard 4: Shadowed builtins",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "PRE\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "FURB188 Hazard 5: Commented-out code discarded by fix",
+      "hazard": "If the branch contains commented-out code (e.g., s = s[:-len(p)]  # TODO: verify\nif s.startswith(p) else s), the fix may discard those comments.",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r1-p006",
+      "title": "FURB188 Hazard 6: Assigned variable appears in condition",
+      "hazard": "When the assigned variable appears elsewhere in the condition (e.g., s = s[:-len(s)] if s.endswith(s) else s), the fix incorrectly binds the method to the original value.",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB188",
+            "severity": "warning",
+            "message": "Prefer `str.removesuffix()` over conditionally replacing with slice.",
+            "span": [
+              3,
+              9
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "''\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:37:41.288565904 -0400\n+++ fixed.py\t2026-10-17 17:37:41.447564382 -0400\n@@ -1,4 +1,4 @@\n s = 'suffixfix'\n if s.endswith(s):\n-    s = s[:-len(s)] if s.endswith(s) else s\n+    s = s.removesuffix(s)\n print(repr(s))\n"
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "FURB188 Hazard 7: Type annotations evaluated at runtime",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "pre\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p008",
+      "title": "FURB188 Hazard 8: Python < 3.9 lacks removeprefix/removesuffix",
+      "hazard": "In Python versions before 3.9, the fix would raise an AttributeError since removeprefix/removesuffix do not exist.",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "fix\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Star import and module-level mutation affecting global used in slicing",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB188",
+            "severity": "warning",
+            "message": "Prefer `str.removeprefix()` over conditionally replacing with slice.",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "cde\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "cde\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:37:45.769523104 -0400\n+++ fixed.py\t2026-10-17 17:37:45.933521541 -0400\n@@ -1,5 +1,4 @@\n prefix = 'ab'\n s = 'abcde'\n-if s.startswith(prefix):\n-    s = s[len(prefix):]\n+s = s.removeprefix(prefix)\n print(s)\n"
+      }
+    },
+    {
+      "id": "r2-p002",
+      "title": "Mutable default argument aliasing after function call",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB188",
+            "severity": "warning",
+            "message": "Prefer `str.removeprefix()` over conditionally replacing with slice.",
+            "span": [
+              6,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "['fix']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "['fix']\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:37:46.042520502 -0400\n+++ fixed.py\t2026-10-17 17:37:46.205518950 -0400\n@@ -3,7 +3,6 @@\n     return lst\n prefix = 'pre'\n s = 'prefix'\n-if s.startswith(prefix):\n-    s = s[len(prefix):]\n+s = s.removeprefix(prefix)\n f(s)\n print(f.__defaults__[0])\n"
+      }
+    },
+    {
+      "id": "r2-p003",
+      "title": "String formatting with f-string and repr in slice length",
+      "hazard": "string formatting edge cases: %, format, f-strings, repr vs str, nested quotes",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB188",
+            "severity": "warning",
+            "message": "Prefer `str.removeprefix()` over conditionally replacing with slice.",
+            "span": [
+              3,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "Result: 'ello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "Result: 'ello'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:37:46.308517970 -0400\n+++ fixed.py\t2026-10-17 17:37:46.476516370 -0400\n@@ -1,5 +1,4 @@\n x = 'hello'\n pref = 'h'\n-if x.startswith(pref):\n-    x = x[len(pref):]\n+x = x.removeprefix(pref)\n print(f'Result: {x!r}')\n"
+      }
+    },
+    {
+      "id": "r2-p004",
+      "title": "Subclass overriding removeprefix with different behavior",
+      "hazard": "If the string is a subclass that overrides removeprefix/removesuffix with different behavior, the fix changes semantics.",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'str'> st\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p005",
+      "title": "Type annotation evaluated at runtime using forward reference",
+      "hazard": "type annotations evaluated at runtime, typing-only imports",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB188",
+            "severity": "warning",
+            "message": "Prefer `str.removeprefix()` over conditionally replacing with slice.",
+            "span": [
+              4,
+              1
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "123\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:37:46.710514142 -0400\n+++ fixed.py\t2026-10-17 17:37:46.879512533 -0400\n@@ -1,6 +1,5 @@\n from __future__ import annotations\n prefix: str = 'xyz'\n s: str = 'xyz123'\n-if s.startswith(prefix):\n-    s = s[len(prefix):]\n+s = s.removeprefix(prefix)\n print(s)\n"
+      }
+    },
+    {
+      "id": "r2-p006",
+      "title": "Keyword-only argument with default evaluated once",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "FURB188",
+            "severity": "warning",
+            "message": "Prefer `str.removeprefix()` over conditionally replacing with slice.",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "cd\nab\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "cd\nab\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:37:46.976511609 -0400\n+++ fixed.py\t2026-10-17 17:37:47.134510106 -0400\n@@ -1,6 +1,5 @@\n def g(*, cut='ab', s='abcd'):\n-    if s.startswith(cut):\n-        s = s[len(cut):]\n+    s = s.removeprefix(cut)\n     return s\n print(g())\n print(g(s='abab'))\n"
+      }
+    },
+    {
+      "id": "r2-p007",
+      "title": "Assigned variable appears in condition via function call",
+      "hazard": "When the assigned variable appears elsewhere in the condition (e.g., s = s[:-len(s)] if s.endswith(s) else s)",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "hell\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "Conditional inside list comprehension altering scoping",
+      "hazard": "If the conditional is nested inside a lambda or comprehension, the fix may alter scoping by lifting expressions.",
+      "rule": "FURB188",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    }
+  ]
+}

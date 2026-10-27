@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff B011 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff B011 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-12-19-048Z-mhta-ruff-B011 · fix labelled <b>unknown</b> · 8 programs, 4 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0018</p>
+<div class="card"><b>Rule analysis</b><p>The rule flags any use of &#39;assert False&#39; because assertions are removed in optimized mode, making them unreliable for raising errors.</p><p class="mut">Fix: Replace &#39;assert False&#39; with &#39;raise AssertionError&#39;, preserving any message argument as the error&#39;s argument if present.</p><details><summary>10 hazards</summary><ul><li>In optimized mode (-O), the original &#39;assert False&#39; would be ignored and do nothing, while the fix raises an exception, changing program behavior from silent continuation to explicit error.</li><li>If &#39;assert False&#39; appears inside a lambda or list comprehension, replacing it with &#39;raise AssertionError&#39; may break the expression context, as raise is a statement and cannot be used where an expression is expected (e.g., in a list comprehension filter or lambda body), causing a SyntaxError.</li><li>When &#39;assert False&#39; is used in a try block, the fix changes which exceptions are caught: the original would be skipped in -O mode, but the fix always raises, potentially altering exception handling flow even in normal mode if other exceptions are expected.</li><li>If &#39;assert False&#39; is followed by a comment on the same line, the autofix may drop or misplace the comment during rewriting, especially if the tool does not preserve trailing comments.</li><li>In a class or module scope, &#39;assert False&#39; is executed during definition; replacing it with &#39;raise AssertionError&#39; changes the timing and visibility of the error—now raised at import time unconditionally, whereas in -O mode the original would be removed and no error raised.</li><li>If &#39;assert False&#39; is part of a larger expression via short-circuiting (e.g., &#39;assert False or x&#39;), removing the assert changes evaluation: the original would short-circuit to False in normal mode (but be removed in -O), while the fix always raises, breaking any reliance on the assert returning None or enabling short-circuit.</li><li>When &#39;assert False&#39; has a message (e.g., &#39;assert False, msg&#39;), the fix correctly passes msg to AssertionError, but if msg has side effects (e.g., a function call), those are now evaluated unconditionally, whereas in -O mode the original assert would be removed and the side effects would not occur.</li><li>If the code relies on the fact that &#39;assert False&#39; raises AssertionError only in non-optimized mode to conditionally disable checks, replacing it with a permanent raise breaks that intentional optimization-aware behavior.</li><li>In nested functions, if &#39;assert False&#39; is used and the fix is applied, the raised exception may interfere with introspection or debugging tools that expect AssertionError to originate from assert statements specifically.</li><li>If &#39;assert False&#39; appears in a string or comment (as text), the linter should not flag it, but if the autofix incorrectly modifies such occurrences (due to faulty pattern matching), it would corrupt documentation or example code.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Trailing comment preservation</td><td class="mut">If &#39;assert False&#39; is followed by a comment on the same line, the autofix may drop or mispl</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Exception chaining in finally block</td><td class="mut">Exceptions raised inside the rewritten code may interfere with finally/else clauses or exc</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>Lambda expression context</td><td class="mut">If &#39;assert False&#39; appears inside a lambda, replacing it with &#39;raise AssertionError&#39; breaks</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Non-file context manager interaction</td><td class="mut">Context managers that are not files but have write() without close() may be misused if ass</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">invalid</span></td><td>Short-circuiting in expression</td><td class="mut">If &#39;assert False&#39; is part of a larger expression via short-circuiting, removing it changes</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Optimization-dependent behavior</td><td class="mut">If code relies on &#39;assert False&#39; being removed in -O to disable checks, replacing with per</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span></td><td>False positive in string literal</td><td class="mut">If &#39;assert False&#39; appears in a string or comment, the linter should not flag it, but fault</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Type annotation evaluated at runtime</td><td class="mut">If &#39;assert False&#39; appears in a type annotation evaluated at runtime (e.g., via string anno</td></tr></table>
+<h2>Sources</h2><details id="r2-p001"><summary>r2-p001 — Trailing comment preservation</summary><pre>flag = True
+if flag:
+    assert False  # This comment must stay after fix
+print(&#39;after&#39;)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Exception chaining in finally block</summary><pre>try:
+    assert False
+except ValueError as e:
+    raise RuntimeError(&#39;caught&#39;) from e
+except AssertionError as e:
+    print(&#39;AssertionError caught:&#39;, e)
+finally:
+    print(&#39;finally ran&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Lambda expression context</summary><pre>f = lambda: assert False or 1
+try:
+    result = f()
+    print(&#39;result:&#39;, result)
+except SyntaxError as e:
+    print(&#39;SyntaxError:&#39;, e.msg)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Non-file context manager interaction</summary><pre>class SilentWriter:
+    def __enter__(self): return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is AssertionError:
+            print(&#39;Silenced AssertionError&#39;)
+            return True
+        return False
+with SilentWriter():
+    assert False
+print(&#39;after context&#39;)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Short-circuiting in expression</summary><pre>def get_flag():
+    print(&#39;get_flag called&#39;)
+    return False
+result = assert False or get_flag()
+print(&#39;result:&#39;, result)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Optimization-dependent behavior</summary><pre>__debug__ = True  # simulate non-optimized
+if __debug__:
+    assert False  # should raise only when debugging
+print(&#39;after assert&#39;)
+</pre></details><details id="r2-p007"><summary>r2-p007 — False positive in string literal</summary><pre>code_str = &#39;assert False  # inline comment&#39;
+print(&#39;string contains:&#39;, code_str)
+# assert False  # real assert -- commented out to avoid trigger
+print(&#39;no modification to string or comment&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Type annotation evaluated at runtime</summary><pre>from __future__ import annotations
+def f() -&gt; &#39;assert False&#39;:
+    return 42
+try:
+    ann = f.__annotations__[&#39;return&#39;]
+    print(&#39;annotation value:&#39;, ann)
+except Exception as e:
+    print(&#39;Annotation error:&#39;, type(e).__name__, str(e))
+</pre></details></body></html>

@@ -1,0 +1,316 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>biome style/noNegationElse — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>biome style/noNegationElse <span class="mut">Version: 2.5.15</span></h1>
+<p class="mut">2026-10-17T20-56-43-558Z-ibkb-biome-style_noNegationElse · fix labelled <b>safe</b> · 13 programs, 8 fired, 8 fixed, 1 oracle-backed finding(s) · model cost $0.0171</p>
+<div class="card"><b>Rule analysis</b><p>Disallows using logical NOT (`!`) as the top-level condition in an `if-else` statement when both branches exist.</p><p class="mut">Fix: Removes the logical NOT operator from the condition and swaps the `if` and `else` blocks so the original `else` block becomes the `if` body and vice versa.</p><details><summary>8 hazards</summary><ul><li>The condition may contain side effects (e.g., function calls) whose evaluation order or number of executions changes when moved, altering program state.</li><li>If the condition declares variables via `let` or `const` inside its scope (in some implementations), moving it may break due to TDZ or scope mismatch.</li><li>The rewritten condition may be harder to read or debug, especially if the original negation was intentional for clarity (e.g., guarding against null/undefined).</li><li>If the `if` block contains a `break`, `continue`, or `return`, swapping blocks can change control flow in loops or functions.</li><li>Comments attached to the `!` token or condition may be lost or misplaced during the rewrite, affecting code documentation.</li><li>In rare cases involving getters with side effects, evaluating the condition twice (if duplicated during transformation) could cause unintended behavior.</li><li>If the condition is part of a larger expression via operator precedence (though unlikely at top level), removing `!` without proper grouping could misinterpret intent.</li><li>The fix assumes the condition is a simple boolean expression; if it&#39;s a complex expression where `!` is not the outermost operator (but the rule only flags when it is), the logic still holds—but extreme nesting could confuse the transform.</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r2-p001"><b>r2-p001</b> <span class="tag bad">fix-breaks-syntax</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The autofix inverted the condition but failed to add braces around the consequent, producing `if (foo) result += &#39;B&#39; else result += &#39;A&#39;` which is a syntax error because an `else` cannot follow a bare statement without braces. This occurs on ordinary code using an `if` without braces and an `else` clause, a perfectly legal and common construct.">judge: real · high</span> ASI Hazard: Leading Parentheses<p class="mut">The autofix inverted the condition but failed to add braces around the consequent, producing `if (foo) result += &#39;B&#39; else result += &#39;A&#39;` which is a syntax error because an `else` cannot follow a bare statement without braces. This occurs on ordinary code using an `if` without braces and an `else` clause, a perfectly legal and common construct.</p>
+<h2>Minimized program (11→7 lines)</h2><pre>let result = &#39;&#39;
+(() =&gt; {
+  if (!foo)
+    result += &#39;A&#39;
+  else
+    result += &#39;B&#39;
+})()
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.js	2026-10-17 16:57:17.310306347 -0400
++++ fixed.js	2026-10-17 16:57:17.583310129 -0400
+@@ -1,10 +1,9 @@
+ let result = &#39;&#39;
+ 
+ (() =&gt; {
+<span class="del">-  if (!foo)</span>
+<span class="add">+  if (foo)</span>
+<span class="add">+    result += &#39;B&#39; else </span>
+     result += &#39;A&#39;
+<span class="del">-  else</span>
+<span class="del">-    result += &#39;B&#39;</span>
+ })()
+ 
+ function foo() { return false }
+</pre>
+<h2>Observed</h2><pre>/home/sun/dev/diaghunt/runs/2026-10-17T20-56-43-558Z-ibkb-biome-style_noNegationElse/r2-p001/fixed.js:5
+    result += &#39;B&#39; else 
+                  ^^^^
+
+SyntaxError: Unexpected token &#39;else&#39;
+    at checkSyntax (node:internal/main/check_syntax:84:5)
+
+Node.js v26.8.1
+</pre>
+<p>Upstream: <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/9629">biomejs/biome/issues/9629</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/7518">biomejs/biome/issues/7518</a> <span class="tag">related</span><a href="https://github.com/biomejs/biome/issues/691">biomejs/biome/issues/691</a> · <a href="reports/r2-p001.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">invalid</span></td><td>TDZ in let declaration within negated condition</td><td class="mut">If the condition declares variables via `let` or `const`, moving it out of the condition b</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">invalid</span></td><td>Name collision after swap due to shadowing</td><td class="mut">Moving the condition may cause variable capture or shadowing when identifiers clash across</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Strict mode semantics change via &#39;this&#39; in condition</td><td class="mut">In strict mode, &#39;this&#39; in condition may be undefined; after fix, evaluation context change</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag ok">fix ok</span></td><td>RegExp lastIndex side effect with g flag</td><td class="mut">Regex with g flag mutates lastIndex; moving condition may alter number of matches due to s</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Function declaration in block scoped incorrectly after move</td><td class="mut">Function declarations inside blocks are not hoisted consistently; moving condition may exp</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">invalid</span></td><td>Readability loss: intentional negation for null guard</td><td class="mut">Rewritten condition may be harder to read, especially when negation guards against null/un</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag bad">fix-breaks-syntax</span></td><td>ASI Hazard: Leading Parentheses</td><td class="mut">ASI and semicolon-less code, leading ( or [ on the next line</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Comment Attachment Loss</td><td class="mut">Comments attached to the `!` token or condition may be lost or misplaced during the rewrit</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Side Effect Evaluation Order Change</td><td class="mut">The condition may contain side effects (e.g., function calls) whose evaluation order or nu</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Name Collision via Shadowing</td><td class="mut">name collisions across scopes after a move (shadowing)</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Complex Condition Misgrouping</td><td class="mut">The fix assumes the condition is a simple boolean expression; if it&#39;s a complex expression</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Class Field and Private Name Interaction</td><td class="mut">class fields, static blocks, private names, super calls</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Operator Precedence Grouping Hazard</td><td class="mut">If the condition is part of a larger expression via operator precedence (though unlikely a</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — TDZ in let declaration within negated condition</summary><pre>(() =&gt; {
+  const log = [];
+  try {
+    // Hazard: &#39;let&#39; declared in condition scope
+    if (!let x = 1) { log.push(&#39;if&#39;); } else { log.push(x); }
+  } catch (e) {
+    log.push(e.name + &#39;: &#39; + e.message);
+  }
+  console.log(log.join(&#39;|&#39;));
+})();
+</pre></details><details id="r1-p002"><summary>r1-p002 — Name collision after swap due to shadowing</summary><pre>(function(){
+  var x = 99;
+  // Hazard: outer &#39;x&#39; shadows inner if swapped
+  if (!var x = 5) { /* unreachable */ } else { /* uses outer x */ return x; }
+  // This line won&#39;t run due to syntax error above, but we adjust:
+})();
+// Let&#39;s fix syntax by moving decl to init-part with comma
+(() =&gt; {
+  var x = 99;
+  // Hazard: if condition declares var, which is hoisted
+  if (! (x = 5, false) ) { /* if */ } else { log.push(x); }
+  var log = [];
+  if (! (x = 5, false) ) { log.push(&#39;if&#39;); } else { log.push(x); }
+  console.log(log.join(&#39;|&#39;)); // Should be 5, not 99
+})();
+</pre></details><details id="r1-p003"><summary>r1-p003 — Strict mode semantics change via &#39;this&#39; in condition</summary><pre>&quot;use strict&quot;;
+(() =&gt; {
+  const log = [];
+  // Hazard: &#39;this&#39; in condition is undefined in strict mode
+  if (!this) { log.push(&#39;a&#39;); } else { log.push(typeof this); }
+  console.log(log.join(&#39;|&#39;)); // Expected: &#39;a&#39;
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:10.437210904 -0400
++++ fixed.js	2026-10-17 16:57:10.703214605 -0400
+@@ -2,6 +2,6 @@
+ (() =&gt; {
+   const log = [];
+   // Hazard: &#39;this&#39; in condition is undefined in strict mode
+<span class="del">-  if (!this) { log.push(&#39;a&#39;); } else { log.push(typeof this); }</span>
+<span class="add">+  if (this) { log.push(typeof this); } else { log.push(&#39;a&#39;); }</span>
+   console.log(log.join(&#39;|&#39;)); // Expected: &#39;a&#39;
+ })();
+</pre></details><details id="r1-p004"><summary>r1-p004 — RegExp lastIndex side effect with g flag</summary><pre>(() =&gt; {
+  const log = [];
+  const regex = /a/g;
+  regex.lastIndex = 0;
+  // Hazard: condition uses regex.test() which advances lastIndex
+  if (!regex.test(&#39;aa&#39;)) { log.push(&#39;if&#39;); } else { log.push(regex.lastIndex); }
+  // After fix: condition becomes regex.test(&#39;aa&#39;) -&gt; true, so else runs
+  console.log(log.join(&#39;|&#39;)); // Before fix: &#39;if&#39;; after fix: &#39;1&#39;
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:10.870216929 -0400
++++ fixed.js	2026-10-17 16:57:11.136220630 -0400
+@@ -3,7 +3,7 @@
+   const regex = /a/g;
+   regex.lastIndex = 0;
+   // Hazard: condition uses regex.test() which advances lastIndex
+<span class="del">-  if (!regex.test(&#39;aa&#39;)) { log.push(&#39;if&#39;); } else { log.push(regex.lastIndex); }</span>
+<span class="add">+  if (regex.test(&#39;aa&#39;)) { log.push(regex.lastIndex); } else { log.push(&#39;if&#39;); }</span>
+   // After fix: condition becomes regex.test(&#39;aa&#39;) -&gt; true, so else runs
+   console.log(log.join(&#39;|&#39;)); // Before fix: &#39;if&#39;; after fix: &#39;1&#39;
+ })();
+</pre></details><details id="r1-p005"><summary>r1-p005 — Function declaration in block scoped incorrectly after move</summary><pre>(() =&gt; {
+  const log = [];
+  // Hazard: if condition contains function decl? Not directly.
+  // Instead: make condition rely on a function whose decl is affected by block scoping
+  if (true) { function f() { return 1; } }
+  // Now use f in condition - but f is not accessible outside block in strict mode
+  &quot;use strict&quot;;
+  try {
+    if (! (typeof f === &#39;function&#39;) ) { log.push(&#39;if&#39;); } else { log.push(f()); }
+  } catch (e) {
+    log.push(e.name);
+  }
+  console.log(log.join(&#39;|&#39;)); // In non-strict: f is hoisted -&gt; &#39;1&#39;; in strict: ReferenceError
+})();
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:11.309223036 -0400
++++ fixed.js	2026-10-17 16:57:11.584226860 -0400
+@@ -6,7 +6,7 @@
+   // Now use f in condition - but f is not accessible outside block in strict mode
+   &quot;use strict&quot;;
+   try {
+<span class="del">-    if (! (typeof f === &#39;function&#39;) ) { log.push(&#39;if&#39;); } else { log.push(f()); }</span>
+<span class="add">+    if ( (typeof f === &#39;function&#39;) ) { log.push(f()); } else { log.push(&#39;if&#39;); }</span>
+   } catch (e) {
+     log.push(e.name);
+   }
+</pre></details><details id="r1-p006"><summary>r1-p006 — Readability loss: intentional negation for null guard</summary><pre>(() =&gt; {
+  const obj = { prop: null };
+  const log = [];
+  // Hazard: !obj.prop reads as &#39;if missing&#39; - clearer than !!obj.prop
+  if (!obj.prop) { log.push(&#39;missing&#39;); } else { log.push(obj.prop); }
+  console.log(log.join(&#39;|&#39;)); // Should be &#39;missing&#39;
+  // After fix: condition becomes obj.prop -&gt; null (falsy), so if block runs -&gt; same output?
+  // Wait: after fix, we swap blocks!
+  // Original: if (!obj.prop) { A } else { B }
+  // Fixed:    if (obj.prop) { B } else { A }
+  // So now: if (null) -&gt; false -&gt; else runs -&gt; A: &#39;missing&#39;
+  // Still same output. Need side effect.
+  // Let&#39;s make else block have side effect
+})();
+// Redo with mutation
+(() =&gt; {
+  let val = &#39;start&#39;;
+  const obj = { prop: null };
+  if (!obj.prop) { val = &#39;if&#39;; } else { val = &#39;else&#39;; }
+  console.log(val); // &#39;if&#39;
+  // After fix: if (obj.prop) { val = &#39;else&#39;; } else { val = &#39;if&#39;; } -&gt; still &#39;if&#39;
+  // Need the condition to be truthy after fix to trigger else-&gt;if swap visibly
+  // Use obj.prop = undefined initially, then change it
+})();
+// Final attempt: make condition depend on mutable state
+(() =&gt; {
+  let state = 0;
+  const obj = { prop: () =&gt; state++ };
+  // First eval: obj.prop() = 0 -&gt; !0 = true -&gt; if block
+  // After fix: condition becomes obj.prop() -&gt; 0 -&gt; falsy -&gt; else block
+  // But we swap blocks too!
+  // Original: if (!obj.prop()) { A } else { B }
+  // Fixed:    if (obj.prop()) { B } else { A }
+  // First call: state=0 -&gt; obj.prop()=0 -&gt; !0=true -&gt; A runs
+  // After fix: first call to obj.prop() in condition -&gt; returns 0 -&gt; falsy -&gt; else runs -&gt; A still?
+  // We need to log which block ran
+})();
+// Correct version:
+{&quot;programs&quot;:[{&quot;title&quot;:&quot;Readability loss: intentional negation for null guard&quot;,&quot;hazard&quot;:&quot;Rewritten condition may be harder to read, especially when negation guards against null/undefined.&quot;,&quot;expect_trigger&quot;:true,&quot;code&quot;:&quot;(() =&gt; {\n  let log = &#39;&#39;;\n  const obj = { value: 42 };\n  // Hazard: negation makes intent clear: &#39;if not present&#39;\n  if (!obj.value) { log = &#39;zero&#39;; } else { log = obj.value.toString(); }\n  console.log(log); // &#39;42&#39;\n  // After fix: if (obj.value) { log = obj.value.toString(); } else { log = &#39;zero&#39;; } -&gt; still &#39;42&#39;\n  // No change. Need the negation to be semantically critical.\n  // Use case: guarding access where falsy means invalid\n}})]}
+</pre></details><details id="r2-p001"><summary>r2-p001 — ASI Hazard: Leading Parentheses</summary><pre>let result = &#39;&#39;
+
+(() =&gt; {
+  if (!foo)
+    result += &#39;A&#39;
+  else
+    result += &#39;B&#39;
+})()
+
+function foo() { return false }
+console.log(result)
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:17.310306347 -0400
++++ fixed.js	2026-10-17 16:57:17.583310129 -0400
+@@ -1,10 +1,9 @@
+ let result = &#39;&#39;
+ 
+ (() =&gt; {
+<span class="del">-  if (!foo)</span>
+<span class="add">+  if (foo)</span>
+<span class="add">+    result += &#39;B&#39; else </span>
+     result += &#39;A&#39;
+<span class="del">-  else</span>
+<span class="del">-    result += &#39;B&#39;</span>
+ })()
+ 
+ function foo() { return false }
+</pre></details><details id="r2-p002"><summary>r2-p002 — Comment Attachment Loss</summary><pre>let log = []
+if (/* skip if */ !enabled /* feature flag */) {
+  log.push(&#39;disabled&#39;)
+} else {
+  log.push(&#39;enabled&#39;)
+}
+enabled = true
+log.push(enabled ? &#39;post&#39; : &#39;pre&#39;)
+console.log(log.join(&#39;|&#39;))
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:17.641310932 -0400
++++ fixed.js	2026-10-17 16:57:17.921314812 -0400
+@@ -1,8 +1,8 @@
+ let log = []
+<span class="del">-if (/* skip if */ !enabled /* feature flag */) {</span>
+<span class="del">-  log.push(&#39;disabled&#39;)</span>
+<span class="del">-} else {</span>
+<span class="add">+if (/* skip if */ enabled /* feature flag */) {</span>
+   log.push(&#39;enabled&#39;)
+<span class="add">+} else {</span>
+<span class="add">+  log.push(&#39;disabled&#39;)</span>
+ }
+ enabled = true
+ log.push(enabled ? &#39;post&#39; : &#39;pre&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Side Effect Evaluation Order Change</summary><pre>let count = 0
+function inc() { return ++count }
+
+if (!inc() &gt; 0) {
+  console.log(&#39;first:&#39;, count)
+} else {
+  console.log(&#39;second:&#39;, count)
+}
+console.log(&#39;final:&#39;, count)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Name Collision via Shadowing</summary><pre>let scope = &#39;outer&#39;
+if (!scope) {
+  let scope = &#39;inner&#39;
+  console.log(scope)
+} else {
+  console.log(scope)
+}
+scope = null
+console.log(scope)
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:18.324320393 -0400
++++ fixed.js	2026-10-17 16:57:18.594324131 -0400
+@@ -1,8 +1,8 @@
+ let scope = &#39;outer&#39;
+<span class="del">-if (!scope) {</span>
+<span class="del">-  let scope = &#39;inner&#39;</span>
+<span class="add">+if (scope) {</span>
+   console.log(scope)
+ } else {
+<span class="add">+  let scope = &#39;inner&#39;</span>
+   console.log(scope)
+ }
+ scope = null
+</pre></details><details id="r2-p005"><summary>r2-p005 — Complex Condition Misgrouping</summary><pre>let val = 0
+if (!(val === 0 || val === 1)) {
+  val = 2
+} else {
+  val = 3
+}
+console.log(val)
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:18.761326444 -0400
++++ fixed.js	2026-10-17 16:57:19.043330348 -0400
+@@ -1,7 +1,7 @@
+ let val = 0
+<span class="del">-if (!(val === 0 || val === 1)) {</span>
+<span class="del">-  val = 2</span>
+<span class="del">-} else {</span>
+<span class="add">+if ((val === 0 || val === 1)) {</span>
+   val = 3
+<span class="add">+} else {</span>
+<span class="add">+  val = 2</span>
+ }
+ console.log(val)
+</pre></details><details id="r2-p006"><summary>r2-p006 — Class Field and Private Name Interaction</summary><pre>class Test {
+  #flag = false
+  static get value() { return 1 }
+  check() {
+    if (!Test.value) {
+      return this.#flag ? &#39;a&#39; : &#39;b&#39;
+    } else {
+      return this.#flag ? &#39;c&#39; : &#39;d&#39;
+    }
+  }
+}
+console.log(new Test().check())
+</pre><pre class="diff">--- orig.js	2026-10-17 16:57:19.209332645 -0400
++++ fixed.js	2026-10-17 16:57:19.479336381 -0400
+@@ -2,10 +2,10 @@
+   #flag = false
+   static get value() { return 1 }
+   check() {
+<span class="del">-    if (!Test.value) {</span>
+<span class="del">-      return this.#flag ? &#39;a&#39; : &#39;b&#39;</span>
+<span class="del">-    } else {</span>
+<span class="add">+    if (Test.value) {</span>
+       return this.#flag ? &#39;c&#39; : &#39;d&#39;
+<span class="add">+    } else {</span>
+<span class="add">+      return this.#flag ? &#39;a&#39; : &#39;b&#39;</span>
+     }
+   }
+ }
+</pre></details><details id="r2-p007"><summary>r2-p007 — Operator Precedence Grouping Hazard</summary><pre>let x = 1, y = 2
+if (!x + y &gt; 2) {
+  console.log(&#39;less&#39;)
+} else {
+  console.log(&#39;greater or equal&#39;)
+}
+x = 3
+console.log(!x + y &gt; 2 ? &#39;static&#39; : &#39;dynamic&#39;)
+</pre></details></body></html>

@@ -1,0 +1,34 @@
+{
+  "summary": "The rule flags redundant 'in' checks before dict[key] when followed by truthiness test.",
+  "firingShapes": [
+    "if \"x\" in d and d[\"x\"]:",
+    "while \"y\" in mapping and mapping[\"y\"]:",
+    "if val := d.get(\"z\") if \"z\" in d else None:",
+    "assert \"k\" in d and d[\"k\"]",
+    "if \"a\" in d and d[\"a\"] > 0:",
+    "elif \"b\" in d and d[\"b\"]:",
+    "for item in lst if \"c\" in d and d[\"c\"]:",
+    "if \"d\" in d and d[\"d\"] is not None:"
+  ],
+  "silentShapes": [
+    "if \"x\" in d:",
+    "if d.get(\"x\") is None:",
+    "if \"x\" in d and d[\"x\"] == 0:",
+    "if \"x\" not in d or d[\"x\"]:",
+    "if \"x\" in d and d[\"x\"] and \"y\" in e:"
+  ],
+  "fixDescription": "Replace 'if key in d and d[key]' with 'if d.get(key)' preserving original formatting and comments when safe.",
+  "hazards": [
+    "Rewriting 'if \"x\" in d and d[\"x\"]:' changes behavior when d[\"x\"] evaluates to False but key exists, as d.get(\"x\") returns the value (False) which is falsy, but the original condition would skip due to falsiness while the fix proceeds.",
+    "If d[\"x\"] has side effects (e.g., a property getter), evaluating it twice in the original vs once in the fix alters side effect count.",
+    "When d[\"x\"] raises KeyError for missing keys (impossible with 'in' guard), removing the guard could expose the error if the fix is applied incorrectly.",
+    "If d is not a dict but a custom mapping with __getitem__ side effects, the fix may not preserve behavior.",
+    "Comments between 'in' and 'and' or after 'd[key]' may be lost if the autofix does not preserve them.",
+    "If d[key] is used later in the same block, the fix does not eliminate redundant lookups; it only replaces the condition.",
+    "In nested expressions like f(\"x\" in d and d[\"x\"]), the fix may break if the surrounding context expects boolean short-circuiting.",
+    "When the value is 0, the original condition fails (due to falsiness) but d.get(\"x\") returns 0 which is falsy, so behavior is preserved—but if the code relies on the key existence check separately, it is lost.",
+    "If d[\"x\"] returns an object with custom __bool__ that returns False, the original skips the block but the fix enters it if the value is truthy after get—wait, no: both are falsy, so same outcome. Correction: hazard is when the value is truthy but the original condition fails due to other reasons? Actually, the original requires both key presence and truthy value. The fix only checks truthy value via get, which returns None if missing (falsy). So if key missing, original: short-circuits at 'in' → false; fix: get returns None → false. If key present and value falsy (0, [], etc): original: true and false → false; fix: get returns falsy → false. If key present and value truthy: both true. So logically equivalent. Hazard must be about side effects or non-dict mappings.",
+    "If d is a subclass of dict that overrides __contains__ or __getitem__ with side effects, the fix may alter behavior.",
+    "The fix assumes d.get(key) returns None for missing keys, but if default is overridden (not possible in get(key) call), it’s safe—however, if someone monkeypatched dict.get, it could break."
+  ]
+}

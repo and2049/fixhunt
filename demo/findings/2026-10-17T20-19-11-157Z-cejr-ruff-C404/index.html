@@ -1,0 +1,211 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff C404 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff C404 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-19-11-157Z-cejr-ruff-C404 · fix labelled <b>unknown</b> · 16 programs, 12 fired, 0 fixed, 0 oracle-backed finding(s) · model cost $0.0053</p>
+<div class="card"><b>Rule analysis</b><p>Flags when dict() wraps a list comprehension producing key-value pairs.</p><p class="mut">Fix: Rewrites dict([(expr1, expr2) for target in iterable if cond]) to {expr1: expr2 for target in iterable if cond}, preserving comprehension structure and filters.</p><details><summary>10 hazards</summary><ul><li>If the list comprehension uses a variable name that shadows an outer variable in the dict key or value expression, the dict comprehension may capture that variable differently due to its own local scope.</li><li>If the iterable expression has side effects (e.g., a function call), moving it into the dict comprehension changes when those effects occur relative to other expressions in the same statement.</li><li>If the list comprehension is nested inside another expression where the list&#39;s identity or mutability matters (e.g., passed to a function that modifies it), replacing it with a dict comprehension alters the object type and breaks expectations.</li><li>If the comprehension contains a bare yield or yield-from, rewriting it as a dict comprehension changes it from a generator expression to a dict comprehension, altering execution timing and preventing lazy evaluation.</li><li>If the original code relies on the list being built eagerly (e.g., for truthiness or length before iteration), the dict comprehension&#39;s lazy-like evaluation (though still eager in CPython) may not preserve intermediate state assumptions in rare edge cases involving __bool__ or __len__ overrides.</li><li>If the list comprehension is part of a larger expression where operator precedence groups it unexpectedly (e.g., dict([(k, v) for k, v in items]) + {}), removing the list constructor could change parsing if parentheses are omitted incorrectly during rewrite.</li><li>If the comprehension includes a tuple with more than two elements (e.g., [(k, v, w) for ...]), the rule should not fire, but if misapplied, the fix would raise a ValueError due to too many values to unpack in the dict comprehension.</li><li>If the list comprehension is inside a lambda or nested function and uses a nonlocal variable, the dict comprehension&#39;s implicit scope may not preserve the same closure behavior, especially in Python 2 or under atypical execution contexts.</li><li>Comments attached to the list brackets or for/clause tokens may be dropped during AST rewrite, even if the tool attempts preservation, due to formatting loss in the conversion process.</li><li>If the iterable is the same variable being assigned to in the comprehension (e.g., dict([(x, x+1) for x in xs]) where xs is later reused), the rewrite is safe, but if the variable is deleted or reassigned mid-comprehension via del or side effect, the timing of observation differs.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Side effects in iterable expression</td><td class="mut">If the iterable expression has side effects (e.g., a function call), moving it into the di</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Context manager interaction</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">invalid</span></td><td>Bare yield in comprehension</td><td class="mut">If the comprehension contains a bare yield or yield-from, rewriting it as a dict comprehen</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Class vs instance attributes, descriptors</td><td class="mut">class attributes vs instance attributes, descriptors, properties with side effects</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Evaluation order and side effects</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">fired, no fix</span></td><td>String formatting edge cases</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Truthiness and coercion</td><td class="mut">truthiness of custom __bool__/__len__, None vs falsy, &#39;is&#39; vs &#39;==&#39;</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">fired, no fix</span></td><td>Numeric coercion and rounding</td><td class="mut">int/float/bool coercion, Decimal, division and rounding</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Comment Loss Hazard</td><td class="mut">Comments attached to list brackets or for-clauses may be dropped during AST-to-source rewr</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Rebinding During Comprehension</td><td class="mut">Rebinding the iterable variable mid-comprehension changes observation timing between list </td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Eagerness and Truthiness</td><td class="mut">Reliance on list truthiness/length during construction differs if __bool__ has side effect</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">invalid</span></td><td>Truthiness and Identity Edge Cases</td><td class="mut">__bool__/__len__ overrides, None vs falsy, &#39;is&#39; vs &#39;==&#39; affect reliance on list vs dict in</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">fired, no fix</span></td><td>Mutability and Identity in Context</td><td class="mut">Passing the list to a function that mutates it; dict comp yields different type, breaking </td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">fired, no fix</span></td><td>Star Imports and Module Side Effects</td><td class="mut">Module-level side effects from * imports or __all__ may be affected if the rewrite occurs </td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">fired, no fix</span></td><td>Keyword-Only and Defaults Evaluation</td><td class="mut">Defaults in keyword-only args evaluated once; comprehension scope may interact if closure </td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Pathlib vs os.path Behavior</td><td class="mut">Behavioral differences between pathlib and os.path for paths, symlinks, or bytes paths aff</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Side effects in iterable expression</summary><pre>def make_list():
+    print(&#39;iterable&#39;)
+    return [1, 2]
+d = dict([(i, i*i) for i in make_list()])
+print(dict(d))
+</pre></details><details id="r1-p002"><summary>r1-p002 — Context manager interaction</summary><pre>class LogWriter:
+    def __enter__(self):
+        self.buf = []
+        print(&#39;enter&#39;)
+        return self
+    def __exit__(self, *exc):
+        print(&#39;exit:&#39;, self.buf)
+    def write(self, s):
+        self.buf.append(s)
+with LogWriter() as w:
+    d = dict([(str(i), w.write(str(i))) for i in range(2)])
+    w.write(&#39;done&#39;)
+print(&#39;after&#39;)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Bare yield in comprehension</summary><pre># This case does not trigger C404 because yield makes it a generator expression,
+# not a list comprehension wrapping tuples.
+gen = ((i, yield i) for i in [1, 2])
+print(&#39;gen created&#39;)
+try:
+    next(gen)
+except StopIteration as e:
+    print(&#39;StopIteration:&#39;, e.value)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Class vs instance attributes, descriptors</summary><pre>class A:
+    val = 10
+    @property
+    def prop(self):
+        print(&#39;prop accessed&#39;)
+        return self.val
+a = A()
+d = dict([(k, getattr(a, k)) for k in [&#39;val&#39;, &#39;prop&#39;]])
+print(dict(d))
+</pre></details><details id="r1-p005"><summary>r1-p005 — Evaluation order and side effects</summary><pre>counter = 0
+def inc():
+    global counter
+    counter += 1
+    return counter
+d = dict([(inc(), inc()) for _ in range(2)])
+print(&#39;counter:&#39;, counter, &#39;dict:&#39;, dict(d))
+</pre></details><details id="r1-p006"><summary>r1-p006 — String formatting edge cases</summary><pre>class S:
+    def __repr__(self): return &quot;repr&quot;
+    def __str__(self): return &quot;str&quot;
+s = S()
+d = dict([(f&#39;{s}&#39;, str(s)) for _ in [1]])
+print(repr(d[f&#39;{s}&#39;]))
+</pre></details><details id="r1-p007"><summary>r1-p007 — Truthiness and coercion</summary><pre>class Falsy:
+    def __len__(self): return 0
+    def __bool__(self): return False
+f = Falsy()
+d = dict([(f, &#39;yes&#39;) for _ in [f] if f])
+print(&#39;dict:&#39;, dict(d), &#39;len:&#39;, len(d))
+</pre></details><details id="r1-p008"><summary>r1-p008 — Numeric coercion and rounding</summary><pre>from decimal import Decimal, ROUND_DOWN
+x = Decimal(&#39;3.5&#39;)
+y = Decimal(&#39;2&#39;)
+d = dict([(int(x // y), float(x / y)) for _ in [1]])
+print(&#39;dict:&#39;, dict(d))
+</pre></details><details id="r2-p001"><summary>r2-p001 — Comment Loss Hazard</summary><pre>def f():
+    # This comment should stay
+    d = dict([
+        (x, x*2)  # inline
+        for x in [1,2]  # loop comment
+    ])
+    return len(d)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Rebinding During Comprehension</summary><pre>xs = [1, 2]
+d = dict([(x, xs.pop()) for x in xs])
+print(d)
+</pre></details><details id="r2-p003"><summary>r2-p003 — Eagerness and Truthiness</summary><pre>class ListLike:
+    def __init__(self):
+        self.data = []
+        self.called = False
+    def __iter__(self):
+        return iter(self.data)
+    def __bool__(self):
+        self.called = True
+        return bool(self.data)
+L = ListLike()
+L.data = [1, 2]
+# Force list build then check truthiness
+lst = [(x, x) for x in L]
+print(&#39;list bool during:&#39;, bool(lst))
+d = dict(lst)
+print(&#39;dict from list:&#39;, d)
+# Now dict comp: truthiness checked during build?
+L2 = ListLike()
+L2.data = [1, 2]
+d2 = dict((x, x) for x in L2)
+print(&#39;dict comp bool called:&#39;, L2.called)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Truthiness and Identity Edge Cases</summary><pre>class OddLen:
+    def __len__(self): return 1
+    def __bool__(self): return False
+lst = [(None, OddLen()) for _ in range(1)]
+print(&#39;list is false:&#39;, not lst)
+d = dict(lst)
+print(&#39;dict value is OddLen:&#39;, isinstance(d[None], OddLen))
+# Dict comp version
+L = [OddLen()]
+d2 = dict((None, x) for x in L)
+print(&#39;dict comp value:&#39;, d2[None])
+</pre></details><details id="r2-p005"><summary>r2-p005 — Mutability and Identity in Context</summary><pre>def mutate_and_return_length(lst):
+    lst.append((99, 99))
+    return len(lst)
+items = [(1, 2), (3, 4)]
+lst_comp = [(x, y) for x, y in items]
+print(&#39;mutate list result:&#39;, mutate_and_return_length(lst_comp))
+print(&#39;final list:&#39;, lst_comp)
+# Now with dict comp equivalent - but we pass a list!
+# So we force a list build then convert? No - to test hazard we must pass the comp directly.
+# Rewrite: if rule fires, it becomes dict comp -&gt; we can&#39;t pass dict to mutate_and_return_length
+# So we design: call site expects list, but rule changes it to dict comp -&gt; type mismatch
+# But we can&#39;t have both. Instead: store the comp result, then pass.
+# Hazard: if the list&#39;s mutability was relied on after.
+def g():
+    r = [(x, x) for x in [1,2]]
+    r.append((3,3))
+    return len(r)
+print(&#39;list mutability test:&#39;, g())
+# If rule rewrote the comp to dict, this would fail - but it doesn&#39;t fire on assignment to r?
+# It does: dict([(x,x) for x in [1,2]]) is the pattern. But here we don&#39;t wrap in dict().
+# So make it:
+h = dict([(x, x) for x in [1,2]])
+print(&#39;h is:&#39;, type(h))
+# Now, if we had passed the list comp to a mutator, but we didn&#39;t. Let&#39;s force:
+items = [(1,2)]
+b = list((x, x) for x in items)  # this is the list comp
+print(&#39;b before mutate:&#39;, b, type(b))
+mutate_and_return_length(b)
+print(&#39;b after mutate:&#39;, b)
+# Now the dict version that the rule would produce if we wrapped in dict():
+# But we don&#39;t. So to test the hazard, we need a case where the list comp is used as a list.
+# The hazard is: if someone passes the list comp (not wrapped) to a mutating function, and elsewhere
+# there is a dict([...]) that gets rewritten, they are unrelated.
+# So instead: make the list comp be the argument, and have a dict(...) nearby that gets rewritten.
+# But they are separate. Unless we do:
+#   f(dict([(x,x) for x in xs]))  and f expects a list? No.
+# We need the dict(...) to be rewritten, and its result used where a list is expected.
+# Impossible without type error.
+# Refocus: hazard is when the list itself (the comp) is used where its list-ness matters.
+# And there is a dict([comp]) that gets rewritten - but that&#39;s a different expression.
+# So we accept that the hazard may not trigger a visible change unless the rewritten dict comp is
+# used in a list-expecting context - which would break.
+# Example:
+xs = [1,2]
+# This dict([...]) will be rewritten to {x:x for x in xs}
+# But if we then try to use it as a list...
+d = dict([(x, x) for x in xs])  # becomes dict comp
+if hasattr(d, &#39;append&#39;):  # will be False
+    d.append((99,99))
+else:
+    print(&#39;dict has no append&#39;)
+# Whereas if it stayed a list comp wrapped in dict(), it&#39;s still a dict.
+# No difference.
+# Give up and use the eval example from before but add mutation.
+# Final decision: use a function that expects a list and mutates it, and pass the result of
+# a dict([list_comp]) - but that makes no sense.
+# Instead: the list comprehension itself is used elsewhere.
+# Let me just output a coherent example for the next hazard and note this one is best-effort.
+</pre></details><details id="r2-p006"><summary>r2-p006 — Star Imports and Module Side Effects</summary><pre>import sys
+# Module-level dict comprehension that triggers rule
+MAP = dict([(k, k) for k in [&#39;a&#39;, &#39;b&#39;]])
+# Simulate * import side effect by checking what&#39;s in globals after
+if &#39;MAP&#39; in globals():
+    print(&#39;MAP defined as:&#39;, type(MAP).__name__)
+    print(&#39;MAP contents:&#39;, MAP)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Keyword-Only and Defaults Evaluation</summary><pre>def make_processor(seq=None):
+    if seq is None:
+        seq = []
+    return lambda: dict([(x, x*2) for x in seq])
+p = make_processor()
+print(&#39;first call:&#39;, p())
+seq = [1,2,3]
+p2 = make_processor(seq)
+print(&#39;second call:&#39;, p2())
+# Now mutate seq after defining p2 but before calling
+seq.append(4)
+print(&#39;after mutate, p2():&#39;, p2())
+</pre></details><details id="r2-p008"><summary>r2-p008 — Pathlib vs os.path Behavior</summary><pre>import os
+from pathlib import Path
+# Create a temporary file
+open(&#39;tmp.txt&#39;, &#39;w&#39;).close()
+try:
+    # List comp that dict() wraps
+    pairs = [(str(Path(&#39;tmp.txt&#39;)), os.path.abspath(&#39;tmp.txt&#39;)) for _ in range(1)]
+    d = dict(pairs)
+    print(&#39;Path str == abspath?&#39;, d[str(Path(&#39;tmp.txt&#39;))] == d[os.path.abspath(&#39;tmp.txt&#39;)])
+    # Now the dict comp equivalent (what rule would produce)
+    d2 = {str(Path(&#39;tmp.txt&#39;)): os.path.abspath(&#39;tmp.txt&#39;) for _ in range(1)}
+    print(&#39;dict comp same:&#39;, d2[str(Path(&#39;tmp.txt&#39;))] == d2[os.path.abspath(&#39;tmp.txt&#39;)])
+finally:
+    os.remove(&#39;tmp.txt&#39;)
+</pre></details></body></html>

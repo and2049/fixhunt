@@ -1,0 +1,538 @@
+{
+  "runId": "2026-10-17T21-47-37-731Z-m8fa-ruff-RUF057",
+  "tool": "ruff",
+  "ext": "py",
+  "version": "ruff 0.17.1",
+  "rule": {
+    "tool": "ruff",
+    "rule": "RUF057",
+    "fixKind": "unknown",
+    "docs": "# unnecessary-round (RUF057)\n\nDerived from the **Ruff-specific rules** linter.\n\nFix is always available.\n\n## What it does\nChecks for `round()` calls that have no effect on the input.\n\n## Why is this bad?\nRounding a value that's already an integer is unnecessary.\nIt's clearer to use the value directly.\n\n## Example\n\n```python\na = round(1, 0)\n```\n\nUse instead:\n\n```python\na = 1\n```\n\n## Fix safety\n\nThe fix is marked unsafe if it is not possible to guarantee that the first argument of\n`round()` is of type `int`, or if the fix deletes comments.\n"
+  },
+  "analysis": {
+    "summary": "Flags redundant round() calls where the second argument is zero and the first argument evaluates to an integer.",
+    "firingShapes": [
+      "x = round(5, 0)",
+      "y = round(len([]), 0)",
+      "z = round(True + False, 0)",
+      "result = round(get_constant(), 0)",
+      "value = round(3.0, 0)"
+    ],
+    "silentShapes": [
+      "a = round(3.14, 0)",
+      "b = round(x, 0)",
+      "c = round(5, 1)",
+      "d = round(round(2.5), 0)"
+    ],
+    "fixDescription": "Replaces round(expr, 0) with expr when expr is statically known to be an integer (e.g., literal int, bool, or expression of integer-typed constants).",
+    "hazards": [
+      "If expr has side effects (e.g., a function call), removing round may alter evaluation timing relative to other expressions.",
+      "If expr is a variable whose type cannot be statically proven as int, the fix may incorrectly apply at runtime for non-int values (e.g., float).",
+      "If expr is a boolean, replacing round(bool, 0) with the bool changes the type from int to bool, potentially breaking downstream int-specific operations.",
+      "If expr is used elsewhere in the same line, removing round may affect operator precedence or grouping (e.g., in round(a+b, 0)*2 vs (a+b)*2).",
+      "If round appears in a larger expression where its return value is ignored, deleting it may preserve value but alter side-effect visibility in debugging or tracing tools.",
+      "If the code relies on round returning a float subclass (unlikely but possible via overrides), replacing with expr may change the return type.",
+      "If expr is a constant that overflows in int context but not in float, the transformation could change value (though Python ints are arbitrary precision, this is negligible).",
+      "If the round call is inside a lambda or comprehension, removing it may affect JIT or optimization assumptions in some implementations.",
+      "If comments are attached to the round call (e.g., # tolerance), the fix may discard them if not preserved during rewrite.",
+      "If expr is a named expression (walrus) like round((y := f()), 0), removing round may change the scope or timing of y's assignment."
+    ]
+  },
+  "opts": {
+    "n": 8,
+    "rounds": 2,
+    "unsafe": false
+  },
+  "cost": 0.013629000000000002,
+  "summary": {
+    "programs": 16,
+    "invalid": 2,
+    "fired": 3,
+    "fixed": 1,
+    "disputed": 10
+  },
+  "reports": [],
+  "results": [
+    {
+      "id": "r1-p001",
+      "title": "Side effect timing alteration",
+      "hazard": "If expr has side effects (e.g., a function call), removing round may alter evaluation timing relative to other expressions.",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "side",
+          "stderr1": "TypeError: sequence item 0: expected str instance, int found",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p002",
+      "title": "Constant overflow irrelevance",
+      "hazard": "If expr is a constant that overflows in int context but not in float, the transformation could change value (though Python ints are arbitrary precision, this is negligible).",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF057",
+            "severity": "warning",
+            "message": "Value being rounded is already an integer",
+            "span": [
+              2,
+              5
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "<class 'int'> True\n",
+          "stderr1": "OverflowError: int too large to convert to float",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'int'> True\n",
+          "stderr1": "OverflowError: int too large to convert to float",
+          "code": 1,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p003",
+      "title": "Boolean type change",
+      "hazard": "If expr is a boolean, replacing round(bool, 0) with the bool changes the type from int to bool, potentially breaking downstream int-specific operations.",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "<class 'int'> 1\nint op ok: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p004",
+      "title": "Operator precedence change",
+      "hazard": "If expr is used elsewhere in the same line, removing round may affect operator precedence or grouping (e.g., in round(a+b, 0)*2 vs (a+b)*2).",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "with round: 9\nwithout round: 9\nequal? True\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p005",
+      "title": "Star-imports and module-level side effects",
+      "hazard": "star-imports, module-level side effects, __all__",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": false
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "pi rounded: 3.0\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": []
+    },
+    {
+      "id": "r1-p006",
+      "title": "Comment discard",
+      "hazard": "If comments are attached to the round call (e.g., # tolerance), the fix may discard them if not preserved during rewrite.",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF057",
+            "severity": "warning",
+            "message": "Value being rounded is already an integer",
+            "span": [
+              2,
+              10
+            ],
+            "fix": "unsafe"
+          }
+        ],
+        "run": {
+          "stdout": "result: 5 # tolerance comment lost after fix?\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": false,
+        "diagnostics": [],
+        "run": {
+          "stdout": "result: 5 # tolerance comment lost after fix?\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": ""
+      }
+    },
+    {
+      "id": "r1-p007",
+      "title": "Ignored return value side-effect visibility",
+      "hazard": "If round appears in a larger expression where its return value is ignored, deleting it may preserve value but alter side-effect visibility in debugging or tracing tools.",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "called \n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r1-p008",
+      "title": "Mutable default argument aliasing",
+      "hazard": "mutable default arguments and aliasing after a rewrite",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "a: 1 b: 2\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p001",
+      "title": "Shadowed builtins and name redefinition",
+      "hazard": "shadowed builtins and names redefined later in the module",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "Before: <lambda>\nx: 5 <class 'int'>\nz: 3 <class 'int'>\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p002",
+      "title": "Float subclass return type reliance",
+      "hazard": "If the code relies on round returning a float subclass (unlikely but possible via overrides), replacing with expr may change the return type.",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p003",
+      "title": "Operator precedence in same-line expression",
+      "hazard": "If expr is used elsewhere in the same line, removing round may affect operator precedence or grouping (e.g., in round(a+b, 0)*2 vs (a+b)*2).",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "",
+          "stderr1": "",
+          "code": null,
+          "timedOut": false
+        },
+        "checkOk": false
+      },
+      "findings": [],
+      "error": "generated program does not parse: Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import ast,sys; ast.parse(open(sys.argv[1], encoding='utf8').read(), sys.argv[1])\n                    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.14/ast.py\", line 46, in parse"
+    },
+    {
+      "id": "r2-p004",
+      "title": "Keyword-only and positional-only args",
+      "hazard": "keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [
+          {
+            "rule": "RUF057",
+            "severity": "warning",
+            "message": "Value being rounded is already an integer",
+            "span": [
+              1,
+              15
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "RUF057",
+            "severity": "warning",
+            "message": "Value being rounded is already an integer",
+            "span": [
+              1,
+              33
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "RUF057",
+            "severity": "warning",
+            "message": "Value being rounded is already an integer",
+            "span": [
+              38,
+              16
+            ],
+            "fix": "safe"
+          },
+          {
+            "rule": "RUF057",
+            "severity": "warning",
+            "message": "Value being rounded is already an integer",
+            "span": [
+              80,
+              16
+            ],
+            "fix": "safe"
+          }
+        ],
+        "run": {
+          "stdout": "First call:\nfunc4: b=1, list=[1, 1, 1]\nSecond call:\nfunc4: b=1, list=[1, 1, 1]\n--- Hazard 4: Defaults ---\nfunc5.__defaults__: (5,)\nfunc6.__defaults__: (1,)\nfunc6.__defaults__: (1,)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [],
+      "after": {
+        "changed": true,
+        "diagnostics": [],
+        "run": {
+          "stdout": "First call:\nfunc4: b=1, list=[1, 1, 1]\nSecond call:\nfunc4: b=1, list=[1, 1, 1]\n--- Hazard 4: Defaults ---\nfunc5.__defaults__: (5,)\nfunc6.__defaults__: (1,)\nfunc6.__defaults__: (1,)\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true,
+        "diff": "--- orig.py\t2026-10-17 17:49:00.517917885 -0400\n+++ fixed.py\t2026-10-17 17:49:00.680945938 -0400\n@@ -1,4 +1,4 @@\n-def func(a, b=round(5, 0), *, c=round(10, 0)):\n+def func(a, b=5, *, c=10):\n     print(f'a={a}, b={b}, c={c}')\n     return b + c\n \n@@ -35,7 +35,7 @@\n # No difference.\n # We make the default expression be used in the function body in a way that its value is used multiple times — but the default value is fixed.\n # Example:\n-def func3(a, b=round(5, 0)):\n+def func3(a, b=5):\n     print(b)\n     print(b)  # uses same value\n # After fix: b=5 -> prints 5 twice.\n@@ -77,7 +77,7 @@\n # To get multiple evaluations, we need the default to be re-evaluated — impossible.\n # We abandon and use: the function is called with b omitted, and we inspect the default value via func.__defaults__.\n print('--- Hazard 4: Defaults ---')\n-def func5(a, b=round(5, 0)):\n+def func5(a, b=5):\n     return b\n \n print('func5.__defaults__:', func5.__defaults__)\n"
+      }
+    },
+    {
+      "id": "r2-p005",
+      "title": "Lambda/comprehension and JIT assumptions",
+      "hazard": "If the round call is inside a lambda or comprehension, removing it may affect JIT or optimization assumptions in some implementations.",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "--- Hazard 5: Lambda/comprehension ---\nLambda result: 1 <class 'int'>\nList comp: [1, 1] [<class 'int'>, <class 'int'>]\nLambda call: 1\nAfter lambda: 3\nList comp: [1, 1]\nAfter comp: 2\nLambda result type: <class 'int'>\nList comp types: [<class 'int'>, <class 'int'>]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p006",
+      "title": "Boolean type change",
+      "hazard": "If expr is a boolean, replacing round(bool, 0) with the bool changes the type from int to bool, potentially breaking downstream int-specific operations.",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "--- Hazard 6: Boolean type change ---\nIndex result: one\nType is int\ntype(round(True,0)): <class 'int'>\ntype(True): <class 'bool'>\nmemoryview len: 1\nmemoryview len: 1\nList with one element:\n[round(True, 0)]: [1]\n[True]: [True]\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p007",
+      "title": "Evaluation order and side effects",
+      "hazard": "evaluation order and side effects when expressions are merged, duplicated or deleted",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "--- Hazard 7: Evaluation order and side effects ---\n--- Hazard 7: Side effects in round call itself ---\nBefore any calls:\n  my_round called with 5, 0\nAfter round(5,0): x = 5\n---\nWith built-in round:\nx2 = 5\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    },
+    {
+      "id": "r2-p008",
+      "title": "File modes and truncation",
+      "hazard": "file modes and truncation, partial writes, non-str data passed to write",
+      "rule": "RUF057",
+      "predicted": {
+        "expectTrigger": true
+      },
+      "before": {
+        "diagnostics": [],
+        "run": {
+          "stdout": "--- Hazard 8: File modes and truncation ---\nWriting to file...\nFile content: '1'\n",
+          "stderr1": "",
+          "code": 0,
+          "timedOut": false
+        },
+        "checkOk": true
+      },
+      "findings": [
+        {
+          "kind": "disputed",
+          "safeLabel": false,
+          "detail": "model expected the rule to fire, it stayed silent"
+        }
+      ]
+    }
+  ]
+}

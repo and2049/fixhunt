@@ -1,0 +1,1 @@
+let relValue = 'external'; const el = document.createElement('a'); el.href = '/url'; el.target = '_blank'; el.rel = relValue; console.log(el.rel); // should be 'external', but fix makes it 'external noopener'

@@ -1,0 +1,120 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff RUF102 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff RUF102 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-50-10-011Z-xr3c-ruff-RUF102 · fix labelled <b>unknown</b> · 16 programs, 4 fired, 4 fixed, 0 oracle-backed finding(s) · model cost $0.0061</p>
+<div class="card"><b>Rule analysis</b><p>Flags invalid `noqa` rule codes in inline comments.</p><p class="mut">Fix: Removes the entire inline `# noqa: &lt;code&gt;` comment if all codes are invalid; otherwise, removes only the invalid codes from the comment, preserving valid ones and the comment if any valid codes remain.</p><details><summary>12 hazards</summary><ul><li>Removing a trailing `# noqa` comment could change the interpretation of preceding tokens if the comment was acting as a line continuation via backslash (though rare in Python).</li><li>If the `# noqa` comment contains manual spacing or alignment that affects readability or tooling, removing it alters whitespace-sensitive processing.</li><li>In a line like `x = 1  # noqa: ABC123  # another comment`, removing the invalid code may leave `#  # another comment` which is syntactically odd but semantically preserved; however, if the fix improperly handles spacing, it could collapse comments incorrectly.</li><li>If the line has a `# noqa:` comment with invalid codes and the fix removes the entire comment, any dependent tooling that parses `# noqa` for metadata (even with invalid codes) may lose expected behavior.</li><li>When the fix removes only part of a `# noqa: code1,code2` comment and leaves a trailing comma (e.g., `# noqa: VALID,`), the resulting comment may be misparsed by tools expecting clean lists.</li><li>If the line contains a `#` inside a string literal (e.g., `s = &quot;x # noqa: FAKE&quot;`), the rule should not fire, but if it did due to a bug, removing the comment-like text would corrupt the string.</li><li>If the `# noqa` comment is the only content after code and its removal leaves trailing whitespace, it is semantically neutral but may affect diff tools or formatting expectations.</li><li>In rare cases where a `# noqa` comment is used to intentionally disable a linter for the next line via some non-standard tool, removing it could re-enable checking incorrectly.</li><li>If the code line ends with a `# noqa` comment and the fix removes it, and the line previously relied on the comment to avoid trailing whitespace warnings in some editors, removal could reintroduce such warnings (though this is editor-specific, not semantic).</li><li>When the fix preserves the `# noqa` comment with only valid codes, if the original comment had irregular spacing (e.g., `# noqa:  E402`), normalization might alter formatting but not semantics.</li><li>If the line has multiple `#` comments (e.g., `x = 1  # first  # noqa: FAKE`), and the fix removes only the `# noqa` part, the remaining comment structure changes but does not affect execution.</li><li>If the `# noqa` comment includes a code that is invalid for Ruff but valid for another tool (e.g., `mypy`), and the user relies on Ruff not stripping it due to `lint.external` configuration, the fix would still remove it unless configured otherwise, breaking cross-tool suppression.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>class attributes vs instance attributes</td><td class="mut">Removing a spurious noqa comment on a class attribute assignment changes which descriptor </td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>dict ordering duplicate keys</td><td class="mut">Removing a spurious noqa comment on a dict literal with duplicate keys changes which value</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag">silent</span></td><td># inside string literal</td><td class="mut">If the rule incorrectly fires on a # inside a string, removing it would corrupt the string</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>intentional next-line disable</td><td class="mut">A non-standard tool uses # noqa to suppress warnings on the *next* line; removing it re-en</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag">invalid</span></td><td>pathlib vs os.path</td><td class="mut">Removing a spurious noqa comment on a path assignment changes which library interprets the</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>irregular spacing preservation</td><td class="mut">When preserving valid codes, irregular spacing in the original comment is lost, changing w</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>star-imports module side effects</td><td class="mut">Removing a spurious noqa comment on an import changes whether a module-level side effect (</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>file modes truncation partial writes</td><td class="mut">Removing a spurious noqa comment on a file open changes mode interpretation, causing trunc</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>String formatting edge case with % operator</td><td class="mut">string formatting edge cases: %, format, f-strings, repr vs str, nested quotes</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Mutable default argument and aliasing</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag ok">fix ok</span></td><td>Trailing comment spacing preservation</td><td class="mut">In a line like `x = 1  # noqa: ABC123  # another comment`, removing the invalid code may l</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Whitespace-sensitive comment alignment</td><td class="mut">If the `# noqa` comment contains manual spacing or alignment that affects readability or t</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Keyword-only and positional-only arguments</td><td class="mut">keyword-only, positional-only, *args/**kwargs forwarding, defaults evaluated once</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Dependent tooling parsing invalid noqa</td><td class="mut">If the line has a `# noqa:` comment with invalid codes and the fix removes the entire comm</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Binary file mode handling</td><td class="mut">bytes vs str, encoding and newline handling, text vs binary modes</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>Non-file context manager with write()</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — class attributes vs instance attributes</summary><pre>class A:
+    x = 1  # noqa: FAKE
+
+def test():
+    a = A()
+    print(a.x, hasattr(A, &#39;x&#39;))
+    a.x = 2
+    print(a.x, A.x)
+
+test()
+</pre></details><details id="r1-p002"><summary>r1-p002 — dict ordering duplicate keys</summary><pre>d = {
+    &#39;a&#39;: 1,
+    &#39;b&#39;: 2,
+    &#39;a&#39;: 3  # noqa: FAKE
+}
+print(list(d.items()))
+</pre></details><details id="r1-p003"><summary>r1-p003 — # inside string literal</summary><pre>s = &quot;x # noqa: FAKE&quot;
+print(repr(s))
+</pre></details><details id="r1-p004"><summary>r1-p004 — intentional next-line disable</summary><pre>flag = 0  # noqa: FAKE
+if flag:  # this line would be checked if tool behaved strangely
+    print(&#39;unreachable&#39;)
+else:
+    print(flag)
+</pre></details><details id="r1-p005"><summary>r1-p005 — pathlib vs os.path</summary><pre>import os
+from pathlib import Path
+p = &#39;tmp&#39;  # noqa: FAKE
+os.mkdir(p)
+os.symlink(&#39;tmp/target&#39;, p + &#39;/link&#39;)
+print(Path(p + &#39;/link&#39;).resolve() == Path(os.path.realpath(p + &#39;/link&#39;)))
+</pre></details><details id="r1-p006"><summary>r1-p006 — irregular spacing preservation</summary><pre>import ast
+code = &#39;x = 1  # noqa:  E402&#39;
+tree = ast.parse(code)
+comment = tree.body[0].value.comment if hasattr(tree.body[0].value, &#39;comment&#39;) else None
+print(comment is None or &#39;E402&#39; in str(comment))
+</pre></details><details id="r1-p007"><summary>r1-p007 — star-imports module side effects</summary><pre>REGISTERED = []
+def register(name):
+    REGISTERED.append(name)
+register(&#39;mod&#39;)  # noqa: FAKE
+from mod import *
+print(&#39;mod&#39; in REGISTERED)
+</pre></details><details id="r1-p008"><summary>r1-p008 — file modes truncation partial writes</summary><pre>with open(&#39;test.txt&#39;, &#39;w&#39;) as f:
+    f.write(&#39;hello&#39;)  # noqa: FAKE
+with open(&#39;test.txt&#39;, &#39;r&#39;) as f:
+    print(f.read())
+</pre></details><details id="r2-p001"><summary>r2-p001 — String formatting edge case with % operator</summary><pre>name = &#39;world&#39;
+greeting = &#39;Hello %s&#39; % name  # noqa: ABC123
+print(greeting)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:50:39.992777017 -0400
++++ fixed.py	2026-10-17 17:50:40.164802388 -0400
+@@ -1,3 +1,3 @@
+ name = &#39;world&#39;
+<span class="del">-greeting = &#39;Hello %s&#39; % name  # noqa: ABC123</span>
+<span class="add">+greeting = &#39;Hello %s&#39; % name</span>
+ print(greeting)
+</pre></details><details id="r2-p002"><summary>r2-p002 — Mutable default argument and aliasing</summary><pre>def f(x=[]):  # noqa: ZZZ999
+    x.append(1)
+    return x
+print(f())
+print(f())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:50:40.259816399 -0400
++++ fixed.py	2026-10-17 17:50:40.423840588 -0400
+@@ -1,4 +1,4 @@
+<span class="del">-def f(x=[]):  # noqa: ZZZ999</span>
+<span class="add">+def f(x=[]):</span>
+     x.append(1)
+     return x
+ print(f())
+</pre></details><details id="r2-p003"><summary>r2-p003 — Trailing comment spacing preservation</summary><pre>x = 1  # noqa: ABC123  # keep this
+print(x)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:50:40.518854599 -0400
++++ fixed.py	2026-10-17 17:50:40.683878935 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-x = 1  # noqa: ABC123  # keep this</span>
+<span class="add">+x = 1  # keep this</span>
+ print(x)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Whitespace-sensitive comment alignment</summary><pre>x = 1     # noqa: FAKE001    
+print(x)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:50:40.778892947 -0400
++++ fixed.py	2026-10-17 17:50:40.945917578 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-x = 1     # noqa: FAKE001    </span>
+<span class="add">+x = 1</span>
+ print(x)
+</pre></details><details id="r2-p005"><summary>r2-p005 — Keyword-only and positional-only arguments</summary><pre>def f(a, /, b, *, c=[]):  # noqa: INVALID
+    c.append(1)
+    return a, b, c
+print(f(1, 2, c=3))
+print(f(1, 2, c=4))
+</pre></details><details id="r2-p006"><summary>r2-p006 — Dependent tooling parsing invalid noqa</summary><pre>config = 42  # noqa: NOT_A_RULE  # tool-expects:this
+print(config)
+</pre></details><details id="r2-p007"><summary>r2-p007 — Binary file mode handling</summary><pre>with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:  # noqa: BADCODE
+    f.write(b&#39;hello&#39;)
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+import os
+os.remove(&#39;test.bin&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — Non-file context manager with write()</summary><pre>import io
+buf = io.StringIO()
+with buf as f:  # noqa: UNKNOWN
+    f.write(&#39;test&#39;)
+print(buf.getvalue())
+</pre></details></body></html>

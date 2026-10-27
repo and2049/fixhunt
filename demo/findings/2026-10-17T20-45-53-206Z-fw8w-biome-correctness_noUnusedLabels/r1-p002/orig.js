@@ -1,0 +1,1 @@
+MYLABEL: class Test {};

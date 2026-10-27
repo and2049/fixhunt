@@ -1,0 +1,178 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff UP018 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff UP018 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T21-17-21-549Z-ajve-ruff-UP018 · fix labelled <b>unknown</b> · 16 programs, 7 fired, 7 fixed, 1 oracle-backed finding(s) · model cost $0.0172</p>
+<div class="card"><b>Rule analysis</b><p>Flags redundant constructor calls like str(x), bytes(b), int(n), float(f), bool(v), complex(c) where x is already of the target type.</p><p class="mut">Fix: Replace the constructor call with its literal equivalent: e.g., str(s) → s when s is a string literal, bytes(b) → b when b is a bytes literal, etc.</p><details><summary>12 hazards</summary><ul><li>Rewriting str(expr) to expr changes behavior if expr has side effects (e.g., str(print(&quot;x&quot;)) vs print(&quot;x&quot;))</li><li>Rewriting bytes(expr) to expr alters evaluation if expr is a function call with side effects</li><li>Rewriting int(expr) to expr fails if expr is a float (e.g., int(3.9) → 3.9 changes value and type)</li><li>Rewriting float(expr) to expr breaks if expr is an integer string (e.g., float(&quot;4&quot;) → &quot;4&quot; raises TypeError in numeric contexts)</li><li>Rewriting bool(expr) to expr changes truthiness semantics (e.g., bool([]) → [] is falsy but not equivalent in explicit bool checks)</li><li>Rewriting complex(expr) to expr fails if expr is a real number (e.g., complex(5) → 5 loses imaginary part and changes type)</li><li>The fix may drop inline comments attached to the constructor call (e.g., str(&quot;hi&quot;)  # comment → &quot;hi&quot;  # comment becomes detached or lost)</li><li>If the constructor name is shadowed locally (e.g., str = lambda x: x; str(&quot;a&quot;)), the rewrite to &quot;a&quot; ignores the custom behavior</li><li>In eval or exec contexts, replacing str(...) with its argument may alter namespace resolution if the argument is a variable</li><li>The rewrite is invalid if the argument is a tuple needing parentheses for disambiguation (e.g., str((1,2)) → (1,2) is fine, but str(1,2) is a syntax error so not fired)</li><li>If the constructor is used as a callable in higher-order code (e.g., map(str, [...]))</li><li>Rewriting may interfere with debugging or profiling tools that rely on constructor call sites</li></ul></details></div>
+<h2>Findings</h2><div class="card" id="r1-p003"><b>r1-p003</b> <span class="tag bad">fix-changes-behavior</span><span class="tag warn">labelled safe</span><span class="tag bad" title="The fix rewrote the string literal inside a type annotation from &#39;int(5)&#39; to &#39;5&#39;, changing the value of f.__annotations__[&#39;x&#39;] from &#39;int(5)&#39; to &#39;5&#39;. Type annotations are stored as strings when using from __future__ import annotations or when quoted, and user code (e.g., runtime type checkers, documentation generators) may depend on the exact annotation text. The rule only intends to replace unnecessary constructor calls in executable code, not inside string literals that are not evaluated.">judge: real · medium</span> type_annotation_runtime_eval<p class="mut">The fix rewrote the string literal inside a type annotation from &#39;int(5)&#39; to &#39;5&#39;, changing the value of f.__annotations__[&#39;x&#39;] from &#39;int(5)&#39; to &#39;5&#39;. Type annotations are stored as strings when using from __future__ import annotations or when quoted, and user code (e.g., runtime type checkers, documentation generators) may depend on the exact annotation text. The rule only intends to replace unnecessary constructor calls in executable code, not inside string literals that are not evaluated.</p>
+<h2>Minimized program (4→3 lines)</h2><pre>def f(x: &#39;int(5)&#39;):
+    return x
+print(f.__annotations__[&#39;x&#39;])
+</pre>
+<h2>Diff applied by the fix</h2><pre class="diff">--- orig.py	2026-10-17 17:17:29.537631778 -0400
++++ fixed.py	2026-10-17 17:17:29.697622187 -0400
+@@ -1,4 +1,4 @@
+ from __future__ import annotations
+<span class="del">-def f(x: &#39;int(5)&#39;):</span>
+<span class="add">+def f(x: &#39;5&#39;):</span>
+     return x
+ print(f.__annotations__[&#39;x&#39;])
+</pre>
+<h2>Observed</h2><pre>stdout before:
+&#39;int(5)&#39;
+stdout after:
+&#39;5&#39;</pre>
+<p>No duplicate or related upstream report found. · <a href="reports/r1-p003.md">evidence sheet</a></p>
+</div>
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>complex_reduction_loses_imaginary_part</td><td class="mut">Rewriting complex(expr) to expr fails if expr is a real number because it discards the ima</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>bytes_str_mode_mismatch</td><td class="mut">Rewriting bytes(b&#39;data&#39;) to b&#39;data&#39; interacts with I/O mode; writing bytes to a text-mode </td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag bad">fix-changes-behavior</span></td><td>type_annotation_runtime_eval</td><td class="mut">Rewriting int(5) to 5 removes a constructor call that might be used in a forward reference</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">silent</span></td><td>star_import_side_effects_all</td><td class="mut">Rewriting bool(True) to True affects module-level execution under star imports if the cons</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>dict_ordering_duplicate_keys</td><td class="mut">Rewriting float(3.14) to 3.14 changes nothing for value, but if used in a dict key constru</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>comments_docstrings_attached</td><td class="mut">Removing str(&#39;hello&#39;) also removes any inline comment or docstring attached to that line, </td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag ok">fix ok</span></td><td>string_formatting_edge_cases</td><td class="mut">Rewriting repr vs str matters: str(42) vs repr(42) are same for int, but for str, str(&#39;&quot;hi</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>debugging_profiler_call_sites</td><td class="mut">Rewriting complex(1+2j) to (1+2j) removes a call site that profilers or debuggers might br</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag ok">fix ok</span></td><td>star_imports_sideeffects_all_hazard</td><td class="mut">star-imports, module-level side effects, __all__</td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">silent</span></td><td>bool_truthiness_semantics_hazard</td><td class="mut">Rewriting bool(expr) to expr changes truthiness semantics (e.g., bool([]) → [] is falsy bu</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>str_sideeffects_hazard</td><td class="mut">Rewriting str(expr) to expr changes behavior if expr has side effects (e.g., str(print(&quot;x&quot;</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>eval_order_sideeffects_merge_hazard</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>eval_exec_namespace_resolution_hazard</td><td class="mut">In eval or exec contexts, replacing str(...) with its argument may alter namespace resolut</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>mutable_default_args_aliasing_hazard</td><td class="mut">mutable default arguments and aliasing after a rewrite</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag">silent</span><span class="tag warn">disputed</span></td><td>int_float_truncation_hazard</td><td class="mut">Rewriting int(expr) to expr fails if expr is a float (e.g., int(3.9) → 3.9 changes value a</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>comments_docstrings_attached_hazard</td><td class="mut">comments and docstrings attached to the removed or moved code</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — complex_reduction_loses_imaginary_part</summary><pre>def f():
+    z = complex(5)
+    return z.real, z.imag
+print(f())
+</pre></details><details id="r1-p002"><summary>r1-p002 — bytes_str_mode_mismatch</summary><pre>with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+    f.write(bytes(b&#39;hello\n&#39;))
+with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+    print(f.read())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:29.275647485 -0400
++++ fixed.py	2026-10-17 17:17:29.439637653 -0400
+@@ -1,4 +1,4 @@
+ with open(&#39;test.bin&#39;, &#39;wb&#39;) as f:
+<span class="del">-    f.write(bytes(b&#39;hello\n&#39;))</span>
+<span class="add">+    f.write(b&#39;hello\n&#39;)</span>
+ with open(&#39;test.bin&#39;, &#39;rb&#39;) as f:
+     print(f.read())
+</pre></details><details id="r1-p003"><summary>r1-p003 — type_annotation_runtime_eval</summary><pre>from __future__ import annotations
+def f(x: &#39;int(5)&#39;):
+    return x
+print(f.__annotations__[&#39;x&#39;])
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:29.537631778 -0400
++++ fixed.py	2026-10-17 17:17:29.697622187 -0400
+@@ -1,4 +1,4 @@
+ from __future__ import annotations
+<span class="del">-def f(x: &#39;int(5)&#39;):</span>
+<span class="add">+def f(x: &#39;5&#39;):</span>
+     return x
+ print(f.__annotations__[&#39;x&#39;])
+</pre></details><details id="r1-p004"><summary>r1-p004 — star_import_side_effects_all</summary><pre>LOG = []
+def bool(x):
+    LOG.append((&#39;bool&#39;, x))
+    return __builtins__.bool(x)
+print(bool(True))
+print(LOG)
+</pre></details><details id="r1-p005"><summary>r1-p005 — dict_ordering_duplicate_keys</summary><pre>keys = [float(3.14), float(3.14)]
+d = {k: None for k in keys}
+print(list(d.keys()))
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:29.929608279 -0400
++++ fixed.py	2026-10-17 17:17:30.107597620 -0400
+@@ -1,3 +1,3 @@
+<span class="del">-keys = [float(3.14), float(3.14)]</span>
+<span class="add">+keys = [3.14, 3.14]</span>
+ d = {k: None for k in keys}
+ print(list(d.keys()))
+</pre></details><details id="r1-p006"><summary>r1-p006 — comments_docstrings_attached</summary><pre>msg = str(&#39;hello&#39;)  # This is a greeting
+print(msg)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:30.212591337 -0400
++++ fixed.py	2026-10-17 17:17:30.373581703 -0400
+@@ -1,2 +1,2 @@
+<span class="del">-msg = str(&#39;hello&#39;)  # This is a greeting</span>
+<span class="add">+msg = &#39;hello&#39;  # This is a greeting</span>
+ print(msg)
+</pre></details><details id="r1-p007"><summary>r1-p007 — string_formatting_edge_cases</summary><pre>s = str(&#39;&quot;hi&quot;&#39;)
+print(repr(s))
+print(s)
+</pre><pre class="diff">--- orig.py	2026-10-17 17:17:30.475575599 -0400
++++ fixed.py	2026-10-17 17:17:30.640565725 -0400
+@@ -1,3 +1,3 @@
+<span class="del">-s = str(&#39;&quot;hi&quot;&#39;)</span>
+<span class="add">+s = &#39;&quot;hi&quot;&#39;</span>
+ print(repr(s))
+ print(s)
+</pre></details><details id="r1-p008"><summary>r1-p008 — debugging_profiler_call_sites</summary><pre>import traceback
+def g():
+    return complex(1+2j)
+def f():
+    return g()
+try:
+    raise ValueError
+except:
+    tb = traceback.format_exc()
+    print(&#39;complex&#39; in tb)
+</pre></details><details id="r2-p001"><summary>r2-p001 — star_imports_sideeffects_all_hazard</summary><pre>__all__ = [&#39;value&#39;]
+value = str(&#39;hello&#39;)  # This is the exported value
+def get_value():
+    return value
+print(get_value())
+</pre><pre class="diff">--- orig.py	2026-10-17 17:18:04.515599907 -0400
++++ fixed.py	2026-10-17 17:18:04.680590622 -0400
+@@ -1,5 +1,5 @@
+ __all__ = [&#39;value&#39;]
+<span class="del">-value = str(&#39;hello&#39;)  # This is the exported value</span>
+<span class="add">+value = &#39;hello&#39;  # This is the exported value</span>
+ def get_value():
+     return value
+ print(get_value())
+</pre></details><details id="r2-p002"><summary>r2-p002 — bool_truthiness_semantics_hazard</summary><pre>lst = []
+if bool(lst):
+    print(&#39;truthy&#39;)
+else:
+    print(&#39;falsy&#39;)
+if lst:  # same as bool(lst) but different identity
+    print(&#39;list truthy&#39;)
+else:
+    print(&#39;list falsy&#39;)
+</pre></details><details id="r2-p003"><summary>r2-p003 — str_sideeffects_hazard</summary><pre>def f():
+    print(&#39;side effect&#39;)
+    return &#39;ok&#39;
+result = str(f())
+print(&#39;result:&#39;, result)
+</pre></details><details id="r2-p004"><summary>r2-p004 — eval_order_sideeffects_merge_hazard</summary><pre>i = 0
+def inc():
+    global i
+    i += 1
+    return i
+vals = [str(inc()), str(inc())]
+print(&#39;vals:&#39;, vals, &#39;i:&#39;, i)
+</pre></details><details id="r2-p005"><summary>r2-p005 — eval_exec_namespace_resolution_hazard</summary><pre>x = &#39;hidden&#39;
+def test():
+    x = &#39;local&#39;
+    return str(x)
+print(test())
+exec(&#39;print(str(x))&#39;)  # uses global x
+</pre></details><details id="r2-p006"><summary>r2-p006 — mutable_default_args_aliasing_hazard</summary><pre>def append_to(val, lst=str([])):  # rule triggers here
+    lst.append(val)
+    return lst
+print(append_to(1))
+print(append_to(2))
+</pre></details><details id="r2-p007"><summary>r2-p007 — int_float_truncation_hazard</summary><pre>f = 3.9
+n = int(f)
+print(f&#39;int({f}) = {n}, type: {type(n)}&#39;)
+if n == f:
+    print(&#39;equal&#39;)
+else:
+    print(&#39;not equal&#39;)
+</pre></details><details id="r2-p008"><summary>r2-p008 — comments_docstrings_attached_hazard</summary><pre>def process_data():
+    &quot;&quot;&quot;Process input data.
+    This function uses str(&#39;ready&#39;) to signal readiness.
+    &quot;&quot;&quot;
+    status = str(&#39;ready&#39;)  # ready signal
+    return status
+</pre><pre class="diff">--- orig.py	2026-10-17 17:18:05.790528239 -0400
++++ fixed.py	2026-10-17 17:18:05.950519252 -0400
+@@ -2,5 +2,5 @@
+     &quot;&quot;&quot;Process input data.
+     This function uses str(&#39;ready&#39;) to signal readiness.
+     &quot;&quot;&quot;
+<span class="del">-    status = str(&#39;ready&#39;)  # ready signal</span>
+<span class="add">+    status = &#39;ready&#39;  # ready signal</span>
+     return status
+</pre></details></body></html>

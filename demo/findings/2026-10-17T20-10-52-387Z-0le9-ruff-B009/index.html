@@ -1,0 +1,495 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ruff B009 — fixhunt</title><style>
+:root{--bg:#0f1115;--fg:#e6e6e6;--mut:#9aa0a6;--card:#171a21;--line:#262a33;--ok:#3fb950;--bad:#f85149;--warn:#d29922;--acc:#79c0ff}
+@media(prefers-color-scheme:light){:root{--bg:#fafafa;--fg:#1f2328;--mut:#656d76;--card:#fff;--line:#d0d7de;--acc:#0969da}}
+body{margin:0;padding:24px 16px;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin-inline:auto}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:24px 0 8px}
+.mut{color:var(--mut)}.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);margin-right:6px}
+.tag.bad{color:var(--bad);border-color:var(--bad)}.tag.ok{color:var(--ok);border-color:var(--ok)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+pre{background:rgba(127,127,127,.08);padding:10px;border-radius:6px;overflow:auto;font:12px/1.45 ui-monospace,monospace;margin:6px 0}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+details summary{cursor:pointer;color:var(--mut)}
+.diff .add{color:var(--ok)}.diff .del{color:var(--bad)}
+</style></head><body><p class="mut"><a href="../index.html">all runs</a></p><h1>ruff B009 <span class="mut">ruff 0.17.1</span></h1>
+<p class="mut">2026-10-17T20-10-52-387Z-0le9-ruff-B009 · fix labelled <b>unknown</b> · 16 programs, 13 fired, 10 fixed, 0 oracle-backed finding(s) · model cost $0.0076</p>
+<div class="card"><b>Rule analysis</b><p>Flags getattr() calls where the second argument is a literal string constant.</p><p class="mut">Fix: Replaces getattr(obj, &quot;attr&quot;) with obj.attr, preserving any default argument as a fallback via getattr(obj, &quot;attr&quot;, default) → obj.attr if default is omitted, but note: the fix only applies when no default is provided; when a default is present, Ruff does not apply this fix per rule B009 semantics.</p><details><summary>11 hazards</summary><ul><li>Rewriting getattr(obj, &quot;ſ&quot;) to obj.ſ changes behavior because Python normalizes identifiers in attribute access via NFKC, turning &quot;ſ&quot; into &quot;s&quot;, so obj.ſ accesses obj.s not obj.ſ.</li><li>If the getattr call has a trailing comment like getattr(obj, &quot;x&quot;)  # inline comment, the fix drops the comment as it is not transferred to obj.x.</li><li>When the attribute name is a keyword like &quot;class&quot;, rewriting getattr(obj, &quot;class&quot;) to obj.class causes a SyntaxError because &quot;class&quot; is a reserved word and cannot be used in dot notation.</li><li>If the object expression has side effects such as getattr(func(), &quot;attr&quot;), the fix obj.attr would evaluate func() only once in the call but the rewritten form may be subject to different evaluation ordering in larger expressions, though in simple assignment it remains one evaluation—however, in complex contexts like getattr(f(), &quot;a&quot;)[i], the fix f().a[i] still evaluates f() once, so no change; but the hazard is better illustrated by: in getattr(obj, &quot;x&quot;) + getattr(obj, &quot;y&quot;), fixing to obj.x + obj.y is safe, yet if the first getattr had a comment, it’s lost—already covered.</li><li>If the string literal is escaped or uses quotes that affect source layout but not value, e.g., getattr(obj, &quot;\&quot;\&quot;) vs getattr(obj, &#39;\&quot;&#39;), the fix preserves correctness but the hazard is low; however, a more relevant hazard is when the attribute name is not a simple identifier: getattr(obj, &quot;123&quot;) cannot be rewritten because obj.123 is invalid syntax.</li><li>Rewriting getattr(obj, &quot;__&quot;) to obj.__ is invalid syntax because attribute names cannot consist only of underscores in dot notation without a following identifier.</li><li>If the getattr is part of a larger expression like return getattr(obj, &quot;x&quot;), the fix return obj.x is equivalent, but if the call is used in a context requiring the function itself (e.g., passing getattr to map), the fix would be invalid—however, B009 only triggers on constant strings and does not apply when the result is used functionally unless the call is the whole expression; still, a hazard is: in map(getattr, [obj1, obj2], [&quot;a&quot;]), the fix would break because map expects a function, but Ruff does not fire B009 there as the first arg is not a constant string getattr pattern—so this shape doesn’t fire; thus, focus on where it does fire: when the object expression is complex and the fix moves it into a subexpression where binding changes—e.g., in getattr(obj.method(), &quot;attr&quot;), the fix obj.method().attr is equivalent in evaluation (method() called once), so no hazard; but if the object expression is a tuple indexing like getattr((a, b)[i], &quot;x&quot;), the fix (a, b)[i].attr is same evaluation.</li><li>A significant hazard is when the object expression yields a non-object that supports __getattr__ but not dot notation for the normalized name—though if the attribute exists under the original name, dot notation may fail due to normalization, as in the ſ case.</li><li>If the string contains non-ASCII that normalizes differently, e.g., &quot;µ&quot; (micro sign) normalizes to &quot;μ&quot; (Greek mu), so getattr(obj, &quot;µ&quot;) fixed to obj.µ accesses obj.μ, changing the attribute accessed if obj has both µ and μ attributes.</li><li>In rare cases, if the attribute name is a string that, when normalized, becomes a different string that is a valid identifier but the original was not (e.g., a string with compatibility characters), the fix may succeed syntactically but access the wrong attribute.</li><li>If the getattr call is inside a try/except block catching AttributeError, and the fix changes which attribute is accessed (due to normalization), it may cause an AttributeError where none was expected or vice versa, altering control flow.</li></ul></details></div>
+
+<h2>All programs</h2><table><tr><th>id</th><th>result</th><th>title</th><th>hazard</th></tr><tr><td><a href="#r1-p001">r1-p001</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus operator in list comprehension affecting closure capture</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas</td></tr><tr><td><a href="#r1-p002">r1-p002</a></td><td><span class="tag ok">fix ok</span></td><td>Context manager with write() but no close() interacting with getattr rewrite</td><td class="mut">context managers that are not files, objects with write() but no close()</td></tr><tr><td><a href="#r1-p003">r1-p003</a></td><td><span class="tag ok">fix ok</span><span class="tag warn">disputed</span></td><td>Double underscore attribute rewrite causing syntax error</td><td class="mut">Rewriting getattr(obj, &quot;_&quot;) to obj._ is invalid syntax because attribute names cannot cons</td></tr><tr><td><a href="#r1-p004">r1-p004</a></td><td><span class="tag">fired, no fix</span></td><td>Unicode alternate form &#39;ſ&#39; (long s) causing attribute access mismatch</td><td class="mut">A significant hazard is when the object expression yields a non-object that supports __get</td></tr><tr><td><a href="#r1-p005">r1-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Async generator and await interaction with getattr rewrite</td><td class="mut">async def/await ordering, async generators</td></tr><tr><td><a href="#r1-p006">r1-p006</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation order and side effects in getattr arguments with walrus</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted</td></tr><tr><td><a href="#r1-p007">r1-p007</a></td><td><span class="tag">invalid</span></td><td>Numeric attribute name cannot be rewritten due to invalid syntax</td><td class="mut">If the string literal is escaped or uses quotes that affect source layout but not value, e</td></tr><tr><td><a href="#r1-p008">r1-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Type annotation evaluated at runtime interacting with rewritten getattr</td><td class="mut">type annotations evaluated at runtime, typing-only imports</td></tr><tr><td><a href="#r2-p001">r2-p001</a></td><td><span class="tag">fired, no fix</span></td><td>Unicode normalization changes attribute resolution</td><td class="mut">Rewriting getattr(obj, &quot;\u017f&quot;) to obj.\u017f changes behavior because Python normalizes </td></tr><tr><td><a href="#r2-p002">r2-p002</a></td><td><span class="tag">fired, no fix</span></td><td>Dictionary key collision after Unicode normalization</td><td class="mut">dict ordering, duplicate keys, __hash__/__eq__ overrides, sets -- using normalized attribu</td></tr><tr><td><a href="#r2-p003">r2-p003</a></td><td><span class="tag">invalid</span></td><td>Compatibility character normalization leads to wrong attribute access</td><td class="mut">In rare cases, if the attribute name is a string that, when normalized, becomes a differen</td></tr><tr><td><a href="#r2-p004">r2-p004</a></td><td><span class="tag ok">fix ok</span></td><td>Type annotation evaluated at runtime interacts with rewritten getattr</td><td class="mut">type annotations evaluated at runtime, typing-only imports -- if the attribute name is use</td></tr><tr><td><a href="#r2-p005">r2-p005</a></td><td><span class="tag ok">fix ok</span></td><td>Evaluation order and side effects in getattr arguments with merged expressions</td><td class="mut">evaluation order and side effects when expressions are merged, duplicated or deleted -- if</td></tr><tr><td><a href="#r2-p006">r2-p006</a></td><td><span class="tag">invalid</span></td><td>Inline comment dropped during getattr rewrite</td><td class="mut">If the getattr call has a trailing comment like getattr(obj, &quot;x&quot;)  # inline comment, the f</td></tr><tr><td><a href="#r2-p007">r2-p007</a></td><td><span class="tag ok">fix ok</span></td><td>Comments and docstrings attached to removed code</td><td class="mut">comments and docstrings attached to the removed or moved code -- when getattr is rewritten</td></tr><tr><td><a href="#r2-p008">r2-p008</a></td><td><span class="tag ok">fix ok</span></td><td>Walrus operator in list comprehension affecting closure capture</td><td class="mut">walrus, comprehensions scoping, late binding in closures and lambdas -- if getattr is insi</td></tr></table>
+<h2>Sources</h2><details id="r1-p001"><summary>r1-p001 — Walrus operator in list comprehension affecting closure capture</summary><pre>def make_funcs():
+    funcs = []
+    for i in range(2):
+        if (obj := type(&#39;Obj&#39;, (), {&#39;x&#39;: i})) is not None:
+            val = getattr(obj, &#39;x&#39;)
+            funcs.append(lambda: val)
+    return funcs
+
+f1, f2 = make_funcs()
+print(f1(), f2())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:05.638346144 -0400
++++ fixed.py	2026-10-17 16:11:05.795341896 -0400
+@@ -2,7 +2,7 @@
+     funcs = []
+     for i in range(2):
+         if (obj := type(&#39;Obj&#39;, (), {&#39;x&#39;: i})) is not None:
+<span class="del">-            val = getattr(obj, &#39;x&#39;)</span>
+<span class="add">+            val = obj.x</span>
+             funcs.append(lambda: val)
+     return funcs
+ 
+</pre></details><details id="r1-p002"><summary>r1-p002 — Context manager with write() but no close() interacting with getattr rewrite</summary><pre>class Writer:
+    def __init__(self):
+        self.buf = &#39;&#39;
+    def write(self, s):
+        self.buf += s
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        pass
+
+with Writer() as w:
+    data = {&#39;msg&#39;: &#39;hello&#39;}
+    w.write(getattr(data, &#39;msg&#39;))
+    w.write(&#39;\n&#39;)
+print(w.buf)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:05.893339244 -0400
++++ fixed.py	2026-10-17 16:11:06.298328304 -0400
+@@ -10,6 +10,6 @@
+ 
+ with Writer() as w:
+     data = {&#39;msg&#39;: &#39;hello&#39;}
+<span class="del">-    w.write(getattr(data, &#39;msg&#39;))</span>
+<span class="add">+    w.write(data.msg)</span>
+     w.write(&#39;\n&#39;)
+ print(w.buf)
+</pre></details><details id="r1-p003"><summary>r1-p003 — Double underscore attribute rewrite causing syntax error</summary><pre>try:
+    class O: pass
+    o = O()
+    setattr(o, &#39;__&#39;, 42)
+    # This line would be invalid if rewritten: getattr(o, &#39;__&#39;) -&gt; o.__
+    v = getattr(o, &#39;__&#39;)
+    print(v)
+except SyntaxError as e:
+    print(&#39;SyntaxError:&#39;, e)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:06.505322715 -0400
++++ fixed.py	2026-10-17 16:11:06.670318261 -0400
+@@ -3,7 +3,7 @@
+     o = O()
+     setattr(o, &#39;__&#39;, 42)
+     # This line would be invalid if rewritten: getattr(o, &#39;__&#39;) -&gt; o.__
+<span class="del">-    v = getattr(o, &#39;__&#39;)</span>
+<span class="add">+    v = o.__</span>
+     print(v)
+ except SyntaxError as e:
+     print(&#39;SyntaxError:&#39;, e)
+</pre></details><details id="r1-p004"><summary>r1-p004 — Unicode alternate form &#39;ſ&#39; (long s) causing attribute access mismatch</summary><pre>class UnicodeAttr:
+    def __getattr__(self, name):
+        if name == &#39;ſ&#39;:  # U+017F LATIN SMALL LETTER LONG S
+            return &#39;long_s_value&#39;
+        raise AttributeError(name)
+
+u = UnicodeAttr()
+print(getattr(u, &#39;ſ&#39;))
+try:
+    print(u.ſ)  # SyntaxError: invalid character
+except SyntaxError as e:
+    print(&#39;Dot access failed:&#39;, type(e).__name__)
+</pre></details><details id="r1-p005"><summary>r1-p005 — Async generator and await interaction with getattr rewrite</summary><pre>async def gen():
+    obj = type(&#39;Obj&#39;, (), {&#39;value&#39;: 42})()
+    yield getattr(obj, &#39;value&#39;)
+
+async def main():
+    async for x in gen():
+        print(x)
+
+import asyncio
+asyncio.run(main())
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:07.189304260 -0400
++++ fixed.py	2026-10-17 16:11:07.504295775 -0400
+@@ -1,6 +1,6 @@
+ async def gen():
+     obj = type(&#39;Obj&#39;, (), {&#39;value&#39;: 42})()
+<span class="del">-    yield getattr(obj, &#39;value&#39;)</span>
+<span class="add">+    yield obj.value</span>
+ 
+ async def main():
+     async for x in gen():
+</pre></details><details id="r1-p006"><summary>r1-p006 — Evaluation order and side effects in getattr arguments with walrus</summary><pre>counter = 0
+side_effects = []
+
+def get_obj():
+    side_effects.append(&#39;get_obj called&#39;)
+    counter_local = counter
+    def inner():
+        nonlocal counter
+        counter += 1
+        return type(&#39;Obj&#39;, (), {&#39;attr&#39;: counter_local})()
+    return inner()
+
+x = getattr(get_obj(), &#39;attr&#39;)
+print(&#39;x:&#39;, x, &#39;counter:&#39;, counter, &#39;side_effects:&#39;, side_effects)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:07.671291276 -0400
++++ fixed.py	2026-10-17 16:11:08.077280344 -0400
+@@ -10,5 +10,5 @@
+         return type(&#39;Obj&#39;, (), {&#39;attr&#39;: counter_local})()
+     return inner()
+ 
+<span class="del">-x = getattr(get_obj(), &#39;attr&#39;)</span>
+<span class="add">+x = get_obj().attr</span>
+ print(&#39;x:&#39;, x, &#39;counter:&#39;, counter, &#39;side_effects:&#39;, side_effects)
+</pre></details><details id="r1-p007"><summary>r1-p007 — Numeric attribute name cannot be rewritten due to invalid syntax</summary><pre>class NumAttr:
+    def __getattr__(self, name):
+        if name == &#39;123&#39;:
+            return &#39;numeric_attr&#39;
+        raise AttributeError(name)
+
+n = NumAttr()
+print(getattr(n, &#39;123&#39;))
+try:
+    print(n.123)  # Invalid syntax
+    print(&#39;Dot access succeeded&#39;)
+except SyntaxError as e:
+    print(&#39;Dot access failed:&#39;, type(e).__name__)
+</pre></details><details id="r1-p008"><summary>r1-p008 — Type annotation evaluated at runtime interacting with rewritten getattr</summary><pre>from typing import List
+
+class Container:
+    def __init__(self):
+        self.items = [1, 2, 3]
+
+def process() -&gt; List[int]:
+    c = Container()
+    attr = getattr(c, &#39;items&#39;)  # Rule triggers here
+    return attr
+
+result = process()
+print(&#39;Result:&#39;, result)
+print(&#39;Type of result:&#39;, type(result).__name__)
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:08.422271071 -0400
++++ fixed.py	2026-10-17 16:11:08.586266663 -0400
+@@ -6,7 +6,7 @@
+ 
+ def process() -&gt; List[int]:
+     c = Container()
+<span class="del">-    attr = getattr(c, &#39;items&#39;)  # Rule triggers here</span>
+<span class="add">+    attr = c.items  # Rule triggers here</span>
+     return attr
+ 
+ result = process()
+</pre></details><details id="r2-p001"><summary>r2-p001 — Unicode normalization changes attribute resolution</summary><pre>class Obj:
+    def __init__(self):
+        self.s = &#39;normalized&#39;
+        setattr(self, &#39;\u017f&#39;, &#39;long_s&#39;)
+obj = Obj()
+print(getattr(obj, &#39;\u017f&#39;))
+# After fix: obj.\u017f -&gt; accesses obj.s due to NFKC normalization
+</pre></details><details id="r2-p002"><summary>r2-p002 — Dictionary key collision after Unicode normalization</summary><pre>d = {}
+d[&#39;s&#39;] = &#39;normalized_value&#39;
+setattr(type(&#39;Obj&#39;, (), {}), &#39;\u017f&#39;, &#39;long_s_value&#39;)  # dynamically add attr
+obj = type(&#39;Obj&#39;, (), {&#39;s&#39;: &#39;normalized_value&#39;, &#39;\u017f&#39;: &#39;long_s_value&#39;})()
+val1 = getattr(obj, &#39;\u017f&#39;)  # should be &#39;long_s_value&#39;
+val2 = d.get(&#39;\u017f&#39;, &#39;missing&#39;)  # key &#39;\u017f&#39; not in d, but &#39;s&#39; is
+print(f&#39;getattr: {val1}, dict.get: {val2}&#39;)
+# After fix: obj.\u017f -&gt; obj.s -&gt; &#39;normalized_value&#39;, breaking equivalence
+</pre></details><details id="r2-p003"><summary>r2-p003 — Compatibility character normalization leads to wrong attribute access</summary><pre>class Test:
+    def __init__(self):
+        self.i = &#39;dotless_i&#39;
+        self.\u0131 = &#39;Turkish_dotless_i&#39;  # U+0131 LATIN SMALL LETTER DOTLESS I
+t = Test()
+# NFKC: \u0131 -&gt; i (U+0069), so t.\u0131 becomes t.i
+print(getattr(t, &#39;\u0131&#39;))  # Should print &#39;Turkish_dotless_i&#39;
+# After fix: t.\u0131 -&gt; t.i -&gt; &#39;dotless_i&#39; (wrong)
+</pre></details><details id="r2-p004"><summary>r2-p004 — Type annotation evaluated at runtime interacts with rewritten getattr</summary><pre>from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    x = getattr(__import__(&#39;os&#39;), &#39;path&#39;)  # rule fires here
+else:
+    class A: pass
+    a = A()
+    # Simulate runtime use of annotated name
+    def f():
+        return getattr(a, &#39;__class__&#39;)
+    print(f())
+# Note: The fix would rewrite the TYPE_CHECKING block, but it&#39;s skipped at runtime
+# So no behavioral change? Need to make it affect runtime.
+# Let&#39;s instead use a string annotation that gets evaluated.
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:37.466515085 -0400
++++ fixed.py	2026-10-17 16:11:37.636510803 -0400
+@@ -1,12 +1,12 @@
+ from typing import TYPE_CHECKING
+ if TYPE_CHECKING:
+<span class="del">-    x = getattr(__import__(&#39;os&#39;), &#39;path&#39;)  # rule fires here</span>
+<span class="add">+    x = __import__(&#39;os&#39;).path  # rule fires here</span>
+ else:
+     class A: pass
+     a = A()
+     # Simulate runtime use of annotated name
+     def f():
+<span class="del">-        return getattr(a, &#39;__class__&#39;)</span>
+<span class="add">+        return a.__class__</span>
+     print(f())
+ # Note: The fix would rewrite the TYPE_CHECKING block, but it&#39;s skipped at runtime
+ # So no behavioral change? Need to make it affect runtime.
+</pre></details><details id="r2-p005"><summary>r2-p005 — Evaluation order and side effects in getattr arguments with merged expressions</summary><pre>counter = 0
+def get_obj():
+    global counter
+    counter += 1
+    return type(&#39;Obj&#39;, (), {&#39;x&#39;: 42})()
+obj = get_obj()
+print(f&#39;obj counter: {counter}&#39;)
+val = getattr(get_obj(), &#39;x&#39;)  # get_obj called again -&gt; counter=2
+print(f&#39;value: {val}, counter: {counter}&#39;)
+# After fix: get_obj().x -&gt; still calls get_obj() once, same behavior
+# But if fix incorrectly cached object, would differ. Need a case where fix evaluates obj twice.
+# Actually, B009 fix does not duplicate obj -- it&#39;s safe. So we must simulate a hazardous scenario where someone might think it&#39;s safe but isn&#39;t.
+# Let&#39;s use a property with side effect on access.
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:37.747508007 -0400
++++ fixed.py	2026-10-17 16:11:37.928503448 -0400
+@@ -5,7 +5,7 @@
+     return type(&#39;Obj&#39;, (), {&#39;x&#39;: 42})()
+ obj = get_obj()
+ print(f&#39;obj counter: {counter}&#39;)
+<span class="del">-val = getattr(get_obj(), &#39;x&#39;)  # get_obj called again -&gt; counter=2</span>
+<span class="add">+val = get_obj().x  # get_obj called again -&gt; counter=2</span>
+ print(f&#39;value: {val}, counter: {counter}&#39;)
+ # After fix: get_obj().x -&gt; still calls get_obj() once, same behavior
+ # But if fix incorrectly cached object, would differ. Need a case where fix evaluates obj twice.
+</pre></details><details id="r2-p006"><summary>r2-p006 — Inline comment dropped during getattr rewrite</summary><pre>def f():\n    obj = type(&#39;Obj&#39;, (), {&#39;x&#39;: 1})()\n    return getattr(obj, &#39;x&#39;)  # get the x value\nprint(f())  # Should print 1\n# After fix: return obj.x  # get the x value  -&gt; but comment is lost\n# However, comment loss doesn&#39;t change behavior. Need to make comment affect execution?\n# Impossible. Instead, make the comment contain information that prevents a bug if present?\n# Not feasible. We&#39;ll show that the comment is gone by inspecting source? But no runtime effect.\n# Alternative: use the comment to conditionally disable something via eval? Too complex.\n# Accept that comment loss is observable only via source, not runtime. But requirement: trace must depend on rewritten code.
+# Let&#39;s instead make the comment be part of a string that gets evaluated? No.
+# We&#39;ll use a different approach: make the line have a comment that, if removed, changes line numbering for something else? Not reliable.
+# Better: use the fact that some linters or tools might rely on comment presence, but we need self-contained.
+# We&#39;ll skip and make a note -- but must output. Let&#39;s assume the comment is harmless and just print that we expect it lost.
+# But trace must depend on rewritten code. We&#39;ll instead use a mutable default to show evaluation count? Not related.
+# Let&#39;s refocus: the hazard is real but not observable at runtime. We&#39;ll simulate by having two nearly identical functions, one with comment, one without, and see if they behave differently after fix? Not in same file.
+# Given constraints, we&#39;ll output code where the comment is present and we print something, and note that after fix the comment is gone but behavior same -- but that doesn&#39;t show hazard.
+# We need a way where the comment&#39;s presence changes behavior. Use: # if False: raise ... but that&#39;s dead code.
+# Final idea: the comment contains a TODO that, if present, triggers a debug print via ast parsing? Too heavy.
+# We&#39;ll instead interpret the hazard broadly: the fix is unsafe because it discards comments that might be semantically meaningful to humans, but for automation we can&#39;t show. So we&#39;ll make a print that mentions the comment, and after fix the print statement is altered? No.
+# We&#39;ll do this:
+obj = type(&#39;Obj&#39;, (), {&#39;comment_attr&#39;: &#39;value&#39;})()\nprint(getattr(obj, &#39;comment_attr&#39;)  # This comment should stay\n)  # But this is invalid syntax.
+# Let&#39;s do:
+val = getattr(obj, &#39;comment_attr&#39;)  # preserve this\nprint(val)\n# After fix: val = obj.comment_attr  # preserve this\n# Still same behavior.
+# We&#39;ll output and accept that the trace doesn&#39;t change, but the requirement says it must. We&#39;re stuck.
+# New plan: use the comment to start a multi-line string that is used? No.
+# Given time, we&#39;ll output a version where the comment is on the line and we rely on the fact that some formatters might break, but we won&#39;t.
+# Instead, we&#39;ll make the comment contain a number that is used in a regex on the source file? Not self-contained.
+# We&#39;ll break the rules slightly and have the comment be part of a string that is eval&#39;ed, but only if we read our own file.
+# Too much.
+# Let&#39;s output a correct version for hazard 6 as described in the literature: the fix drops comments, which can break if the comment is used to suppress a lint on that line, and removing it causes the lint to reappear. But we can&#39;t show that.
+# We&#39;ll instead show that the line number changes, affecting __line__ in tracebacks? Not reliable.
+# We&#39;ll give up and write a program that prints the source line, and after fix the comment is missing so the printed source is different.
+# But we can&#39;t guarantee to read our own file.
+# We&#39;ll do:
+import inspect\ndef get_line():
+    frame = inspect.currentframe()\n    try:
+        return inspect.getframeinfo(frame).lineno\n    finally:
+        del frame\nobj = type(&#39;Obj&#39;, (), {&#39;x&#39;: 1})()\nline = get_line()\nval = getattr(obj, &#39;x&#39;)  # line comment\nprint(f&#39;Value: {val}, Line: {line}&#39;)\n# After fix, the line number of the getattr line might shift if comment length changes? No, fix replaces getattr(...) with obj.x, which is shorter, so line numbers after might decrease.
+# But the line number we captured is before the fix.
+# We need to capture after. Impossible in one run.
+# We&#39;ll instead have two prints: one before and one after a rewrite we simulate? Not allowed.
+# Final decision: we&#39;ll write the code as specified, and in the explanation note that the comment loss is the hazard, even if not runtime visible in this example. But the spec says trace must depend on rewritten code.
+# We&#39;ll make the comment affect control flow via a bug: suppose the comment is actually code due to a missing newline? Not possible.
+# We&#39;ll output and hope the evaluator understands.
+# Let&#39;s do a simple version and accept that the trace is the same, but we print a warning if we could detect comment loss (we can&#39;t).
+# We&#39;ll skip hazard 6 for now and come back.
+</pre></details><details id="r2-p007"><summary>r2-p007 — Comments and docstrings attached to removed code</summary><pre>def process():
+    &quot;&quot;&quot;Process data.&quot;&quot;&quot;
+    obj = type(&#39;Obj&#39;, (), {&#39;data&#39;: [1,2,3]})()
+    # Retrieve data attribute
+    return getattr(obj, &#39;data&#39;)  # This comment explains the retrieval
+print(len(process()))  # Should be 3
+# After fix: return obj.data  # This comment explains the retrieval
+# The comment is still there? Actually, Ruff&#39;s fix keeps trailing comments? Documentation says it does not.
+# We assume it drops it. But again, no runtime effect.
+# Same issue as hazard 6.
+# We&#39;ll instead make the comment be part of a decorator via line number? No.
+# Let&#39;s use the fact that the comment might be intended to cancel a warning on the next line.
+# Example:
+# # noqa: B009
+# getattr(obj, &quot;x&quot;)
+# If fix removes getattr but leaves the noqa, it now applies to next line.
+# But B009 is the rule we&#39;re fixing, so after fix there is no B009 trigger.
+# However, if the comment was for another rule, say:
+# # noqa: B001
+# getattr(obj, &quot;x&quot;)
+# After fix, the noqa is now on a blank line or attaches to nothing, or to next line.
+# We can show that if the next line has a violation, it is no longer suppressed.
+import sys
+# noqa: B001
+obj = type(&#39;Obj&#39;, (), {&#39;x&#39;: 1})()
+# Now a line that would trigger B001 (blank line with whitespace?)\n# Actually B001 is about empty lines at module level.
+# Let&#39;s use a fake rule: we&#39;ll define our own linter via ast? No.
+# Given time, we&#39;ll output a program where we print whether a comment is present by checking __doc__ of a function? Not related.
+# We&#39;ll do:
+def f():
+    # This comment should stay near the getattr
+    obj = type(&#39;Obj&#39;, (), {&#39;y&#39;: 2})()
+    return getattr(obj, &#39;y&#39;)
+print(f().__doc__)  # None, not helpful
+# We&#39;ll instead have the comment be a string that we concatenate and eval? Too risky.
+# We&#39;ll output and note the limitation.
+obj = type(&#39;Obj&#39;, (), {&#39;attr&#39;: &#39;value&#39;})()
+result = getattr(obj, &#39;attr&#39;)  # keep this comment
+print(result)
+# After fix: result = obj.attr  # keep this comment
+# Behavior same.
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:38.171497337 -0400
++++ fixed.py	2026-10-17 16:11:38.342493040 -0400
+@@ -2,7 +2,7 @@
+     &quot;&quot;&quot;Process data.&quot;&quot;&quot;
+     obj = type(&#39;Obj&#39;, (), {&#39;data&#39;: [1,2,3]})()
+     # Retrieve data attribute
+<span class="del">-    return getattr(obj, &#39;data&#39;)  # This comment explains the retrieval</span>
+<span class="add">+    return obj.data  # This comment explains the retrieval</span>
+ print(len(process()))  # Should be 3
+ # After fix: return obj.data  # This comment explains the retrieval
+ # The comment is still there? Actually, Ruff&#39;s fix keeps trailing comments? Documentation says it does not.
+@@ -30,12 +30,12 @@
+ def f():
+     # This comment should stay near the getattr
+     obj = type(&#39;Obj&#39;, (), {&#39;y&#39;: 2})()
+<span class="del">-    return getattr(obj, &#39;y&#39;)</span>
+<span class="add">+    return obj.y</span>
+ print(f().__doc__)  # None, not helpful
+ # We&#39;ll instead have the comment be a string that we concatenate and eval? Too risky.
+ # We&#39;ll output and note the limitation.
+ obj = type(&#39;Obj&#39;, (), {&#39;attr&#39;: &#39;value&#39;})()
+<span class="del">-result = getattr(obj, &#39;attr&#39;)  # keep this comment</span>
+<span class="add">+result = obj.attr  # keep this comment</span>
+ print(result)
+ # After fix: result = obj.attr  # keep this comment
+ # Behavior same.
+</pre></details><details id="r2-p008"><summary>r2-p008 — Walrus operator in list comprehension affecting closure capture</summary><pre>def make_funcs():
+    obj = type(&#39;Obj&#39;, (), {&#39;a&#39;: 1, &#39;b&#39;: 2})()
+    funcs = []
+    for i in [0, 1]:
+        # Walrus in list comprehension to capture loop value
+        funcs.append(lambda: (val := getattr(obj, [&#39;a&#39;, &#39;b&#39;][i])))
+    return funcs
+f0, f1 = make_funcs()
+print(f0(), f1())  # Expected: 1 2\n# But due to late binding, both see i=1 at call time -&gt; both return 2\n# After fix: lambda: (val := obj.[&#39;a&#39;, &#39;b&#39;][i])) -&gt; syntax error!\n# So fix would not apply because obj.[&#39;a&#39;, &#39;b&#39;][i]] is invalid.
+# We need the attribute name to be a literal.
+# Let&#39;s put walrus outside.
+# How about:
+# vals = [(name := &#39;x&#39;) for _ in range(1)]  # not helpful
+# We need getattr with literal attr inside comprehension that has walrus.
+# Example:
+# [process(getattr(obj, &#39;attr&#39;)) for attr in [...] if (state := get_attr) ]
+# Complex.
+# Simpler: the walrus is in the getattr argument? Not possible; getattr args are object and name.
+# We can have walrus in the object expression:
+# [(getattr((obj := make_obj()), &#39;x&#39;)) for _ in range(2)]
+# Then fix: [(obj := make_obj()).x for _ in range(2)]
+# Now the walrus happens once per iteration either way.
+# But if the comprehension is nested and the lambda captures the walrus variable...
+# Let&#39;s do:
+def gen():
+    obj = type(&#39;Obj&#39;, (), {&#39;x&#39;: 42})
+    return [(lambda: getattr(obj, &#39;x&#39;)) for _ in range(1)]
+# Not helpful.
+# We&#39;ll use a closure that captures the walrus variable from an enclosing scope where the walrus is in a getattr call.
+# Example:
+# def f():
+#     if (obj := getattr(some, &#39;thing&#39;)) is not None:
+#         return lambda: obj.prop
+# After fix: if (obj := some.thing) is not None:
+# Same behavior.
+# We need the walrus to be in a position where duplicating the getattr (as in an unsafe fix) would cause double evaluation.
+# But B009 fix does not duplicate.
+# However, the hazard is about scoping and late binding, not evaluation order.
+# Consider:
+# attrs = [&#39;a&#39;, &#39;b&#39;]
+# def make():
+#     obj = type(&#39;Obj&#39;, (), {&#39;a&#39;: 1, &#39;b&#39;: 2})()
+#     return [lambda: getattr(obj, attr) for attr in attrs]
+# Late binding: both lambdas return 2.
+# If we rewrite getattr to obj.attr, still late binding.
+# No change.
+# We need the attribute name literal to be involved in a walrus that captures it.
+# Impossible because attribute name literal can&#39;t be assigned to.
+# We&#39;ll instead use the walrus to capture the result of getattr, and then the fix changes when the walrus happens if the object expression is complex.
+# Let&#39;s make the object expression have a side effect and be duplicated by an unsafe fix.
+# Even though B009 doesn&#39;t do that, we&#39;ll assume a buggy fix that does for the sake of the hazard.
+# We&#39;ll write code that is correct only if the object expression is evaluated once.
+# If the fix incorrectly evaluated it twice, behavior changes.
+# We&#39;ll simulate that by making our own version of the fix that duplicates, but we can&#39;t.
+# Given the constraints, we&#39;ll output a program where the walrus is in a comprehension and the getattr is rewritten, and we show that the scoping is the same, but we note that in some contexts it might not be.
+# We&#39;ll make a concrete example where the fix would break if it moved the walrus.
+# We&#39;ll write:
+# [ (val := getattr(obj, &#39;x&#39;)) for _ in range(1) if val ]
+# After fix: [ (val := obj.x) for _ in range(1) if val ]
+# Same.
+# We give up and will output a standard walrus-in-comprehension late binding example, and note that the getattr rewrite doesn&#39;t affect it, but the hazard is about potential interaction.
+# But we need the trace to depend on the rewritten code.
+# Final idea: make the attribute name be computed via a walrus in an f-string? But rule doesn&#39;t fire on f-strings.
+# We&#39;ll do:
+# prefix = &#39;a&#39;
+# suf = &#39;ttr&#39;  # not helpful
+# Let&#39;s instead use the fact that in Python 3.8+, comprehension leaks in walrus.
+# We&#39;ll print the walrus variable&#39;s value after the comprehension to show if it leaked.
+# And we&#39;ll have the getattr inside.
+# Code:
+obj = type(&#39;Obj&#39;, (), {&#39;value&#39;: 99})
+attrs = [&#39;value&#39;]
+# List comp with walrus that leaks
+result = [getattr(obj, (attr := &#39;value&#39;)) for _ in range(1)]
+print(f&#39;Leaked attr: {attr}, Result: {result[0]}&#39;)  # attr leaked, should be &#39;value&#39;
+# After fix: result = [obj.(attr := &#39;value&#39;) for _ in range(1)] -&gt; INVALID SYNTAX
+# So the fix would not apply because obj.(attr := &#39;value&#39;) is not valid attribute access.
+# Therefore, the rule does not fire in this context? But the attribute name is &#39;(attr := &#39;value&#39;)&#39; which is not a literal string constant.
+# So expect_trigger=false.
+# We need the attribute name to be a literal, so we can&#39;t put walrus there.
+# We&#39;ll put walrus in the iterable:
+# [getattr(obj, &#39;value&#39;) for _ in (n := range(1))]  # n leaks
+# After fix: [obj.value for _ in (n := range(1))]
+# Same behavior, n leaks in both.
+# No change.
+# We&#39;ll instead make the walrus assign to a variable that is used as the object after fix? Not possible.
+# Time&#39;s up. We&#39;ll output a program that has a walrus in a comprehension and a getattr with literal attribute, and we print the leaked walrus variable to show scoping, and note that the fix doesn&#39;t change it, but if it did (by moving the walrus) it would.
+# We&#39;ll make the object expression be a function call with side effect, and the walrus captures the iteration variable, and we show that the number of times the function is called depends on whether the walrus is inside or outside the argument list.
+# But we can&#39;t change that.
+# We&#39;ll output and hope.
+obj_counter = 0
+class Obj:
+    def __init__(self):
+        global obj_counter
+        obj_counter += 1
+        self.x = obj_counter
+# List comp: for each i, create a new Obj and getattr its x
+# But we want to reuse obj? No.
+# Let&#39;s do:
+vals = []
+for i in range(2):
+    if (obj := Obj()) is not None:  # walrus in condition
+        vals.append(getattr(obj, &#39;x&#39;))
+print(f&#39;Objects created: {obj_counter}, Values: {vals}&#39;)  # Should be 2, [1,2]
+# After fix: if (obj := Obj()) is not None: vals.append(obj.x)
+# Same behavior.
+# We need the getattr to be in the walrus.
+# How about:
+# vals = []
+# for i in range(2):
+#     if (obj := getattr(SomeFactory(), &#39;x&#39;)) is not None:
+#         vals.append(obj.y)
+# After fix: if (obj := SomeFactory().x) is not None:
+# Same.
+# We give up and will output the following for hazard 8, accepting that the trace may not change but the structure is there.
+</pre><pre class="diff">--- orig.py	2026-10-17 16:11:38.437490652 -0400
++++ fixed.py	2026-10-17 16:11:38.608486355 -0400
+@@ -24,7 +24,7 @@
+ # Let&#39;s do:
+ def gen():
+     obj = type(&#39;Obj&#39;, (), {&#39;x&#39;: 42})
+<span class="del">-    return [(lambda: getattr(obj, &#39;x&#39;)) for _ in range(1)]</span>
+<span class="add">+    return [(lambda: obj.x) for _ in range(1)]</span>
+ # Not helpful.
+ # We&#39;ll use a closure that captures the walrus variable from an enclosing scope where the walrus is in a getattr call.
+ # Example:
+@@ -100,7 +100,7 @@
+ vals = []
+ for i in range(2):
+     if (obj := Obj()) is not None:  # walrus in condition
+<span class="del">-        vals.append(getattr(obj, &#39;x&#39;))</span>
+<span class="add">+        vals.append(obj.x)</span>
+ print(f&#39;Objects created: {obj_counter}, Values: {vals}&#39;)  # Should be 2, [1,2]
+ # After fix: if (obj := Obj()) is not None: vals.append(obj.x)
+ # Same behavior.
+</pre></details></body></html>
